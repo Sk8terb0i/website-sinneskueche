@@ -1,0 +1,9 @@
+.planet-container {
+  position: absolute;
+  cursor: pointer;
+}
+
+.planet-icon {
+  display: block;
+  pointer-events: none;
+}

@@ -1,0 +1,31 @@
+import { useState } from "react";
+import Header from "../components/Header/Header";
+import "./Course.css";
+
+export default function Pottery({ currentLang, setCurrentLang }) {
+  const [currentTab, setCurrentTab] = useState("info"); // optional: tabs for sessions, materials, etc.
+
+  const content = {
+    en: {
+      title: "Singing Lessons",
+      description: "Learn to sing.",
+    },
+    de: {
+      title: "Gesangsunterricht",
+      description: "Lerne zu singen.",
+    },
+  };
+
+  const lang = currentLang;
+
+  return (
+    <div className="course-container">
+      <Header currentLang={currentLang} setCurrentLang={setCurrentLang} />
+
+      <main className="course-main">
+        <h1 className="course-title">{content[lang].title}</h1>
+        <p className="course-description">{content[lang].description}</p>
+      </main>
+    </div>
+  );
+}

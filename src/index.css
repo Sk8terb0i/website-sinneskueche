@@ -1,0 +1,60 @@
+@font-face {
+  font-family: "Satoshi";
+  src: url("/src/assets/fonts/Satoshi-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("/src/assets/fonts/Satoshi-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("/src/assets/fonts/Satoshi-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Harmond-SemBdItaCond";
+  src: url("/src/assets/fonts/Harmond-SemBdItaCond.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Harmond-ExtraBoldExpanded";
+  src: url("/src/assets/fonts/Harmond-ExtraBoldExpanded.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Harmond-ExtBdItaExp";
+  src: url("/src/assets/fonts/Harmond-ExtBdItaExp.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Harmond-SemiBoldCondensed";
+  src: url("/src/assets/fonts/Harmond-SemiBoldCondensed.woff2") format("woff2");
+}
+
+body {
+  font-family: "Satoshi", sans-serif;
+  margin: 0;
+  background: #fffce3;
+  overflow: hidden;
+}
+
+.landing {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+}
+
+.sun {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}

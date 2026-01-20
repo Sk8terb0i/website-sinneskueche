@@ -1,0 +1,32 @@
+/* Course.css - shared styles for all course pages */
+
+.course-container {
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.course-main {
+  max-width: 800px;
+  margin: 2rem auto;
+}
+
+.course-title {
+  font-family: 'Harmond-SemiBoldCondensed', sans-serif;
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.course-description {
+  font-family: 'Satoshi', sans-serif;
+  font-size: 1.2rem;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.course-schedule,
+.course-materials {
+  font-family: 'Satoshi', sans-serif;
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
