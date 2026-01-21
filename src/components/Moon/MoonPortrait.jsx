@@ -16,6 +16,14 @@ export default function MoonPortrait({
 }) {
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  // Update width for dynamic label wrapping
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // ---------------- Resolve content & link ----------------
   let content = "";
@@ -28,7 +36,7 @@ export default function MoonPortrait({
     content = moon;
   }
 
-  // ---------------- 6 fixed positions on right half ----------------
+  // ---------------- 6 fixed positions ----------------
   const possibleAngles = [
     -Math.PI / 4,
     -Math.PI / 6,
@@ -50,12 +58,12 @@ export default function MoonPortrait({
   }
   const targetAngle = targetAngleRef.current;
 
-  // ---------------- Entry and exit angles ----------------
   const entryAngle =
     enterDirection === "top" ? -Math.PI / 2 - 0.5 : Math.PI / 2 + 0.5;
   const exitAngle =
     exitDirection === "bottom" ? Math.PI / 2 + 1 : -Math.PI / 2 - 1;
 
+  // ---------------- Animation State ----------------
   const [animatedAngle, setAnimatedAngle] = useState(
     exitOnly ? targetAngle : entryAngle,
   );
@@ -63,8 +71,9 @@ export default function MoonPortrait({
   const [animatedScale, setAnimatedScale] = useState(exitOnly ? 1 : 1);
   const [state, setState] = useState(exitOnly ? "exit" : "enter");
 
-  // ---------------- Time-based easing animation ----------------
-  const duration = 3000;
+  const moveDuration = exitOnly ? 1200 : 800;
+  const fadeOutDuration = 600;
+
   const startTimeRef = useRef(null);
   const startAngleRef = useRef(animatedAngle);
   const startOpacityRef = useRef(animatedOpacity);
@@ -77,49 +86,37 @@ export default function MoonPortrait({
       if (!startTimeRef.current) startTimeRef.current = timestamp;
       const elapsed = timestamp - startTimeRef.current;
 
-      let target = targetAngle;
-      let targetOpacity = 1;
-      let targetScale = 1;
-      let opacityDuration = duration;
+      const moveT = Math.min(elapsed / moveDuration, 1);
+      const easedMoveT = easeOutCubic(moveT);
 
-      if (state === "enter") {
-        target = targetAngle;
-      } else if (state === "exit") {
-        target = exitAngle;
-        targetOpacity = 0;
-        targetScale = 0;
-        opacityDuration = 600;
+      let targetA = targetAngle;
+      let targetS = 1;
+
+      if (state === "exit") {
+        targetA = exitAngle;
+        targetS = 0;
+        // Independent label fade
+        const fadeT = Math.min(elapsed / fadeOutDuration, 1);
+        setAnimatedOpacity(startOpacityRef.current * (1 - easeOutCubic(fadeT)));
+      } else if (state === "enter") {
+        targetA = targetAngle;
+        targetS = 1;
+        setAnimatedOpacity(easedMoveT);
       } else {
         return;
       }
 
-      const t = Math.min(elapsed / duration, 1);
-      const easedT = easeOutCubic(t);
-      const newAngle =
-        startAngleRef.current + (target - startAngleRef.current) * easedT;
+      setAnimatedAngle(
+        startAngleRef.current + (targetA - startAngleRef.current) * easedMoveT,
+      );
+      setAnimatedScale(
+        startScaleRef.current + (targetS - startScaleRef.current) * easedMoveT,
+      );
 
-      const tOpacity = Math.min(elapsed / opacityDuration, 1);
-      const easedOpacity = easeOutCubic(tOpacity);
-      const newOpacity =
-        startOpacityRef.current +
-        (targetOpacity - startOpacityRef.current) * easedOpacity;
-
-      const tScale = Math.min(elapsed / opacityDuration, 1);
-      const easedScale = easeOutCubic(tScale);
-      const newScale =
-        startScaleRef.current +
-        (targetScale - startScaleRef.current) * easedScale;
-
-      setAnimatedAngle(newAngle);
-      setAnimatedOpacity(newOpacity);
-      setAnimatedScale(newScale);
-
-      if (t < 1) {
+      if (moveT < 1) {
         requestAnimationFrame(step);
       } else if (state === "enter") {
         setState("idle");
-        setAnimatedOpacity(1);
-        setAnimatedScale(1);
       }
     };
 
@@ -128,24 +125,30 @@ export default function MoonPortrait({
     startOpacityRef.current = animatedOpacity;
     startScaleRef.current = animatedScale;
 
-    requestAnimationFrame(step);
-  }, [state, targetAngle, exitAngle]);
+    const animId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(animId);
+  }, [state, targetAngle, exitAngle, moveDuration, fadeOutDuration]);
 
-  // ---------------- Compute position ----------------
+  // ---------------- Position & Style ----------------
   const moonX = Math.cos(animatedAngle) * orbitRadius;
   const moonY = Math.sin(animatedAngle) * orbitRadius;
 
+  // Calculate max width for the label so it wraps before hitting screen edge
+  const currentLeftPos = windowWidth * 0.1 + moonX;
+  const maxLabelWidth = windowWidth - currentLeftPos - 60;
+
   const moonStyle = {
     position: "fixed",
-    left: `calc(20vw + ${moonX}px)`,
+    left: `calc(10vw + ${moonX}px)`,
     top: `calc(50vh + ${moonY}px)`,
     transform: "translate(-50%, -50%)",
     zIndex: 2000,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    pointerEvents: href ? "auto" : "none",
+    pointerEvents: href && state !== "exit" ? "auto" : "none",
     cursor: href ? "pointer" : "default",
+    WebkitTapHighlightColor: "transparent", // Clean mobile taps
   };
 
   const circleStyle = {
@@ -153,73 +156,73 @@ export default function MoonPortrait({
     height: "32px",
     borderRadius: "50%",
     background: href ? (isHovered ? "#9960a8" : "white") : "#ffffff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    transition: "background 0.2s ease-in-out, transform 0.2s ease",
-    transform: href
-      ? `scale(${isHovered ? 1.2 : animatedScale})`
-      : `scale(${animatedScale})`,
+    transition: "background 0.2s ease",
+    transform: `scale(${isHovered ? 1.2 : animatedScale})`,
+    flexShrink: 0,
   };
 
   const labelStyle = {
     position: "absolute",
     top: "50%",
     transform: "translateY(-50%)",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    wordWrap: "break-word",
+    maxWidth: `${maxLabelWidth}px`,
+    width: "max-content",
+    minWidth: "120px",
     fontSize: isHovered ? "16px" : "14px",
     fontStyle: href ? "normal" : "italic",
     color: "#1c0700",
     textDecoration: href && isHovered ? "underline" : "none",
-    transition:
-      "color 0.2s ease-in-out, text-decoration 0.2s ease-in-out, font-size 0.2s ease",
     left: "100%",
     marginLeft: "12px",
     opacity: animatedOpacity,
-  };
-
-  const orbitStyle = {
-    position: "fixed",
-    left: "20vw",
-    top: "50vh",
-    transform: "translate(-50%, -50%)",
-    pointerEvents: "none",
-    zIndex: 1000,
+    lineHeight: "1.2",
+    pointerEvents: "auto",
+    transition: "color 0.2s, font-size 0.2s, text-decoration 0.2s",
   };
 
   return (
-    <>
-      {/* Orbit Path */}
-      <svg style={orbitStyle} width={orbitRadius * 2} height={orbitRadius * 2}>
-        <circle cx={orbitRadius} cy={orbitRadius} r={orbitRadius} fill="none" />
-      </svg>
-
-      {/* Moon */}
-      <div
-        style={moonStyle}
-        onClick={() => {
-          if (!href) return;
-
-          if (href.startsWith("http")) {
-            window.open(href, "_blank", "noreferrer");
-          } else {
-            navigate(href);
-          }
-        }}
-        onMouseEnter={() => {
-          if (!href) return;
+    <div
+      style={moonStyle}
+      onClick={(e) => {
+        if (!href || state === "exit") return;
+        e.stopPropagation(); // Prevents background reset
+        if (href.startsWith("http")) {
+          window.open(href, "_blank", "noreferrer");
+        } else {
+          navigate(href);
+        }
+      }}
+      // --- Desktop Controls ---
+      onMouseEnter={() => {
+        if (href && state !== "exit") {
           setIsHovered(true);
           onHoverStart?.();
-        }}
-        onMouseLeave={() => {
-          if (!href) return;
+        }
+      }}
+      onMouseLeave={() => {
+        if (href) {
           setIsHovered(false);
           onHoverEnd?.();
-        }}
-      >
-        <div style={circleStyle} />
-        <span style={labelStyle}>{content}</span>
-      </div>
-    </>
+        }
+      }}
+      // --- Mobile Controls ---
+      onTouchStart={() => {
+        if (href && state !== "exit") {
+          setIsHovered(true);
+          onHoverStart?.();
+        }
+      }}
+      onTouchEnd={() => {
+        setTimeout(() => {
+          setIsHovered(false);
+          onHoverEnd?.();
+        }, 150);
+      }}
+    >
+      <div style={circleStyle} />
+      <span style={labelStyle}>{content}</span>
+    </div>
   );
 }
