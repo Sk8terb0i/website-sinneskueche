@@ -10,28 +10,34 @@ export default function LandingPortrait() {
   const [activeIndex, setActiveIndex] = useState(null);
   const [previousIndex, setPreviousIndex] = useState(null);
   const [currentLang, setCurrentLang] = useState(defaultLang);
-  const [planetSize, setPlanetSize] = useState(100);
-  const [sunSize, setSunSize] = useState(250);
+  const [planetSize, setPlanetSize] = useState(80);
+  const [sunSize, setSunSize] = useState(200);
   const [hasShiftedLeft, setHasShiftedLeft] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [scrollDirection, setScrollDirection] = useState("down");
   const [activePlanetCenter, setActivePlanetCenter] = useState({ x: 0, y: 0 });
 
   const activePlanetRef = useRef(null);
+  const touchStartY = useRef(null);
 
   const coursePlanets = planets.filter((p) => p.type === "courses");
 
-  // ---------------- Scroll wheel changes active planet ----------------
+  // ---------------- Scroll logic (wheel + touch) ----------------
   useEffect(() => {
-    const handleWheel = (e) => {
-      e.preventDefault();
-      setScrollDirection(e.deltaY > 0 ? "down" : "up");
+    let scrollLocked = false; // lock first scroll
+
+    const scrollHandler = (direction) => {
+      setScrollDirection(direction);
 
       setActiveIndex((prev) => {
+        if (prev === null && !scrollLocked) {
+          scrollLocked = true;
+          return direction === "down" ? 0 : coursePlanets.length - 1;
+        }
+
         const startIndex = prev ?? 0;
         let nextIndex;
-
-        if (e.deltaY > 0) {
+        if (direction === "down") {
           nextIndex = (startIndex + 1) % coursePlanets.length;
         } else {
           nextIndex =
@@ -43,11 +49,48 @@ export default function LandingPortrait() {
       });
     };
 
+    // Desktop: wheel
+    const handleWheel = (e) => {
+      e.preventDefault();
+      const direction = e.deltaY > 0 ? "down" : "up";
+      scrollHandler(direction);
+    };
+
+    // Mobile: touch
+    const handleTouchStart = (e) => {
+      touchStartY.current = e.touches[0].clientY;
+    };
+
+    const handleTouchMove = (e) => {
+      if (touchStartY.current === null) return;
+
+      const deltaY = touchStartY.current - e.touches[0].clientY;
+      if (Math.abs(deltaY) < 20) return; // swipe threshold
+
+      const direction = deltaY > 0 ? "down" : "up";
+      scrollHandler(direction);
+
+      touchStartY.current = e.touches[0].clientY; // reset for next swipe
+    };
+
+    const handleTouchEnd = () => {
+      touchStartY.current = null;
+    };
+
     window.addEventListener("wheel", handleWheel, { passive: false });
-    return () => window.removeEventListener("wheel", handleWheel);
+    window.addEventListener("touchstart", handleTouchStart, { passive: false });
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleTouchEnd);
+
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
   }, [coursePlanets.length]);
 
-  // ---------------- Horizontal movement on activation ----------------
+  // ---------------- Horizontal shift ----------------
   useEffect(() => {
     if (activeIndex !== null && !hasShiftedLeft) {
       const timeout = setTimeout(() => setHasShiftedLeft(true), 200);
@@ -56,12 +99,12 @@ export default function LandingPortrait() {
     if (activeIndex === null) setHasShiftedLeft(false);
   }, [activeIndex, hasShiftedLeft]);
 
-  const normalGap = planetSize * 0.6;
+  const normalGap = planetSize * 0.5;
   const expandedGap = planetSize * 1.1;
 
   const getPlanetSize = (index) => {
     if (activeIndex === null) return planetSize;
-    return activeIndex === index ? planetSize * 3 : planetSize / 2;
+    return activeIndex === index ? planetSize * 2.5 : planetSize / 2;
   };
 
   // ---------------- Compute vertical translation ----------------
@@ -86,7 +129,7 @@ export default function LandingPortrait() {
 
   const translateY = computeTranslateY();
 
-  // ---------------- Update active planet center for MoonPortrait ----------------
+  // ---------------- Update active planet center ----------------
   useEffect(() => {
     if (activePlanetRef.current) {
       const rect = activePlanetRef.current.getBoundingClientRect();
@@ -97,7 +140,7 @@ export default function LandingPortrait() {
     }
   }, [activeIndex, translateY, planetSize]);
 
-  // ---------------- Clear old moons after exit ----------------
+  // ---------------- Clear old moons ----------------
   useEffect(() => {
     if (previousIndex !== null) {
       const exitDuration = 4000;
@@ -177,11 +220,10 @@ export default function LandingPortrait() {
             moon={moon}
             index={idx}
             totalMoons={coursePlanets[previousIndex].courses.length}
-            orbitRadius={220}
+            orbitRadius={150}
             currentLang={currentLang}
             exitOnly
             exitDirection={scrollDirection === "down" ? "bottom" : "top"}
-            // Pass previous planet center for alignment
             planetCenter={activePlanetCenter}
           />
         ))}
@@ -195,10 +237,9 @@ export default function LandingPortrait() {
             moon={moon}
             index={idx}
             totalMoons={coursePlanets[activeIndex].courses.length}
-            orbitRadius={220}
+            orbitRadius={150}
             currentLang={currentLang}
             enterDirection={scrollDirection === "down" ? "top" : "bottom"}
-            // Pass active planet center for alignment
             planetCenter={activePlanetCenter}
           />
         ))}

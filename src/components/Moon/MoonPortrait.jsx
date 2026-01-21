@@ -149,8 +149,8 @@ export default function MoonPortrait({
   };
 
   const circleStyle = {
-    width: "48px",
-    height: "48px",
+    width: "32px",
+    height: "32px",
     borderRadius: "50%",
     background: href ? (isHovered ? "#9960a8" : "white") : "#ffffff",
     display: "flex",
@@ -167,7 +167,7 @@ export default function MoonPortrait({
     top: "50%",
     transform: "translateY(-50%)",
     whiteSpace: "nowrap",
-    fontSize: isHovered ? "18px" : "16px",
+    fontSize: isHovered ? "16px" : "14px",
     fontStyle: href ? "normal" : "italic",
     color: "#1c0700",
     textDecoration: href && isHovered ? "underline" : "none",

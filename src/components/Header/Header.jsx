@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { HouseHeart } from "lucide-react";
 
 export default function Header({ currentLang, setCurrentLang }) {
   const location = useLocation();
@@ -18,15 +19,16 @@ export default function Header({ currentLang, setCurrentLang }) {
 
   const hoverTransition = "transform 0.2s ease, color 0.2s ease";
 
-  // Determine if the studio name should be clickable
   const isLandingPortrait = location.pathname === "/" && isPortrait;
 
-  // Determine color
+  // ----------------- Determine title color -----------------
   const titleColor = isLandingPortrait
     ? "#1c0700" // landing portrait: dark, not interactive
     : titleHovered
       ? "#9960a8" // hovered
       : "#4e5f28"; // default color
+
+  const titleFontSize = isLandingPortrait ? "1.5rem" : "2rem";
 
   return (
     <header
@@ -49,16 +51,27 @@ export default function Header({ currentLang, setCurrentLang }) {
     >
       {/* Left container: title/home */}
       <div style={{ width: "50vw", display: "flex", alignItems: "center" }}>
-        {(location.pathname !== "/" || !isLandingPortrait) && (
+        {isLandingPortrait ? (
+          // Landing portrait: show small, non-clickable title
+          <div
+            style={{
+              fontFamily: "Harmond-SemiBoldCondensed",
+              fontSize: titleFontSize,
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              color: titleColor,
+            }}
+          >
+            Atelier Sinnesküche
+          </div>
+        ) : (
+          // Other pages: clickable HouseHeart icon
           <div
             onClick={() => navigate("/")}
             onMouseEnter={() => setTitleHovered(true)}
             onMouseLeave={() => setTitleHovered(false)}
             style={{
-              fontFamily: "Harmond-SemiBoldCondensed",
-              fontSize: "2rem",
-              fontWeight: 700,
-              textDecoration: "none",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
@@ -67,24 +80,7 @@ export default function Header({ currentLang, setCurrentLang }) {
               color: titleColor,
             }}
           >
-            Atelier Sinnesküche
-          </div>
-        )}
-
-        {/* Non-clickable landing portrait title */}
-        {isLandingPortrait && (
-          <div
-            style={{
-              fontFamily: "Harmond-SemiBoldCondensed",
-              fontSize: "2rem",
-              fontWeight: 700,
-              textDecoration: "none",
-              display: "flex",
-              alignItems: "center",
-              color: titleColor,
-            }}
-          >
-            Atelier Sinnesküche
+            <HouseHeart size={32} strokeWidth={2} />
           </div>
         )}
       </div>

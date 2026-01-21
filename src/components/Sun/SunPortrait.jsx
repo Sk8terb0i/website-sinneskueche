@@ -8,7 +8,7 @@ export default function SunPortrait({ style }) {
       style={{
         width: style?.width,
         height: style?.height,
-        marginTop: "3vh",
+        marginTop: "1vh",
         objectFit: "contain",
         cursor: "default",
       }}
