@@ -19,15 +19,15 @@ export default function LandingPortrait() {
 
   const activePlanetRef = useRef(null);
   const touchStartY = useRef(null);
-  const touchStartTime = useRef(null);
+  const touchLocked = useRef(false); // prevent multiple triggers per swipe
 
   const coursePlanets = planets.filter((p) => p.type === "courses");
 
   // ---------------- Scroll logic (wheel + touch) ----------------
   useEffect(() => {
-    let scrollLocked = false;
+    let scrollLocked = false; // lock first scroll
 
-    const scrollHandler = (direction, steps = 1) => {
+    const scrollHandler = (direction) => {
       setScrollDirection(direction);
 
       setActiveIndex((prev) => {
@@ -39,9 +39,10 @@ export default function LandingPortrait() {
         const startIndex = prev ?? 0;
         let nextIndex;
         if (direction === "down") {
-          nextIndex = Math.min(startIndex + steps, coursePlanets.length - 1);
+          nextIndex = (startIndex + 1) % coursePlanets.length;
         } else {
-          nextIndex = Math.max(startIndex - steps, 0);
+          nextIndex =
+            (startIndex - 1 + coursePlanets.length) % coursePlanets.length;
         }
 
         if (nextIndex !== startIndex) setPreviousIndex(startIndex);
@@ -59,38 +60,27 @@ export default function LandingPortrait() {
     // Mobile: touch
     const handleTouchStart = (e) => {
       touchStartY.current = e.touches[0].clientY;
-      touchStartTime.current = e.timeStamp;
+      touchLocked.current = false;
     };
 
     const handleTouchMove = (e) => {
-      if (touchStartY.current === null || touchStartTime.current === null)
-        return;
+      if (touchStartY.current === null || touchLocked.current) return;
 
       const deltaY = touchStartY.current - e.touches[0].clientY;
-      const elapsed = e.timeStamp - touchStartTime.current;
+      const threshold = 50; // minimum swipe distance to trigger a planet change
 
-      // Minimum swipe distance
-      const minSwipe = 30;
-      if (Math.abs(deltaY) < minSwipe) return;
-
-      // Determine steps based on swipe velocity
-      const velocity = Math.abs(deltaY) / elapsed; // px/ms
-      const steps = Math.min(
-        Math.floor(Math.abs(deltaY) / 80 + velocity * 5),
-        coursePlanets.length,
-      );
+      if (Math.abs(deltaY) < threshold) return;
 
       const direction = deltaY > 0 ? "down" : "up";
-      scrollHandler(direction, steps);
+      scrollHandler(direction);
 
-      // Reset for next swipe
-      touchStartY.current = e.touches[0].clientY;
-      touchStartTime.current = e.timeStamp;
+      touchStartY.current = null; // prevent multiple triggers until next touch
+      touchLocked.current = true;
     };
 
     const handleTouchEnd = () => {
       touchStartY.current = null;
-      touchStartTime.current = null;
+      touchLocked.current = false;
     };
 
     window.addEventListener("wheel", handleWheel, { passive: false });
@@ -123,6 +113,7 @@ export default function LandingPortrait() {
     return activeIndex === index ? planetSize * 2.5 : planetSize / 2;
   };
 
+  // ---------------- Compute vertical translation ----------------
   const computeTranslateY = () => {
     if (activeIndex === null) {
       const totalHeight =
@@ -213,6 +204,7 @@ export default function LandingPortrait() {
           />
         ))}
 
+        {/* Sun */}
         <div
           style={{
             transition: "opacity 0.8s ease",
