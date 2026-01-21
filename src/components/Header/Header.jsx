@@ -19,16 +19,37 @@ export default function Header({ currentLang, setCurrentLang }) {
 
   const hoverTransition = "transform 0.2s ease, color 0.2s ease";
 
-  const isLandingPortrait = location.pathname === "/" && isPortrait;
+  const isLanding = location.pathname === "/";
 
-  // ----------------- Determine title color -----------------
-  const titleColor = isLandingPortrait
-    ? "#1c0700" // landing portrait: dark, not interactive
-    : titleHovered
-      ? "#9960a8" // hovered
-      : "#4e5f28"; // default color
+  // ----------------- Determine what to show on the left -----------------
+  let showTitle = false;
+  let showIcon = false;
+  let titleFontSize = "2rem";
 
-  const titleFontSize = isLandingPortrait ? "1.5rem" : "2rem";
+  if (isPortrait) {
+    titleFontSize = "1.5rem";
+    if (isLanding) {
+      showTitle = true; // non-clickable small title
+    } else {
+      showIcon = true; // icon on other pages
+    }
+  } else {
+    titleFontSize = "2rem";
+    if (isLanding) {
+      showTitle = false; // hide title on landing
+      showIcon = false; // hide icon on landing
+    } else {
+      showTitle = true; // clickable title on other pages
+    }
+  }
+
+  // Right side styles
+  const langFontSize = isPortrait ? "0.85rem" : "1rem";
+  const rightGap = isPortrait ? "0.8rem" : "1.5rem";
+  const hamburgerSize = isPortrait
+    ? { width: 18, height: 16 }
+    : { width: 24, height: 20 };
+  const hamburgerBarHeight = isPortrait ? 2.4 : 4;
 
   return (
     <header
@@ -51,22 +72,33 @@ export default function Header({ currentLang, setCurrentLang }) {
     >
       {/* Left container: title/home */}
       <div style={{ width: "50vw", display: "flex", alignItems: "center" }}>
-        {isLandingPortrait ? (
-          // Landing portrait: show small, non-clickable title
+        {showTitle && (
           <div
+            onClick={!isPortrait ? () => navigate("/") : undefined}
+            onMouseEnter={() => !isPortrait && setTitleHovered(true)}
+            onMouseLeave={() => !isPortrait && setTitleHovered(false)}
             style={{
               fontFamily: "Harmond-SemiBoldCondensed",
               fontSize: titleFontSize,
-              fontWeight: 400,
+              fontWeight: !isPortrait ? 700 : 400,
               display: "flex",
               alignItems: "center",
-              color: titleColor,
+              color: !isPortrait
+                ? titleHovered
+                  ? "#9960a8"
+                  : "#4e5f28"
+                : "#1c0700", // portrait landing page title
+              cursor: !isPortrait ? "pointer" : "default",
+              transform:
+                !isPortrait && titleHovered ? "scale(1.05)" : "scale(1)",
+              transition: hoverTransition,
             }}
           >
             Atelier Sinnesküche
           </div>
-        ) : (
-          // Other pages: clickable HouseHeart icon
+        )}
+
+        {showIcon && (
           <div
             onClick={() => navigate("/")}
             onMouseEnter={() => setTitleHovered(true)}
@@ -77,16 +109,16 @@ export default function Header({ currentLang, setCurrentLang }) {
               alignItems: "center",
               transform: titleHovered ? "scale(1.05)" : "scale(1)",
               transition: hoverTransition,
-              color: titleColor,
+              color: titleHovered ? "#9960a8" : "#4e5f28",
             }}
           >
-            <HouseHeart size={32} strokeWidth={2} />
+            <HouseHeart size={26} strokeWidth={1} />
           </div>
         )}
       </div>
 
       {/* Right Controls */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: rightGap }}>
         {/* Language Toggle */}
         <div
           className="lang-toggle"
@@ -105,7 +137,7 @@ export default function Header({ currentLang, setCurrentLang }) {
             display: "flex",
             alignItems: "center",
             fontFamily: "Satoshi, sans-serif",
-            fontSize: "1rem",
+            fontSize: langFontSize,
             cursor: "pointer",
             color: "#4e5f28",
             userSelect: "none",
@@ -136,8 +168,8 @@ export default function Header({ currentLang, setCurrentLang }) {
           }}
           onClick={() => console.log("Menu clicked")}
           style={{
-            width: "24px",
-            height: "20px",
+            width: `${hamburgerSize.width}px`,
+            height: `${hamburgerSize.height}px`,
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
@@ -150,7 +182,7 @@ export default function Header({ currentLang, setCurrentLang }) {
               key={i}
               style={{
                 display: "block",
-                height: "4px",
+                height: `${hamburgerBarHeight}px`,
                 width: "100%",
                 backgroundColor: "#4e5f28",
                 borderRadius: "2px",
