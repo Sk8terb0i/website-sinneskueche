@@ -18,6 +18,16 @@ export default function Header({ currentLang, setCurrentLang }) {
 
   const hoverTransition = "transform 0.2s ease, color 0.2s ease";
 
+  // Determine if the studio name should be clickable
+  const isLandingPortrait = location.pathname === "/" && isPortrait;
+
+  // Determine color
+  const titleColor = isLandingPortrait
+    ? "#1c0700" // landing portrait: dark, not interactive
+    : titleHovered
+      ? "#9960a8" // hovered
+      : "#4e5f28"; // default color
+
   return (
     <header
       style={{
@@ -39,10 +49,9 @@ export default function Header({ currentLang, setCurrentLang }) {
     >
       {/* Left container: title/home */}
       <div style={{ width: "50vw", display: "flex", alignItems: "center" }}>
-        {(location.pathname === "/" && isPortrait) ||
-        location.pathname !== "/" ? (
+        {(location.pathname !== "/" || !isLandingPortrait) && (
           <div
-            onClick={() => navigate("/")} // navigate instead of <a href="/">
+            onClick={() => navigate("/")}
             onMouseEnter={() => setTitleHovered(true)}
             onMouseLeave={() => setTitleHovered(false)}
             style={{
@@ -55,12 +64,29 @@ export default function Header({ currentLang, setCurrentLang }) {
               alignItems: "center",
               transform: titleHovered ? "scale(1.05)" : "scale(1)",
               transition: hoverTransition,
-              color: titleHovered ? "#9960a8" : "#1c0700",
+              color: titleColor,
             }}
           >
             Atelier Sinnesküche
           </div>
-        ) : null}
+        )}
+
+        {/* Non-clickable landing portrait title */}
+        {isLandingPortrait && (
+          <div
+            style={{
+              fontFamily: "Harmond-SemiBoldCondensed",
+              fontSize: "2rem",
+              fontWeight: 700,
+              textDecoration: "none",
+              display: "flex",
+              alignItems: "center",
+              color: titleColor,
+            }}
+          >
+            Atelier Sinnesküche
+          </div>
+        )}
       </div>
 
       {/* Right Controls */}
