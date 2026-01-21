@@ -19,14 +19,15 @@ export default function LandingPortrait() {
 
   const activePlanetRef = useRef(null);
   const touchStartY = useRef(null);
+  const touchStartTime = useRef(null);
 
   const coursePlanets = planets.filter((p) => p.type === "courses");
 
   // ---------------- Scroll logic (wheel + touch) ----------------
   useEffect(() => {
-    let scrollLocked = false; // lock first scroll
+    let scrollLocked = false;
 
-    const scrollHandler = (direction) => {
+    const scrollHandler = (direction, steps = 1) => {
       setScrollDirection(direction);
 
       setActiveIndex((prev) => {
@@ -38,10 +39,9 @@ export default function LandingPortrait() {
         const startIndex = prev ?? 0;
         let nextIndex;
         if (direction === "down") {
-          nextIndex = (startIndex + 1) % coursePlanets.length;
+          nextIndex = Math.min(startIndex + steps, coursePlanets.length - 1);
         } else {
-          nextIndex =
-            (startIndex - 1 + coursePlanets.length) % coursePlanets.length;
+          nextIndex = Math.max(startIndex - steps, 0);
         }
 
         if (nextIndex !== startIndex) setPreviousIndex(startIndex);
@@ -59,22 +59,38 @@ export default function LandingPortrait() {
     // Mobile: touch
     const handleTouchStart = (e) => {
       touchStartY.current = e.touches[0].clientY;
+      touchStartTime.current = e.timeStamp;
     };
 
     const handleTouchMove = (e) => {
-      if (touchStartY.current === null) return;
+      if (touchStartY.current === null || touchStartTime.current === null)
+        return;
 
       const deltaY = touchStartY.current - e.touches[0].clientY;
-      if (Math.abs(deltaY) < 20) return; // swipe threshold
+      const elapsed = e.timeStamp - touchStartTime.current;
+
+      // Minimum swipe distance
+      const minSwipe = 30;
+      if (Math.abs(deltaY) < minSwipe) return;
+
+      // Determine steps based on swipe velocity
+      const velocity = Math.abs(deltaY) / elapsed; // px/ms
+      const steps = Math.min(
+        Math.floor(Math.abs(deltaY) / 80 + velocity * 5),
+        coursePlanets.length,
+      );
 
       const direction = deltaY > 0 ? "down" : "up";
-      scrollHandler(direction);
+      scrollHandler(direction, steps);
 
-      touchStartY.current = e.touches[0].clientY; // reset for next swipe
+      // Reset for next swipe
+      touchStartY.current = e.touches[0].clientY;
+      touchStartTime.current = e.timeStamp;
     };
 
     const handleTouchEnd = () => {
       touchStartY.current = null;
+      touchStartTime.current = null;
     };
 
     window.addEventListener("wheel", handleWheel, { passive: false });
@@ -107,14 +123,12 @@ export default function LandingPortrait() {
     return activeIndex === index ? planetSize * 2.5 : planetSize / 2;
   };
 
-  // ---------------- Compute vertical translation ----------------
   const computeTranslateY = () => {
     if (activeIndex === null) {
       const totalHeight =
         coursePlanets.reduce((sum, _, i) => sum + getPlanetSize(i), 0) +
         (coursePlanets.length - 1) * normalGap +
         sunSize;
-
       return window.innerHeight / 2 - totalHeight / 2;
     }
 
@@ -199,7 +213,6 @@ export default function LandingPortrait() {
           />
         ))}
 
-        {/* Sun */}
         <div
           style={{
             transition: "opacity 0.8s ease",
@@ -211,7 +224,7 @@ export default function LandingPortrait() {
         </div>
       </div>
 
-      {/* ---------------- Old moons (exit) ---------------- */}
+      {/* ---------------- Old moons ---------------- */}
       {previousIndex !== null &&
         hasShiftedLeft &&
         coursePlanets[previousIndex].courses?.map((moon, idx) => (
@@ -228,7 +241,7 @@ export default function LandingPortrait() {
           />
         ))}
 
-      {/* ---------------- New moons (enter) ---------------- */}
+      {/* ---------------- New moons ---------------- */}
       {activeIndex !== null &&
         hasShiftedLeft &&
         coursePlanets[activeIndex].courses?.map((moon, idx) => (

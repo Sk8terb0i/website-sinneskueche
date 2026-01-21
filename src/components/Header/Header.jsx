@@ -57,7 +57,7 @@ export default function Header({ currentLang, setCurrentLang }) {
             style={{
               fontFamily: "Harmond-SemiBoldCondensed",
               fontSize: titleFontSize,
-              fontWeight: 700,
+              fontWeight: 400,
               display: "flex",
               alignItems: "center",
               color: titleColor,
