@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 export default function Header({ currentLang, setCurrentLang }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isPortrait, setIsPortrait] = useState(
     window.innerWidth < window.innerHeight,
   );
   const [titleHovered, setTitleHovered] = useState(false);
 
-  // Update portrait state on window resize
   useEffect(() => {
     const handleResize = () =>
       setIsPortrait(window.innerWidth < window.innerHeight);
@@ -39,11 +39,10 @@ export default function Header({ currentLang, setCurrentLang }) {
     >
       {/* Left container: title/home */}
       <div style={{ width: "50vw", display: "flex", alignItems: "center" }}>
-        {/* Studio name clickable in all relevant cases */}
         {(location.pathname === "/" && isPortrait) ||
         location.pathname !== "/" ? (
-          <a
-            href="/"
+          <div
+            onClick={() => navigate("/")} // navigate instead of <a href="/">
             onMouseEnter={() => setTitleHovered(true)}
             onMouseLeave={() => setTitleHovered(false)}
             style={{
@@ -60,7 +59,7 @@ export default function Header({ currentLang, setCurrentLang }) {
             }}
           >
             Atelier Sinnesküche
-          </a>
+          </div>
         ) : null}
       </div>
 

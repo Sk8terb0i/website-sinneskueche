@@ -1,11 +1,19 @@
+// Dynamically import all images in the folder
+const planetImages = import.meta.glob("../assets/planets/*.png", {
+  eager: true,
+});
+
+// Helper to get the imported image path by filename
+const getImage = (filename) => {
+  const key = `../assets/planets/${filename}`;
+  return planetImages[key]?.default || "";
+};
+
 export const planets = [
   {
     id: "sight",
     type: "courses",
-    icon: {
-      en: "src/assets/planets/sight_en.png",
-      de: "src/assets/planets/sight_de.png",
-    },
+    icon: { en: getImage("sight_en.png"), de: getImage("sight_de.png") },
     courses: [
       {
         text: { en: "pottery tuesdays", de: "pottery tuesdays" },
@@ -16,10 +24,7 @@ export const planets = [
   {
     id: "touch",
     type: "courses",
-    icon: {
-      en: "src/assets/planets/touch_en.png",
-      de: "src/assets/planets/touch_de.png",
-    },
+    icon: { en: getImage("touch_en.png"), de: getImage("touch_de.png") },
     courses: [
       {
         text: { en: "pottery tuesdays", de: "pottery tuesdays" },
@@ -30,10 +35,7 @@ export const planets = [
   {
     id: "hearing",
     type: "courses",
-    icon: {
-      en: "src/assets/planets/hearing_en.png",
-      de: "src/assets/planets/hearing_de.png",
-    },
+    icon: { en: getImage("hearing_en.png"), de: getImage("hearing_de.png") },
     courses: [
       {
         text: { en: "singing lessons", de: "gesangsunterricht" },
@@ -44,10 +46,7 @@ export const planets = [
   {
     id: "smell",
     type: "courses",
-    icon: {
-      en: "src/assets/planets/smell_en.png",
-      de: "src/assets/planets/smell_de.png",
-    },
+    icon: { en: getImage("smell_en.png"), de: getImage("smell_de.png") },
     courses: [
       {
         text: {
@@ -60,10 +59,7 @@ export const planets = [
   {
     id: "taste",
     type: "courses",
-    icon: {
-      en: "src/assets/planets/taste_en.png",
-      de: "src/assets/planets/taste_de.png",
-    },
+    icon: { en: getImage("taste_en.png"), de: getImage("taste_de.png") },
     courses: [
       {
         text: {
@@ -76,10 +72,7 @@ export const planets = [
   {
     id: "location",
     type: "info",
-    icon: {
-      en: "src/assets/planets/location_en.png",
-      de: "src/assets/planets/location_de.png",
-    },
+    icon: { en: getImage("location_en.png"), de: getImage("location_de.png") },
     courses: [
       {
         text: { en: "how to find us :)", de: "so findest du uns :)" },
@@ -90,10 +83,7 @@ export const planets = [
   {
     id: "team",
     type: "info",
-    icon: {
-      en: "src/assets/planets/team_en.png",
-      de: "src/assets/planets/team_de.png",
-    },
+    icon: { en: getImage("team_en.png"), de: getImage("team_de.png") },
     courses: [
       { text: { en: "get to know us", de: "das sind wir" }, link: "/team" },
     ],
@@ -101,10 +91,7 @@ export const planets = [
   {
     id: "events",
     type: "info",
-    icon: {
-      en: "src/assets/planets/events_en.png",
-      de: "src/assets/planets/events_de.png",
-    },
+    icon: { en: getImage("events_en.png"), de: getImage("events_de.png") },
     courses: [
       { text: { en: "come back later :)", de: "komm später wieder :)" } },
     ],
@@ -112,10 +99,7 @@ export const planets = [
   {
     id: "contact",
     type: "action",
-    icon: {
-      en: "src/assets/planets/contact_en.png",
-      de: "src/assets/planets/contact_de.png",
-    },
+    icon: { en: getImage("contact_en.png"), de: getImage("contact_de.png") },
     courses: [
       { text: { en: "get in touch!", de: "melde dich!" }, link: "/contact" },
     ],
@@ -123,10 +107,7 @@ export const planets = [
   {
     id: "rent",
     type: "action",
-    icon: {
-      en: "src/assets/planets/rent_en.png",
-      de: "src/assets/planets/rent_de.png",
-    },
+    icon: { en: getImage("rent_en.png"), de: getImage("rent_de.png") },
     courses: [
       { text: { en: "rent our space", de: "raum mieten" }, link: "/rent" },
     ],
