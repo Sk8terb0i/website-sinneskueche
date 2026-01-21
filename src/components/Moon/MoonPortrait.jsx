@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 // Keep track of last used angles globally to avoid overlap
 const lastUsedAngles = [];
@@ -13,6 +14,7 @@ export default function MoonPortrait({
   onHoverStart,
   onHoverEnd,
 }) {
+  const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
 
   // ---------------- Resolve content & link ----------------
@@ -82,31 +84,26 @@ export default function MoonPortrait({
 
       if (state === "enter") {
         target = targetAngle;
-        targetOpacity = 1;
-        targetScale = 1;
       } else if (state === "exit") {
         target = exitAngle;
         targetOpacity = 0;
-        targetScale = 0; // Shrink moon to 0
-        opacityDuration = 600; // faster fade/scale on exit
+        targetScale = 0;
+        opacityDuration = 600;
       } else {
         return;
       }
 
-      // Animate angle
       const t = Math.min(elapsed / duration, 1);
       const easedT = easeOutCubic(t);
       const newAngle =
         startAngleRef.current + (target - startAngleRef.current) * easedT;
 
-      // Animate opacity
       const tOpacity = Math.min(elapsed / opacityDuration, 1);
       const easedOpacity = easeOutCubic(tOpacity);
       const newOpacity =
         startOpacityRef.current +
         (targetOpacity - startOpacityRef.current) * easedOpacity;
 
-      // Animate scale
       const tScale = Math.min(elapsed / opacityDuration, 1);
       const easedScale = easeOutCubic(tScale);
       const newScale =
@@ -198,11 +195,17 @@ export default function MoonPortrait({
       </svg>
 
       {/* Moon */}
-      <a
-        href={href || "#"}
-        target={href?.startsWith("http") ? "_blank" : "_self"}
-        rel="noreferrer"
+      <div
         style={moonStyle}
+        onClick={() => {
+          if (!href) return;
+
+          if (href.startsWith("http")) {
+            window.open(href, "_blank", "noreferrer");
+          } else {
+            navigate(href);
+          }
+        }}
         onMouseEnter={() => {
           if (!href) return;
           setIsHovered(true);
@@ -216,7 +219,7 @@ export default function MoonPortrait({
       >
         <div style={circleStyle} />
         <span style={labelStyle}>{content}</span>
-      </a>
+      </div>
     </>
   );
 }

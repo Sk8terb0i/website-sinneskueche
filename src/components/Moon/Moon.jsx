@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Moon({
   planetId,
@@ -13,11 +14,14 @@ export default function Moon({
   onHoverEnd,
   totalMoons = 1,
 }) {
+  const navigate = useNavigate();
+
   const speedFactor = 0.01;
-  const sideSpacing = 0.6; // radians (~35°)
-  const padding = 250; // min distance from window edge
+  const sideSpacing = 0.6;
+  const padding = 250;
   const [isHovered, setIsHovered] = useState(false);
   const hoverTimeoutRef = useRef(null);
+  const hasInitialized = useRef(false);
 
   // -------------------- Moon Orbit Radius --------------------
   let moonOrbitRadius = 100;
@@ -35,22 +39,42 @@ export default function Moon({
     content = moon;
   }
 
-  // -------------------- Track current side --------------------
+  // -------------------- Side & angle state --------------------
   const [side, setSide] = useState("right");
+  const [targetAngle, setTargetAngle] = useState(0);
+  const [animatedAngle, setAnimatedAngle] = useState(0);
 
-  // -------------------- Track target angle --------------------
-  const [targetAngle, setTargetAngle] = useState(() => {
-    const arc = sideSpacing * (totalMoons - 1);
-    return -arc / 2 + index * sideSpacing;
-  });
-
-  // -------------------- Flip logic --------------------
+  // -------------------- Initial placement (NO animation) --------------------
   useEffect(() => {
+    const arc = sideSpacing * (totalMoons - 1);
+
+    const rightAngle = -arc / 2 + index * sideSpacing;
+    const projectedX =
+      planetPosition.x + Math.cos(rightAngle) * moonOrbitRadius;
+
+    const shouldFlipRight =
+      projectedX + windowSize.width / 2 + 24 > windowSize.width - padding;
+
+    const initialSide = shouldFlipRight ? "left" : "right";
+    const initialAngle = shouldFlipRight
+      ? Math.PI - arc / 2 + index * sideSpacing
+      : rightAngle;
+
+    setSide(initialSide);
+    setTargetAngle(initialAngle);
+    setAnimatedAngle(initialAngle); // 👈 instant placement
+
+    hasInitialized.current = true;
+  }, [planetPosition.x, windowSize.width, index, totalMoons, moonOrbitRadius]);
+
+  // -------------------- Flip logic (AFTER init) --------------------
+  useEffect(() => {
+    if (!hasInitialized.current) return;
+
     const arc = sideSpacing * (totalMoons - 1);
     const projectedX =
       planetPosition.x + Math.cos(targetAngle) * moonOrbitRadius;
 
-    // Flip only if moon is too close to current side edge
     if (
       side === "right" &&
       projectedX + windowSize.width / 2 + 24 > windowSize.width - padding
@@ -71,13 +95,13 @@ export default function Moon({
     index,
     totalMoons,
     moonOrbitRadius,
+    targetAngle,
   ]);
 
-  // -------------------- animatedAngle state --------------------
-  const [animatedAngle, setAnimatedAngle] = useState(targetAngle);
-
-  // -------------------- Animate smoothly --------------------
+  // -------------------- Smooth animation --------------------
   useEffect(() => {
+    if (!hasInitialized.current) return;
+
     let frame;
     const animate = () => {
       setAnimatedAngle((prev) => {
@@ -93,11 +117,10 @@ export default function Moon({
     return () => cancelAnimationFrame(frame);
   }, [targetAngle]);
 
-  // -------------------- Compute x & y --------------------
+  // -------------------- Compute position --------------------
   const moonX = Math.cos(animatedAngle) * moonOrbitRadius;
   const moonY = Math.sin(animatedAngle) * moonOrbitRadius;
 
-  // -------------------- Moon container --------------------
   const moonStyle = {
     position: "absolute",
     left: `calc(50% + ${planetPosition.x + moonX}px)`,
@@ -111,7 +134,6 @@ export default function Moon({
     cursor: href ? "pointer" : "default",
   };
 
-  // -------------------- Circle styles --------------------
   const circleStyle = {
     width: "24px",
     height: "24px",
@@ -124,7 +146,6 @@ export default function Moon({
     transform: href ? `scale(${isHovered ? 1.2 : 1})` : "scale(1)",
   };
 
-  // -------------------- Label styles --------------------
   const labelStyle = {
     position: "absolute",
     top: "50%",
@@ -132,10 +153,8 @@ export default function Moon({
     whiteSpace: "nowrap",
     fontSize: isHovered ? "14px" : "12px",
     fontStyle: href ? "normal" : "italic",
-    color: href ? "#1c0700" : "#1c0700",
+    color: "#1c0700",
     textDecoration: href && isHovered ? "underline" : "none",
-    transition:
-      "color 0.2s ease-in-out, text-decoration 0.2s ease-in-out, font-size 0.2s ease",
     left: moonX >= 0 ? "100%" : "auto",
     right: moonX < 0 ? "100%" : "auto",
     marginLeft: moonX >= 0 ? "12px" : "0",
@@ -143,11 +162,14 @@ export default function Moon({
   };
 
   return (
-    <a
-      href={href || "#"}
-      target={href?.startsWith("http") ? "_blank" : "_self"}
-      rel="noreferrer"
+    <div
       style={moonStyle}
+      onClick={() => {
+        if (!href) return;
+        href.startsWith("http")
+          ? window.open(href, "_blank", "noreferrer")
+          : navigate(href);
+      }}
       onMouseEnter={() => {
         if (!href) return;
         if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
@@ -164,6 +186,6 @@ export default function Moon({
     >
       <div style={circleStyle} />
       <span style={labelStyle}>{content}</span>
-    </a>
+    </div>
   );
 }
