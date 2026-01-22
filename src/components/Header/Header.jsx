@@ -13,6 +13,8 @@ export default function Header({
     window.innerWidth < window.innerHeight,
   );
   const [titleHovered, setTitleHovered] = useState(false);
+  const [langHovered, setLangHovered] = useState(false);
+  const [menuHovered, setMenuHovered] = useState(false);
 
   useEffect(() => {
     const handleResize = () =>
@@ -22,7 +24,6 @@ export default function Header({
   }, []);
 
   const hoverTransition = "transform 0.2s ease, color 0.2s ease";
-
   const isLanding = location.pathname === "/";
 
   // ----------------- Determine what to show on the left -----------------
@@ -33,7 +34,6 @@ export default function Header({
   if (isPortrait) {
     titleFontSize = "1.5rem";
     if (isLanding) {
-      // ONLY show title if we are on landing AND a planet is active
       showTitle = isPlanetActive;
     } else {
       showIcon = true;
@@ -41,10 +41,10 @@ export default function Header({
   } else {
     titleFontSize = "2rem";
     if (isLanding) {
-      showTitle = false; // hide title on landing
-      showIcon = false; // hide icon on landing
+      showTitle = false;
+      showIcon = false;
     } else {
-      showTitle = true; // clickable title on other pages
+      showTitle = true;
     }
   }
 
@@ -82,18 +82,26 @@ export default function Header({
             onClick={!isPortrait ? () => navigate("/") : undefined}
             onMouseEnter={() => !isPortrait && setTitleHovered(true)}
             onMouseLeave={() => !isPortrait && setTitleHovered(false)}
+            // Touch events only trigger for title if NOT in portrait landing mode
+            onTouchStart={() => !isPortrait && setTitleHovered(true)}
+            onTouchEnd={() =>
+              !isPortrait && setTimeout(() => setTitleHovered(false), 200)
+            }
             style={{
               fontFamily: "Harmond-SemiBoldCondensed",
               fontSize: titleFontSize,
               fontWeight: !isPortrait ? 700 : 400,
               display: "flex",
               alignItems: "center",
-              color: !isPortrait
-                ? titleHovered
+              // Only apply the purple hover color if we are NOT in portrait
+              color:
+                !isPortrait && titleHovered
                   ? "#9960a8"
-                  : "#4e5f28"
-                : "#1c0700", // portrait landing page title
+                  : isPortrait && isLanding
+                    ? "#1c0700"
+                    : "#4e5f28",
               cursor: !isPortrait ? "pointer" : "default",
+              // Scale only applies to desktop/landscape
               transform:
                 !isPortrait && titleHovered ? "scale(1.05)" : "scale(1)",
               transition: hoverTransition,
@@ -108,6 +116,8 @@ export default function Header({
             onClick={() => navigate("/")}
             onMouseEnter={() => setTitleHovered(true)}
             onMouseLeave={() => setTitleHovered(false)}
+            onTouchStart={() => setTitleHovered(true)}
+            onTouchEnd={() => setTimeout(() => setTitleHovered(false), 200)}
             style={{
               cursor: "pointer",
               display: "flex",
@@ -124,19 +134,13 @@ export default function Header({
 
       {/* Right Controls */}
       <div style={{ display: "flex", alignItems: "center", gap: rightGap }}>
-        {/* Language Toggle */}
         <div
-          className="lang-toggle"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "scale(1.1)";
-            e.currentTarget.style.color = "#9960a8";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "scale(1)";
-            e.currentTarget.style.color = "#4e5f28";
-          }}
+          onMouseEnter={() => setLangHovered(true)}
+          onMouseLeave={() => setLangHovered(false)}
+          onTouchStart={() => setLangHovered(true)}
+          onTouchEnd={() => setTimeout(() => setLangHovered(false), 200)}
           onClick={(e) => {
-            e.stopPropagation(); // Prevents layout reset
+            e.stopPropagation();
             setCurrentLang((prev) => (prev === "en" ? "de" : "en"));
           }}
           style={{
@@ -145,9 +149,10 @@ export default function Header({
             fontFamily: "Satoshi, sans-serif",
             fontSize: langFontSize,
             cursor: "pointer",
-            color: "#4e5f28",
+            color: langHovered ? "#9960a8" : "#4e5f28",
             userSelect: "none",
             transition: hoverTransition,
+            transform: langHovered ? "scale(1.1)" : "scale(1)",
           }}
         >
           <span style={{ fontWeight: currentLang === "en" ? 700 : 400 }}>
@@ -159,21 +164,13 @@ export default function Header({
           </span>
         </div>
 
-        {/* Hamburger Menu */}
         <div
-          className="hamburger-menu"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "scale(1.1)";
-            const spans = e.currentTarget.querySelectorAll("span");
-            spans.forEach((s) => (s.style.backgroundColor = "#9960a8"));
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "scale(1)";
-            const spans = e.currentTarget.querySelectorAll("span");
-            spans.forEach((s) => (s.style.backgroundColor = "#4e5f28"));
-          }}
+          onMouseEnter={() => setMenuHovered(true)}
+          onMouseLeave={() => setMenuHovered(false)}
+          onTouchStart={() => setMenuHovered(true)}
+          onTouchEnd={() => setTimeout(() => setMenuHovered(false), 200)}
           onClick={(e) => {
-            e.stopPropagation(); // Prevents layout reset
+            e.stopPropagation();
             console.log("Menu clicked");
           }}
           style={{
@@ -184,6 +181,7 @@ export default function Header({
             justifyContent: "space-between",
             cursor: "pointer",
             transition: "transform 0.2s ease",
+            transform: menuHovered ? "scale(1.1)" : "scale(1)",
           }}
         >
           {[0, 1, 2].map((i) => (
@@ -193,7 +191,7 @@ export default function Header({
                 display: "block",
                 height: `${hamburgerBarHeight}px`,
                 width: "100%",
-                backgroundColor: "#4e5f28",
+                backgroundColor: menuHovered ? "#9960a8" : "#4e5f28",
                 borderRadius: "2px",
                 transition: "background-color 0.2s ease",
               }}

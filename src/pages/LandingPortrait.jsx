@@ -11,7 +11,7 @@ export default function LandingPortrait() {
   const [previousIndex, setPreviousIndex] = useState(null);
   const [currentLang, setCurrentLang] = useState(defaultLang);
   const [planetSize] = useState(80);
-  const [sunSize] = useState(200);
+  const [sunSize] = useState(150);
   const [hasShiftedLeft, setHasShiftedLeft] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [scrollDirection, setScrollDirection] = useState("down");
@@ -88,7 +88,7 @@ export default function LandingPortrait() {
     };
   }, [coursePlanets.length]);
 
-  const normalGap = planetSize * 0.5;
+  const normalGap = planetSize * 0.2;
   const expandedGap = planetSize * 1.1;
 
   const getPlanetSize = (index) => {
@@ -106,12 +106,12 @@ export default function LandingPortrait() {
     return distance * 2;
   };
 
-  // Helper to calculate the accumulated height up to a certain index
-  const getAccumulatedHeight = (index) => {
+  const getAccumulatedHeight = (index, isIdle = false) => {
     let height = 0;
-    const gap = activeIndex !== null ? expandedGap : normalGap;
+    const gap = !isIdle && activeIndex !== null ? expandedGap : normalGap;
     for (let i = 0; i < index; i++) {
-      height += getPlanetSize(i) + gap;
+      const size = isIdle ? planetSize : getPlanetSize(i);
+      height += size + gap;
     }
     return height;
   };
@@ -127,7 +127,6 @@ export default function LandingPortrait() {
         window.innerHeight * 0.07,
       );
     }
-    // We want the center of the active planet to be at the center of the screen
     return (
       window.innerHeight / 2 -
       getAccumulatedHeight(activeIndex) -
@@ -136,6 +135,20 @@ export default function LandingPortrait() {
   };
 
   const translateY = computeTranslateY();
+
+  const idleTotalHeight =
+    coursePlanets.length * planetSize +
+    (coursePlanets.length - 1) * normalGap +
+    sunSize;
+  const idleTranslateY = Math.max(
+    window.innerHeight / 2 - idleTotalHeight / 2,
+    window.innerHeight * 0.07,
+  );
+  const sunTopPosition =
+    idleTranslateY +
+    coursePlanets.length * planetSize +
+    coursePlanets.length * normalGap;
+
   const springEase = "cubic-bezier(0.34, 1.56, 0.64, 1)";
   const smoothEase = "cubic-bezier(0.4, 0, 0.2, 1)";
   const currentEase = previousIndex === null ? springEase : smoothEase;
@@ -180,6 +193,49 @@ export default function LandingPortrait() {
       </div>
 
       <div
+        style={{
+          position: "absolute",
+          top: `${sunTopPosition}px`,
+          left: "50%",
+          width: sunSize,
+          height: sunSize,
+          transform: "translateX(-50%)",
+          transition: `opacity 0.3s ease-out`,
+          opacity: activeIndex === null && isLoaded ? 1 : 0,
+          pointerEvents: activeIndex === null ? "auto" : "none",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          zIndex: 1,
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleReset();
+        }}
+      >
+        {coursePlanets.map((_, index) => (
+          <div
+            key={`orbit-${index}`}
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              width: `${getOrbitDiameter(index)}px`,
+              height: `${getOrbitDiameter(index)}px`,
+              border: "1px solid rgba(28, 7, 0, 0.15)",
+              borderRadius: "50%",
+              transform: "translate(-50%, -50%)",
+              boxSizing: "border-box",
+              zIndex: -1,
+              pointerEvents: "none",
+            }}
+          />
+        ))}
+        <SunPortrait style={{ width: "100%", height: "100%", zIndex: 1 }} />
+      </div>
+
+      <div
         onClick={(e) =>
           e.target === e.currentTarget ? handleReset() : e.stopPropagation()
         }
@@ -191,6 +247,7 @@ export default function LandingPortrait() {
           transform: `translateY(${translateY}px)`,
           transition: `transform ${movementDuration} ${currentEase}, gap 0.5s`,
           width: "fit-content",
+          zIndex: 2,
         }}
       >
         {coursePlanets.map((planet, index) => {
@@ -203,14 +260,20 @@ export default function LandingPortrait() {
           const currentAngle = isLoaded ? 0 : startAngle;
           let translateX = hasShiftedLeft ? "-10vw" : "0";
 
+          // Calculate distance from active planet
+          // Only apply limit if a planet is active
+          const isVisible =
+            activeIndex === null || Math.abs(index - activeIndex) <= 2;
+
           return (
             <div
               key={planet.id}
               onClick={(e) => e.stopPropagation()}
               style={{
                 zIndex: 2,
-                opacity: isLoaded ? 1 : 0,
-                transition: `transform ${movementDuration} ${currentEase}, translate ${movementDuration} ${currentEase}, opacity ${movementDuration} ease`,
+                opacity: isLoaded && isVisible ? 1 : 0,
+                pointerEvents: isVisible ? "auto" : "none",
+                transition: `transform ${movementDuration} ${currentEase}, translate ${movementDuration} ${currentEase}, opacity 0.5s ease`,
                 transformOrigin: `center ${radius}px`,
                 transform: `rotate(${currentAngle}deg)`,
                 translate: `${translateX} 0`,
@@ -239,45 +302,6 @@ export default function LandingPortrait() {
             </div>
           );
         })}
-
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            handleReset();
-          }}
-          style={{
-            position: "relative",
-            width: sunSize,
-            height: sunSize,
-            transition: `opacity 1.5s ease`,
-            opacity: activeIndex === null && isLoaded ? 1 : 0,
-            pointerEvents: activeIndex === null ? "auto" : "none",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-          }}
-        >
-          {coursePlanets.map((_, index) => (
-            <div
-              key={`orbit-${index}`}
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                width: `${getOrbitDiameter(index)}px`,
-                height: `${getOrbitDiameter(index)}px`,
-                border: "1px solid rgba(28, 7, 0, 0.15)",
-                borderRadius: "50%",
-                transform: "translate(-50%, -50%)",
-                boxSizing: "border-box",
-                zIndex: -1,
-                pointerEvents: "none",
-              }}
-            />
-          ))}
-          <SunPortrait style={{ width: "100%", height: "100%", zIndex: 1 }} />
-        </div>
       </div>
 
       {activeIndex !== null &&
