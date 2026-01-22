@@ -15,12 +15,8 @@ export default function LandingPortrait() {
   const [hasShiftedLeft, setHasShiftedLeft] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [scrollDirection, setScrollDirection] = useState("down");
-  const [activePlanetCenter, setActivePlanetCenter] = useState({ x: 0, y: 0 });
   const [isLoaded, setIsLoaded] = useState(false);
-
-  const activePlanetRef = useRef(null);
-  const touchStartY = useRef(null);
-  const touchLocked = useRef(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const coursePlanets = planets.filter((p) => p.type === "courses");
 
@@ -29,24 +25,31 @@ export default function LandingPortrait() {
     return () => clearTimeout(timer);
   }, []);
 
-  // ---------------- Scroll logic ----------------
+  const handleReset = () => {
+    if (activeIndex === null || isResetting) return;
+    setIsResetting(true);
+    setIsLoaded(false);
+    setPreviousIndex(null);
+    setActiveIndex(null);
+    setTimeout(() => {
+      setIsLoaded(true);
+      setIsResetting(false);
+    }, 400);
+  };
+
   useEffect(() => {
     const scrollHandler = (direction) => {
       setScrollDirection(direction);
       setActiveIndex((prev) => {
         let nextIndex;
-
         if (direction === "down") {
-          // If nothing is active, start "before" the first element so +1 equals 0
-          const startIndex = prev ?? -1;
-          nextIndex = (startIndex + 1) % coursePlanets.length;
+          nextIndex = prev === null ? 0 : (prev + 1) % coursePlanets.length;
         } else {
-          // If nothing is active, start at the end so -1 goes to the last planet
-          const startIndex = prev ?? 0;
           nextIndex =
-            (startIndex - 1 + coursePlanets.length) % coursePlanets.length;
+            prev === null
+              ? 0
+              : (prev - 1 + coursePlanets.length) % coursePlanets.length;
         }
-
         if (nextIndex !== prev) setPreviousIndex(prev);
         return nextIndex;
       });
@@ -54,6 +57,7 @@ export default function LandingPortrait() {
 
     const handleWheel = (e) => {
       e.preventDefault();
+      if (Math.abs(e.deltaY) < 10) return;
       scrollHandler(e.deltaY > 0 ? "down" : "up");
     };
 
@@ -71,6 +75,9 @@ export default function LandingPortrait() {
       touchLocked.current = true;
     };
 
+    const touchStartY = { current: null };
+    const touchLocked = { current: false };
+
     window.addEventListener("wheel", handleWheel, { passive: false });
     window.addEventListener("touchstart", handleTouchStart, { passive: false });
     window.addEventListener("touchmove", handleTouchMove, { passive: false });
@@ -81,7 +88,6 @@ export default function LandingPortrait() {
     };
   }, [coursePlanets.length]);
 
-  // ---------------- UI Calculations ----------------
   const normalGap = planetSize * 0.5;
   const expandedGap = planetSize * 1.1;
 
@@ -100,38 +106,40 @@ export default function LandingPortrait() {
     return distance * 2;
   };
 
+  // Helper to calculate the accumulated height up to a certain index
+  const getAccumulatedHeight = (index) => {
+    let height = 0;
+    const gap = activeIndex !== null ? expandedGap : normalGap;
+    for (let i = 0; i < index; i++) {
+      height += getPlanetSize(i) + gap;
+    }
+    return height;
+  };
+
   const computeTranslateY = () => {
     if (activeIndex === null) {
       const totalHeight =
         coursePlanets.reduce((sum, _, i) => sum + getPlanetSize(i), 0) +
         (coursePlanets.length - 1) * normalGap +
         sunSize;
-
-      // 1. Calculate the ideal centered position
-      const centeredY = window.innerHeight / 2 - totalHeight / 2;
-
-      // 2. Define the minimum top margin (0.07 =7vh)
-      const minTopMargin = window.innerHeight * 0.07;
-
-      // 3. Return whichever is larger (ensures it never goes above 7vh)
-      return Math.max(centeredY, minTopMargin);
+      return Math.max(
+        window.innerHeight / 2 - totalHeight / 2,
+        window.innerHeight * 0.07,
+      );
     }
-
-    // ... existing logic for activeIndex !== null
-    let offsetAbove = 0;
-    for (let i = 0; i < activeIndex; i++) {
-      offsetAbove += getPlanetSize(i) + expandedGap;
-    }
+    // We want the center of the active planet to be at the center of the screen
     return (
-      window.innerHeight * 0.48 - (offsetAbove + getPlanetSize(activeIndex) / 2)
+      window.innerHeight / 2 -
+      getAccumulatedHeight(activeIndex) -
+      getPlanetSize(activeIndex) / 2
     );
   };
 
   const translateY = computeTranslateY();
-
-  // ---------------- Easing Constant ----------------
-  // This curve creates the overshoot (the 1.56 value)
   const springEase = "cubic-bezier(0.34, 1.56, 0.64, 1)";
+  const smoothEase = "cubic-bezier(0.4, 0, 0.2, 1)";
+  const currentEase = previousIndex === null ? springEase : smoothEase;
+  const movementDuration = activeIndex === null ? "1.5s" : "0.8s";
 
   useEffect(() => {
     if (activeIndex !== null && !hasShiftedLeft) {
@@ -141,35 +149,20 @@ export default function LandingPortrait() {
     }
   }, [activeIndex]);
 
-  useEffect(() => {
-    const updatePosition = () => {
-      if (activePlanetRef.current) {
-        const rect = activePlanetRef.current.getBoundingClientRect();
-        setActivePlanetCenter({
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 2,
-        });
-      }
-    };
-
-    updatePosition();
-    const timer = setTimeout(updatePosition, 1000);
-    window.addEventListener("resize", updatePosition);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("resize", updatePosition);
-    };
-  }, [activeIndex, translateY, hasShiftedLeft, isLoaded]);
+  const targetCenter = {
+    x: window.innerWidth * 0.4,
+    y: window.innerHeight * 0.5,
+  };
 
   return (
     <div
-      onClick={() => setActiveIndex(null)}
+      onClick={handleReset}
       style={{
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        padding: "2rem",
+        padding: "0",
         overflow: "hidden",
         position: "relative",
         cursor: activeIndex !== null ? "pointer" : "default",
@@ -182,49 +175,33 @@ export default function LandingPortrait() {
         <Header
           currentLang={currentLang}
           setCurrentLang={setCurrentLang}
-          isPlanetActive={activeIndex !== null} // Pass the active state here
+          isPlanetActive={activeIndex !== null}
         />
       </div>
 
       <div
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setActiveIndex(null);
-          } else {
-            e.stopPropagation();
-          }
-        }}
+        onClick={(e) =>
+          e.target === e.currentTarget ? handleReset() : e.stopPropagation()
+        }
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           gap: activeIndex !== null ? expandedGap : normalGap,
           transform: `translateY(${translateY}px)`,
-          // Container Y-movement now uses the springEase
-          transition: `transform 1s ${springEase}, gap 0.5s`,
+          transition: `transform ${movementDuration} ${currentEase}, gap 0.5s`,
           width: "fit-content",
         }}
       >
         {coursePlanets.map((planet, index) => {
           const radius = getOrbitDiameter(index) / 2;
-          const speedFactor = 0.0016;
-          const circumference = 2 * Math.PI * radius;
-
           const possibleAngles = [-90, 90, -180, 45, -45];
           let startAngle =
             index === coursePlanets.length - 1
               ? 180
               : possibleAngles[index % possibleAngles.length];
-
-          const arcFraction = Math.abs(startAngle) / 360;
-          const orbitDuration =
-            circumference * arcFraction * speedFactor + 0.25;
           const currentAngle = isLoaded ? 0 : startAngle;
-
-          let translateX = "0";
-          if (hasShiftedLeft) {
-            translateX = activeIndex === index ? "-20vw" : "-40vw";
-          }
+          let translateX = hasShiftedLeft ? "-10vw" : "0";
 
           return (
             <div
@@ -232,16 +209,15 @@ export default function LandingPortrait() {
               onClick={(e) => e.stopPropagation()}
               style={{
                 zIndex: 2,
-                // Rotation and Horizontal shift now use springEase
-                transition: `transform ${orbitDuration}s ${springEase}, 
-                             translate 1s ${springEase}`,
+                opacity: isLoaded ? 1 : 0,
+                transition: `transform ${movementDuration} ${currentEase}, translate ${movementDuration} ${currentEase}, opacity ${movementDuration} ease`,
                 transformOrigin: `center ${radius}px`,
                 transform: `rotate(${currentAngle}deg)`,
                 translate: `${translateX} 0`,
+                position: "relative",
               }}
             >
               <div
-                ref={activeIndex === index ? activePlanetRef : null}
                 style={{
                   transition: "transform 0.3s ease",
                   transform:
@@ -253,9 +229,8 @@ export default function LandingPortrait() {
                   language={currentLang}
                   size={getPlanetSize(index)}
                   onActivate={() => {
-                    const newIndex = activeIndex === index ? null : index;
-                    if (newIndex !== activeIndex) setPreviousIndex(activeIndex);
-                    setActiveIndex(newIndex);
+                    setPreviousIndex(activeIndex);
+                    setActiveIndex(activeIndex === index ? null : index);
                   }}
                   onMouseEnter={() => setHoveredIndex(index)}
                   onMouseLeave={() => setHoveredIndex(null)}
@@ -265,19 +240,17 @@ export default function LandingPortrait() {
           );
         })}
 
-        {/* Sun & Orbits */}
         <div
           onClick={(e) => {
             e.stopPropagation();
-            setActiveIndex(null);
+            handleReset();
           }}
           style={{
             position: "relative",
             width: sunSize,
             height: sunSize,
-            transition: `opacity 0.8s ease, transform 1s ${springEase}`,
-            opacity: activeIndex === null ? 1 : 0,
-            transform: hasShiftedLeft ? "translateX(-40vw)" : "translateX(0)",
+            transition: `opacity 1.5s ease`,
+            opacity: activeIndex === null && isLoaded ? 1 : 0,
             pointerEvents: activeIndex === null ? "auto" : "none",
             display: "flex",
             alignItems: "center",
@@ -307,44 +280,31 @@ export default function LandingPortrait() {
         </div>
       </div>
 
-      {/* Moons Logic */}
       {activeIndex !== null &&
         hasShiftedLeft &&
         coursePlanets[activeIndex].courses?.map((moon, idx) => (
-          <div
+          <MoonPortrait
             key={`new-${activeIndex}-${idx}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoonPortrait
-              moon={moon}
-              index={idx}
-              totalMoons={coursePlanets[activeIndex].courses.length}
-              orbitRadius={120}
-              currentLang={currentLang}
-              enterDirection={scrollDirection === "down" ? "top" : "bottom"}
-              planetCenter={activePlanetCenter}
-            />
-          </div>
+            moon={moon}
+            orbitRadius={120}
+            currentLang={currentLang}
+            enterDirection={scrollDirection === "down" ? "top" : "bottom"}
+            planetCenter={targetCenter}
+          />
         ))}
 
       {previousIndex !== null &&
         hasShiftedLeft &&
         coursePlanets[previousIndex].courses?.map((moon, idx) => (
-          <div
+          <MoonPortrait
             key={`old-${previousIndex}-${idx}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoonPortrait
-              moon={moon}
-              index={idx}
-              totalMoons={coursePlanets[previousIndex].courses.length}
-              orbitRadius={120}
-              currentLang={currentLang}
-              exitOnly
-              exitDirection={scrollDirection === "down" ? "bottom" : "top"}
-              planetCenter={activePlanetCenter}
-            />
-          </div>
+            moon={moon}
+            orbitRadius={120}
+            currentLang={currentLang}
+            exitOnly
+            exitDirection={scrollDirection === "down" ? "bottom" : "top"}
+            planetCenter={targetCenter}
+          />
         ))}
     </div>
   );

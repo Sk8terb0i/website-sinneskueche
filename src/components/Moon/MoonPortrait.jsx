@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
-// Keep track of last used angles globally to avoid overlap
 const lastUsedAngles = [];
 
 export default function MoonPortrait({
@@ -11,13 +10,13 @@ export default function MoonPortrait({
   exitOnly = false,
   enterDirection = "top",
   exitDirection = "bottom",
+  planetCenter,
   onHoverStart,
   onHoverEnd,
 }) {
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-  // NEW: State for "no-link" feedback animation
   const [isShaking, setIsShaking] = useState(false);
 
   useEffect(() => {
@@ -26,7 +25,6 @@ export default function MoonPortrait({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // ---------------- Resolve content & link ----------------
   let content = "";
   let href = null;
   if (typeof moon === "object") {
@@ -37,7 +35,9 @@ export default function MoonPortrait({
     content = moon;
   }
 
-  // ---------------- Positioning Logic ----------------
+  const centerX = planetCenter?.x ?? window.innerWidth * 0.3;
+  const centerY = planetCenter?.y ?? window.innerHeight * 0.5;
+
   const possibleAngles = [
     -Math.PI / 4,
     -Math.PI / 6,
@@ -56,26 +56,24 @@ export default function MoonPortrait({
     lastUsedAngles.push(chosen);
     targetAngleRef.current = chosen;
   }
+
   const targetAngle = targetAngleRef.current;
   const entryAngle =
     enterDirection === "top" ? -Math.PI / 2 - 0.5 : Math.PI / 2 + 0.5;
   const exitAngle =
     exitDirection === "bottom" ? Math.PI / 2 + 1 : -Math.PI / 2 - 1;
 
-  // ---------------- Animation State ----------------
   const [animatedAngle, setAnimatedAngle] = useState(
     exitOnly ? targetAngle : entryAngle,
   );
   const [animatedOpacity, setAnimatedOpacity] = useState(exitOnly ? 1 : 0);
-  const [animatedScale, setAnimatedScale] = useState(exitOnly ? 1 : 1);
+  const [animatedScale, setAnimatedScale] = useState(1);
   const [state, setState] = useState(exitOnly ? "exit" : "enter");
 
   const moveDuration = exitOnly ? 1200 : 800;
   const fadeOutDuration = 600;
   const startTimeRef = useRef(null);
   const startAngleRef = useRef(animatedAngle);
-  const startOpacityRef = useRef(animatedOpacity);
-  const startScaleRef = useRef(animatedScale);
 
   useEffect(() => {
     const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
@@ -92,101 +90,34 @@ export default function MoonPortrait({
         targetA = exitAngle;
         targetS = 0;
         const fadeT = Math.min(elapsed / fadeOutDuration, 1);
-        setAnimatedOpacity(startOpacityRef.current * (1 - easeOutCubic(fadeT)));
+        setAnimatedOpacity(1 - easeOutCubic(fadeT));
       } else if (state === "enter") {
         targetA = targetAngle;
         targetS = 1;
         setAnimatedOpacity(easedMoveT);
-      } else {
-        return;
       }
 
       setAnimatedAngle(
         startAngleRef.current + (targetA - startAngleRef.current) * easedMoveT,
       );
-      setAnimatedScale(
-        startScaleRef.current + (targetS - startScaleRef.current) * easedMoveT,
-      );
+      setAnimatedScale(1 + (targetS - 1) * easedMoveT);
 
       if (moveT < 1) requestAnimationFrame(step);
       else if (state === "enter") setState("idle");
     };
     startTimeRef.current = null;
     startAngleRef.current = animatedAngle;
-    startOpacityRef.current = animatedOpacity;
-    startScaleRef.current = animatedScale;
     const animId = requestAnimationFrame(step);
     return () => cancelAnimationFrame(animId);
   }, [state, targetAngle, exitAngle]);
 
-  // ---------------- Shake Keyframes Helper ----------------
-  // We define the shake using a CSS animation string
-  const shakeAnimation = isShaking ? "shake 0.4s ease-in-out" : "none";
-
-  // ---------------- Position & Style ----------------
   const moonX = Math.cos(animatedAngle) * orbitRadius;
   const moonY = Math.sin(animatedAngle) * orbitRadius;
-  const currentLeftPos = windowWidth * 0.3 + moonX;
+  const currentLeftPos = centerX + moonX;
   const maxLabelWidth = windowWidth - currentLeftPos - 60;
-
-  const moonStyle = {
-    position: "fixed",
-    left: `calc(30vw + ${moonX}px)`,
-    top: `calc(50vh + ${moonY}px)`,
-    transform: "translate(-50%, -50%)",
-    zIndex: 2000,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    pointerEvents: state !== "exit" ? "auto" : "none",
-    cursor: href ? "pointer" : "default",
-    WebkitTapHighlightColor: "transparent",
-    animation: shakeAnimation, // Apply shake here
-  };
-
-  const circleStyle = {
-    width: "32px",
-    height: "32px",
-    borderRadius: "50%",
-    // Pulsing color if shaking
-    background: isShaking
-      ? "rgba(255, 255, 255, 0.75)"
-      : href
-        ? isHovered
-          ? "#9960a8"
-          : "white"
-        : "#ffffff",
-    transition: "background 0.2s ease, transform 0.2s ease",
-    transform: `scale(${isHovered ? 1.2 : animatedScale})`,
-    flexShrink: 0,
-  };
-
-  const labelStyle = {
-    position: "absolute",
-    top: "50%",
-    transform: "translateY(-50%)",
-    whiteSpace: "normal",
-    wordWrap: "break-word",
-    overflowWrap: "anywhere",
-    hyphens: "auto",
-    maxWidth: `${maxLabelWidth}px`,
-    width: "max-content",
-    minWidth: "120px",
-    fontSize: isHovered ? "16px" : "14px",
-    fontStyle: href ? "normal" : "italic",
-    color: isShaking ? "rgba(28, 7, 0, 0.5)" : "#1c0700", // Label turns red briefly
-    textDecoration: href && isHovered ? "underline" : "none",
-    left: "100%",
-    marginLeft: "12px",
-    opacity: animatedOpacity,
-    lineHeight: "1.2",
-    pointerEvents: "auto",
-    transition: "all 0.2s ease",
-  };
 
   return (
     <>
-      {/* Inline style for the shake animation keyframes */}
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translate(-50%, -50%); }
@@ -195,25 +126,58 @@ export default function MoonPortrait({
         }
       `}</style>
 
+      {/* Orbit SVG */}
+      <svg
+        style={{
+          position: "fixed",
+          left: centerX,
+          top: centerY,
+          width: orbitRadius * 2 + 4,
+          height: orbitRadius * 2 + 4,
+          transform: "translate(-50%, -50%)",
+          pointerEvents: "none",
+          zIndex: 1999,
+          // Fixed opacity so it doesn't pulse/fade on entry/exit
+          opacity: 0.4,
+        }}
+      >
+        <circle
+          cx={orbitRadius + 2}
+          cy={orbitRadius + 2}
+          r={orbitRadius}
+          fill="none"
+          stroke="#1c0700"
+          strokeWidth="1"
+          strokeDasharray="4 4"
+        />
+      </svg>
+
       <div
-        style={moonStyle}
+        style={{
+          position: "fixed",
+          left: centerX + moonX,
+          top: centerY + moonY,
+          transform: "translate(-50%, -50%)",
+          zIndex: 2000,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          pointerEvents: state !== "exit" ? "auto" : "none",
+          cursor: href ? "pointer" : "default",
+          WebkitTapHighlightColor: "transparent",
+          animation: isShaking ? "shake 0.4s ease-in-out" : "none",
+        }}
         onClick={(e) => {
           e.stopPropagation();
-
           if (state === "exit") return;
-
-          // IF NO LINK: Trigger feedback
           if (!href) {
             setIsShaking(true);
             setTimeout(() => setIsShaking(false), 400);
             return;
           }
-
-          if (href.startsWith("http")) {
+          if (href.startsWith("http"))
             window.open(href, "_blank", "noreferrer");
-          } else {
-            navigate(href);
-          }
+          else navigate(href);
         }}
         onMouseEnter={() => {
           if (href && state !== "exit") {
@@ -240,8 +204,46 @@ export default function MoonPortrait({
           }, 150);
         }}
       >
-        <div style={circleStyle} />
-        <span style={labelStyle}>{content}</span>
+        <div
+          style={{
+            width: "32px",
+            height: "32px",
+            borderRadius: "50%",
+            background: isShaking
+              ? "rgba(255, 255, 255, 0.75)"
+              : href && isHovered
+                ? "#9960a8"
+                : "white",
+            transition: "background 0.2s ease, transform 0.2s ease",
+            transform: `scale(${isHovered ? 1.2 : animatedScale})`,
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "100%",
+            marginLeft: "12px",
+            transform: "translateY(-50%)",
+            display: "block",
+            whiteSpace: "normal",
+            wordWrap: "break-word",
+            overflowWrap: "break-word",
+            maxWidth: `${windowWidth - (centerX + moonX) - 40}px`,
+            width: "max-content",
+            minWidth: "80px",
+            fontSize: isHovered ? "16px" : "14px",
+            fontStyle: href ? "normal" : "italic",
+            color: isShaking ? "rgba(28, 7, 0, 0.5)" : "#1c0700",
+            textDecoration: href && isHovered ? "underline" : "none",
+            opacity: animatedOpacity,
+            lineHeight: "1.2",
+            transition: "all 0.2s ease",
+          }}
+        >
+          {content}
+        </span>
       </div>
     </>
   );
