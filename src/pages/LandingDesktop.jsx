@@ -10,14 +10,50 @@ import { languages, defaultLang } from "../i18n";
 import { planets } from "../data/planets";
 
 export default function Landing() {
-  const navigate = useNavigate(); // <-- added
+  const navigate = useNavigate();
   const [activePlanet, setActivePlanet] = useState(null);
   const [hoveredPlanet, setHoveredPlanet] = useState(null);
   const [focusedPlanet, setFocusedPlanet] = useState(null);
   const [hoveredMoonPlanet, setHoveredMoonPlanet] = useState(null);
-  const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
-  const [planetAngles, setPlanetAngles] = useState({});
-  const [moonOffsets, setMoonOffsets] = useState({});
+  const [windowSize, setWindowSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+
+  // Controls the "Fly Out" animation
+  const [isSystemMounted, setIsSystemMounted] = useState(false);
+
+  const [planetAngles, setPlanetAngles] = useState(() => {
+    const initialAngles = {};
+    const grouped = planets.reduce((acc, p) => {
+      acc[p.type] = acc[p.type] || [];
+      acc[p.type].push(p);
+      return acc;
+    }, {});
+
+    planets.forEach((planet) => {
+      const group = grouped[planet.type];
+      const index = group.findIndex((p) => p.id === planet.id);
+      const base = (360 / group.length) * index;
+      initialAngles[planet.id] =
+        (base + (Math.random() - 0.5) * 30 + 360) % 360;
+    });
+    return initialAngles;
+  });
+
+  const [moonOffsets, setMoonOffsets] = useState(() => {
+    const offsets = {};
+    planets.forEach((planet) => {
+      if (planet.courses && planet.courses.length > 0) {
+        const moonCount = planet.courses.length;
+        offsets[planet.id] = planet.courses.map(
+          (_, idx) => (360 / moonCount) * idx + (Math.random() - 0.5) * 15,
+        );
+      }
+    });
+    return offsets;
+  });
+
   const [sunClicked, setSunClicked] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentLang, setCurrentLang] = useState(defaultLang);
@@ -29,55 +65,26 @@ export default function Landing() {
   const orbitSpeeds = { courses: 9, info: 7, action: 5 };
   const ringSlowFactor = 0.1;
   const lang = languages[currentLang];
+  const planetBaseSizes = { courses: 128, info: 96, action: 64 };
 
-  /* -------------------- Window Resize -------------------- */
+  // Trigger fly-out immediately after mount
+  useEffect(() => {
+    const timer = setTimeout(() => setIsSystemMounted(true), 50);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     const handleResize = () =>
       setWindowSize({ width: window.innerWidth, height: window.innerHeight });
-    handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  /* -------------------- Init Angles & Moon Offsets -------------------- */
-  useEffect(() => {
-    const initialAngles = {};
-    const offsets = {};
-
-    const grouped = planets.reduce((acc, p) => {
-      acc[p.type] = acc[p.type] || [];
-      acc[p.type].push(p);
-      return acc;
-    }, {});
-
-    planets.forEach((planet) => {
-      const group = grouped[planet.type];
-      const index = group.findIndex((p) => p.id === planet.id);
-      const base = (360 / group.length) * index;
-
-      initialAngles[planet.id] =
-        (base + (Math.random() - 0.5) * 30 + 360) % 360;
-
-      if (planet.courses && planet.courses.length > 0) {
-        const moonCount = planet.courses.length;
-        offsets[planet.id] = planet.courses.map(
-          (_, idx) => (360 / moonCount) * idx + (Math.random() - 0.5) * 15,
-        );
-      }
-    });
-
-    setPlanetAngles(initialAngles);
-    setMoonOffsets(offsets);
-  }, []);
-
-  /* -------------------- Animation Loop -------------------- */
   useEffect(() => {
     let lastTime = performance.now();
-
     const animate = (time) => {
       const delta = (time - lastTime) / 1000;
       lastTime = time;
-
       const targetSpeed = isPaused ? 0 : 1;
       globalSpeedRef.current += (targetSpeed - globalSpeedRef.current) * 0.08;
 
@@ -88,8 +95,9 @@ export default function Landing() {
       }
 
       setPlanetAngles((prev) => {
-        const next = {};
+        const next = { ...prev };
         planets.forEach((planet) => {
+          if (prev[planet.id] === undefined) return;
           next[planet.id] =
             (prev[planet.id] -
               orbitSpeeds[planet.type] *
@@ -101,114 +109,130 @@ export default function Landing() {
         });
         return next;
       });
-
       requestRef.current = requestAnimationFrame(animate);
     };
-
     requestRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(requestRef.current);
   }, [isPaused, focusedPlanet]);
 
-  /* -------------------- Radii -------------------- */
-  const baseRadius = Math.min(windowSize.width, windowSize.height) / 5;
-  const orbitRadii = {
+  const safeWidth = windowSize.width || 1200;
+  const safeHeight = windowSize.height || 800;
+  const baseRadius = Math.min(safeWidth, safeHeight) / 5;
+  const scaleFactor = Math.max(0.4, Math.min(1, baseRadius / 250));
+
+  // These stay constant so the Orbit rings don't move
+  const staticOrbitRadii = {
     action: baseRadius,
     info: baseRadius * 1.5,
     courses: baseRadius * 2,
   };
 
-  /* -------------------- Sun Click -------------------- */
-  const handleSunClick = () => {
-    setSunClicked(true);
-    setTimeout(() => setSunClicked(false), 200);
-    setIsPaused((prev) => !prev);
-  };
+  const sunSize = 200 * scaleFactor;
+  const isSystemHovered = hoveredPlanet || hoveredMoonPlanet;
 
-  /* -------------------- Render -------------------- */
   return (
     <div
       className="landing"
-      style={{ position: "relative" }}
+      style={{
+        position: "relative",
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+      }}
       onClick={() => {
         setFocusedPlanet(null);
         setActivePlanet(null);
       }}
     >
-      {/* Header */}
       <Header currentLang={currentLang} setCurrentLang={setCurrentLang} />
 
-      {/* Sun */}
       <Sun
-        hovered={hoveredPlanet || hoveredMoonPlanet}
         sunClicked={sunClicked}
-        onClick={handleSunClick}
+        size={sunSize}
+        style={{
+          filter: isSystemHovered ? "blur(7px)" : "none",
+          transition: "filter 0.3s ease",
+        }}
+        onClick={() => {
+          setSunClicked(true);
+          setTimeout(() => setSunClicked(false), 200);
+          setIsPaused(!isPaused);
+        }}
       />
+
       <StudioName />
 
-      {/* Orbits */}
-      {Object.entries(orbitRadii).map(([type, radius]) => (
+      {/* Orbit Rings: Using static radii so they are visible immediately */}
+      {Object.entries(staticOrbitRadii).map(([type, radius]) => (
         <Orbit
           key={type}
           radius={radius}
           label={lang.orbits[type]}
+          scaleFactor={scaleFactor}
           style={{
-            filter: hoveredPlanet || hoveredMoonPlanet ? "blur(7px)" : "none",
+            filter: isSystemHovered ? "blur(7px)" : "none",
+            transition: "filter 0.3s ease",
           }}
         />
       ))}
 
-      {/* Planets */}
       {planets.map((planet) => {
-        const radius = orbitRadii[planet.type];
-        const angle = planetAngles[planet.id] || 0;
-        const rad = (angle * Math.PI) / 180;
-        const x = Math.cos(rad) * radius;
-        const y = Math.sin(rad) * radius;
+        if (planetAngles[planet.id] === undefined) return null;
 
-        const blurActive = hoveredPlanet || hoveredMoonPlanet;
+        // Planets use the static radii ONLY when mounted, otherwise they stay at 0
+        const targetRadius = isSystemMounted
+          ? staticOrbitRadii[planet.type]
+          : 0;
+        const angle = planetAngles[planet.id];
+        const rad = (angle * Math.PI) / 180;
+        const x = Math.cos(rad) * targetRadius;
+        const y = Math.sin(rad) * targetRadius;
+
         const currentFocusPlanet = hoveredPlanet || hoveredMoonPlanet;
         const currentFocusType = currentFocusPlanet
           ? planets.find((p) => p.id === currentFocusPlanet)?.type
           : null;
 
         let blurValue = "none";
-        if (blurActive && planet.id !== currentFocusPlanet) {
+        if (isSystemHovered && planet.id !== currentFocusPlanet) {
           blurValue =
             planet.type === currentFocusType ? "blur(1px)" : "blur(3px)";
         }
 
-        const isHoverable = !blurActive || planet.id === currentFocusPlanet;
+        const isHoverable =
+          !isSystemHovered || planet.id === currentFocusPlanet;
+        const currentSize = (planetBaseSizes[planet.type] || 64) * scaleFactor;
 
         return (
           <Planet
             key={planet.id}
             planet={planet}
             language={currentLang}
+            size={currentSize}
             style={{
               position: "absolute",
               top: "50%",
               left: "50%",
               transform: `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`,
-              willChange: "transform",
-              zIndex: 1,
+              zIndex: 10,
               filter: blurValue,
-              transition: "filter 0.2s ease",
+              // Initial fly-out is smooth (1.5s), subsequent hover scaling remains snappy (0.2s)
+              transition: isSystemMounted
+                ? "transform 1.5s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease, opacity 0.8s ease"
+                : "none",
+              opacity: isSystemMounted ? 1 : 0,
             }}
-            isActive={activePlanet === planet.id}
             onActivate={(id) => {
               const planetData = planets.find((p) => p.id === id);
               if (
-                planetData.courses &&
-                planetData.courses.length === 1 &&
-                typeof planetData.courses[0] === "object" &&
+                planetData.courses?.length === 1 &&
                 planetData.courses[0].link
               ) {
-                // React Router navigation instead of window.open
                 navigate(planetData.courses[0].link);
-                return;
+              } else {
+                setActivePlanet(id);
+                setFocusedPlanet(id);
               }
-              setActivePlanet(id);
-              setFocusedPlanet(id);
             }}
             onHover={
               isHoverable
@@ -219,24 +243,19 @@ export default function Landing() {
                   }
                 : undefined
             }
-            onHoverEnd={
-              isHoverable
-                ? () => {
-                    hoverTimeoutRef.current = setTimeout(() => {
-                      setHoveredPlanet(null);
-                    }, 150);
-                  }
-                : undefined
-            }
+            onHoverEnd={() => {
+              hoverTimeoutRef.current = setTimeout(
+                () => setHoveredPlanet(null),
+                150,
+              );
+            }}
           />
         );
       })}
 
-      {/* Moons */}
       {planets.map((planet) => {
         if (focusedPlanet !== planet.id || !planet.courses) return null;
-
-        const radius = orbitRadii[planet.type];
+        const radius = staticOrbitRadii[planet.type];
         const angle = planetAngles[planet.id] || 0;
         const rad = (angle * Math.PI) / 180;
         const x = Math.cos(rad) * radius;
@@ -253,6 +272,8 @@ export default function Landing() {
             planetPosition={{ x, y }}
             windowSize={windowSize}
             currentLang={currentLang}
+            scaleFactor={scaleFactor} // <--- Add this line
+            style={{ transform: `scale(${scaleFactor})`, zIndex: 20 }}
             onHoverStart={() => {
               clearTimeout(hoverTimeoutRef.current);
               setHoveredMoonPlanet(planet.id);

@@ -2,7 +2,11 @@ import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { HouseHeart } from "lucide-react";
 
-export default function Header({ currentLang, setCurrentLang }) {
+export default function Header({
+  currentLang,
+  setCurrentLang,
+  isPlanetActive,
+}) {
   const location = useLocation();
   const navigate = useNavigate();
   const [isPortrait, setIsPortrait] = useState(
@@ -29,9 +33,10 @@ export default function Header({ currentLang, setCurrentLang }) {
   if (isPortrait) {
     titleFontSize = "1.5rem";
     if (isLanding) {
-      showTitle = true; // non-clickable small title
+      // ONLY show title if we are on landing AND a planet is active
+      showTitle = isPlanetActive;
     } else {
-      showIcon = true; // icon on other pages
+      showIcon = true;
     }
   } else {
     titleFontSize = "2rem";
@@ -130,9 +135,10 @@ export default function Header({ currentLang, setCurrentLang }) {
             e.currentTarget.style.transform = "scale(1)";
             e.currentTarget.style.color = "#4e5f28";
           }}
-          onClick={() =>
-            setCurrentLang((prev) => (prev === "en" ? "de" : "en"))
-          }
+          onClick={(e) => {
+            e.stopPropagation(); // Prevents layout reset
+            setCurrentLang((prev) => (prev === "en" ? "de" : "en"));
+          }}
           style={{
             display: "flex",
             alignItems: "center",
@@ -166,7 +172,10 @@ export default function Header({ currentLang, setCurrentLang }) {
             const spans = e.currentTarget.querySelectorAll("span");
             spans.forEach((s) => (s.style.backgroundColor = "#4e5f28"));
           }}
-          onClick={() => console.log("Menu clicked")}
+          onClick={(e) => {
+            e.stopPropagation(); // Prevents layout reset
+            console.log("Menu clicked");
+          }}
           style={{
             width: `${hamburgerSize.width}px`,
             height: `${hamburgerSize.height}px`,

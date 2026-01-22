@@ -34,15 +34,20 @@ export default function LandingPortrait() {
     const scrollHandler = (direction) => {
       setScrollDirection(direction);
       setActiveIndex((prev) => {
-        const startIndex = prev ?? 0;
         let nextIndex;
+
         if (direction === "down") {
+          // If nothing is active, start "before" the first element so +1 equals 0
+          const startIndex = prev ?? -1;
           nextIndex = (startIndex + 1) % coursePlanets.length;
         } else {
+          // If nothing is active, start at the end so -1 goes to the last planet
+          const startIndex = prev ?? 0;
           nextIndex =
             (startIndex - 1 + coursePlanets.length) % coursePlanets.length;
         }
-        if (nextIndex !== startIndex) setPreviousIndex(startIndex);
+
+        if (nextIndex !== prev) setPreviousIndex(prev);
         return nextIndex;
       });
     };
@@ -82,7 +87,7 @@ export default function LandingPortrait() {
 
   const getPlanetSize = (index) => {
     if (activeIndex === null) return planetSize;
-    return activeIndex === index ? planetSize * 2.5 : planetSize / 2;
+    return activeIndex === index ? planetSize * 2 : planetSize / 3;
   };
 
   const getOrbitDiameter = (targetIndex) => {
@@ -101,8 +106,18 @@ export default function LandingPortrait() {
         coursePlanets.reduce((sum, _, i) => sum + getPlanetSize(i), 0) +
         (coursePlanets.length - 1) * normalGap +
         sunSize;
-      return window.innerHeight / 2 - totalHeight / 2;
+
+      // 1. Calculate the ideal centered position
+      const centeredY = window.innerHeight / 2 - totalHeight / 2;
+
+      // 2. Define the minimum top margin (0.07 =7vh)
+      const minTopMargin = window.innerHeight * 0.07;
+
+      // 3. Return whichever is larger (ensures it never goes above 7vh)
+      return Math.max(centeredY, minTopMargin);
     }
+
+    // ... existing logic for activeIndex !== null
     let offsetAbove = 0;
     for (let i = 0; i < activeIndex; i++) {
       offsetAbove += getPlanetSize(i) + expandedGap;
@@ -160,7 +175,16 @@ export default function LandingPortrait() {
         cursor: activeIndex !== null ? "pointer" : "default",
       }}
     >
-      <Header currentLang={currentLang} setCurrentLang={setCurrentLang} />
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: "100%", zIndex: 4000 }}
+      >
+        <Header
+          currentLang={currentLang}
+          setCurrentLang={setCurrentLang}
+          isPlanetActive={activeIndex !== null} // Pass the active state here
+        />
+      </div>
 
       <div
         onClick={(e) => {
@@ -199,7 +223,7 @@ export default function LandingPortrait() {
 
           let translateX = "0";
           if (hasShiftedLeft) {
-            translateX = activeIndex === index ? "-45vw" : "-40vw";
+            translateX = activeIndex === index ? "-20vw" : "-40vw";
           }
 
           return (
@@ -295,7 +319,7 @@ export default function LandingPortrait() {
               moon={moon}
               index={idx}
               totalMoons={coursePlanets[activeIndex].courses.length}
-              orbitRadius={150}
+              orbitRadius={120}
               currentLang={currentLang}
               enterDirection={scrollDirection === "down" ? "top" : "bottom"}
               planetCenter={activePlanetCenter}
@@ -314,7 +338,7 @@ export default function LandingPortrait() {
               moon={moon}
               index={idx}
               totalMoons={coursePlanets[previousIndex].courses.length}
-              orbitRadius={150}
+              orbitRadius={120}
               currentLang={currentLang}
               exitOnly
               exitDirection={scrollDirection === "down" ? "bottom" : "top"}

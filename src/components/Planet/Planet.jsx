@@ -1,5 +1,4 @@
 import { useState } from "react";
-import "./Planet.css";
 
 export default function Planet({
   planet,
@@ -9,6 +8,7 @@ export default function Planet({
   onHover,
   onHoverEnd,
   style,
+  size,
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const iconSrc = planet.icon[language];
@@ -18,23 +18,40 @@ export default function Planet({
       className="planet-container"
       style={{
         ...style,
+        width: `${size}px`,
+        height: `${size}px`,
         transform: isHovered
-          ? `${style.transform} scale(1.1)` // simple grow on hover
+          ? `${style.transform} scale(1.1)`
           : style.transform,
-        transition: "transform 0.2s ease, filter 0.2s ease",
+        transition: "transform 0.2s ease-out, filter 0.2s ease",
         cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
       }}
       onMouseEnter={() => {
         setIsHovered(true);
-        onHover(planet.id);
+        if (onHover) onHover(planet.id);
       }}
       onMouseLeave={() => {
         setIsHovered(false);
-        onHoverEnd && onHoverEnd();
+        if (onHoverEnd) onHoverEnd();
       }}
-      onClick={() => onActivate(planet.id)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onActivate(planet.id);
+      }}
     >
-      <img src={iconSrc} alt={planet.id} className="planet-icon" />
+      <img
+        src={iconSrc}
+        alt={planet.id}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          pointerEvents: "none",
+        }}
+      />
     </div>
   );
 }

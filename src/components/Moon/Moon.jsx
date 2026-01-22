@@ -5,7 +5,7 @@ export default function Moon({
   planetId,
   moon,
   index,
-  planetPosition, // { x, y }
+  planetPosition,
   planetType,
   moonOffset,
   windowSize,
@@ -13,6 +13,7 @@ export default function Moon({
   onHoverStart,
   onHoverEnd,
   totalMoons = 1,
+  scaleFactor = 1, // <--- Add default value here
 }) {
   const navigate = useNavigate();
 
@@ -23,10 +24,13 @@ export default function Moon({
   const hoverTimeoutRef = useRef(null);
   const hasInitialized = useRef(false);
 
-  // -------------------- Moon Orbit Radius --------------------
-  let moonOrbitRadius = 100;
-  if (planetType === "info") moonOrbitRadius -= 20;
-  if (planetType === "action") moonOrbitRadius -= 40;
+  // -------------------- Moon Orbit Radius (Scaled) --------------------
+  let baseMoonRadius = 100;
+  if (planetType === "info") baseMoonRadius -= 20;
+  if (planetType === "action") baseMoonRadius -= 40;
+
+  // Apply the scale factor to the radius
+  const moonOrbitRadius = baseMoonRadius * scaleFactor;
 
   // -------------------- Resolve content & link --------------------
   let content = "";
