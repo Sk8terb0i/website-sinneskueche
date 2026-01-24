@@ -9,7 +9,7 @@ import Moon from "../components/Moon/Moon";
 import { languages, defaultLang } from "../i18n";
 import { planets } from "../data/planets";
 
-export default function Landing() {
+export default function Landing({ isMenuOpen }) {
   const navigate = useNavigate();
   const [activePlanet, setActivePlanet] = useState(null);
   const [hoveredPlanet, setHoveredPlanet] = useState(null);
@@ -20,7 +20,6 @@ export default function Landing() {
     height: window.innerHeight,
   });
 
-  // Controls the "Fly Out" animation
   const [isSystemMounted, setIsSystemMounted] = useState(false);
 
   const [planetAngles, setPlanetAngles] = useState(() => {
@@ -67,7 +66,6 @@ export default function Landing() {
   const lang = languages[currentLang];
   const planetBaseSizes = { courses: 128, info: 96, action: 64 };
 
-  // Trigger fly-out immediately after mount
   useEffect(() => {
     const timer = setTimeout(() => setIsSystemMounted(true), 50);
     return () => clearTimeout(timer);
@@ -120,7 +118,6 @@ export default function Landing() {
   const baseRadius = Math.min(safeWidth, safeHeight) / 5;
   const scaleFactor = Math.max(0.4, Math.min(1, baseRadius / 250));
 
-  // These stay constant so the Orbit rings don't move
   const staticOrbitRadii = {
     action: baseRadius,
     info: baseRadius * 1.5,
@@ -162,7 +159,6 @@ export default function Landing() {
 
       <StudioName />
 
-      {/* Orbit Rings: Using static radii so they are visible immediately */}
       {Object.entries(staticOrbitRadii).map(([type, radius]) => (
         <Orbit
           key={type}
@@ -179,7 +175,6 @@ export default function Landing() {
       {planets.map((planet) => {
         if (planetAngles[planet.id] === undefined) return null;
 
-        // Planets use the static radii ONLY when mounted, otherwise they stay at 0
         const targetRadius = isSystemMounted
           ? staticOrbitRadii[planet.type]
           : 0;
@@ -216,7 +211,6 @@ export default function Landing() {
               transform: `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`,
               zIndex: 10,
               filter: blurValue,
-              // Initial fly-out is smooth (1.5s), subsequent hover scaling remains snappy (0.2s)
               transition: isSystemMounted
                 ? "transform 1.5s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease, opacity 0.8s ease"
                 : "none",
@@ -235,7 +229,7 @@ export default function Landing() {
               }
             }}
             onHover={
-              isHoverable
+              !isMenuOpen && isHoverable
                 ? (id) => {
                     clearTimeout(hoverTimeoutRef.current);
                     setHoveredPlanet(id);
@@ -244,10 +238,11 @@ export default function Landing() {
                 : undefined
             }
             onHoverEnd={() => {
-              hoverTimeoutRef.current = setTimeout(
-                () => setHoveredPlanet(null),
-                150,
-              );
+              setHoveredPlanet(null);
+              clearTimeout(hoverTimeoutRef.current);
+              hoverTimeoutRef.current = setTimeout(() => {
+                setFocusedPlanet((prev) => (hoveredMoonPlanet ? prev : null));
+              }, 150);
             }}
           />
         );
@@ -272,13 +267,20 @@ export default function Landing() {
             planetPosition={{ x, y }}
             windowSize={windowSize}
             currentLang={currentLang}
-            scaleFactor={scaleFactor} // <--- Add this line
+            scaleFactor={scaleFactor}
             style={{ transform: `scale(${scaleFactor})`, zIndex: 20 }}
             onHoverStart={() => {
               clearTimeout(hoverTimeoutRef.current);
               setHoveredMoonPlanet(planet.id);
+              setFocusedPlanet(planet.id);
             }}
-            onHoverEnd={() => setHoveredMoonPlanet(null)}
+            onHoverEnd={() => {
+              setHoveredMoonPlanet(null);
+              clearTimeout(hoverTimeoutRef.current);
+              hoverTimeoutRef.current = setTimeout(() => {
+                setFocusedPlanet((prev) => (hoveredPlanet ? prev : null));
+              }, 150);
+            }}
           />
         ));
       })}

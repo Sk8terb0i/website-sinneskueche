@@ -18,7 +18,17 @@ export default function LandingPortrait() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
+  // Menu State and Ref (Ref is used for synchronous checking in event listeners)
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isMenuOpenRef = useRef(false);
+
+  useEffect(() => {
+    isMenuOpenRef.current = isMenuOpen;
+  }, [isMenuOpen]);
+
   const coursePlanets = planets.filter((p) => p.type === "courses");
+  const touchStartY = useRef(null);
+  const touchLocked = useRef(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoaded(true), 100);
@@ -26,7 +36,7 @@ export default function LandingPortrait() {
   }, []);
 
   const handleReset = () => {
-    if (activeIndex === null || isResetting) return;
+    if (activeIndex === null || isResetting || isMenuOpenRef.current) return;
     setIsResetting(true);
     setIsLoaded(false);
     setPreviousIndex(null);
@@ -39,6 +49,7 @@ export default function LandingPortrait() {
 
   useEffect(() => {
     const scrollHandler = (direction) => {
+      if (isMenuOpenRef.current) return;
       setScrollDirection(direction);
       setActiveIndex((prev) => {
         let nextIndex;
@@ -56,27 +67,31 @@ export default function LandingPortrait() {
     };
 
     const handleWheel = (e) => {
+      if (isMenuOpenRef.current) return;
       e.preventDefault();
       if (Math.abs(e.deltaY) < 10) return;
       scrollHandler(e.deltaY > 0 ? "down" : "up");
     };
 
     const handleTouchStart = (e) => {
+      if (isMenuOpenRef.current) return;
       touchStartY.current = e.touches[0].clientY;
       touchLocked.current = false;
     };
 
     const handleTouchMove = (e) => {
-      if (touchStartY.current === null || touchLocked.current) return;
+      if (
+        isMenuOpenRef.current ||
+        touchStartY.current === null ||
+        touchLocked.current
+      )
+        return;
       const deltaY = touchStartY.current - e.touches[0].clientY;
       if (Math.abs(deltaY) < 50) return;
       scrollHandler(deltaY > 0 ? "down" : "up");
       touchStartY.current = null;
       touchLocked.current = true;
     };
-
-    const touchStartY = { current: null };
-    const touchLocked = { current: false };
 
     window.addEventListener("wheel", handleWheel, { passive: false });
     window.addEventListener("touchstart", handleTouchStart, { passive: false });
@@ -179,16 +194,18 @@ export default function LandingPortrait() {
         overflow: "hidden",
         position: "relative",
         cursor: activeIndex !== null ? "pointer" : "default",
+        pointerEvents: isMenuOpen ? "none" : "auto",
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ width: "100%", zIndex: 4000 }}
+        style={{ width: "100%", zIndex: 4000, pointerEvents: "auto" }}
       >
         <Header
           currentLang={currentLang}
           setCurrentLang={setCurrentLang}
           isPlanetActive={activeIndex !== null}
+          onMenuToggle={setIsMenuOpen}
         />
       </div>
 
@@ -260,8 +277,6 @@ export default function LandingPortrait() {
           const currentAngle = isLoaded ? 0 : startAngle;
           let translateX = hasShiftedLeft ? "-10vw" : "0";
 
-          // Calculate distance from active planet
-          // Only apply limit if a planet is active
           const isVisible =
             activeIndex === null || Math.abs(index - activeIndex) <= 2;
 
