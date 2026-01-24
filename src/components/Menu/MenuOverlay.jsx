@@ -2,19 +2,46 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import { planets } from "../../data/planets";
-
-/**
- * MENU DRAWER COMPONENT
- * - Adaptive blur: 1px on mobile, 4px on desktop.
- * - Text links for footer.
- * - Tap-friendly interactions for mobile.
- */
+import { db } from "../../firebase";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import AtelierCalendar from "../Calendar/AtelierCalendar";
 
 export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const navigate = useNavigate();
-
   const [isCoursesOpen, setIsCoursesOpen] = useState(true);
   const [isStudioOpen, setIsStudioOpen] = useState(true);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(true);
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
+
+  const isMobile = window.innerWidth < 768;
+
+  // 1. Fetch and Slice Events based on Device
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const eventsCollection = collection(db, "events");
+        const q = query(eventsCollection, orderBy("date", "asc"));
+        const snapshot = await getDocs(q);
+        const now = new Date().setHours(0, 0, 0, 0);
+
+        const allUpcoming = snapshot.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() }))
+          .filter((event) => {
+            const eventDate = new Date(event.date).setHours(0, 0, 0, 0);
+            return eventDate >= now;
+          });
+
+        // Limit: 3 for mobile, 8 for landscape/desktop
+        const limit = isMobile ? 3 : 8;
+        setUpcomingEvents(allUpcoming.slice(0, limit));
+      } catch (error) {
+        console.error("Error fetching events:", error);
+      }
+    };
+    if (isOpen) fetchEvents();
+  }, [isOpen, isMobile]);
+
+  const hasUpcomingEvents = upcomingEvents.length > 0;
 
   const getPlanetIcon = (id) => {
     const planet = planets.find((p) => p.id === id);
@@ -37,7 +64,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
       ],
       infoAction: [
         {
-          text: { en: "about  us", de: "über uns" },
+          text: { en: "about us", de: "über uns" },
           link: "/team",
           icon: getPlanetIcon("team"),
         },
@@ -62,21 +89,15 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   );
 
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
+    document.body.style.overflow = isOpen ? "hidden" : "unset";
     return () => {
       document.body.style.overflow = "unset";
     };
   }, [isOpen]);
 
-  const isMobile = window.innerWidth < 768;
-
   return (
     <>
-      {/* SCRIM / BACKDROP */}
+      {/* BACKDROP & DESKTOP CALENDAR SIDE-PANEL */}
       <div
         style={{
           position: "fixed",
@@ -84,83 +105,114 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           backgroundColor: "rgba(28, 7, 0, 0.15)",
           backdropFilter: isOpen
             ? isMobile
-              ? "blur(1px)"
-              : "blur(4px)"
+              ? "blur(2px)"
+              : "blur(6px)"
             : "blur(0px)",
           WebkitBackdropFilter: isOpen
             ? isMobile
-              ? "blur(1px)"
-              : "blur(4px)"
+              ? "blur(2px)"
+              : "blur(6px)"
             : "blur(0px)",
           zIndex: 9998,
           opacity: isOpen ? 1 : 0,
           visibility: isOpen ? "visible" : "hidden",
-          transition:
-            "opacity 0.5s ease, backdrop-filter 0.5s ease, -webkit-backdrop-filter 0.5s ease",
+          transition: "opacity 0.5s ease, backdrop-filter 0.5s ease",
+          display: "flex",
+          justifyContent: "flex-end",
+          paddingRight: isMobile ? "0" : "440px", // 420px menu + 20px gap
         }}
         onClick={onClose}
-      />
+      >
+        {!isMobile && isOpen && hasUpcomingEvents && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "360px",
+              height: "100dvh",
+              // padding-top matches the vertical start of the "Courses" title
+              padding: "5.85rem 3rem 3rem 3rem",
+              backgroundColor: "rgba(255, 252, 227, 0.85)",
+              borderRight: "1px solid rgba(28, 7, 0, 0.05)",
+              boxShadow: "10px 0 30px rgba(28, 7, 0, 0.03)",
+              animation: "fadeInBlur 1.2s forwards",
+              display: "flex",
+              flexDirection: "column",
+              boxSizing: "border-box",
+            }}
+          >
+            <Section
+              title={currentLang === "en" ? "upcoming" : "termine"}
+              isOpen={isCalendarOpen}
+              toggle={() => setIsCalendarOpen(!isCalendarOpen)}
+              isMobile={false}
+            >
+              {/* Landscape/Desktop specific gap */}
+              <div style={{ paddingTop: "2.5rem" }}>
+                <AtelierCalendar
+                  currentLang={currentLang}
+                  isMobile={false}
+                  events={upcomingEvents}
+                />
+              </div>
+            </Section>
+          </div>
+        )}
+      </div>
 
-      {/* MENU PANEL */}
+      {/* MAIN MENU PANEL */}
       <div
         style={{
           position: "fixed",
           top: 0,
           right: 0,
-          width: isMobile ? "75vw" : "420px",
-          height: "100%",
-          minHeight: "100vh",
-          overflowY: "auto",
+          width: isMobile ? "85vw" : "420px",
+          height: "100dvh",
           backgroundColor: "#fffce3",
           zIndex: 9999,
-          boxShadow: "-10px 0 50px rgba(28, 7, 0, 0.08)",
           transform: isOpen ? "translateX(0)" : "translateX(100%)",
           transition: "transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
           display: "flex",
           flexDirection: "column",
-          padding: isMobile ? "1.5rem 2rem" : "3rem 4rem",
+          padding: isMobile ? "2.5rem 1.5rem 1.5rem 1.5rem" : "3rem 4rem",
           boxSizing: "border-box",
+          overflow: "hidden",
         }}
       >
         <div
           style={{
             display: "flex",
             justifyContent: "flex-end",
-            marginBottom: "2rem",
+            marginBottom: isMobile ? "2.5rem" : "2rem",
             flexShrink: 0,
           }}
         >
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "#1c0700",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              fontFamily: "Satoshi",
-              fontSize: "0.85rem",
-              textTransform: "lowercase",
-            }}
-          >
+          <button onClick={onClose} style={closeBtnStyle}>
             <span>{currentLang === "en" ? "close" : "schließen"}</span>
-            <X size={18} strokeWidth={1.5} />
+            <X size={18} />
           </button>
         </div>
 
-        <div style={{ flex: "1 0 auto" }}>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            gap: isMobile ? "1.8rem" : "1.2rem",
+            overflow: "hidden",
+          }}
+        >
           <Section
             title={currentLang === "en" ? "Courses" : "Kurse"}
             isOpen={isCoursesOpen}
             toggle={() => setIsCoursesOpen(!isCoursesOpen)}
+            isMobile={isMobile}
           >
             {menuData.courses.map((item, i) => (
               <MenuLink
                 key={i}
                 item={item}
                 lang={currentLang}
+                isMobile={isMobile}
                 onNavigate={(p) => {
                   navigate(p);
                   onClose();
@@ -169,18 +221,18 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
             ))}
           </Section>
 
-          <div style={{ height: "1rem" }} />
-
           <Section
             title={currentLang === "en" ? "The Atelier" : "Das Atelier"}
             isOpen={isStudioOpen}
             toggle={() => setIsStudioOpen(!isStudioOpen)}
+            isMobile={isMobile}
           >
             {menuData.infoAction.map((item, i) => (
               <MenuLink
                 key={i}
                 item={item}
                 lang={currentLang}
+                isMobile={isMobile}
                 onNavigate={(p) => {
                   navigate(p);
                   onClose();
@@ -188,153 +240,105 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
               />
             ))}
           </Section>
+
+          {isMobile && hasUpcomingEvents && (
+            <Section
+              title={currentLang === "en" ? "Upcoming" : "Termine"}
+              isOpen={isCalendarOpen}
+              toggle={() => setIsCalendarOpen(!isCalendarOpen)}
+              isMobile={isMobile}
+            >
+              <div style={{ paddingTop: "0.5rem" }}>
+                <AtelierCalendar
+                  currentLang={currentLang}
+                  isMobile={true}
+                  events={upcomingEvents}
+                />
+              </div>
+            </Section>
+          )}
+
+          {isMobile && <div style={{ flexGrow: 1 }} />}
         </div>
 
         <div
           style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "12px",
-            marginTop: "3rem",
-            paddingBottom: "3rem",
-            paddingTop: "2rem",
-            borderTop: "1px solid rgba(28, 7, 0, 0.05)",
-            flexShrink: 0,
+            ...footerStyle,
+            marginTop: isMobile ? "0.5rem" : "3rem",
+            paddingBottom: isMobile ? "1rem" : "3rem",
           }}
         >
           <a
-            href="https://www.instagram.com/sinneskueche/"
+            href="https://instagram.com/sinneskueche/"
             target="_blank"
             rel="noreferrer"
-            style={{
-              color: "#caaff3",
-              transition: "color 0.3s",
-              textDecoration: "none",
-              fontFamily: "Satoshi",
-              fontSize: "1rem",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#9960a8")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#caaff3")}
+            className="footer-link"
           >
             instagram
           </a>
-          <a
-            href="mailto:hallo@sinneskueche.de"
-            style={{
-              color: "#caaff3",
-              transition: "color 0.3s",
-              textDecoration: "none",
-              fontFamily: "Satoshi",
-              fontSize: "1rem",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#9960a8")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#caaff3")}
-          >
+          <a href="mailto:hallo@sinneskueche.de" className="footer-link">
             hallo@sinneskueche.de
           </a>
         </div>
       </div>
 
       <style>{`
-        @keyframes hintPulse {
-          0% { transform: scale(1); opacity: 0.6; }
-          100% { transform: scale(2.8); opacity: 0; }
-        }
+        .footer-link { color: #caaff3; text-decoration: none; font-family: Satoshi; font-size: 1rem; transition: color 0.3s; }
+        .footer-link:hover { color: #9960a8; }
+        @keyframes fadeInBlur { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
       `}</style>
     </>
   );
 }
 
-function Section({ title, children, isOpen, toggle }) {
-  const [hasInteracted, setHasInteracted] = useState(false);
-
-  const handleToggle = () => {
-    if (!hasInteracted) setHasInteracted(true);
-    toggle();
-  };
-
-  const showPulse = !isOpen && !hasInteracted;
-
+// Sub-components
+function Section({ title, children, isOpen, toggle, isMobile }) {
   return (
-    <div style={{ marginBottom: "0.5rem" }}>
+    <div style={{ marginBottom: isMobile ? "0.2rem" : "0.5rem" }}>
       <div
-        onClick={handleToggle}
+        onClick={toggle}
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "1.2rem",
+          gap: "1rem",
           cursor: "pointer",
-          padding: "0.5rem 0",
+          padding: "0.3rem 0",
         }}
       >
         <div
           style={{
-            position: "relative",
-            width: "10px",
-            height: "10px",
-            flexShrink: 0,
-            marginLeft: "5px",
+            width: "8px",
+            height: "8px",
+            backgroundColor: isOpen ? "#caaff3" : "#1c0700",
+            borderRadius: "50%",
+            transition: "all 0.4s ease",
           }}
-        >
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              backgroundColor: isOpen ? "#caaff3" : "#1c0700",
-              borderRadius: "50%",
-              transition: "all 0.4s ease",
-              transform: isOpen ? "scale(1.3)" : "scale(1)",
-              zIndex: 2,
-              position: "relative",
-            }}
-          />
-          {showPulse && (
-            <div
-              style={{
-                position: "absolute",
-                inset: "-4px",
-                border: "1px solid #1c0700",
-                borderRadius: "50%",
-                animation: "hintPulse 2s infinite ease-out",
-                pointerEvents: "none",
-              }}
-            />
-          )}
-        </div>
-
+        />
         <h3
           style={{
             fontFamily: "Harmond-SemiBoldCondensed",
-            fontSize: "2.1rem",
-            color: "#1c0700",
+            fontSize: isMobile ? "1.8rem" : "2.1rem",
             margin: 0,
-            padding: 0,
-            lineHeight: 1.1,
             textTransform: "lowercase",
             opacity: isOpen ? 1 : 0.7,
-            transition: "opacity 0.3s ease",
           }}
         >
           {title}
         </h3>
       </div>
-
       <div
         style={{
           display: "grid",
           gridTemplateRows: isOpen ? "1fr" : "0fr",
-          transition: "grid-template-rows 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+          transition: "grid-template-rows 0.5s ease",
         }}
       >
-        <div style={{ overflow: "hidden", paddingLeft: "2.5rem" }}>
+        <div style={{ overflow: "hidden", paddingLeft: "2rem" }}>
           <div
             style={{
               opacity: isOpen ? 1 : 0,
-              transform: isOpen ? "translateY(0)" : "translateY(-5px)",
-              transition: "opacity 0.4s ease, transform 0.4s ease",
-              transitionDelay: isOpen ? "0.1s" : "0s",
-              paddingTop: "0.2rem",
-              paddingBottom: "1rem",
+              transition: "opacity 0.4s ease",
+              paddingBottom: "0.3rem",
             }}
           >
             {children}
@@ -345,40 +349,23 @@ function Section({ title, children, isOpen, toggle }) {
   );
 }
 
-/**
- * MenuLink updated for mobile tap interaction
- */
-function MenuLink({ item, lang, onNavigate }) {
+function MenuLink({ item, lang, onNavigate, isMobile }) {
   const [isActive, setIsActive] = useState(false);
-
-  // Desktop hover logic
-  const handleMouseEnter = () => setIsActive(true);
-  const handleMouseLeave = () => setIsActive(false);
-
-  // Mobile/Touch specific logic: triggers active state on press down
-  const handlePointerDown = () => setIsActive(true);
-  const handlePointerUp = () => setIsActive(false);
-
   return (
     <div
       onClick={() => onNavigate(item.link)}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
+      onMouseEnter={() => setIsActive(true)}
+      onMouseLeave={() => setIsActive(false)}
       style={{
         display: "flex",
         alignItems: "center",
         gap: "12px",
-        padding: "10px 0",
+        padding: isMobile ? "6px 0" : "10px 0",
         cursor: "pointer",
         color: isActive ? "#9960a8" : "#4e5f28",
-        transition: "all 0.2s ease",
         fontFamily: "Satoshi",
-        textTransform: "lowercase",
-        fontSize: "1.1rem",
-        WebkitTapHighlightColor: "transparent", // Removes the grey box on mobile
+        fontSize: isMobile ? "1rem" : "1.1rem",
+        transition: "all 0.2s ease",
       }}
     >
       {item.icon && (
@@ -386,22 +373,32 @@ function MenuLink({ item, lang, onNavigate }) {
           src={item.icon[lang]}
           alt=""
           style={{
-            width: "30px",
-            height: "30px",
-            transition:
-              "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-            transform: isActive ? "scale(1.2) rotate(8deg)" : "scale(1)",
+            width: isMobile ? "24px" : "30px",
+            height: isMobile ? "24px" : "30px",
           }}
         />
       )}
-      <span
-        style={{
-          transform: isActive ? "translateX(4px)" : "translateX(0)",
-          transition: "transform 0.2s ease",
-        }}
-      >
-        {item.text[lang]}
-      </span>
+      <span>{item.text[lang]}</span>
     </div>
   );
 }
+
+const closeBtnStyle = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  fontFamily: "Satoshi",
+  fontSize: "0.85rem",
+  textTransform: "lowercase",
+};
+const footerStyle = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
+  borderTop: "1px solid rgba(28, 7, 0, 0.05)",
+  flexShrink: 0,
+  paddingTop: "1.5rem",
+};

@@ -7,6 +7,7 @@ import Team from "./pages/Team";
 import Location from "./pages/Location";
 import Contact from "./pages/Contact";
 import Rent from "./pages/Rent";
+import Admin from "./pages/Admin/Admin";
 import { defaultLang } from "./i18n";
 
 export default function App() {
@@ -56,6 +57,7 @@ export default function App() {
           <Rent currentLang={currentLang} setCurrentLang={setCurrentLang} />
         }
       />
+      <Route path="/admin-sinneskueche" element={<Admin />} />
     </Routes>
   );
 }
