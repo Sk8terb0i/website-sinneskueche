@@ -9,8 +9,12 @@ import Moon from "../components/Moon/Moon";
 import { languages, defaultLang } from "../i18n";
 import { planets } from "../data/planets";
 
-export default function Landing({ isMenuOpen }) {
+export default function Landing() {
   const navigate = useNavigate();
+
+  // --- New State for Menu Sync ---
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   const [activePlanet, setActivePlanet] = useState(null);
   const [hoveredPlanet, setHoveredPlanet] = useState(null);
   const [focusedPlanet, setFocusedPlanet] = useState(null);
@@ -135,22 +139,34 @@ export default function Landing({ isMenuOpen }) {
         width: "100vw",
         height: "100vh",
         overflow: "hidden",
+        // Blocks clicks to the solar system when the menu is open
+        pointerEvents: isMenuOpen ? "none" : "auto",
       }}
       onClick={() => {
+        if (isMenuOpen) return;
         setFocusedPlanet(null);
         setActivePlanet(null);
       }}
     >
-      <Header currentLang={currentLang} setCurrentLang={setCurrentLang} />
+      <div style={{ pointerEvents: "auto" }}>
+        <Header
+          currentLang={currentLang}
+          setCurrentLang={setCurrentLang}
+          isMenuOpen={isMenuOpen}
+          onMenuToggle={setIsMenuOpen}
+        />
+      </div>
 
       <Sun
         sunClicked={sunClicked}
         size={sunSize}
         style={{
-          filter: isSystemHovered ? "blur(7px)" : "none",
+          filter: isSystemHovered || isMenuOpen ? "blur(7px)" : "none",
           transition: "filter 0.3s ease",
+          cursor: isMenuOpen ? "default" : "pointer",
         }}
         onClick={() => {
+          if (isMenuOpen) return;
           setSunClicked(true);
           setTimeout(() => setSunClicked(false), 200);
           setIsPaused(!isPaused);
@@ -166,7 +182,7 @@ export default function Landing({ isMenuOpen }) {
           label={lang.orbits[type]}
           scaleFactor={scaleFactor}
           style={{
-            filter: isSystemHovered ? "blur(7px)" : "none",
+            filter: isSystemHovered || isMenuOpen ? "blur(7px)" : "none",
             transition: "filter 0.3s ease",
           }}
         />
@@ -189,13 +205,16 @@ export default function Landing({ isMenuOpen }) {
           : null;
 
         let blurValue = "none";
-        if (isSystemHovered && planet.id !== currentFocusPlanet) {
+        if (
+          (isSystemHovered || isMenuOpen) &&
+          planet.id !== currentFocusPlanet
+        ) {
           blurValue =
             planet.type === currentFocusType ? "blur(1px)" : "blur(3px)";
         }
 
         const isHoverable =
-          !isSystemHovered || planet.id === currentFocusPlanet;
+          !isMenuOpen && (!isSystemHovered || planet.id === currentFocusPlanet);
         const currentSize = (planetBaseSizes[planet.type] || 64) * scaleFactor;
 
         return (
@@ -217,6 +236,7 @@ export default function Landing({ isMenuOpen }) {
               opacity: isSystemMounted ? 1 : 0,
             }}
             onActivate={(id) => {
+              if (isMenuOpen) return;
               const planetData = planets.find((p) => p.id === id);
               if (
                 planetData.courses?.length === 1 &&
@@ -229,7 +249,7 @@ export default function Landing({ isMenuOpen }) {
               }
             }}
             onHover={
-              !isMenuOpen && isHoverable
+              isHoverable
                 ? (id) => {
                     clearTimeout(hoverTimeoutRef.current);
                     setHoveredPlanet(id);
@@ -268,8 +288,13 @@ export default function Landing({ isMenuOpen }) {
             windowSize={windowSize}
             currentLang={currentLang}
             scaleFactor={scaleFactor}
-            style={{ transform: `scale(${scaleFactor})`, zIndex: 20 }}
+            style={{
+              transform: `scale(${scaleFactor})`,
+              zIndex: 20,
+              pointerEvents: isMenuOpen ? "none" : "auto",
+            }}
             onHoverStart={() => {
+              if (isMenuOpen) return;
               clearTimeout(hoverTimeoutRef.current);
               setHoveredMoonPlanet(planet.id);
               setFocusedPlanet(planet.id);

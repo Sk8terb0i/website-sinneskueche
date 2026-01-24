@@ -18,7 +18,7 @@ export default function LandingPortrait() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
-  // Menu State and Ref (Ref is used for synchronous checking in event listeners)
+  // Menu State lifted from Header
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isMenuOpenRef = useRef(false);
 
@@ -36,6 +36,7 @@ export default function LandingPortrait() {
   }, []);
 
   const handleReset = () => {
+    // Blocks reset interaction if menu is open
     if (activeIndex === null || isResetting || isMenuOpenRef.current) return;
     setIsResetting(true);
     setIsLoaded(false);
@@ -194,6 +195,7 @@ export default function LandingPortrait() {
         overflow: "hidden",
         position: "relative",
         cursor: activeIndex !== null ? "pointer" : "default",
+        // Blocks pointer events on the background when menu is open
         pointerEvents: isMenuOpen ? "none" : "auto",
       }}
     >
@@ -205,6 +207,7 @@ export default function LandingPortrait() {
           currentLang={currentLang}
           setCurrentLang={setCurrentLang}
           isPlanetActive={activeIndex !== null}
+          isMenuOpen={isMenuOpen}
           onMenuToggle={setIsMenuOpen}
         />
       </div>
@@ -219,7 +222,7 @@ export default function LandingPortrait() {
           transform: "translateX(-50%)",
           transition: `opacity 0.3s ease-out`,
           opacity: activeIndex === null && isLoaded ? 1 : 0,
-          pointerEvents: activeIndex === null ? "auto" : "none",
+          pointerEvents: activeIndex === null && !isMenuOpen ? "auto" : "none",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -287,7 +290,7 @@ export default function LandingPortrait() {
               style={{
                 zIndex: 2,
                 opacity: isLoaded && isVisible ? 1 : 0,
-                pointerEvents: isVisible ? "auto" : "none",
+                pointerEvents: isVisible && !isMenuOpen ? "auto" : "none",
                 transition: `transform ${movementDuration} ${currentEase}, translate ${movementDuration} ${currentEase}, opacity 0.5s ease`,
                 transformOrigin: `center ${radius}px`,
                 transform: `rotate(${currentAngle}deg)`,
@@ -307,10 +310,11 @@ export default function LandingPortrait() {
                   language={currentLang}
                   size={getPlanetSize(index)}
                   onActivate={() => {
+                    if (isMenuOpen) return;
                     setPreviousIndex(activeIndex);
                     setActiveIndex(activeIndex === index ? null : index);
                   }}
-                  onMouseEnter={() => setHoveredIndex(index)}
+                  onMouseEnter={() => !isMenuOpen && setHoveredIndex(index)}
                   onMouseLeave={() => setHoveredIndex(null)}
                 />
               </div>

@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Instagram, Mail } from "lucide-react";
+import { X } from "lucide-react";
 import { planets } from "../../data/planets";
 
-export default function MenuOverlay({ isOpen, onClose, currentLang }) {
+/**
+ * MENU DRAWER COMPONENT
+ * - Adaptive blur: 1px on mobile, 4px on desktop.
+ * - Text links for footer.
+ * - Tap-friendly interactions for mobile.
+ */
+
+export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const navigate = useNavigate();
 
-  // 1. State for collapsing (Expanded by default)
   const [isCoursesOpen, setIsCoursesOpen] = useState(true);
   const [isStudioOpen, setIsStudioOpen] = useState(true);
 
@@ -15,8 +21,8 @@ export default function MenuOverlay({ isOpen, onClose, currentLang }) {
     return planet ? planet.icon : { en: "", de: "" };
   };
 
-  const menuData = useMemo(() => {
-    return {
+  const menuData = useMemo(
+    () => ({
       courses: [
         {
           text: { en: "pottery tuesdays", de: "pottery tuesdays" },
@@ -31,12 +37,12 @@ export default function MenuOverlay({ isOpen, onClose, currentLang }) {
       ],
       infoAction: [
         {
-          text: { en: "get to know us", de: "das sind wir" },
+          text: { en: "about  us", de: "über uns" },
           link: "/team",
           icon: getPlanetIcon("team"),
         },
         {
-          text: { en: "how to find us :)", de: "so findest du uns :)" },
+          text: { en: "location", de: "standort" },
           link: "/location",
           icon: getPlanetIcon("location"),
         },
@@ -46,395 +52,356 @@ export default function MenuOverlay({ isOpen, onClose, currentLang }) {
           icon: getPlanetIcon("rent"),
         },
         {
-          text: { en: "get in touch!", de: "melde dich!" },
+          text: { en: "contact", de: "kontakt" },
           link: "/contact",
           icon: getPlanetIcon("contact"),
         },
       ],
-    };
-  }, [currentLang]);
+    }),
+    [currentLang],
+  );
 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
-      document.body.style.touchAction = "none";
     } else {
       document.body.style.overflow = "unset";
-      document.body.style.touchAction = "unset";
     }
     return () => {
       document.body.style.overflow = "unset";
-      document.body.style.touchAction = "unset";
     };
   }, [isOpen]);
 
-  const labels = {
-    courses: { en: "Courses", de: "Kurse" },
-    studio: { en: "The Atelier", de: "Das Atelier" },
-  };
-
-  const isMobile = window.innerWidth < window.innerHeight;
+  const isMobile = window.innerWidth < 768;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(255, 252, 227, 0.98)",
-        zIndex: 9999,
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems: "center",
-        transition:
-          "transform 0.8s cubic-bezier(0.85, 0, 0.15, 1), visibility 0.8s",
-        transform: isOpen ? "translateY(0)" : "translateY(-100%)",
-        visibility: isOpen ? "visible" : "hidden",
-        pointerEvents: isOpen ? "auto" : "none",
-        padding: isMobile ? "1rem" : "2rem",
-        overflowY: "auto",
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <button
-        onClick={onClose}
+    <>
+      {/* SCRIM / BACKDROP */}
+      <div
         style={{
-          position: "absolute",
-          top: "30px",
-          right: "30px",
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "rgba(28, 7, 0, 0.15)",
+          backdropFilter: isOpen
+            ? isMobile
+              ? "blur(1px)"
+              : "blur(4px)"
+            : "blur(0px)",
+          WebkitBackdropFilter: isOpen
+            ? isMobile
+              ? "blur(1px)"
+              : "blur(4px)"
+            : "blur(0px)",
+          zIndex: 9998,
+          opacity: isOpen ? 1 : 0,
+          visibility: isOpen ? "visible" : "hidden",
+          transition:
+            "opacity 0.5s ease, backdrop-filter 0.5s ease, -webkit-backdrop-filter 0.5s ease",
+        }}
+        onClick={onClose}
+      />
+
+      {/* MENU PANEL */}
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          right: 0,
+          width: isMobile ? "75vw" : "420px",
+          height: "100%",
+          minHeight: "100vh",
+          overflowY: "auto",
+          backgroundColor: "#fffce3",
+          zIndex: 9999,
+          boxShadow: "-10px 0 50px rgba(28, 7, 0, 0.08)",
+          transform: isOpen ? "translateX(0)" : "translateX(100%)",
+          transition: "transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
           display: "flex",
-          alignItems: "center",
-          gap: "12px",
-          background: "transparent",
-          border: "none",
-          cursor: "pointer",
-          zIndex: 10000,
+          flexDirection: "column",
+          padding: isMobile ? "1.5rem 2rem" : "3rem 4rem",
+          boxSizing: "border-box",
         }}
       >
-        <span
-          className="close-text"
-          style={{
-            fontFamily: "Satoshi",
-            fontSize: "0.8rem",
-            letterSpacing: "0.1em",
-            color: "#1c0700",
-            textTransform: "lowercase",
-            opacity: 0, // Hidden by default
-            transition: "opacity 0.3s ease",
-          }}
-        >
-          {currentLang === "en" ? "close menu" : "menü schließen"}
-        </span>
         <div
           style={{
-            width: "12px",
-            height: "12px",
-            borderRadius: "50%",
-            backgroundColor: "#1c0700",
-            transition: "all 0.3s ease",
+            display: "flex",
+            justifyContent: "flex-end",
+            marginBottom: "2rem",
+            flexShrink: 0,
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#caaff3";
-            e.currentTarget.previousSibling.style.opacity = "1";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "#1c0700";
-            e.currentTarget.previousSibling.style.opacity = "0";
-          }}
-        />
-      </button>
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          gap: isMobile ? "2rem" : "10rem",
-          width: "100%",
-          maxWidth: "1400px",
-          justifyContent: "center",
-          alignItems: "flex-start",
-          opacity: isOpen ? 1 : 0,
-          transition: "opacity 0.5s ease 0.2s",
-        }}
-      >
-        {/* COURSES SECTION */}
-        <div style={{ flex: 1, width: "100%" }}>
-          <div
-            style={{
-              ...categoryHeaderContainerStyle(isOpen, 0),
-              cursor: "pointer",
-            }}
-            onClick={() => setIsCoursesOpen(!isCoursesOpen)}
-          >
-            <h3 style={categoryHeaderStyle(isMobile)}>
-              {labels.courses[currentLang]}
-            </h3>
-            <div style={orbitMarkerStyle(isOpen, 0, isCoursesOpen)} />
-          </div>
-
-          <div
-            style={{
-              maxHeight: isCoursesOpen ? "1400px" : "0px",
-              opacity: isCoursesOpen ? 1 : 0,
-              overflow: "hidden",
-              transition: "all 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-              paddingTop: "40px",
-              marginTop: "-40px",
-            }}
-          >
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {menuData.courses.map((item, i) => (
-                <MenuLink
-                  key={item.link}
-                  item={item}
-                  lang={currentLang}
-                  isOpen={isOpen && isCoursesOpen}
-                  index={i}
-                  isMobile={isMobile}
-                  baseDelay={0.2}
-                  onNavigate={(path) => {
-                    navigate(path);
-                    onClose();
-                  }}
-                />
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        {/* STUDIO SECTION */}
-        <div style={{ flex: 1, width: "100%" }}>
-          <div
-            style={{
-              ...categoryHeaderContainerStyle(isOpen, 1),
-              cursor: "pointer",
-            }}
-            onClick={() => setIsStudioOpen(!isStudioOpen)}
-          >
-            <h3 style={categoryHeaderStyle(isMobile)}>
-              {labels.studio[currentLang]}
-            </h3>
-            <div style={orbitMarkerStyle(isOpen, 1, isStudioOpen)} />
-          </div>
-
-          <div
-            style={{
-              maxHeight: isStudioOpen ? "1400px" : "0px",
-              opacity: isStudioOpen ? 1 : 0,
-              overflow: "hidden",
-              transition: "all 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-              paddingTop: "40px",
-              marginTop: "-40px",
-            }}
-          >
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {menuData.infoAction.map((item, i) => (
-                <MenuLink
-                  key={item.link}
-                  item={item}
-                  lang={currentLang}
-                  isOpen={isOpen && isStudioOpen}
-                  index={i}
-                  isMobile={isMobile}
-                  baseDelay={0.3}
-                  onNavigate={(path) => {
-                    navigate(path);
-                    onClose();
-                  }}
-                />
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div
-        style={{
-          position: isMobile ? "relative" : "absolute",
-          bottom: isMobile ? "0" : "40px",
-          marginTop: isMobile ? "3rem" : "0",
-          opacity: isOpen ? 1 : 0,
-          transition: "opacity 1s ease 0.8s",
-          display: "flex",
-          gap: "32px",
-        }}
-      >
-        <a
-          href="https://www.instagram.com/sinneskueche/"
-          target="_blank"
-          rel="noreferrer"
-          style={footerLinkStyle}
         >
-          <Instagram size={isMobile ? 22 : 28} strokeWidth={1.2} />
-        </a>
-        <a href="mailto:hallo@sinneskueche.de" style={footerLinkStyle}>
-          <Mail size={isMobile ? 22 : 28} strokeWidth={1.2} />
-        </a>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#1c0700",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              fontFamily: "Satoshi",
+              fontSize: "0.85rem",
+              textTransform: "lowercase",
+            }}
+          >
+            <span>{currentLang === "en" ? "close" : "schließen"}</span>
+            <X size={18} strokeWidth={1.5} />
+          </button>
+        </div>
+
+        <div style={{ flex: "1 0 auto" }}>
+          <Section
+            title={currentLang === "en" ? "Courses" : "Kurse"}
+            isOpen={isCoursesOpen}
+            toggle={() => setIsCoursesOpen(!isCoursesOpen)}
+          >
+            {menuData.courses.map((item, i) => (
+              <MenuLink
+                key={i}
+                item={item}
+                lang={currentLang}
+                onNavigate={(p) => {
+                  navigate(p);
+                  onClose();
+                }}
+              />
+            ))}
+          </Section>
+
+          <div style={{ height: "1rem" }} />
+
+          <Section
+            title={currentLang === "en" ? "The Atelier" : "Das Atelier"}
+            isOpen={isStudioOpen}
+            toggle={() => setIsStudioOpen(!isStudioOpen)}
+          >
+            {menuData.infoAction.map((item, i) => (
+              <MenuLink
+                key={i}
+                item={item}
+                lang={currentLang}
+                onNavigate={(p) => {
+                  navigate(p);
+                  onClose();
+                }}
+              />
+            ))}
+          </Section>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+            marginTop: "3rem",
+            paddingBottom: "3rem",
+            paddingTop: "2rem",
+            borderTop: "1px solid rgba(28, 7, 0, 0.05)",
+            flexShrink: 0,
+          }}
+        >
+          <a
+            href="https://www.instagram.com/sinneskueche/"
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              color: "#caaff3",
+              transition: "color 0.3s",
+              textDecoration: "none",
+              fontFamily: "Satoshi",
+              fontSize: "1rem",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#9960a8")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#caaff3")}
+          >
+            instagram
+          </a>
+          <a
+            href="mailto:hallo@sinneskueche.de"
+            style={{
+              color: "#caaff3",
+              transition: "color 0.3s",
+              textDecoration: "none",
+              fontFamily: "Satoshi",
+              fontSize: "1rem",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#9960a8")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#caaff3")}
+          >
+            hallo@sinneskueche.de
+          </a>
+        </div>
       </div>
-    </div>
+
+      <style>{`
+        @keyframes hintPulse {
+          0% { transform: scale(1); opacity: 0.6; }
+          100% { transform: scale(2.8); opacity: 0; }
+        }
+      `}</style>
+    </>
   );
 }
 
-// Sub-components and styles remain largely the same, but fixed the Orbit Marker logic
-function MenuLink({
-  item,
-  lang,
-  isOpen,
-  index,
-  baseDelay,
-  onNavigate,
-  isMobile,
-}) {
-  const planetSizePx = isMobile ? 55 : 80;
-  const orbitRadius = isMobile ? 48 : 68;
-  const moonSize = isMobile ? 14 : 20;
-  const gap = isMobile ? 4 : 6;
-  const marginBottom = isMobile ? "2.2rem" : "5rem";
-  const isPlanetOnLeft = index % 2 === 0;
-  const staggerOffset = isMobile ? "10%" : "15%";
+function Section({ title, children, isOpen, toggle }) {
+  const [hasInteracted, setHasInteracted] = useState(false);
 
-  const pos = useMemo(() => {
-    const angles = isPlanetOnLeft ? [65, 90, 115] : [245, 270, 300];
-    const degree = angles[Math.floor(Math.random() * angles.length)];
-    const radians = (degree - 90) * (Math.PI / 180);
-    return {
-      x: Math.cos(radians) * orbitRadius,
-      y: Math.sin(radians) * orbitRadius,
-    };
-  }, [isPlanetOnLeft, orbitRadius]);
+  const handleToggle = () => {
+    if (!hasInteracted) setHasInteracted(true);
+    toggle();
+  };
 
-  const isMoonOnLeftOfPlanet = pos.x < 0;
+  const showPulse = !isOpen && !hasInteracted;
 
   return (
-    <li style={{ marginBottom, listStyle: "none", width: "100%" }}>
+    <div style={{ marginBottom: "0.5rem" }}>
       <div
-        onClick={() => onNavigate(item.link)}
+        onClick={handleToggle}
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: isPlanetOnLeft ? "flex-start" : "flex-end",
-          paddingLeft: isPlanetOnLeft ? staggerOffset : "0",
-          paddingRight: !isPlanetOnLeft ? staggerOffset : "0",
+          gap: "1.2rem",
           cursor: "pointer",
-          transition:
-            "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.5s",
-          transform: isOpen ? "translateY(0)" : "translateY(20px)",
-          opacity: isOpen ? 1 : 0,
-          transitionDelay: isOpen ? `${baseDelay + index * 0.05}s` : "0s",
-          height: `${planetSizePx}px`,
+          padding: "0.5rem 0",
         }}
       >
         <div
           style={{
             position: "relative",
-            width: `${planetSizePx}px`,
-            height: `${planetSizePx}px`,
+            width: "10px",
+            height: "10px",
             flexShrink: 0,
+            marginLeft: "5px",
           }}
         >
           <div
             style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              width: `${orbitRadius * 2}px`,
-              height: `${orbitRadius * 2}px`,
+              width: "100%",
+              height: "100%",
+              backgroundColor: isOpen ? "#caaff3" : "#1c0700",
               borderRadius: "50%",
-              border: "1px dashed #1c0700",
-              opacity: 0.15,
-              transform: "translate(-50%, -50%)",
+              transition: "all 0.4s ease",
+              transform: isOpen ? "scale(1.3)" : "scale(1)",
+              zIndex: 2,
+              position: "relative",
             }}
           />
-          {item.icon && (
-            <img
-              src={item.icon[lang]}
-              alt=""
+          {showPulse && (
+            <div
               style={{
-                width: "100%",
-                height: "100%",
-                position: "relative",
-                zIndex: 2,
+                position: "absolute",
+                inset: "-4px",
+                border: "1px solid #1c0700",
+                borderRadius: "50%",
+                animation: "hintPulse 2s infinite ease-out",
+                pointerEvents: "none",
               }}
             />
           )}
+        </div>
+
+        <h3
+          style={{
+            fontFamily: "Harmond-SemiBoldCondensed",
+            fontSize: "2.1rem",
+            color: "#1c0700",
+            margin: 0,
+            padding: 0,
+            lineHeight: 1.1,
+            textTransform: "lowercase",
+            opacity: isOpen ? 1 : 0.7,
+            transition: "opacity 0.3s ease",
+          }}
+        >
+          {title}
+        </h3>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateRows: isOpen ? "1fr" : "0fr",
+          transition: "grid-template-rows 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
+      >
+        <div style={{ overflow: "hidden", paddingLeft: "2.5rem" }}>
           <div
             style={{
-              position: "absolute",
-              width: `${moonSize}px`,
-              height: `${moonSize}px`,
-              backgroundColor: "white",
-              borderRadius: "50%",
-              zIndex: 4,
-              left: "50%",
-              top: "50%",
-              transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
-            }}
-          />
-          <span
-            style={{
-              position: "absolute",
-              left: "50%",
-              top: "50%",
-              whiteSpace: "nowrap",
-              fontFamily: "Satoshi, sans-serif",
-              fontSize: isMobile ? "0.75rem" : "clamp(0.75rem, 2.5vw, 1rem)",
-              color: "#4e5f28",
-              textTransform: "lowercase",
-              pointerEvents: "none",
-              textAlign: isMoonOnLeftOfPlanet ? "right" : "left",
-              transform: `translate(calc(${isMoonOnLeftOfPlanet ? "-100%" : "0%"} + ${pos.x + (isMoonOnLeftOfPlanet ? -(moonSize / 2 + gap) : moonSize / 2 + gap)}px), calc(-50% + ${pos.y}px))`,
+              opacity: isOpen ? 1 : 0,
+              transform: isOpen ? "translateY(0)" : "translateY(-5px)",
+              transition: "opacity 0.4s ease, transform 0.4s ease",
+              transitionDelay: isOpen ? "0.1s" : "0s",
+              paddingTop: "0.2rem",
+              paddingBottom: "1rem",
             }}
           >
-            {item.text[lang]}
-          </span>
+            {children}
+          </div>
         </div>
       </div>
-    </li>
+    </div>
   );
 }
 
-const categoryHeaderContainerStyle = (isOpen, idx) => ({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "right",
-  paddingRight: "5vw",
-  marginBottom: "2rem",
-  width: "100%",
-  opacity: isOpen ? 1 : 0,
-  transform: isOpen ? "translateY(0)" : "translateY(20px)",
-  transition: `all 0.6s ease ${0.1 + idx * 0.1}s`,
-});
+/**
+ * MenuLink updated for mobile tap interaction
+ */
+function MenuLink({ item, lang, onNavigate }) {
+  const [isActive, setIsActive] = useState(false);
 
-const orbitMarkerStyle = (isOpen, idx, isSectionExpanded) => ({
-  width: "12px",
-  height: "12px",
-  borderRadius: "50%",
-  backgroundColor: isSectionExpanded ? "#caaff3" : "#1c0700",
-  marginLeft: "1.5rem",
-  opacity: isOpen ? 0.6 : 0,
-  transform: isOpen
-    ? isSectionExpanded
-      ? "scale(1)"
-      : "scale(0.8) rotate(45deg)"
-    : "scale(0)",
-  transition: `all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)`,
-  boxShadow: isSectionExpanded ? "0 0 10px rgba(202, 175, 243, 0.4)" : "none",
-});
+  // Desktop hover logic
+  const handleMouseEnter = () => setIsActive(true);
+  const handleMouseLeave = () => setIsActive(false);
 
-const categoryHeaderStyle = (isMobile) => ({
-  fontFamily: "Harmond-SemiBoldCondensed",
-  fontSize: isMobile ? "2.2rem" : "clamp(2.5rem, 10vw, 4.2rem)",
-  color: "#1c0700",
-  lineHeight: "1",
-  whiteSpace: "nowrap",
-  margin: 0,
-});
+  // Mobile/Touch specific logic: triggers active state on press down
+  const handlePointerDown = () => setIsActive(true);
+  const handlePointerUp = () => setIsActive(false);
 
-const footerLinkStyle = {
-  textDecoration: "none",
-  color: "#caaff3",
-  transition: "color 0.3s ease",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
+  return (
+    <div
+      onClick={() => onNavigate(item.link)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        padding: "10px 0",
+        cursor: "pointer",
+        color: isActive ? "#9960a8" : "#4e5f28",
+        transition: "all 0.2s ease",
+        fontFamily: "Satoshi",
+        textTransform: "lowercase",
+        fontSize: "1.1rem",
+        WebkitTapHighlightColor: "transparent", // Removes the grey box on mobile
+      }}
+    >
+      {item.icon && (
+        <img
+          src={item.icon[lang]}
+          alt=""
+          style={{
+            width: "30px",
+            height: "30px",
+            transition:
+              "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+            transform: isActive ? "scale(1.2) rotate(8deg)" : "scale(1)",
+          }}
+        />
+      )}
+      <span
+        style={{
+          transform: isActive ? "translateX(4px)" : "translateX(0)",
+          transition: "transform 0.2s ease",
+        }}
+      >
+        {item.text[lang]}
+      </span>
+    </div>
+  );
+}

@@ -7,6 +7,8 @@ export default function Header({
   currentLang,
   setCurrentLang,
   isPlanetActive,
+  isMenuOpen, // Prop from parent
+  onMenuToggle, // Prop from parent
 }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -19,7 +21,6 @@ export default function Header({
   const [titleHovered, setTitleHovered] = useState(false);
   const [langHovered, setLangHovered] = useState(false);
   const [menuHovered, setMenuHovered] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleResize = () =>
@@ -31,7 +32,6 @@ export default function Header({
   const hoverTransition = "transform 0.2s ease, color 0.2s ease";
   const isLanding = location.pathname === "/";
 
-  // ----------------- Determine what to show on the left -----------------
   let showTitle = false;
   let showIcon = false;
   let titleFontSize = "2rem";
@@ -53,7 +53,6 @@ export default function Header({
     }
   }
 
-  // Right side styles
   const langFontSize = isPortrait ? "0.85rem" : "1rem";
   const rightGap = isPortrait ? "0.8rem" : "1.5rem";
   const hamburgerSize = isPortrait
@@ -81,17 +80,12 @@ export default function Header({
           gap: "1rem",
         }}
       >
-        {/* Left container: title/home */}
         <div style={{ width: "50vw", display: "flex", alignItems: "center" }}>
           {showTitle && (
             <div
               onClick={!isPortrait ? () => navigate("/") : undefined}
               onMouseEnter={() => !isPortrait && setTitleHovered(true)}
               onMouseLeave={() => !isPortrait && setTitleHovered(false)}
-              onTouchStart={() => !isPortrait && setTitleHovered(true)}
-              onTouchEnd={() =>
-                !isPortrait && setTimeout(() => setTitleHovered(false), 200)
-              }
               style={{
                 fontFamily: "Harmond-SemiBoldCondensed",
                 fontSize: titleFontSize,
@@ -119,8 +113,6 @@ export default function Header({
               onClick={() => navigate("/")}
               onMouseEnter={() => setTitleHovered(true)}
               onMouseLeave={() => setTitleHovered(false)}
-              onTouchStart={() => setTitleHovered(true)}
-              onTouchEnd={() => setTimeout(() => setTitleHovered(false), 200)}
               style={{
                 cursor: "pointer",
                 display: "flex",
@@ -135,14 +127,10 @@ export default function Header({
           )}
         </div>
 
-        {/* Right Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: rightGap }}>
-          {/* Language Toggle */}
           <div
             onMouseEnter={() => setLangHovered(true)}
             onMouseLeave={() => setLangHovered(false)}
-            onTouchStart={() => setLangHovered(true)}
-            onTouchEnd={() => setTimeout(() => setLangHovered(false), 200)}
             onClick={(e) => {
               e.stopPropagation();
               setCurrentLang((prev) => (prev === "en" ? "de" : "en"));
@@ -168,16 +156,13 @@ export default function Header({
             </span>
           </div>
 
-          {/* Hamburger Menu */}
           <div
             className="hamburger-menu"
             onMouseEnter={() => setMenuHovered(true)}
             onMouseLeave={() => setMenuHovered(false)}
-            onTouchStart={() => setMenuHovered(true)}
-            onTouchEnd={() => setTimeout(() => setMenuHovered(false), 200)}
             onClick={(e) => {
               e.stopPropagation();
-              setIsMenuOpen(true);
+              onMenuToggle(true); // Updates parent state
             }}
             style={{
               width: `${hamburgerSize.width}px`,
@@ -207,10 +192,9 @@ export default function Header({
         </div>
       </header>
 
-      {/* Radial Constellation Overlay */}
       <MenuOverlay
         isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
+        onClose={() => onMenuToggle(false)} // Updates parent state
         currentLang={currentLang}
       />
     </>
