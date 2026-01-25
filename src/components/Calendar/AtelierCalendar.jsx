@@ -34,6 +34,7 @@ export default function AtelierCalendar({ currentLang, isMobile }) {
 
   const handleNavigate = (e, link) => {
     if (!link) return;
+    // Internal Link Logic (SPA navigation)
     if (!link.startsWith("http")) {
       e.preventDefault();
       navigate(link);
@@ -52,7 +53,11 @@ export default function AtelierCalendar({ currentLang, isMobile }) {
       >
         {events.map((event, i) => {
           const hasLink = !!event.link;
-          const isCourse = event.link && !event.link.startsWith("http");
+          const isExternal = event.link?.startsWith("http");
+
+          // CRITICAL FIX: Use 'type' from DB if available, fallback to link check for old data
+          const isCourse =
+            event.type === "course" || (event.link && !isExternal);
 
           return (
             <div
@@ -61,11 +66,7 @@ export default function AtelierCalendar({ currentLang, isMobile }) {
                 width: "100%",
                 display: "block",
                 borderLeft: "2px solid #caaff3",
-
-                /* UPDATED GRADIENT: 
-                   - Solid 50% opacity for the first 10% of the width.
-                   - Fades to completely transparent by 80% of the width.
-                */
+                // Visual logic: Courses are transparent, Events have the purple glow
                 background: isCourse
                   ? "transparent"
                   : "linear-gradient(90deg, rgba(202, 175, 243, 0.2) 10%, rgba(202, 175, 243, 0) 90%)",
@@ -93,8 +94,8 @@ export default function AtelierCalendar({ currentLang, isMobile }) {
               <a
                 href={event.link || "#"}
                 onClick={(e) => handleNavigate(e, event.link)}
-                target={event.link?.startsWith("http") ? "_blank" : "_self"}
-                rel="noreferrer"
+                target={isExternal ? "_blank" : "_self"}
+                rel={isExternal ? "noopener noreferrer" : ""}
                 className={hasLink ? "calendar-link" : ""}
                 style={{
                   fontSize: isMobile ? "0.95rem" : "1.1rem",

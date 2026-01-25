@@ -15,6 +15,7 @@ import {
   query,
   orderBy,
   writeBatch,
+  setDoc,
 } from "firebase/firestore";
 import { planets } from "../../data/planets";
 import {
@@ -23,6 +24,8 @@ import {
   Calendar as CalendarIcon,
   LogOut,
   Lock,
+  Edit2,
+  XCircle,
 } from "lucide-react";
 
 export default function Admin() {
@@ -37,6 +40,7 @@ export default function Admin() {
   const [linkType, setLinkType] = useState("course");
   const [link, setLink] = useState("");
   const [externalLink, setExternalLink] = useState("");
+  const [editingId, setEditingId] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
 
   const eventsCollection = collection(db, "events");
@@ -52,7 +56,7 @@ export default function Admin() {
   );
 
   const autoFillFirstCourse = () => {
-    if (availableCourses.length > 0) {
+    if (availableCourses.length > 0 && !editingId) {
       handleCourseSelection(availableCourses[0].link);
     }
   };
@@ -91,7 +95,6 @@ export default function Admin() {
     try {
       const q = query(eventsCollection, orderBy("date", "asc"));
       const querySnapshot = await getDocs(q);
-
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -100,33 +103,104 @@ export default function Admin() {
         id: doc.id,
       }));
 
-      const expiredEvents = [];
-      const validEvents = [];
-
-      allFetchedEvents.forEach((event) => {
+      const validEvents = allFetchedEvents.filter((event) => {
         const eventDate = new Date(event.date);
         eventDate.setHours(0, 0, 0, 0);
-
-        if (eventDate < today) {
-          expiredEvents.push(event.id);
-        } else {
-          validEvents.push(event);
-        }
+        return eventDate >= today;
       });
-
-      if (expiredEvents.length > 0) {
-        const batch = writeBatch(db);
-        expiredEvents.forEach((id) => {
-          const docRef = doc(db, "events", id);
-          batch.delete(docRef);
-        });
-        await batch.commit();
-        console.log(`Auto-cleaned ${expiredEvents.length} past events.`);
-      }
 
       setEvents(validEvents);
     } catch (error) {
       console.error("Error fetching events:", error);
+    }
+  };
+
+  const startEdit = (event) => {
+    setEditingId(event.id);
+    setDate(event.date);
+    setTime(event.time || "");
+    setTitleEn(event.title.en);
+    setTitleDe(event.title.de);
+
+    // Set linkType based on saved type, or guess if type doesn't exist yet
+    const type =
+      event.type || (event.link?.startsWith("http") ? "event" : "course");
+    setLinkType(type);
+
+    if (type === "course") {
+      // Check if it's a standard link or a custom override
+      const isStandard = availableCourses.some((c) => c.link === event.link);
+      if (isStandard) {
+        setLink(event.link);
+        setExternalLink("");
+      } else {
+        // It's a course but with a custom URL
+        setExternalLink(event.link);
+      }
+    } else {
+      setExternalLink(event.link || "");
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setDate("");
+    setTime("");
+    setExternalLink("");
+    setTitleEn("");
+    setTitleDe("");
+    if (linkType === "course") {
+      autoFillFirstCourse();
+    }
+  };
+
+  const handleToggle = (type) => {
+    setLinkType(type);
+    setExternalLink("");
+    if (type === "course") {
+      autoFillFirstCourse();
+    } else {
+      setLink("");
+      setTitleEn("");
+      setTitleDe("");
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      // Link logic: Event uses external. Course uses override if present, else template link.
+      const finalLink =
+        linkType === "event" ? externalLink : externalLink || link || "";
+
+      const eventData = {
+        date,
+        time,
+        title: { en: titleEn, de: titleDe },
+        link: finalLink,
+        type: linkType, // Explicitly save type to handle custom links correctly
+      };
+
+      if (editingId) {
+        await setDoc(doc(db, "events", editingId), eventData);
+      } else {
+        await addDoc(eventsCollection, eventData);
+      }
+
+      resetForm();
+      fetchEvents();
+    } catch (e) {
+      alert("Error saving: " + e.message);
+    }
+  };
+
+  const deleteEvent = async (e, id) => {
+    e.stopPropagation();
+    if (window.confirm("Delete this entry?")) {
+      await deleteDoc(doc(db, "events", id));
+      if (editingId === id) resetForm();
+      fetchEvents();
     }
   };
 
@@ -146,54 +220,9 @@ export default function Admin() {
     }
     try {
       await sendPasswordResetEmail(auth, email);
-      alert(
-        "If an account exists for " + email + ", a reset link has been sent.",
-      );
+      alert("Reset link sent to " + email);
     } catch (error) {
       alert("Error: " + error.message);
-    }
-  };
-
-  const handleToggle = (type) => {
-    setLinkType(type);
-    setLink("");
-    setExternalLink("");
-    setTitleEn("");
-    setTitleDe("");
-    setTime("");
-    if (type === "course") {
-      autoFillFirstCourse();
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await addDoc(eventsCollection, {
-        date,
-        time,
-        title: { en: titleEn, de: titleDe },
-        link: linkType === "course" ? link || "" : externalLink || "",
-      });
-      setDate("");
-      setTime("");
-      setExternalLink("");
-      if (linkType === "course") autoFillFirstCourse();
-      else {
-        setLink("");
-        setTitleEn("");
-        setTitleDe("");
-      }
-      fetchEvents();
-    } catch (e) {
-      alert("Error saving: " + e.message);
-    }
-  };
-
-  const deleteEvent = async (id) => {
-    if (window.confirm("Delete this entry?")) {
-      await deleteDoc(doc(db, "events", id));
-      fetchEvents();
     }
   };
 
@@ -263,11 +292,7 @@ export default function Admin() {
         backgroundColor: "#fffce3",
         color: "#1c0700",
         fontFamily: "Satoshi",
-        display: "block",
-        overflowY: "auto",
         overflowX: "hidden",
-        position: "relative",
-        WebkitOverflowScrolling: "touch",
       }}
     >
       <div style={{ padding: isMobile ? "1.5rem" : "4vw" }}>
@@ -307,9 +332,42 @@ export default function Admin() {
             }}
           >
             <div style={formCardStyle}>
-              <h2 style={sectionTitleStyle}>
-                <PlusCircle size={18} color="#caaff3" /> NEW ENTRY
-              </h2>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "1.2rem",
+                }}
+              >
+                <h2 style={{ ...sectionTitleStyle, marginBottom: 0 }}>
+                  {editingId ? (
+                    <Edit2 size={18} color="#caaff3" />
+                  ) : (
+                    <PlusCircle size={18} color="#caaff3" />
+                  )}
+                  {editingId ? "EDIT ENTRY" : "NEW ENTRY"}
+                </h2>
+                {editingId && (
+                  <button
+                    onClick={resetForm}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#ff4d4d",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontSize: "0.7rem",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    <XCircle size={14} /> CANCEL
+                  </button>
+                )}
+              </div>
+
               <form
                 onSubmit={handleSubmit}
                 style={{
@@ -345,6 +403,7 @@ export default function Admin() {
                     </div>
                   </div>
                 </div>
+
                 <div
                   style={{
                     display: "grid",
@@ -363,7 +422,7 @@ export default function Admin() {
                     />
                   </div>
                   <div>
-                    <label style={labelStyle}>Time (Optional)</label>
+                    <label style={labelStyle}>Time</label>
                     <input
                       type="text"
                       placeholder="e.g. 18:30"
@@ -375,37 +434,50 @@ export default function Admin() {
                 </div>
 
                 {linkType === "course" ? (
-                  <div>
-                    <label style={labelStyle}>Select Course</label>
-                    <select
-                      value={link}
-                      onChange={(e) => handleCourseSelection(e.target.value)}
-                      style={{
-                        ...inputStyle,
-                        backgroundColor: "#f8f6ff",
-                        borderColor: "#caaff3",
-                      }}
-                      required
-                    >
-                      {availableCourses.map((c, i) => (
-                        <option key={i} value={c.link}>
-                          {c.text.en}
-                        </option>
-                      ))}
-                    </select>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1.2rem",
+                    }}
+                  >
+                    <div>
+                      <label style={labelStyle}>Template</label>
+                      <select
+                        value={link}
+                        onChange={(e) => handleCourseSelection(e.target.value)}
+                        style={inputStyle}
+                        required
+                      >
+                        {availableCourses.map((c, i) => (
+                          <option key={i} value={c.link}>
+                            {c.text.en}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>
+                        Override Link (Custom URL)
+                      </label>
+                      <input
+                        type="url"
+                        placeholder={link}
+                        value={externalLink}
+                        onChange={(e) => setExternalLink(e.target.value)}
+                        style={inputStyle}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div>
-                    <label style={labelStyle}>Link / URL (Optional)</label>
+                    <label style={labelStyle}>Link / URL</label>
                     <input
                       type="url"
-                      placeholder="https://booking-link.com"
+                      placeholder="https://..."
                       value={externalLink}
                       onChange={(e) => setExternalLink(e.target.value)}
-                      style={{
-                        ...inputStyle,
-                        backgroundColor: "#fcfcfc",
-                      }}
+                      style={inputStyle}
                     />
                   </div>
                 )}
@@ -417,29 +489,32 @@ export default function Admin() {
                     gap: "10px",
                   }}
                 >
-                  <div>
-                    <label style={labelStyle}>Title (EN)</label>
-                    <input
-                      type="text"
-                      value={titleEn}
-                      onChange={(e) => setTitleEn(e.target.value)}
-                      required
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Title (DE)</label>
-                    <input
-                      type="text"
-                      value={titleDe}
-                      onChange={(e) => setTitleDe(e.target.value)}
-                      required
-                      style={inputStyle}
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    placeholder="Title EN"
+                    value={titleEn}
+                    onChange={(e) => setTitleEn(e.target.value)}
+                    required
+                    style={inputStyle}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Title DE"
+                    value={titleDe}
+                    onChange={(e) => setTitleDe(e.target.value)}
+                    required
+                    style={inputStyle}
+                  />
                 </div>
-                <button type="submit" style={btnStyle}>
-                  Add to Calendar
+                <button
+                  type="submit"
+                  style={{
+                    ...btnStyle,
+                    backgroundColor: editingId ? "#1c0700" : "#caaff3",
+                    color: editingId ? "#fff" : "#1c0700",
+                  }}
+                >
+                  {editingId ? "Update Entry" : "Add to Calendar"}
                 </button>
               </form>
             </div>
@@ -458,36 +533,29 @@ export default function Admin() {
               }}
             >
               {events.map((event) => (
-                <div key={event.id} style={cardStyle}>
+                <div
+                  key={event.id}
+                  onClick={() => startEdit(event)}
+                  style={{
+                    ...cardStyle,
+                    cursor: "pointer",
+                    border:
+                      editingId === event.id
+                        ? "2px solid #caaff3"
+                        : "2px solid transparent",
+                  }}
+                >
                   <div style={{ flex: 1 }}>
                     <div
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
+                        fontSize: "0.7rem",
+                        color: "#caaff3",
+                        fontWeight: "800",
                         marginBottom: "4px",
                       }}
                     >
-                      <span
-                        style={{
-                          fontSize: "0.7rem",
-                          color: "#caaff3",
-                          fontWeight: "800",
-                        }}
-                      >
-                        {new Date(event.date).toLocaleDateString("de-DE")}
-                      </span>
-                      {event.time && (
-                        <span
-                          style={{
-                            fontSize: "0.7rem",
-                            opacity: 0.5,
-                            fontWeight: "bold",
-                          }}
-                        >
-                          • {event.time}
-                        </span>
-                      )}
+                      {new Date(event.date).toLocaleDateString("de-DE")}{" "}
+                      {event.time && `• ${event.time}`}
                     </div>
                     <span
                       style={{
@@ -497,9 +565,18 @@ export default function Admin() {
                     >
                       {event.title.en}
                     </span>
+                    <div
+                      style={{
+                        fontSize: "0.6rem",
+                        opacity: 0.4,
+                        marginTop: "4px",
+                      }}
+                    >
+                      TYPE: {event.type || "unknown"}
+                    </div>
                   </div>
                   <button
-                    onClick={() => deleteEvent(event.id)}
+                    onClick={(e) => deleteEvent(e, event.id)}
                     style={deleteBtnStyle}
                   >
                     <Trash2 size={18} />
@@ -613,6 +690,7 @@ const cardStyle = {
   backgroundColor: "#fff",
   borderRadius: "18px",
   boxShadow: "0 4px 15px rgba(28, 7, 0, 0.02)",
+  transition: "all 0.2s ease",
 };
 const deleteBtnStyle = {
   color: "#ff4d4d",
