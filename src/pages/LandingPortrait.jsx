@@ -309,31 +309,45 @@ export default function LandingPortrait() {
                 opacity: isLoaded && isVisible ? 1 : 0,
                 pointerEvents: isVisible && !isMenuOpen ? "auto" : "none",
                 transition: `transform ${movementDuration} ${currentEase}, translate ${movementDuration} ${currentEase}, opacity 0.5s ease`,
+                position: "relative",
+
+                // 1. Position the planet using the rotation swing
                 transformOrigin: `center ${radius}px`,
                 transform: `rotate(${currentAngle}deg)`,
                 translate: `${translateX} 0`,
-                position: "relative",
               }}
             >
               <div
                 style={{
-                  transition: "transform 0.3s ease",
-                  transform:
-                    hoveredIndex === index ? "scale(1.15)" : "scale(1)",
+                  // 2. FORCE the content to stay upright by negating the parent rotation
+                  // We use !important or ensure this transform runs AFTER the parent logic
+                  transform: `rotate(${-currentAngle}deg)`,
+                  transition: `transform ${movementDuration} ${currentEase}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                <PlanetPortrait
-                  planet={planet}
-                  language={currentLang}
-                  size={getPlanetSize(index)}
-                  onActivate={() => {
-                    if (isMenuOpen) return;
-                    setPreviousIndex(activeIndex);
-                    setActiveIndex(activeIndex === index ? null : index);
+                <div
+                  style={{
+                    transition: "transform 0.3s ease",
+                    transform:
+                      hoveredIndex === index ? "scale(1.15)" : "scale(1)",
                   }}
-                  onMouseEnter={() => !isMenuOpen && setHoveredIndex(index)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                />
+                >
+                  <PlanetPortrait
+                    planet={planet}
+                    language={currentLang}
+                    size={getPlanetSize(index)}
+                    onActivate={() => {
+                      if (isMenuOpen) return;
+                      setPreviousIndex(activeIndex);
+                      setActiveIndex(activeIndex === index ? null : index);
+                    }}
+                    onMouseEnter={() => !isMenuOpen && setHoveredIndex(index)}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                  />
+                </div>
               </div>
             </div>
           );
