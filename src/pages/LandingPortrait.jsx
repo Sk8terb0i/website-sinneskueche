@@ -26,6 +26,23 @@ export default function LandingPortrait() {
     isMenuOpenRef.current = isMenuOpen;
   }, [isMenuOpen]);
 
+  // --- OVERFLOW LOCK LOGIC ---
+  useEffect(() => {
+    // Save original overflow value
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+
+    // Apply hidden overflow
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden"; // Often needed for mobile Safari/Chrome
+
+    // Cleanup: revert when component unmounts
+    return () => {
+      document.body.style.overflow = originalStyle;
+      document.documentElement.style.overflow = originalStyle;
+    };
+  }, []);
+  // ---------------------------
+
   const coursePlanets = planets.filter((p) => p.type === "courses");
   const touchStartY = useRef(null);
   const touchLocked = useRef(false);

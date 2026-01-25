@@ -36,6 +36,7 @@ export default function Admin() {
   const [titleDe, setTitleDe] = useState("");
   const [linkType, setLinkType] = useState("course");
   const [link, setLink] = useState("");
+  const [externalLink, setExternalLink] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
 
   const eventsCollection = collection(db, "events");
@@ -86,13 +87,11 @@ export default function Admin() {
     };
   }, []);
 
-  // UPDATED: Fetches events and automatically deletes past ones
   const fetchEvents = async () => {
     try {
       const q = query(eventsCollection, orderBy("date", "asc"));
       const querySnapshot = await getDocs(q);
 
-      // Get current date at midnight for fair comparison
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -101,7 +100,6 @@ export default function Admin() {
         id: doc.id,
       }));
 
-      // Separate current/future events from past ones
       const expiredEvents = [];
       const validEvents = [];
 
@@ -116,7 +114,6 @@ export default function Admin() {
         }
       });
 
-      // If there are expired events, delete them from Firestore in a batch
       if (expiredEvents.length > 0) {
         const batch = writeBatch(db);
         expiredEvents.forEach((id) => {
@@ -159,13 +156,13 @@ export default function Admin() {
 
   const handleToggle = (type) => {
     setLinkType(type);
+    setLink("");
+    setExternalLink("");
+    setTitleEn("");
+    setTitleDe("");
+    setTime("");
     if (type === "course") {
       autoFillFirstCourse();
-    } else {
-      setLink("");
-      setTitleEn("");
-      setTitleDe("");
-      setTime("");
     }
   };
 
@@ -176,10 +173,11 @@ export default function Admin() {
         date,
         time,
         title: { en: titleEn, de: titleDe },
-        link: link || "",
+        link: linkType === "course" ? link || "" : externalLink || "",
       });
       setDate("");
       setTime("");
+      setExternalLink("");
       if (linkType === "course") autoFillFirstCourse();
       else {
         setLink("");
@@ -375,7 +373,8 @@ export default function Admin() {
                     />
                   </div>
                 </div>
-                {linkType === "course" && (
+
+                {linkType === "course" ? (
                   <div>
                     <label style={labelStyle}>Select Course</label>
                     <select
@@ -395,7 +394,22 @@ export default function Admin() {
                       ))}
                     </select>
                   </div>
+                ) : (
+                  <div>
+                    <label style={labelStyle}>Link / URL (Optional)</label>
+                    <input
+                      type="url"
+                      placeholder="https://booking-link.com"
+                      value={externalLink}
+                      onChange={(e) => setExternalLink(e.target.value)}
+                      style={{
+                        ...inputStyle,
+                        backgroundColor: "#fcfcfc",
+                      }}
+                    />
+                  </div>
                 )}
+
                 <div
                   style={{
                     display: "grid",
@@ -500,7 +514,6 @@ export default function Admin() {
   );
 }
 
-// Styles remain identical to your previous code block...
 const loginWrapperStyle = {
   display: "flex",
   justifyContent: "center",
