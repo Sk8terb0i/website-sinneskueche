@@ -49,6 +49,24 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
     return planet ? planet.icon : { en: "", de: "" };
   };
 
+  // Helper to directly get the _hover PNG version
+  const getHoverIcon = (id) => {
+    const planet = planets.find((p) => p.id === id);
+    if (!planet) return { en: "", de: "" };
+
+    const icons = { ...planet.icon };
+
+    Object.keys(icons).forEach((lang) => {
+      // Replaces _en.png with _hover_en.png and _de.png with _hover_de.png
+      icons[lang] = icons[lang].replace(
+        new RegExp(`_${lang}\\.`),
+        `_hover_${lang}.`,
+      );
+    });
+
+    return icons;
+  };
+
   const menuData = useMemo(
     () => ({
       courses: [
@@ -60,7 +78,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         {
           text: { en: "singing lessons", de: "gesangsunterricht" },
           link: "/singing",
-          icon: getPlanetIcon("hearing"),
+          icon: getHoverIcon("hearing"),
         },
       ],
       infoAction: [
