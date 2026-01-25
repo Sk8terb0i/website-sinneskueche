@@ -11,11 +11,13 @@ export default function Planet({
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
-  // Get the base icon source (e.g., "assets/hearing_en.png")
+  // 1. Use the path exactly as it is defined in your data
   const baseIconSrc = planet.icon[language];
 
-  // Generate the hover source by inserting "_hover" before the language suffix
-  // This looks for the ".png" (or other extension) and inserts "_hover" before it
+  // 2. Insert "_hover" before the language part of the filename.
+  // This regex finds the underscore + language + dot (e.g., "_en.")
+  // and replaces it with "_hover_en."
+  // This preserves whatever directory structure (like "assets/") was already there.
   const hoverIconSrc = baseIconSrc.replace(
     new RegExp(`_${language}\\.`),
     `_hover_${language}.`,
@@ -31,7 +33,6 @@ export default function Planet({
         ...style,
         width: `${size}px`,
         height: `${size}px`,
-        // The transform now combines the position from props + the hover scale
         transform: isHovered
           ? `${style.transform} scale(1.15)`
           : style.transform,
@@ -50,7 +51,6 @@ export default function Planet({
         setIsHovered(false);
         if (onHoverEnd) onHoverEnd();
       }}
-      // Adding Touch support for the "tap" interaction we discussed earlier
       onTouchStart={() => setIsHovered(true)}
       onTouchEnd={() => setIsHovered(false)}
       onClick={(e) => {
@@ -66,7 +66,6 @@ export default function Planet({
           height: "100%",
           objectFit: "contain",
           pointerEvents: "none",
-          // Smooth transition between the two images
           transition: "all 0.2s ease",
         }}
       />
