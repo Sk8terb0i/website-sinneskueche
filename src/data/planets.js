@@ -6,16 +6,25 @@ const mobileImages = import.meta.glob("../assets/planets_mobile/*.png", {
   eager: true,
 });
 
-// 2. Helper to get the correct path based on orientation
-const getImage = (filename) => {
-  // Check if width < height (Portrait/Mobile orientation)
+// 2. Helper to get the correct path with a fallback mechanism
+const getImage = (filename, fallbackFilename = null) => {
   const isPortrait = window.innerWidth < window.innerHeight;
-
   const folder = isPortrait ? "planets_mobile" : "planets";
   const imageSet = isPortrait ? mobileImages : desktopImages;
 
   const key = `../assets/${folder}/${filename}`;
-  return imageSet[key]?.default || "";
+  const image = imageSet[key]?.default;
+
+  // If the image exists, return it.
+  if (image) return image;
+
+  // If the image doesn't exist and we have a fallback, try to get the fallback
+  if (fallbackFilename) {
+    const fallbackKey = `../assets/${folder}/${fallbackFilename}`;
+    return imageSet[fallbackKey]?.default || "";
+  }
+
+  return "";
 };
 
 // 3. Definition (Note: We use getters so the logic runs whenever the icon is accessed)
@@ -25,6 +34,12 @@ export const planets = [
     type: "courses",
     get icon() {
       return { en: getImage("sight_en.png"), de: getImage("sight_de.png") };
+    },
+    get iconHover() {
+      return {
+        en: getImage("sight_hover_en.png"),
+        de: getImage("sight_hover_de.png"),
+      };
     },
     courses: [
       {
@@ -39,6 +54,12 @@ export const planets = [
     get icon() {
       return { en: getImage("touch_en.png"), de: getImage("touch_de.png") };
     },
+    get iconHover() {
+      return {
+        en: getImage("touch_hover_en.png"),
+        de: getImage("touch_hover_de.png"),
+      };
+    },
     courses: [
       {
         text: { en: "pottery tuesdays", de: "pottery tuesdays" },
@@ -52,6 +73,12 @@ export const planets = [
     get icon() {
       return { en: getImage("hearing_en.png"), de: getImage("hearing_de.png") };
     },
+    get iconHover() {
+      return {
+        en: getImage("hearing_hover_en.png"),
+        de: getImage("hearing_hover_de.png"),
+      };
+    },
     courses: [
       {
         text: { en: "singing lessons", de: "gesangsunterricht" },
@@ -64,6 +91,12 @@ export const planets = [
     type: "courses",
     get icon() {
       return { en: getImage("smell_en.png"), de: getImage("smell_de.png") };
+    },
+    get iconHover() {
+      return {
+        en: getImage("smell_hover_en.png"),
+        de: getImage("smell_hover_de.png"),
+      };
     },
     courses: [
       {
@@ -79,6 +112,12 @@ export const planets = [
     type: "courses",
     get icon() {
       return { en: getImage("taste_en.png"), de: getImage("taste_de.png") };
+    },
+    get iconHover() {
+      return {
+        en: getImage("taste_hover_en.png"),
+        de: getImage("taste_hover_de.png"),
+      };
     },
     courses: [
       {
