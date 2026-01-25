@@ -14,7 +14,6 @@ import {
   doc,
   query,
   orderBy,
-  writeBatch,
   setDoc,
 } from "firebase/firestore";
 import { planets } from "../../data/planets";
@@ -26,12 +25,14 @@ import {
   Lock,
   Edit2,
   XCircle,
+  Loader2, // Added for loading icon
 } from "lucide-react";
 
 export default function Admin() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false); // New state for loading
   const [events, setEvents] = useState([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -122,19 +123,16 @@ export default function Admin() {
     setTitleEn(event.title.en);
     setTitleDe(event.title.de);
 
-    // Set linkType based on saved type, or guess if type doesn't exist yet
     const type =
       event.type || (event.link?.startsWith("http") ? "event" : "course");
     setLinkType(type);
 
     if (type === "course") {
-      // Check if it's a standard link or a custom override
       const isStandard = availableCourses.some((c) => c.link === event.link);
       if (isStandard) {
         setLink(event.link);
         setExternalLink("");
       } else {
-        // It's a course but with a custom URL
         setExternalLink(event.link);
       }
     } else {
@@ -170,7 +168,6 @@ export default function Admin() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Link logic: Event uses external. Course uses override if present, else template link.
       const finalLink =
         linkType === "event" ? externalLink : externalLink || link || "";
 
@@ -179,7 +176,7 @@ export default function Admin() {
         time,
         title: { en: titleEn, de: titleDe },
         link: finalLink,
-        type: linkType, // Explicitly save type to handle custom links correctly
+        type: linkType,
       };
 
       if (editingId) {
@@ -206,10 +203,13 @@ export default function Admin() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setIsLoading(true); // START LOADING
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
       alert("Login failed: " + error.message);
+    } finally {
+      setIsLoading(false); // STOP LOADING
     }
   };
 
@@ -252,6 +252,7 @@ export default function Admin() {
             onChange={(e) => setEmail(e.target.value)}
             style={{ ...inputStyle, marginBottom: "1.2rem" }}
             required
+            disabled={isLoading}
           />
           <div
             style={{
@@ -265,6 +266,7 @@ export default function Admin() {
               type="button"
               onClick={handleForgotPassword}
               style={forgotLinkStyle}
+              disabled={isLoading}
             >
               Forgot?
             </button>
@@ -275,11 +277,39 @@ export default function Admin() {
             onChange={(e) => setPassword(e.target.value)}
             style={{ ...inputStyle, marginBottom: "2rem" }}
             required
+            disabled={isLoading}
           />
-          <button type="submit" style={btnStyle}>
-            Sign In
+          <button
+            type="submit"
+            disabled={isLoading}
+            style={{
+              ...btnStyle,
+              opacity: isLoading ? 0.7 : 1,
+              cursor: isLoading ? "not-allowed" : "pointer",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: "10px",
+            }}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="spinner" size={18} /> Signing In...
+              </>
+            ) : (
+              "Sign In"
+            )}
           </button>
         </form>
+        <style>{`
+          .spinner {
+            animation: spin 1s linear infinite;
+          }
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }
