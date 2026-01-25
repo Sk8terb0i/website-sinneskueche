@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import Landing from "./pages/Landing";
@@ -8,9 +8,12 @@ import Team from "./pages/Team";
 import Location from "./pages/Location";
 import Contact from "./pages/Contact";
 import Rent from "./pages/Rent";
-import Admin from "./pages/Admin/Admin";
+// import Admin from "./pages/Admin/Admin"; // Removed standard import
 import PageTransition from "./components/PageTransition";
 import { defaultLang } from "./i18n";
+
+// Dynamic Import for Admin
+const Admin = lazy(() => import("./pages/Admin/Admin"));
 
 export default function App() {
   const [currentLang, setCurrentLang] = useState(defaultLang);
@@ -93,12 +96,21 @@ export default function App() {
         <Route
           path="/admin-sinneskueche"
           element={
-            <PageTransition>
-              <Admin />
-            </PageTransition>
+            <Suspense fallback={<div style={loadingContainerStyle} />}>
+              <PageTransition>
+                <Admin />
+              </PageTransition>
+            </Suspense>
           }
         />
       </Routes>
     </AnimatePresence>
   );
 }
+
+// Simple style to prevent layout shift while Admin loads
+const loadingContainerStyle = {
+  width: "100vw",
+  height: "100vh",
+  backgroundColor: "#fffce3",
+};
