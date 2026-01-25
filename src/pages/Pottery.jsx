@@ -3,7 +3,10 @@ import Header from "../components/Header/Header";
 import "./Course.css";
 
 export default function Pottery({ currentLang, setCurrentLang }) {
-  const [currentTab, setCurrentTab] = useState("info"); // optional: tabs for sessions, materials, etc.
+  const [currentTab, setCurrentTab] = useState("info");
+
+  // --- ADD MENU STATE ---
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const content = {
     en: {
@@ -22,7 +25,13 @@ export default function Pottery({ currentLang, setCurrentLang }) {
 
   return (
     <div className="course-container">
-      <Header currentLang={currentLang} setCurrentLang={setCurrentLang} />
+      {/* --- PASS MENU PROPS TO HEADER --- */}
+      <Header
+        currentLang={currentLang}
+        setCurrentLang={setCurrentLang}
+        isMenuOpen={isMenuOpen}
+        onMenuToggle={setIsMenuOpen}
+      />
 
       <main className="course-main">
         <h1 className="course-title">{content[lang].title}</h1>

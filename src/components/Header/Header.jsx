@@ -7,8 +7,8 @@ export default function Header({
   currentLang,
   setCurrentLang,
   isPlanetActive,
-  isMenuOpen, // Prop from parent
-  onMenuToggle, // Prop from parent
+  isMenuOpen,
+  onMenuToggle,
 }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -86,21 +86,22 @@ export default function Header({
               onClick={!isPortrait ? () => navigate("/") : undefined}
               onMouseEnter={() => !isPortrait && setTitleHovered(true)}
               onMouseLeave={() => !isPortrait && setTitleHovered(false)}
+              // Tap interaction for mobile
+              onTouchStart={() => setTitleHovered(true)}
+              onTouchEnd={() => setTitleHovered(false)}
               style={{
                 fontFamily: "Harmond-SemiBoldCondensed",
                 fontSize: titleFontSize,
                 fontWeight: !isPortrait ? 700 : 400,
                 display: "flex",
                 alignItems: "center",
-                color:
-                  !isPortrait && titleHovered
-                    ? "#9960a8"
-                    : isPortrait && isLanding
-                      ? "#1c0700"
-                      : "#4e5f28",
+                color: titleHovered
+                  ? "#9960a8"
+                  : isPortrait && isLanding
+                    ? "#1c0700"
+                    : "#4e5f28",
                 cursor: !isPortrait ? "pointer" : "default",
-                transform:
-                  !isPortrait && titleHovered ? "scale(1.05)" : "scale(1)",
+                transform: titleHovered ? "scale(1.05)" : "scale(1)",
                 transition: hoverTransition,
               }}
             >
@@ -113,6 +114,9 @@ export default function Header({
               onClick={() => navigate("/")}
               onMouseEnter={() => setTitleHovered(true)}
               onMouseLeave={() => setTitleHovered(false)}
+              // Tap interaction for mobile
+              onTouchStart={() => setTitleHovered(true)}
+              onTouchEnd={() => setTitleHovered(false)}
               style={{
                 cursor: "pointer",
                 display: "flex",
@@ -131,6 +135,9 @@ export default function Header({
           <div
             onMouseEnter={() => setLangHovered(true)}
             onMouseLeave={() => setLangHovered(false)}
+            // Tap interaction for mobile
+            onTouchStart={() => setLangHovered(true)}
+            onTouchEnd={() => setLangHovered(false)}
             onClick={(e) => {
               e.stopPropagation();
               setCurrentLang((prev) => (prev === "en" ? "de" : "en"));
@@ -160,9 +167,12 @@ export default function Header({
             className="hamburger-menu"
             onMouseEnter={() => setMenuHovered(true)}
             onMouseLeave={() => setMenuHovered(false)}
+            // Tap interaction for mobile
+            onTouchStart={() => setMenuHovered(true)}
+            onTouchEnd={() => setMenuHovered(false)}
             onClick={(e) => {
               e.stopPropagation();
-              onMenuToggle(true); // Updates parent state
+              onMenuToggle(true);
             }}
             style={{
               width: `${hamburgerSize.width}px`,
@@ -194,7 +204,7 @@ export default function Header({
 
       <MenuOverlay
         isOpen={isMenuOpen}
-        onClose={() => onMenuToggle(false)} // Updates parent state
+        onClose={() => onMenuToggle(false)}
         currentLang={currentLang}
       />
     </>

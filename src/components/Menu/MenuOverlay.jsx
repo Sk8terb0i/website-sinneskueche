@@ -13,9 +13,11 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const [isCalendarOpen, setIsCalendarOpen] = useState(true);
   const [upcomingEvents, setUpcomingEvents] = useState([]);
 
+  // Close Button Hover/Tap state
+  const [closeActive, setCloseActive] = useState(false);
+
   const isMobile = window.innerWidth < 768;
 
-  // 1. Fetch and Slice Events based on Device
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -31,7 +33,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
             return eventDate >= now;
           });
 
-        // Limit: 3 for mobile, 8 for landscape/desktop
         const limit = isMobile ? 3 : 8;
         setUpcomingEvents(allUpcoming.slice(0, limit));
       } catch (error) {
@@ -97,7 +98,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
 
   return (
     <>
-      {/* BACKDROP & DESKTOP CALENDAR SIDE-PANEL */}
       <div
         style={{
           position: "fixed",
@@ -119,7 +119,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           transition: "opacity 0.5s ease, backdrop-filter 0.5s ease",
           display: "flex",
           justifyContent: "flex-end",
-          paddingRight: isMobile ? "0" : "440px", // 420px menu + 20px gap
+          paddingRight: isMobile ? "0" : "440px",
         }}
         onClick={onClose}
       >
@@ -129,7 +129,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
             style={{
               width: "360px",
               height: "100dvh",
-              // padding-top matches the vertical start of the "Courses" title
               padding: "5.85rem 3rem 3rem 3rem",
               backgroundColor: "rgba(255, 252, 227, 0.85)",
               borderRight: "1px solid rgba(28, 7, 0, 0.05)",
@@ -146,7 +145,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
               toggle={() => setIsCalendarOpen(!isCalendarOpen)}
               isMobile={false}
             >
-              {/* Landscape/Desktop specific gap */}
               <div style={{ paddingTop: "2.5rem" }}>
                 <AtelierCalendar
                   currentLang={currentLang}
@@ -159,7 +157,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         )}
       </div>
 
-      {/* MAIN MENU PANEL */}
       <div
         style={{
           position: "fixed",
@@ -186,7 +183,18 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
             flexShrink: 0,
           }}
         >
-          <button onClick={onClose} style={closeBtnStyle}>
+          <button
+            onClick={onClose}
+            onMouseEnter={() => setCloseActive(true)}
+            onMouseLeave={() => setCloseActive(false)}
+            onTouchStart={() => setCloseActive(true)}
+            onTouchEnd={() => setCloseActive(false)}
+            style={{
+              ...closeBtnStyle,
+              color: closeActive ? "#9960a8" : "#1c0700",
+              transition: "color 0.2s ease",
+            }}
+          >
             <span>{currentLang === "en" ? "close" : "schließen"}</span>
             <X size={18} />
           </button>
@@ -291,12 +299,17 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   );
 }
 
-// Sub-components
 function Section({ title, children, isOpen, toggle, isMobile }) {
+  const [isSectionActive, setIsSectionActive] = useState(false);
+
   return (
     <div style={{ marginBottom: isMobile ? "0.2rem" : "0.5rem" }}>
       <div
         onClick={toggle}
+        onMouseEnter={() => setIsSectionActive(true)}
+        onMouseLeave={() => setIsSectionActive(false)}
+        onTouchStart={() => setIsSectionActive(true)}
+        onTouchEnd={() => setIsSectionActive(false)}
         style={{
           display: "flex",
           alignItems: "center",
@@ -309,7 +322,7 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
           style={{
             width: "8px",
             height: "8px",
-            backgroundColor: isOpen ? "#caaff3" : "#1c0700",
+            backgroundColor: isSectionActive || isOpen ? "#caaff3" : "#1c0700",
             borderRadius: "50%",
             transition: "all 0.4s ease",
           }}
@@ -320,7 +333,9 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
             fontSize: isMobile ? "1.8rem" : "2.1rem",
             margin: 0,
             textTransform: "lowercase",
-            opacity: isOpen ? 1 : 0.7,
+            opacity: isOpen || isSectionActive ? 1 : 0.7,
+            color: isSectionActive ? "#9960a8" : "#1c0700",
+            transition: "all 0.2s ease",
           }}
         >
           {title}
@@ -356,6 +371,8 @@ function MenuLink({ item, lang, onNavigate, isMobile }) {
       onClick={() => onNavigate(item.link)}
       onMouseEnter={() => setIsActive(true)}
       onMouseLeave={() => setIsActive(false)}
+      onTouchStart={() => setIsActive(true)}
+      onTouchEnd={() => setIsActive(false)}
       style={{
         display: "flex",
         alignItems: "center",
@@ -366,6 +383,7 @@ function MenuLink({ item, lang, onNavigate, isMobile }) {
         fontFamily: "Satoshi",
         fontSize: isMobile ? "1rem" : "1.1rem",
         transition: "all 0.2s ease",
+        transform: isActive ? "translateX(5px)" : "translateX(0)",
       }}
     >
       {item.icon && (
@@ -394,6 +412,7 @@ const closeBtnStyle = {
   fontSize: "0.85rem",
   textTransform: "lowercase",
 };
+
 const footerStyle = {
   display: "flex",
   flexDirection: "column",
