@@ -28,6 +28,28 @@ import {
   Loader2,
 } from "lucide-react";
 
+// --- COMPONENT DEFINED OUTSIDE TO PREVENT RE-RENDERING FOCUS ISSUES ---
+const PageWrapper = ({ children }) => (
+  <div
+    id="admin-scroll-container"
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      overflowY: "auto",
+      overflowX: "hidden",
+      backgroundColor: "#fffce3",
+      zIndex: 9999,
+      fontFamily: "Satoshi",
+      color: "#1c0700",
+    }}
+  >
+    {children}
+  </div>
+);
+
 export default function Admin() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
@@ -138,7 +160,6 @@ export default function Admin() {
     } else {
       setExternalLink(event.link || "");
     }
-    // Fixed scroll behavior to work with internal container
     document
       .getElementById("admin-scroll-container")
       ?.scrollTo({ top: 0, behavior: "smooth" });
@@ -228,28 +249,6 @@ export default function Admin() {
       alert("Error: " + error.message);
     }
   };
-
-  // Base layout wrapper that handles the scroll lock bypass
-  const PageWrapper = ({ children }) => (
-    <div
-      id="admin-scroll-container"
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "100vw",
-        height: "100vh",
-        overflowY: "auto", // This creates the scrollbar inside the Admin page
-        overflowX: "hidden",
-        backgroundColor: "#fffce3",
-        zIndex: 9999,
-        fontFamily: "Satoshi",
-        color: "#1c0700",
-      }}
-    >
-      {children}
-    </div>
-  );
 
   if (!user) {
     return (
