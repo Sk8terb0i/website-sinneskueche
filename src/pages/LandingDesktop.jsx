@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-// Corrected path to src/firebase.js
 import { db } from "../firebase";
 import { collection, query, getDocs, orderBy } from "firebase/firestore";
 import Orbit from "../components/Orbit/Orbit";
@@ -27,11 +26,11 @@ export default function Landing() {
   });
 
   const [isSystemMounted, setIsSystemMounted] = useState(false);
+  const [isInitialAnimationDone, setIsInitialAnimationDone] = useState(false); // Fix for jitter
   const [sunClicked, setSunClicked] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentLang, setCurrentLang] = useState(defaultLang);
 
-  // New state to hold planets with Firebase events
   const [planets, setPlanets] = useState(initialPlanets);
 
   const hoverTimeoutRef = useRef(null);
@@ -43,7 +42,7 @@ export default function Landing() {
   const lang = languages[currentLang];
   const planetBaseSizes = { courses: 128, info: 96, action: 64 };
 
-  // --- Firebase Logic: Only injecting events ---
+  // --- Firebase Logic ---
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -70,8 +69,8 @@ export default function Landing() {
                 return {
                   ...p,
                   courses: fetchedEvents.map((e) => ({
-                    text: e.title, // Admin field
-                    link: e.link, // Admin field
+                    text: e.title,
+                    link: e.link,
                   })),
                 };
               }
@@ -86,7 +85,7 @@ export default function Landing() {
     fetchEvents();
   }, []);
 
-  // --- External/Internal Link Handler ---
+  // --- Link Handler ---
   const handleLink = (link) => {
     if (!link) return;
     const isExternal =
@@ -103,7 +102,7 @@ export default function Landing() {
     }
   };
 
-  // --- Logic for Angles and Offsets (Unchanged) ---
+  // --- Logic for Angles and Offsets ---
   const [planetAngles, setPlanetAngles] = useState(() => {
     const initialAngles = {};
     const grouped = initialPlanets.reduce((acc, p) => {
@@ -134,7 +133,6 @@ export default function Landing() {
     return offsets;
   });
 
-  // Update offsets if planets (moons) change
   useEffect(() => {
     const newOffsets = { ...moonOffsets };
     planets.forEach((planet) => {
@@ -148,9 +146,17 @@ export default function Landing() {
     setMoonOffsets(newOffsets);
   }, [planets]);
 
+  // Handle mounting and the fly-out animation timing
   useEffect(() => {
-    const timer = setTimeout(() => setIsSystemMounted(true), 50);
-    return () => clearTimeout(timer);
+    const mountTimer = setTimeout(() => setIsSystemMounted(true), 50);
+    const animationTimer = setTimeout(
+      () => setIsInitialAnimationDone(true),
+      1600,
+    );
+    return () => {
+      clearTimeout(mountTimer);
+      clearTimeout(animationTimer);
+    };
   }, []);
 
   useEffect(() => {
@@ -160,6 +166,7 @@ export default function Landing() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // --- Animation Loop ---
   useEffect(() => {
     let lastTime = performance.now();
     const animate = (time) => {
@@ -167,11 +174,13 @@ export default function Landing() {
       lastTime = time;
       const targetSpeed = isPaused ? 0 : 1;
       globalSpeedRef.current += (targetSpeed - globalSpeedRef.current) * 0.08;
+
       const ringSpeeds = { courses: 1, info: 1, action: 1 };
       if (focusedPlanet) {
         const p = planets.find((p) => p.id === focusedPlanet);
         if (p) ringSpeeds[p.type] = ringSlowFactor;
       }
+
       setPlanetAngles((prev) => {
         const next = { ...prev };
         planets.forEach((planet) => {
@@ -300,13 +309,18 @@ export default function Landing() {
               position: "absolute",
               top: "50%",
               left: "50%",
+              // Ensure translate3d is used to trigger GPU acceleration
               transform: `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`,
               zIndex: 10,
               filter: blurValue,
               opacity: isSystemMounted ? 1 : 0,
-              transition: isSystemMounted
-                ? "transform 1.5s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease, opacity 0.8s ease"
-                : "none",
+              // This 'will-change' hint tells the browser to prepare the GPU
+              willChange: "transform, filter",
+              transition: isInitialAnimationDone
+                ? "filter 0.2s ease, opacity 0.8s ease"
+                : isSystemMounted
+                  ? "transform 1.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.8s ease"
+                  : "none",
             }}
             onActivate={(id) => {
               if (isMenuOpen) return;
