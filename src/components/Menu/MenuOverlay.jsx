@@ -60,7 +60,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         {
           text: { en: "pottery tuesdays", de: "pottery tuesdays" },
           link: "/pottery",
-          icon: getPlanetIcon("touch"), // Normal icon
+          icon: getPlanetIcon("touch", true), // false = Normal icon
         },
         {
           text: { en: "singing lessons", de: "gesangsunterricht" },
