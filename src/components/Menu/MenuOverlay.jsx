@@ -43,15 +43,13 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const hasUpcomingEvents = upcomingEvents.length > 0;
 
   /**
-   * Updated Helper: Gets either the base icon or the hover icon
-   * directly from the planet object getters.
+   * Updated Helper: Gets the base icon from the planet object.
+   * Hover logic removed to prevent crashes.
    */
-  const getPlanetIcon = (id, useHover = false) => {
+  const getPlanetIcon = (id) => {
     const planet = planets.find((p) => p.id === id);
     if (!planet) return { en: "", de: "" };
-
-    // This calls the getters we created in planets.js
-    return useHover ? planet.iconHover : planet.icon;
+    return planet.icon;
   };
 
   const menuData = useMemo(
@@ -60,12 +58,12 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         {
           text: { en: "pottery tuesdays", de: "pottery tuesdays" },
           link: "/pottery",
-          icon: getPlanetIcon("touch", true), // false = Normal icon
+          icon: getPlanetIcon("touch"),
         },
         {
           text: { en: "singing lessons", de: "gesangsunterricht" },
           link: "/singing",
-          icon: getPlanetIcon("hearing", true), // Specifically use Hover icon
+          icon: getPlanetIcon("hearing"),
         },
       ],
       infoAction: [
@@ -304,7 +302,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   );
 }
 
-// Sub-components (Section and MenuLink) remain identical to your original code
 function Section({ title, children, isOpen, toggle, isMobile }) {
   const [isSectionActive, setIsSectionActive] = useState(false);
 
@@ -399,6 +396,7 @@ function MenuLink({ item, lang, onNavigate, isMobile }) {
           style={{
             width: isMobile ? "24px" : "30px",
             height: isMobile ? "24px" : "30px",
+            objectFit: "contain",
           }}
         />
       )}

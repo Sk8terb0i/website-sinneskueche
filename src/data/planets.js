@@ -1,44 +1,24 @@
-// 1. Import both sets of images
-const desktopImages = import.meta.glob("../assets/planets/*.png", {
-  eager: true,
-});
-const mobileImages = import.meta.glob("../assets/planets_mobile/*.png", {
+// 1. Import images from the standard folder
+const planetImages = import.meta.glob("../assets/planets/*.png", {
   eager: true,
 });
 
-// 2. Helper to get the correct path with a fallback mechanism
-const getImage = (filename, fallbackFilename = null) => {
-  const isPortrait = window.innerWidth < window.innerHeight;
-  const folder = isPortrait ? "planets_mobile" : "planets";
-  const imageSet = isPortrait ? mobileImages : desktopImages;
-
-  const key = `../assets/${folder}/${filename}`;
-  const image = imageSet[key]?.default;
-
-  // If the image exists, return it.
-  if (image) return image;
-
-  // If the image doesn't exist and we have a fallback, try to get the fallback
-  if (fallbackFilename) {
-    const fallbackKey = `../assets/${folder}/${fallbackFilename}`;
-    return imageSet[fallbackKey]?.default || "";
-  }
-
-  return "";
+// 2. Helper to get the path
+const getImage = (filename) => {
+  const key = `../assets/planets/${filename}`;
+  return planetImages[key]?.default || "";
 };
 
-// 3. Definition (Note: We use getters so the logic runs whenever the icon is accessed)
+// 3. Planet Definitions
+// Both 'en' and 'de' now point to the '_en.png' asset.
 export const planets = [
   {
     id: "sight",
     type: "courses",
     get icon() {
-      return { en: getImage("sight_en.png"), de: getImage("sight_de.png") };
-    },
-    get iconHover() {
       return {
-        en: getImage("sight_hover_en.png"),
-        de: getImage("sight_hover_de.png"),
+        en: getImage("sight_en.png"),
+        de: getImage("sight_en.png"),
       };
     },
     courses: [
@@ -52,12 +32,9 @@ export const planets = [
     id: "touch",
     type: "courses",
     get icon() {
-      return { en: getImage("touch_en.png"), de: getImage("touch_de.png") };
-    },
-    get iconHover() {
       return {
-        en: getImage("touch_hover_en.png"),
-        de: getImage("touch_hover_de.png"),
+        en: getImage("touch_en.png"),
+        de: getImage("touch_en.png"),
       };
     },
     courses: [
@@ -71,12 +48,9 @@ export const planets = [
     id: "hearing",
     type: "courses",
     get icon() {
-      return { en: getImage("hearing_en.png"), de: getImage("hearing_de.png") };
-    },
-    get iconHover() {
       return {
-        en: getImage("hearing_hover_en.png"),
-        de: getImage("hearing_hover_de.png"),
+        en: getImage("hearing_en.png"),
+        de: getImage("hearing_en.png"),
       };
     },
     courses: [
@@ -90,12 +64,9 @@ export const planets = [
     id: "smell",
     type: "courses",
     get icon() {
-      return { en: getImage("smell_en.png"), de: getImage("smell_de.png") };
-    },
-    get iconHover() {
       return {
-        en: getImage("smell_hover_en.png"),
-        de: getImage("smell_hover_de.png"),
+        en: getImage("smell_en.png"),
+        de: getImage("smell_en.png"),
       };
     },
     courses: [
@@ -111,12 +82,9 @@ export const planets = [
     id: "taste",
     type: "courses",
     get icon() {
-      return { en: getImage("taste_en.png"), de: getImage("taste_de.png") };
-    },
-    get iconHover() {
       return {
-        en: getImage("taste_hover_en.png"),
-        de: getImage("taste_hover_de.png"),
+        en: getImage("taste_en.png"),
+        de: getImage("taste_en.png"),
       };
     },
     courses: [
@@ -134,7 +102,7 @@ export const planets = [
     get icon() {
       return {
         en: getImage("location_en.png"),
-        de: getImage("location_de.png"),
+        de: getImage("location_en.png"),
       };
     },
     courses: [
@@ -148,7 +116,10 @@ export const planets = [
     id: "team",
     type: "info",
     get icon() {
-      return { en: getImage("team_en.png"), de: getImage("team_de.png") };
+      return {
+        en: getImage("team_en.png"),
+        de: getImage("team_en.png"),
+      };
     },
     courses: [
       { text: { en: "get to know us", de: "das sind wir" }, link: "/team" },
@@ -158,7 +129,10 @@ export const planets = [
     id: "events",
     type: "info",
     get icon() {
-      return { en: getImage("events_en.png"), de: getImage("events_de.png") };
+      return {
+        en: getImage("events_en.png"),
+        de: getImage("events_en.png"),
+      };
     },
     courses: [
       { text: { en: "come back later :)", de: "komm später wieder :)" } },
@@ -168,7 +142,10 @@ export const planets = [
     id: "contact",
     type: "action",
     get icon() {
-      return { en: getImage("contact_en.png"), de: getImage("contact_de.png") };
+      return {
+        en: getImage("contact_en.png"),
+        de: getImage("contact_en.png"),
+      };
     },
     courses: [
       { text: { en: "get in touch!", de: "melde dich!" }, link: "/contact" },
@@ -178,7 +155,10 @@ export const planets = [
     id: "rent",
     type: "action",
     get icon() {
-      return { en: getImage("rent_en.png"), de: getImage("rent_de.png") };
+      return {
+        en: getImage("rent_en.png"),
+        de: getImage("rent_en.png"),
+      };
     },
     courses: [
       { text: { en: "rent our space", de: "raum mieten" }, link: "/rent" },

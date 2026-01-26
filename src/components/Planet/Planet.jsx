@@ -11,10 +11,8 @@ export default function Planet({
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
-  // Directly access the getters from planets.js
-  const currentIconSrc = isHovered
-    ? planet.iconHover[language]
-    : planet.icon[language];
+  // Simply use the standard icon. No more swapping!
+  const currentIconSrc = planet.icon[language];
 
   return (
     <div
@@ -23,6 +21,7 @@ export default function Planet({
         ...style,
         width: `${size}px`,
         height: `${size}px`,
+        // We still keep the scale effect for visual feedback
         transform: isHovered
           ? `${style.transform} scale(1.15)`
           : style.transform,
@@ -41,8 +40,6 @@ export default function Planet({
         setIsHovered(false);
         if (onHoverEnd) onHoverEnd();
       }}
-      onTouchStart={() => setIsHovered(true)}
-      onTouchEnd={() => setIsHovered(false)}
       onClick={(e) => {
         e.stopPropagation();
         onActivate(planet.id);
@@ -56,7 +53,6 @@ export default function Planet({
           height: "100%",
           objectFit: "contain",
           pointerEvents: "none",
-          transition: "all 0.2s ease",
         }}
       />
     </div>
