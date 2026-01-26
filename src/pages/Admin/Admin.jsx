@@ -25,14 +25,14 @@ import {
   Lock,
   Edit2,
   XCircle,
-  Loader2, // Added for loading icon
+  Loader2,
 } from "lucide-react";
 
 export default function Admin() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false); // New state for loading
+  const [isLoading, setIsLoading] = useState(false);
   const [events, setEvents] = useState([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -138,7 +138,10 @@ export default function Admin() {
     } else {
       setExternalLink(event.link || "");
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Fixed scroll behavior to work with internal container
+    document
+      .getElementById("admin-scroll-container")
+      ?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const resetForm = () => {
@@ -203,13 +206,13 @@ export default function Admin() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setIsLoading(true); // START LOADING
+    setIsLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
       alert("Login failed: " + error.message);
     } finally {
-      setIsLoading(false); // STOP LOADING
+      setIsLoading(false);
     }
   };
 
@@ -226,106 +229,116 @@ export default function Admin() {
     }
   };
 
+  // Base layout wrapper that handles the scroll lock bypass
+  const PageWrapper = ({ children }) => (
+    <div
+      id="admin-scroll-container"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        overflowY: "auto", // This creates the scrollbar inside the Admin page
+        overflowX: "hidden",
+        backgroundColor: "#fffce3",
+        zIndex: 9999,
+        fontFamily: "Satoshi",
+        color: "#1c0700",
+      }}
+    >
+      {children}
+    </div>
+  );
+
   if (!user) {
     return (
-      <div style={loginWrapperStyle}>
-        <form onSubmit={handleLogin} style={loginCardStyle(isMobile)}>
-          <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-            <Lock
-              size={isMobile ? 32 : 40}
-              color="#caaff3"
-              style={{ marginBottom: "1rem" }}
+      <PageWrapper>
+        <div style={loginWrapperStyle}>
+          <form onSubmit={handleLogin} style={loginCardStyle(isMobile)}>
+            <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+              <Lock
+                size={isMobile ? 32 : 40}
+                color="#caaff3"
+                style={{ marginBottom: "1rem" }}
+              />
+              <h1
+                style={{
+                  fontFamily: "Harmond-SemiBoldCondensed",
+                  fontSize: "2rem",
+                }}
+              >
+                Atelier Login
+              </h1>
+            </div>
+            <label style={labelStyle}>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{ ...inputStyle, marginBottom: "1.2rem" }}
+              required
+              disabled={isLoading}
             />
-            <h1
+            <div
               style={{
-                fontFamily: "Harmond-SemiBoldCondensed",
-                fontSize: "2rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "baseline",
               }}
             >
-              Atelier Login
-            </h1>
-          </div>
-          <label style={labelStyle}>Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ ...inputStyle, marginBottom: "1.2rem" }}
-            required
-            disabled={isLoading}
-          />
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-            }}
-          >
-            <label style={labelStyle}>Password</label>
-            <button
-              type="button"
-              onClick={handleForgotPassword}
-              style={forgotLinkStyle}
+              <label style={labelStyle}>Password</label>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                style={forgotLinkStyle}
+                disabled={isLoading}
+              >
+                Forgot?
+              </button>
+            </div>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{ ...inputStyle, marginBottom: "2rem" }}
+              required
               disabled={isLoading}
+            />
+            <button
+              type="submit"
+              disabled={isLoading}
+              style={{
+                ...btnStyle,
+                opacity: isLoading ? 0.7 : 1,
+                cursor: isLoading ? "not-allowed" : "pointer",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "10px",
+              }}
             >
-              Forgot?
+              {isLoading ? (
+                <>
+                  <Loader2 className="spinner" size={18} /> Signing In...
+                </>
+              ) : (
+                "Sign In"
+              )}
             </button>
-          </div>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ ...inputStyle, marginBottom: "2rem" }}
-            required
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            disabled={isLoading}
-            style={{
-              ...btnStyle,
-              opacity: isLoading ? 0.7 : 1,
-              cursor: isLoading ? "not-allowed" : "pointer",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: "10px",
-            }}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="spinner" size={18} /> Signing In...
-              </>
-            ) : (
-              "Sign In"
-            )}
-          </button>
-        </form>
-        <style>{`
-          .spinner {
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
-      </div>
+          </form>
+          <style>{`
+            .spinner { animation: spin 1s linear infinite; }
+            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          `}</style>
+        </div>
+      </PageWrapper>
     );
   }
 
   return (
-    <div
-      style={{
-        width: "100%",
-        minHeight: "100vh",
-        backgroundColor: "#fffce3",
-        color: "#1c0700",
-        fontFamily: "Satoshi",
-        overflowX: "hidden",
-      }}
-    >
-      <div style={{ padding: isMobile ? "1.5rem" : "4vw" }}>
+    <PageWrapper>
+      <div style={{ padding: isMobile ? "1.5rem" : "4vw", minHeight: "101vh" }}>
         <header style={headerStyle(isMobile)}>
           <div style={{ flex: 1 }}>
             <h1
@@ -379,20 +392,7 @@ export default function Admin() {
                   {editingId ? "EDIT ENTRY" : "NEW ENTRY"}
                 </h2>
                 {editingId && (
-                  <button
-                    onClick={resetForm}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#ff4d4d",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      fontSize: "0.7rem",
-                      fontWeight: "bold",
-                    }}
-                  >
+                  <button onClick={resetForm} style={cancelBtnStyle}>
                     <XCircle size={14} /> CANCEL
                   </button>
                 )}
@@ -487,9 +487,7 @@ export default function Admin() {
                       </select>
                     </div>
                     <div>
-                      <label style={labelStyle}>
-                        Override Link (Custom URL)
-                      </label>
+                      <label style={labelStyle}>Override Link</label>
                       <input
                         type="url"
                         placeholder={link}
@@ -617,16 +615,16 @@ export default function Admin() {
           </section>
         </div>
       </div>
-    </div>
+    </PageWrapper>
   );
 }
 
+// STYLES
 const loginWrapperStyle = {
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
   minHeight: "100vh",
-  backgroundColor: "#fffce3",
   padding: "1.5rem",
 };
 const loginCardStyle = (isMobile) => ({
@@ -711,6 +709,17 @@ const sectionTitleStyle = {
   fontWeight: "bold",
   textTransform: "uppercase",
   letterSpacing: "0.05rem",
+};
+const cancelBtnStyle = {
+  background: "none",
+  border: "none",
+  color: "#ff4d4d",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: "4px",
+  fontSize: "0.7rem",
+  fontWeight: "bold",
 };
 const cardStyle = {
   display: "flex",

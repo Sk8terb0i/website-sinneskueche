@@ -6,8 +6,6 @@ const animations = {
   exit: { opacity: 0, scale: 1.02 },
 };
 
-const transition = { duration: 0.5, ease: [0.61, 1, 0.88, 1] };
-
 export default function PageTransition({ children }) {
   return (
     <motion.div
@@ -16,7 +14,14 @@ export default function PageTransition({ children }) {
       animate="animate"
       exit="exit"
       transition={{ duration: 0.4, ease: [0.43, 0.13, 0.23, 0.96] }}
-      style={{ width: "100%", position: "relative" }}
+      style={{
+        width: "100vw", // Force exact viewport width
+        height: "100vh", // Force exact viewport height
+        position: "fixed", // Use fixed to stack pages during 'wait'
+        top: 0,
+        left: 0,
+        overflow: "hidden", // Kill any leaking content during animation
+      }}
     >
       {children}
     </motion.div>

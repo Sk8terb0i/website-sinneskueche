@@ -1,22 +1,36 @@
 import { useState, lazy, Suspense } from "react";
+
 import { Routes, Route, useLocation } from "react-router-dom";
+
 import { AnimatePresence } from "framer-motion";
+
 import Landing from "./pages/Landing";
+
 import Pottery from "./pages/Pottery";
+
 import Singing from "./pages/Singing";
+
 import Team from "./pages/Team";
+
 import Location from "./pages/Location";
+
 import Contact from "./pages/Contact";
+
 import Rent from "./pages/Rent";
+
 // import Admin from "./pages/Admin/Admin"; // Removed standard import
+
 import PageTransition from "./components/PageTransition";
+
 import { defaultLang } from "./i18n";
 
 // Dynamic Import for Admin
+
 const Admin = lazy(() => import("./pages/Admin/Admin"));
 
 export default function App() {
   const [currentLang, setCurrentLang] = useState(defaultLang);
+
   const location = useLocation();
 
   return (
@@ -33,6 +47,7 @@ export default function App() {
             </PageTransition>
           }
         />
+
         <Route
           path="/pottery"
           element={
@@ -44,6 +59,7 @@ export default function App() {
             </PageTransition>
           }
         />
+
         <Route
           path="/singing"
           element={
@@ -55,6 +71,7 @@ export default function App() {
             </PageTransition>
           }
         />
+
         <Route
           path="/team"
           element={
@@ -63,6 +80,7 @@ export default function App() {
             </PageTransition>
           }
         />
+
         <Route
           path="/location"
           element={
@@ -74,6 +92,7 @@ export default function App() {
             </PageTransition>
           }
         />
+
         <Route
           path="/contact"
           element={
@@ -85,6 +104,7 @@ export default function App() {
             </PageTransition>
           }
         />
+
         <Route
           path="/rent"
           element={
@@ -93,6 +113,7 @@ export default function App() {
             </PageTransition>
           }
         />
+
         <Route
           path="/admin-sinneskueche"
           element={
@@ -109,8 +130,11 @@ export default function App() {
 }
 
 // Simple style to prevent layout shift while Admin loads
+
 const loadingContainerStyle = {
   width: "100vw",
+
   height: "100vh",
+
   backgroundColor: "#fffce3",
 };

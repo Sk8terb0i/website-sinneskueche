@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import PlanetPortrait from "../components/Planet/PlanetPortrait";
 import MoonPortrait from "../components/Moon/MoonPortrait";
 import SunPortrait from "../components/Sun/SunPortrait";
@@ -7,6 +8,7 @@ import { planets } from "../data/planets";
 import { defaultLang } from "../i18n";
 
 export default function LandingPortrait() {
+  const navigate = useNavigate();
   const [activeIndex, setActiveIndex] = useState(null);
   const [previousIndex, setPreviousIndex] = useState(null);
   const [currentLang, setCurrentLang] = useState(defaultLang);
@@ -18,30 +20,12 @@ export default function LandingPortrait() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
-  // Menu State lifted from Header
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isMenuOpenRef = useRef(false);
 
   useEffect(() => {
     isMenuOpenRef.current = isMenuOpen;
   }, [isMenuOpen]);
-
-  // --- OVERFLOW LOCK LOGIC ---
-  useEffect(() => {
-    // Save original overflow value
-    const originalStyle = window.getComputedStyle(document.body).overflow;
-
-    // Apply hidden overflow
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden"; // Often needed for mobile Safari/Chrome
-
-    // Cleanup: revert when component unmounts
-    return () => {
-      document.body.style.overflow = originalStyle;
-      document.documentElement.style.overflow = originalStyle;
-    };
-  }, []);
-  // ---------------------------
 
   const coursePlanets = planets.filter((p) => p.type === "courses");
   const touchStartY = useRef(null);
@@ -53,7 +37,6 @@ export default function LandingPortrait() {
   }, []);
 
   const handleReset = () => {
-    // Blocks reset interaction if menu is open
     if (activeIndex === null || isResetting || isMenuOpenRef.current) return;
     setIsResetting(true);
     setIsLoaded(false);
@@ -212,7 +195,6 @@ export default function LandingPortrait() {
         overflow: "hidden",
         position: "relative",
         cursor: activeIndex !== null ? "pointer" : "default",
-        // Blocks pointer events on the background when menu is open
         pointerEvents: isMenuOpen ? "none" : "auto",
       }}
     >
@@ -296,7 +278,6 @@ export default function LandingPortrait() {
               : possibleAngles[index % possibleAngles.length];
           const currentAngle = isLoaded ? 0 : startAngle;
           let translateX = hasShiftedLeft ? "-10vw" : "0";
-
           const isVisible =
             activeIndex === null || Math.abs(index - activeIndex) <= 2;
 
@@ -310,8 +291,6 @@ export default function LandingPortrait() {
                 pointerEvents: isVisible && !isMenuOpen ? "auto" : "none",
                 transition: `transform ${movementDuration} ${currentEase}, translate ${movementDuration} ${currentEase}, opacity 0.5s ease`,
                 position: "relative",
-
-                // 1. Position the planet using the rotation swing
                 transformOrigin: `center ${radius}px`,
                 transform: `rotate(${currentAngle}deg)`,
                 translate: `${translateX} 0`,
@@ -319,8 +298,6 @@ export default function LandingPortrait() {
             >
               <div
                 style={{
-                  // 2. FORCE the content to stay upright by negating the parent rotation
-                  // We use !important or ensure this transform runs AFTER the parent logic
                   transform: `rotate(${-currentAngle}deg)`,
                   transition: `transform ${movementDuration} ${currentEase}`,
                   display: "flex",
@@ -341,8 +318,27 @@ export default function LandingPortrait() {
                     size={getPlanetSize(index)}
                     onActivate={() => {
                       if (isMenuOpen) return;
-                      setPreviousIndex(activeIndex);
-                      setActiveIndex(activeIndex === index ? null : index);
+
+                      const isCurrentlyActive = activeIndex === index;
+                      const moonCount = planet.courses?.length || 0;
+
+                      // 1. Redirect if active and has 1 moon
+                      if (isCurrentlyActive && moonCount === 1) {
+                        const targetLink = planet.courses[0].link;
+                        if (targetLink) {
+                          navigate(targetLink);
+                          return;
+                        }
+                      }
+
+                      // 2. If it is already active, trigger the FULL RESET animation
+                      if (isCurrentlyActive) {
+                        handleReset();
+                      } else {
+                        // 3. Normal activation (expand)
+                        setPreviousIndex(activeIndex);
+                        setActiveIndex(index);
+                      }
                     }}
                     onMouseEnter={() => !isMenuOpen && setHoveredIndex(index)}
                     onMouseLeave={() => setHoveredIndex(null)}
