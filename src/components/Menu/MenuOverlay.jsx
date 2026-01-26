@@ -6,6 +6,9 @@ import { db } from "../../firebase";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import AtelierCalendar from "../Calendar/AtelierCalendar";
 
+// Import the dot icon
+import dotIcon from "../../assets/planets/dot.png";
+
 export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const navigate = useNavigate();
   const [isCoursesOpen, setIsCoursesOpen] = useState(true);
@@ -42,14 +45,17 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
 
   const hasUpcomingEvents = upcomingEvents.length > 0;
 
-  /**
-   * Updated Helper: Gets the base icon from the planet object.
-   * Hover logic removed to prevent crashes.
-   */
   const getPlanetIcon = (id) => {
     const planet = planets.find((p) => p.id === id);
     if (!planet) return { en: "", de: "" };
     return planet.icon;
+  };
+
+  // Dot object with customWidth to trigger smaller size in MenuLink
+  const dotIconObj = {
+    en: dotIcon,
+    de: dotIcon,
+    isDot: true, // Flag to identify it's a dot
   };
 
   const menuData = useMemo(
@@ -70,22 +76,22 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         {
           text: { en: "about us", de: "über uns" },
           link: "/team",
-          icon: getPlanetIcon("team"),
+          icon: dotIconObj,
         },
         {
           text: { en: "location", de: "standort" },
           link: "/location",
-          icon: getPlanetIcon("location"),
+          icon: dotIconObj,
         },
         {
           text: { en: "rent our space", de: "raum mieten" },
           link: "/rent",
-          icon: getPlanetIcon("rent"),
+          icon: dotIconObj,
         },
         {
           text: { en: "contact", de: "kontakt" },
           link: "/contact",
-          icon: getPlanetIcon("contact"),
+          icon: dotIconObj,
         },
       ],
     }),
@@ -369,6 +375,16 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
 
 function MenuLink({ item, lang, onNavigate, isMobile }) {
   const [isActive, setIsActive] = useState(false);
+
+  // Logic to determine icon size: dots get 8px/10px, planets get 24px/30px
+  const iconSize = item.icon?.isDot
+    ? isMobile
+      ? "16px"
+      : "20px"
+    : isMobile
+      ? "24px"
+      : "30px";
+
   return (
     <div
       onClick={() => onNavigate(item.link)}
@@ -394,8 +410,8 @@ function MenuLink({ item, lang, onNavigate, isMobile }) {
           src={item.icon[lang]}
           alt=""
           style={{
-            width: isMobile ? "24px" : "30px",
-            height: isMobile ? "24px" : "30px",
+            width: iconSize,
+            height: iconSize,
             objectFit: "contain",
           }}
         />

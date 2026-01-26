@@ -102,7 +102,7 @@ export const planets = [
     get icon() {
       return {
         en: getImage("location_en.png"),
-        de: getImage("location_en.png"),
+        de: getImage("location_de.png"),
       };
     },
     courses: [
@@ -131,7 +131,7 @@ export const planets = [
     get icon() {
       return {
         en: getImage("events_en.png"),
-        de: getImage("events_en.png"),
+        de: getImage("events_de.png"),
       };
     },
     courses: [
@@ -144,7 +144,7 @@ export const planets = [
     get icon() {
       return {
         en: getImage("contact_en.png"),
-        de: getImage("contact_en.png"),
+        de: getImage("contact_de.png"),
       };
     },
     courses: [
@@ -157,7 +157,7 @@ export const planets = [
     get icon() {
       return {
         en: getImage("rent_en.png"),
-        de: getImage("rent_en.png"),
+        de: getImage("rent_de.png"),
       };
     },
     courses: [
