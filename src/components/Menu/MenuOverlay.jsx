@@ -7,7 +7,7 @@ import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import AtelierCalendar from "../Calendar/AtelierCalendar";
 
 // Import the dot icon
-import dotIcon from "../../assets/planets/dot.png";
+import dotIcon from "../../assets/planets/moon.png";
 
 export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const navigate = useNavigate();

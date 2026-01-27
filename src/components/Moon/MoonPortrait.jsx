@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import moonImage from "../../assets/planets/moon.png"; // Adjust path if necessary
 
 const lastUsedAngles = [];
 
@@ -46,6 +47,7 @@ export default function MoonPortrait({
     Math.PI / 6,
     Math.PI / 4,
   ];
+
   const targetAngleRef = useRef(null);
   if (targetAngleRef.current === null) {
     const availableAngles = possibleAngles.filter(
@@ -113,8 +115,6 @@ export default function MoonPortrait({
 
   const moonX = Math.cos(animatedAngle) * orbitRadius;
   const moonY = Math.sin(animatedAngle) * orbitRadius;
-  const currentLeftPos = centerX + moonX;
-  const maxLabelWidth = windowWidth - currentLeftPos - 60;
 
   return (
     <>
@@ -137,7 +137,6 @@ export default function MoonPortrait({
           transform: "translate(-50%, -50%)",
           pointerEvents: "none",
           zIndex: 1999,
-          // Fixed opacity so it doesn't pulse/fade on entry/exit
           opacity: 0.4,
         }}
       >
@@ -204,21 +203,29 @@ export default function MoonPortrait({
           }, 150);
         }}
       >
-        <div
+        {/* REPLACED: Image instead of white circle */}
+        <img
+          src={moonImage}
+          alt="moon"
           style={{
             width: "32px",
             height: "32px",
-            borderRadius: "50%",
-            background: isShaking
-              ? "rgba(255, 255, 255, 0.75)"
-              : href && isHovered
-                ? "#9960a8"
-                : "white",
-            transition: "background 0.2s ease, transform 0.2s ease",
+            objectFit: "contain",
+            transition:
+              "filter 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
             transform: `scale(${isHovered ? 1.2 : animatedScale})`,
+            opacity: animatedOpacity,
+            // If hovering over a link, we give it a slight purple tint/glow
+            // otherwise keep it normal. Shaking makes it slightly transparent.
+            filter: isShaking
+              ? "brightness(1.5) opacity(0.7)"
+              : href && isHovered
+                ? "drop-shadow(0 0 5px #9960a8) drop-shadow(0 0 1px #9960a8)"
+                : "none",
             flexShrink: 0,
           }}
         />
+
         <span
           style={{
             position: "absolute",
