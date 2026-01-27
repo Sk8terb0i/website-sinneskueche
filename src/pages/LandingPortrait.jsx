@@ -122,16 +122,6 @@ export default function LandingPortrait() {
     return distance * 2;
   };
 
-  const getAccumulatedHeight = (index, isIdle = false) => {
-    let height = 0;
-    const gap = !isIdle && activeIndex !== null ? expandedGap : normalGap;
-    for (let i = 0; i < index; i++) {
-      const size = isIdle ? planetSize : getPlanetSize(i);
-      height += size + gap;
-    }
-    return height;
-  };
-
   const computeTranslateY = () => {
     if (activeIndex === null) {
       const totalHeight =
@@ -143,6 +133,13 @@ export default function LandingPortrait() {
         window.innerHeight * 0.07,
       );
     }
+    const getAccumulatedHeight = (idx) => {
+      let h = 0;
+      for (let i = 0; i < idx; i++) {
+        h += getPlanetSize(i) + expandedGap;
+      }
+      return h;
+    };
     return (
       window.innerHeight / 2 -
       getAccumulatedHeight(activeIndex) -
@@ -198,6 +195,21 @@ export default function LandingPortrait() {
         pointerEvents: isMenuOpen ? "none" : "auto",
       }}
     >
+      <style>
+        {`
+          @keyframes microTension {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(var(--tx), var(--ty)) rotate(var(--tr)); }
+            66% { transform: translate(calc(var(--tx) * -0.7), calc(var(--ty) * 0.5)) rotate(calc(var(--tr) * -0.8)); }
+          }
+          .tethered-float {
+            /* Slower duration makes the struggle feel heavy/viscous */
+            animation: microTension var(--fdur) ease-in-out infinite;
+            animation-delay: var(--fdelay);
+          }
+        `}
+      </style>
+
       <div
         onClick={(e) => e.stopPropagation()}
         style={{ width: "100%", zIndex: 4000, pointerEvents: "auto" }}
@@ -281,6 +293,13 @@ export default function LandingPortrait() {
           const isVisible =
             activeIndex === null || Math.abs(index - activeIndex) <= 2;
 
+          // Personality math - dialed back for subtlety
+          const dur = 7 + (index % 4); // Balanced speed: 7s - 10s
+          const delay = index * -1.8;
+          const tx = 1.5 + (index % 2); // Max 2.5px side pull
+          const ty = 2.5 + (index % 3); // Max 4.5px vertical pull
+          const tr = 0.8 + (index % 2) * 0.4; // Max 1.2deg rotation
+
           return (
             <div
               key={planet.id}
@@ -306,10 +325,16 @@ export default function LandingPortrait() {
                 }}
               >
                 <div
+                  className={activeIndex === null ? "tethered-float" : ""}
                   style={{
-                    transition: "transform 0.3s ease",
+                    transition: "transform 0.4s ease",
+                    "--fdur": `${dur}s`,
+                    "--fdelay": `${delay}s`,
+                    "--tx": `${tx}px`,
+                    "--ty": `${ty}px`,
+                    "--tr": `${tr}deg`,
                     transform:
-                      hoveredIndex === index ? "scale(1.15)" : "scale(1)",
+                      hoveredIndex === index ? "scale(1.1)" : "scale(1)",
                   }}
                 >
                   <PlanetPortrait
@@ -318,11 +343,9 @@ export default function LandingPortrait() {
                     size={getPlanetSize(index)}
                     onActivate={() => {
                       if (isMenuOpen) return;
-
                       const isCurrentlyActive = activeIndex === index;
                       const moonCount = planet.courses?.length || 0;
 
-                      // 1. Redirect if active and has 1 moon
                       if (isCurrentlyActive && moonCount === 1) {
                         const targetLink = planet.courses[0].link;
                         if (targetLink) {
@@ -331,11 +354,9 @@ export default function LandingPortrait() {
                         }
                       }
 
-                      // 2. If it is already active, trigger the FULL RESET animation
                       if (isCurrentlyActive) {
                         handleReset();
                       } else {
-                        // 3. Normal activation (expand)
                         setPreviousIndex(activeIndex);
                         setActiveIndex(index);
                       }

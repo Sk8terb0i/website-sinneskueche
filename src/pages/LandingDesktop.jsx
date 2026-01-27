@@ -37,7 +37,7 @@ export default function Landing() {
   const requestRef = useRef();
   const globalSpeedRef = useRef(1);
 
-  const orbitSpeeds = { courses: 9, info: 7, action: 5 };
+  const orbitSpeeds = { courses: 15, info: 10, action: 7 };
   const ringSlowFactor = 0.1;
   const lang = languages[currentLang];
   const planetBaseSizes = { courses: 128, info: 96, action: 64 };
