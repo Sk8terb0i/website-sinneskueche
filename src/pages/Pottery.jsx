@@ -30,7 +30,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       details: [
         { icon: <Clock size={20} />, text: "18:30 - 21:30" },
         { icon: <Users size={20} />, text: "Alle Level willkommen" },
-        { icon: <Coffee size={20} />, text: "Gemütliche Gruppen" },
+        { icon: <Coffee size={20} />, text: "Kleine, gemütliche Gruppen" },
       ],
     },
   };
