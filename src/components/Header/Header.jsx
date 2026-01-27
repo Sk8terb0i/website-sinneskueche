@@ -64,7 +64,7 @@ export default function Header({
     <>
       <header
         style={{
-          position: "absolute",
+          position: "fixed",
           top: 0,
           left: "50%",
           transform: "translateX(-50%)",
@@ -78,6 +78,8 @@ export default function Header({
           zIndex: 4000,
           pointerEvents: "auto",
           gap: "1rem",
+          background:
+            "linear-gradient(to bottom, #fffce3 0%, #fffce3 60%, #fffce30c 100%)",
         }}
       >
         <div style={{ width: "50vw", display: "flex", alignItems: "center" }}>

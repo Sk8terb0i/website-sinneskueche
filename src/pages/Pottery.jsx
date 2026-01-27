@@ -17,7 +17,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
   const content = {
     en: {
       title: "Pottery Tuesdays",
-      welcome: "Make Tuesdays your creative sanctuary.",
+      welcome: "Make Tuesdays your creative sanctuary",
       details: [
         { icon: <Clock size={20} />, text: "18:30 - 21:30" },
         { icon: <Users size={20} />, text: "All skill levels" },
@@ -26,7 +26,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     },
     de: {
       title: "Pottery Tuesdays",
-      welcome: "Mach den Dienstag zu deiner kreativen Auszeit.",
+      welcome: "Mach den Dienstag zu deiner kreativen Auszeit",
       details: [
         { icon: <Clock size={20} />, text: "18:30 - 21:30" },
         { icon: <Users size={20} />, text: "Alle Level willkommen" },
@@ -49,8 +49,9 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       textAlign: "center",
     },
     welcomeText: {
-      fontSize: "0.85rem",
-      textTransform: "uppercase",
+      fontSize: "0.9rem",
+      fontStyle: "italic",
+      textTransform: "lowercase",
       letterSpacing: "0.15em",
       color: "#1c0700",
       opacity: 0.6,
@@ -95,10 +96,9 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       alignItems: "center",
       gap: "10px",
       padding: "10px 24px",
-      background: "rgba(28, 7, 0, 0.04)",
+      background: "#caaff31e",
       borderRadius: "100px",
       color: "#1c0700",
-      border: "1px solid rgba(28, 7, 0, 0.02)",
       whiteSpace: "nowrap",
     },
     infoLabel: {
@@ -138,7 +138,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
             .welcome-text {
               order: 2;
               margin-bottom: 40px !important;
-              font-size: 0.75rem !important; /* Slight tweak to ensure it fits mobile widths */
+              font-size: 0.9rem !important; /* Slight tweak to ensure it fits mobile widths */
               width: 50vw;
             }
             .info-grid {

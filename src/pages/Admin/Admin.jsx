@@ -15,6 +15,8 @@ import {
   query,
   orderBy,
   setDoc,
+  updateDoc,
+  onSnapshot,
 } from "firebase/firestore";
 import { planets } from "../../data/planets";
 import {
@@ -26,6 +28,9 @@ import {
   Edit2,
   XCircle,
   Loader2,
+  Mail,
+  CheckCircle,
+  Clock,
 } from "lucide-react";
 
 // --- COMPONENT DEFINED OUTSIDE TO PREVENT RE-RENDERING FOCUS ISSUES ---
@@ -55,6 +60,9 @@ export default function Admin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+
+  // --- EVENT STATES ---
   const [events, setEvents] = useState([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -64,9 +72,17 @@ export default function Admin() {
   const [link, setLink] = useState("");
   const [externalLink, setExternalLink] = useState("");
   const [editingId, setEditingId] = useState(null);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+
+  // --- RENTAL STATES ---
+  const [rentRequests, setRentRequests] = useState([]);
+  const [availabilities, setAvailabilities] = useState([]);
+  const [availDate, setAvailDate] = useState("");
+  const [availTime, setAvailTime] = useState("");
+  const [notifyEmail, setNotifyEmail] = useState("");
 
   const eventsCollection = collection(db, "events");
+  const requestsCollection = collection(db, "rent_requests");
+  const availabilityCollection = collection(db, "rental_availability");
 
   const availableCourses = Array.from(
     new Map(
@@ -78,41 +94,61 @@ export default function Admin() {
     ).values(),
   );
 
-  const autoFillFirstCourse = () => {
-    if (availableCourses.length > 0 && !editingId) {
-      handleCourseSelection(availableCourses[0].link);
-    }
-  };
-
-  const handleCourseSelection = (courseLink) => {
-    const sel = availableCourses.find((c) => c.link === courseLink);
-    setLink(courseLink);
-    if (sel) {
-      setTitleEn(sel.text.en);
-      setTitleDe(sel.text.de);
-      if (sel.text.en.toLowerCase().includes("pottery tuesdays")) {
-        setTime("18:30 - 21:30");
-      } else {
-        setTime("");
-      }
-    }
-  };
-
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 900);
     window.addEventListener("resize", handleResize);
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         fetchEvents();
         autoFillFirstCourse();
+        setupRealtimeListeners();
+        fetchSettings();
       }
     });
+
     return () => {
       unsubscribe();
       window.removeEventListener("resize", handleResize);
     };
   }, []);
+
+  const setupRealtimeListeners = () => {
+    onSnapshot(
+      query(requestsCollection, orderBy("createdAt", "desc")),
+      (snap) => {
+        setRentRequests(
+          snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        );
+      },
+    );
+
+    onSnapshot(
+      query(availabilityCollection, orderBy("date", "asc")),
+      (snap) => {
+        setAvailabilities(
+          snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        );
+      },
+    );
+  };
+
+  const fetchSettings = async () => {
+    const snap = await getDocs(collection(db, "settings"));
+    if (!snap.empty) {
+      setNotifyEmail(snap.docs[0].data().adminEmail || "");
+    }
+  };
+
+  const updateNotifyEmail = async () => {
+    await setDoc(
+      doc(db, "settings", "admin_config"),
+      { adminEmail: notifyEmail },
+      { merge: true },
+    );
+    alert("Notification email updated!");
+  };
 
   const fetchEvents = async () => {
     try {
@@ -138,17 +174,98 @@ export default function Admin() {
     }
   };
 
+  // --- HANDLERS ---
+  const autoFillFirstCourse = () => {
+    if (availableCourses.length > 0 && !editingId) {
+      handleCourseSelection(availableCourses[0].link);
+    }
+  };
+
+  const handleCourseSelection = (courseLink) => {
+    const sel = availableCourses.find((c) => c.link === courseLink);
+    setLink(courseLink);
+    if (sel) {
+      setTitleEn(sel.text.en);
+      setTitleDe(sel.text.de);
+      if (sel.text.en.toLowerCase().includes("pottery tuesdays")) {
+        setTime("18:30 - 21:30");
+      } else {
+        setTime("");
+      }
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const finalLink =
+        linkType === "event" ? externalLink : externalLink || link || "";
+      const eventData = {
+        date,
+        time,
+        title: { en: titleEn, de: titleDe },
+        link: finalLink,
+        type: linkType,
+      };
+
+      if (editingId) {
+        await setDoc(doc(db, "events", editingId), eventData);
+      } else {
+        await addDoc(eventsCollection, eventData);
+      }
+      resetForm();
+      fetchEvents();
+    } catch (e) {
+      alert("Error saving: " + e.message);
+    }
+  };
+
+  const handleAddAvailability = async () => {
+    if (!availDate) return alert("Select a date");
+    await addDoc(availabilityCollection, {
+      date: availDate,
+      time: availTime,
+      status: "available",
+    });
+    setAvailDate("");
+    setAvailTime("");
+  };
+
+  // --- NEW RENTAL STATUS HANDLERS ---
+  const handleApprove = async (reqId) => {
+    await updateDoc(doc(db, "rent_requests", reqId), { status: "approved" });
+  };
+
+  const handleReject = async (reqId, availId) => {
+    await updateDoc(doc(db, "rent_requests", reqId), { status: "rejected" });
+    if (availId) {
+      await updateDoc(doc(db, "rental_availability", availId), {
+        status: "available",
+      });
+    }
+  };
+
+  const deleteAvailability = async (id) => {
+    if (window.confirm("Delete this availability?")) {
+      await deleteDoc(doc(db, "rental_availability", id));
+    }
+  };
+
+  const deleteRequest = async (id) => {
+    if (window.confirm("Delete this request?")) {
+      await deleteDoc(doc(db, "rent_requests", id));
+    }
+  };
+
   const startEdit = (event) => {
     setEditingId(event.id);
     setDate(event.date);
     setTime(event.time || "");
     setTitleEn(event.title.en);
     setTitleDe(event.title.de);
-
     const type =
       event.type || (event.link?.startsWith("http") ? "event" : "course");
     setLinkType(type);
-
     if (type === "course") {
       const isStandard = availableCourses.some((c) => c.link === event.link);
       if (isStandard) {
@@ -172,57 +289,7 @@ export default function Admin() {
     setExternalLink("");
     setTitleEn("");
     setTitleDe("");
-    if (linkType === "course") {
-      autoFillFirstCourse();
-    }
-  };
-
-  const handleToggle = (type) => {
-    setLinkType(type);
-    setExternalLink("");
-    if (type === "course") {
-      autoFillFirstCourse();
-    } else {
-      setLink("");
-      setTitleEn("");
-      setTitleDe("");
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const finalLink =
-        linkType === "event" ? externalLink : externalLink || link || "";
-
-      const eventData = {
-        date,
-        time,
-        title: { en: titleEn, de: titleDe },
-        link: finalLink,
-        type: linkType,
-      };
-
-      if (editingId) {
-        await setDoc(doc(db, "events", editingId), eventData);
-      } else {
-        await addDoc(eventsCollection, eventData);
-      }
-
-      resetForm();
-      fetchEvents();
-    } catch (e) {
-      alert("Error saving: " + e.message);
-    }
-  };
-
-  const deleteEvent = async (e, id) => {
-    e.stopPropagation();
-    if (window.confirm("Delete this entry?")) {
-      await deleteDoc(doc(db, "events", id));
-      if (editingId === id) resetForm();
-      fetchEvents();
-    }
+    if (linkType === "course") autoFillFirstCourse();
   };
 
   const handleLogin = async (e) => {
@@ -234,19 +301,6 @@ export default function Admin() {
       alert("Login failed: " + error.message);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (!email || !email.includes("@")) {
-      alert("Please enter a valid email address first.");
-      return;
-    }
-    try {
-      await sendPasswordResetEmail(auth, email);
-      alert("Reset link sent to " + email);
-    } catch (error) {
-      alert("Error: " + error.message);
     }
   };
 
@@ -277,7 +331,6 @@ export default function Admin() {
               onChange={(e) => setEmail(e.target.value)}
               style={{ ...inputStyle, marginBottom: "1.2rem" }}
               required
-              disabled={isLoading}
             />
             <div
               style={{
@@ -289,9 +342,8 @@ export default function Admin() {
               <label style={labelStyle}>Password</label>
               <button
                 type="button"
-                onClick={handleForgotPassword}
+                onClick={() => sendPasswordResetEmail(auth, email)}
                 style={forgotLinkStyle}
-                disabled={isLoading}
               >
                 Forgot?
               </button>
@@ -302,34 +354,15 @@ export default function Admin() {
               onChange={(e) => setPassword(e.target.value)}
               style={{ ...inputStyle, marginBottom: "2rem" }}
               required
-              disabled={isLoading}
             />
-            <button
-              type="submit"
-              disabled={isLoading}
-              style={{
-                ...btnStyle,
-                opacity: isLoading ? 0.7 : 1,
-                cursor: isLoading ? "not-allowed" : "pointer",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: "10px",
-              }}
-            >
+            <button type="submit" disabled={isLoading} style={btnStyle}>
               {isLoading ? (
-                <>
-                  <Loader2 className="spinner" size={18} /> Signing In...
-                </>
+                <Loader2 className="spinner" size={18} />
               ) : (
                 "Sign In"
               )}
             </button>
           </form>
-          <style>{`
-            .spinner { animation: spin 1s linear infinite; }
-            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-          `}</style>
         </div>
       </PageWrapper>
     );
@@ -338,6 +371,7 @@ export default function Admin() {
   return (
     <PageWrapper>
       <div style={{ padding: isMobile ? "1.5rem" : "4vw", minHeight: "101vh" }}>
+        {/* HEADER */}
         <header style={headerStyle(isMobile)}>
           <div style={{ flex: 1 }}>
             <h1
@@ -358,45 +392,37 @@ export default function Admin() {
           </button>
         </header>
 
+        {/* SECTION 1: EVENT CALENDAR MANAGEMENT */}
+        <h2
+          style={{ ...sectionTitleStyle, color: "#4e5f28", fontSize: "1.2rem" }}
+        >
+          1. Calendar Events
+        </h2>
         <div
           style={{
             display: isMobile ? "block" : "flex",
-            gap: isMobile ? "3rem" : "4rem",
-            alignItems: "flex-start",
+            gap: "2rem",
+            marginBottom: "5rem",
           }}
         >
-          <section
-            style={{
-              width: isMobile ? "100%" : "420px",
-              position: isMobile ? "relative" : "sticky",
-              top: "2rem",
-              marginBottom: isMobile ? "3rem" : 0,
-            }}
-          >
+          <section style={{ width: isMobile ? "100%" : "400px" }}>
             <div style={formCardStyle}>
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  alignItems: "center",
                   marginBottom: "1.2rem",
                 }}
               >
-                <h2 style={{ ...sectionTitleStyle, marginBottom: 0 }}>
-                  {editingId ? (
-                    <Edit2 size={18} color="#caaff3" />
-                  ) : (
-                    <PlusCircle size={18} color="#caaff3" />
-                  )}
+                <h3 style={sectionTitleStyle}>
                   {editingId ? "EDIT ENTRY" : "NEW ENTRY"}
-                </h2>
+                </h3>
                 {editingId && (
                   <button onClick={resetForm} style={cancelBtnStyle}>
                     <XCircle size={14} /> CANCEL
                   </button>
                 )}
               </div>
-
               <form
                 onSubmit={handleSubmit}
                 style={{
@@ -409,30 +435,27 @@ export default function Admin() {
                   <label style={labelStyle}>Source</label>
                   <div style={toggleContainerStyle}>
                     <div
-                      onClick={() => handleToggle("course")}
+                      onClick={() => setLinkType("course")}
                       style={{
                         ...toggleOptionStyle,
                         backgroundColor:
                           linkType === "course" ? "#caaff3" : "transparent",
-                        color: linkType === "course" ? "#fff" : "#1c0700",
                       }}
                     >
                       Course
                     </div>
                     <div
-                      onClick={() => handleToggle("event")}
+                      onClick={() => setLinkType("event")}
                       style={{
                         ...toggleOptionStyle,
                         backgroundColor:
                           linkType === "event" ? "#caaff3" : "transparent",
-                        color: linkType === "event" ? "#fff" : "#1c0700",
                       }}
                     >
                       Event
                     </div>
                   </div>
                 </div>
-
                 <div
                   style={{
                     display: "grid",
@@ -440,75 +463,43 @@ export default function Admin() {
                     gap: "10px",
                   }}
                 >
-                  <div>
-                    <label style={labelStyle}>Date</label>
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      required
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Time</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 18:30"
-                      value={time}
-                      onChange={(e) => setTime(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    required
+                    style={inputStyle}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    style={inputStyle}
+                  />
                 </div>
-
                 {linkType === "course" ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "1.2rem",
-                    }}
+                  <select
+                    value={link}
+                    onChange={(e) => handleCourseSelection(e.target.value)}
+                    style={inputStyle}
+                    required
                   >
-                    <div>
-                      <label style={labelStyle}>Template</label>
-                      <select
-                        value={link}
-                        onChange={(e) => handleCourseSelection(e.target.value)}
-                        style={inputStyle}
-                        required
-                      >
-                        {availableCourses.map((c, i) => (
-                          <option key={i} value={c.link}>
-                            {c.text.en}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Override Link</label>
-                      <input
-                        type="url"
-                        placeholder={link}
-                        value={externalLink}
-                        onChange={(e) => setExternalLink(e.target.value)}
-                        style={inputStyle}
-                      />
-                    </div>
-                  </div>
+                    {availableCourses.map((c, i) => (
+                      <option key={i} value={c.link}>
+                        {c.text.en}
+                      </option>
+                    ))}
+                  </select>
                 ) : (
-                  <div>
-                    <label style={labelStyle}>Link / URL</label>
-                    <input
-                      type="url"
-                      placeholder="https://..."
-                      value={externalLink}
-                      onChange={(e) => setExternalLink(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
+                  <input
+                    type="url"
+                    placeholder="URL https://..."
+                    value={externalLink}
+                    onChange={(e) => setExternalLink(e.target.value)}
+                    style={inputStyle}
+                  />
                 )}
-
                 <div
                   style={{
                     display: "grid",
@@ -533,25 +524,17 @@ export default function Admin() {
                     style={inputStyle}
                   />
                 </div>
-                <button
-                  type="submit"
-                  style={{
-                    ...btnStyle,
-                    backgroundColor: editingId ? "#1c0700" : "#caaff3",
-                    color: editingId ? "#fff" : "#1c0700",
-                  }}
-                >
+                <button type="submit" style={btnStyle}>
                   {editingId ? "Update Entry" : "Add to Calendar"}
                 </button>
               </form>
             </div>
           </section>
 
-          <section style={{ flex: 1, width: "100%", paddingBottom: "10vh" }}>
-            <h2 style={sectionTitleStyle}>
-              <CalendarIcon size={18} color="#caaff3" /> SCHEDULED (
-              {events.length})
-            </h2>
+          <section style={{ flex: 1 }}>
+            <h3 style={sectionTitleStyle}>
+              <CalendarIcon size={16} /> Scheduled Events ({events.length})
+            </h3>
             <div
               style={{
                 display: "flex",
@@ -559,18 +542,11 @@ export default function Admin() {
                 gap: "0.8rem",
               }}
             >
-              {events.map((event) => (
+              {events.map((ev) => (
                 <div
-                  key={event.id}
-                  onClick={() => startEdit(event)}
-                  style={{
-                    ...cardStyle,
-                    cursor: "pointer",
-                    border:
-                      editingId === event.id
-                        ? "2px solid #caaff3"
-                        : "2px solid transparent",
-                  }}
+                  key={ev.id}
+                  onClick={() => startEdit(ev)}
+                  style={cardStyle}
                 >
                   <div style={{ flex: 1 }}>
                     <div
@@ -578,36 +554,256 @@ export default function Admin() {
                         fontSize: "0.7rem",
                         color: "#caaff3",
                         fontWeight: "800",
-                        marginBottom: "4px",
                       }}
                     >
-                      {new Date(event.date).toLocaleDateString("de-DE")}{" "}
-                      {event.time && `• ${event.time}`}
+                      {ev.date} {ev.time && `• ${ev.time}`}
                     </div>
-                    <span
-                      style={{
-                        fontSize: isMobile ? "0.95rem" : "1.1rem",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {event.title.en}
-                    </span>
-                    <div
-                      style={{
-                        fontSize: "0.6rem",
-                        opacity: 0.4,
-                        marginTop: "4px",
-                      }}
-                    >
-                      TYPE: {event.type || "unknown"}
-                    </div>
+                    <span style={{ fontWeight: "600" }}>{ev.title.en}</span>
                   </div>
                   <button
-                    onClick={(e) => deleteEvent(e, event.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm("Delete?"))
+                        deleteDoc(doc(db, "events", ev.id)).then(fetchEvents);
+                    }}
                     style={deleteBtnStyle}
                   >
                     <Trash2 size={18} />
                   </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        {/* SECTION 2: RENTAL MANAGEMENT */}
+        <hr style={{ opacity: 0.1, marginBottom: "4rem" }} />
+        <h2
+          style={{ ...sectionTitleStyle, color: "#4e5f28", fontSize: "1.2rem" }}
+        >
+          2. Rental Management
+        </h2>
+
+        <div style={{ display: isMobile ? "block" : "flex", gap: "2rem" }}>
+          {/* Availability Setup */}
+          <section style={{ width: isMobile ? "100%" : "400px" }}>
+            <div style={formCardStyle}>
+              <h3 style={sectionTitleStyle}>
+                <PlusCircle size={16} /> Set Availability
+              </h3>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1rem",
+                }}
+              >
+                <input
+                  type="date"
+                  value={availDate}
+                  onChange={(e) => setAvailDate(e.target.value)}
+                  style={inputStyle}
+                />
+                <input
+                  type="text"
+                  placeholder="Time slot (e.g. 10:00 - 16:00)"
+                  value={availTime}
+                  onChange={(e) => setAvailTime(e.target.value)}
+                  style={inputStyle}
+                />
+                <button
+                  onClick={handleAddAvailability}
+                  style={{
+                    ...btnStyle,
+                    backgroundColor: "#4e5f28",
+                    color: "white",
+                  }}
+                >
+                  Publish Date
+                </button>
+              </div>
+
+              <div style={{ marginTop: "2rem" }}>
+                <h4 style={labelStyle}>Notification Settings</h4>
+                <div style={{ display: "flex", gap: "5px" }}>
+                  <input
+                    type="email"
+                    placeholder="Admin notification email"
+                    value={notifyEmail}
+                    onChange={(e) => setNotifyEmail(e.target.value)}
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button
+                    onClick={updateNotifyEmail}
+                    style={{ ...btnStyle, width: "auto", padding: "0 15px" }}
+                  >
+                    <Mail size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: "1.5rem" }}>
+              <h3 style={labelStyle}>Live Availabilities</h3>
+              {availabilities.map((a) => (
+                <div
+                  key={a.id}
+                  style={{
+                    ...cardStyle,
+                    padding: "0.8rem",
+                    marginBottom: "0.5rem",
+                    opacity: a.status === "available" ? 1 : 0.5,
+                  }}
+                >
+                  <span style={{ fontSize: "0.85rem" }}>
+                    {a.date} — <strong>{a.status}</strong>
+                  </span>
+                  <button
+                    onClick={() => deleteAvailability(a.id)}
+                    style={deleteBtnStyle}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Incoming Requests */}
+          <section style={{ flex: 1 }}>
+            <h3 style={sectionTitleStyle}>
+              <Clock size={16} /> Incoming Rent Requests ({rentRequests.length})
+            </h3>
+            {rentRequests.length === 0 && (
+              <p style={{ opacity: 0.5 }}>No requests yet.</p>
+            )}
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+            >
+              {rentRequests.map((req) => (
+                <div
+                  key={req.id}
+                  style={{
+                    ...cardStyle,
+                    alignItems: "flex-start",
+                    flexDirection: "column",
+                    // Visual status indicator
+                    borderLeft:
+                      req.status === "approved"
+                        ? "6px solid #4e5f28"
+                        : req.status === "rejected"
+                          ? "6px solid #ff4d4d"
+                          : "6px solid #caaff3",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      width: "100%",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                      }}
+                    >
+                      <span style={{ fontWeight: "bold", fontSize: "1.1rem" }}>
+                        {req.name}
+                      </span>
+                      {req.status !== "pending" && (
+                        <span
+                          style={{
+                            fontSize: "0.6rem",
+                            background: "#eee",
+                            padding: "2px 8px",
+                            borderRadius: "10px",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          {req.status}
+                        </span>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        alignItems: "center",
+                      }}
+                    >
+                      {/* ACTION BUTTONS: Only show if pending */}
+                      {req.status === "pending" && (
+                        <>
+                          <button
+                            onClick={() => handleApprove(req.id)}
+                            title="Approve"
+                            style={{
+                              ...deleteBtnStyle,
+                              color: "#4e5f28",
+                              opacity: 1,
+                            }}
+                          >
+                            <CheckCircle size={22} />
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleReject(req.id, req.availabilityId)
+                            }
+                            title="Reject"
+                            style={{
+                              ...deleteBtnStyle,
+                              color: "#ff4d4d",
+                              opacity: 1,
+                            }}
+                          >
+                            <XCircle size={22} />
+                          </button>
+                        </>
+                      )}
+
+                      <a
+                        href={`mailto:${req.email}`}
+                        style={{ color: "#caaff3" }}
+                      >
+                        <Mail size={20} />
+                      </a>
+                      <button
+                        onClick={() => deleteRequest(req.id)}
+                        style={deleteBtnStyle}
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                      gap: "10px",
+                      width: "100%",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    <div>
+                      <span style={labelStyle}>Email:</span> {req.email}
+                    </div>
+                    <div>
+                      <span style={labelStyle}>Phone:</span> {req.phone}
+                    </div>
+                    <div>
+                      <span style={labelStyle}>Requested Date:</span>{" "}
+                      <strong>{req.date}</strong>
+                    </div>
+                    <div>
+                      <span style={labelStyle}>Received:</span>{" "}
+                      {new Date(req.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
