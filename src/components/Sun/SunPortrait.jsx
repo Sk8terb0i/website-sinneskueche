@@ -1,4 +1,4 @@
-import sun_portrait from "../../assets/sun_portrait.png";
+import sun_portrait from "../../assets/sun.png";
 
 export default function SunPortrait({ style }) {
   return (
