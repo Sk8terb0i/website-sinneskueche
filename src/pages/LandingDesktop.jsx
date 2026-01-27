@@ -11,7 +11,7 @@ import Moon from "../components/Moon/Moon";
 import { languages, defaultLang } from "../i18n";
 import { planets as initialPlanets } from "../data/planets";
 
-export default function Landing() {
+export default function Landing({ currentLang, setCurrentLang }) {
   const navigate = useNavigate();
 
   // --- State ---
@@ -29,7 +29,6 @@ export default function Landing() {
   const [isInitialAnimationDone, setIsInitialAnimationDone] = useState(false); // Fix for jitter
   const [sunClicked, setSunClicked] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [currentLang, setCurrentLang] = useState(defaultLang);
 
   const [planets, setPlanets] = useState(initialPlanets);
 

@@ -7,11 +7,10 @@ import Header from "../components/Header/Header";
 import { planets } from "../data/planets";
 import { defaultLang } from "../i18n";
 
-export default function LandingPortrait() {
+export default function LandingPortrait({ currentLang, setCurrentLang }) {
   const navigate = useNavigate();
   const [activeIndex, setActiveIndex] = useState(null);
   const [previousIndex, setPreviousIndex] = useState(null);
-  const [currentLang, setCurrentLang] = useState(defaultLang);
   const [planetSize] = useState(80);
   const [sunSize] = useState(150);
   const [hasShiftedLeft, setHasShiftedLeft] = useState(false);
