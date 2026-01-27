@@ -1,31 +1,115 @@
 import { useState } from "react";
 import Header from "../components/Header/Header";
-import "./Course.css";
+import { Clock, Users, Coffee } from "lucide-react";
+
+const planetImages = import.meta.glob("../assets/planets/*.png", {
+  eager: true,
+});
+
+const getImage = (filename) => {
+  const key = `../assets/planets/${filename}`;
+  return planetImages[key]?.default || "";
+};
 
 export default function Pottery({ currentLang, setCurrentLang }) {
-  const [currentTab, setCurrentTab] = useState("info");
-
-  // --- ADD MENU STATE ---
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const content = {
     en: {
       title: "Pottery Tuesdays",
-      description:
-        "Join our pottery course almost every Tuesday. Suitable for beginners and advanced learners alike.",
+      welcome: "Make Tuesdays your creative sanctuary.",
+      details: [
+        { icon: <Clock size={20} />, text: "18:30 - 21:30" },
+        { icon: <Users size={20} />, text: "All skill levels" },
+        { icon: <Coffee size={20} />, text: "Small, cozy groups" },
+      ],
     },
     de: {
       title: "Pottery Tuesdays",
-      description:
-        "Besuche unseren Töpferkurs fast jeden Dienstag. Für Anfänger und Fortgeschrittene geeignet.",
+      welcome: "Mach den Dienstag zu deiner kreativen Auszeit.",
+      details: [
+        { icon: <Clock size={20} />, text: "18:30 - 21:30" },
+        { icon: <Users size={20} />, text: "Alle Level willkommen" },
+        { icon: <Coffee size={20} />, text: "Gemütliche Gruppen" },
+      ],
     },
   };
 
-  const lang = currentLang;
+  const touchImg = getImage("touch_en.png");
+  const sightImg = getImage("sight_en.png");
+
+  const styles = {
+    main: {
+      maxWidth: "1100px",
+      margin: "0 auto",
+      padding: "160px 20px 80px 20px",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      textAlign: "center",
+    },
+    welcomeText: {
+      fontSize: "0.85rem",
+      textTransform: "uppercase",
+      letterSpacing: "0.15em",
+      color: "#1c0700",
+      opacity: 0.6,
+      marginBottom: "12px",
+      fontWeight: "500",
+    },
+    titleWrapper: {
+      position: "relative",
+      display: "inline-block",
+      marginBottom: "40px",
+    },
+    title: {
+      fontSize: "3.5rem",
+      margin: 0,
+      zIndex: 2,
+      position: "relative",
+      color: "#1c0700",
+      lineHeight: "1.1",
+    },
+    moon: (top, left, delay) => ({
+      position: "absolute",
+      width: "65px",
+      height: "65px",
+      top: top,
+      left: left,
+      objectFit: "contain",
+      pointerEvents: "none",
+      zIndex: 1,
+      animation: `drift 12s ease-in-out infinite`,
+      animationDelay: `${delay}s`,
+    }),
+    infoGrid: {
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: "12px",
+      marginTop: "20px",
+      flexWrap: "wrap",
+    },
+    infoItem: {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      padding: "10px 24px",
+      background: "rgba(28, 7, 0, 0.04)",
+      borderRadius: "100px",
+      color: "#1c0700",
+      border: "1px solid rgba(28, 7, 0, 0.02)",
+      whiteSpace: "nowrap",
+    },
+    infoLabel: {
+      fontSize: "0.9rem",
+      lineHeight: "1.4",
+      fontWeight: "500",
+    },
+  };
 
   return (
     <div className="course-container">
-      {/* --- PASS MENU PROPS TO HEADER --- */}
       <Header
         currentLang={currentLang}
         setCurrentLang={setCurrentLang}
@@ -33,9 +117,89 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         onMenuToggle={setIsMenuOpen}
       />
 
-      <main className="course-main">
-        <h1 className="course-title">{content[lang].title}</h1>
-        <p className="course-description">{content[lang].description}</p>
+      <style>
+        {`
+          @keyframes drift {
+            0%, 100% { transform: translate(0, 0) rotate(-3deg); }
+            50% { transform: translate(15px, -15px) rotate(4deg); }
+          }
+
+          @media (max-width: 768px) {
+            .main-content {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              padding-top: 120px !important;
+            }
+            .title-wrapper {
+              order: 1;
+              margin-bottom: 8px !important; /* Pulls text closer under title */
+            }
+            .welcome-text {
+              order: 2;
+              margin-bottom: 40px !important;
+              font-size: 0.75rem !important; /* Slight tweak to ensure it fits mobile widths */
+              width: 50vw;
+            }
+            .info-grid {
+              order: 3;
+              flex-direction: column !important;
+              gap: 12px !important;
+              width: 100%;
+            }
+            .icon-touch {
+              left: -10px !important; 
+              top: -10px !important;
+            }
+            .icon-sight {
+              left: calc(100% - 55px) !important;
+              top: 45px !important;
+            }
+            .info-item:nth-child(1) { transform: translateX(-15px); }
+            .info-item:nth-child(2) { transform: translateX(15px); }
+            .info-item:nth-child(3) { transform: translateX(-10px); }
+          }
+        `}
+      </style>
+
+      <main style={styles.main} className="main-content">
+        {/* Title Group First */}
+        <div className="title-wrapper" style={styles.titleWrapper}>
+          {touchImg && (
+            <img
+              src={touchImg}
+              alt="Touch"
+              className="icon-touch"
+              style={styles.moon("-35px", "-120px", 0)}
+            />
+          )}
+          <h1 className="course-title" style={styles.title}>
+            {content[currentLang].title}
+          </h1>
+          {sightImg && (
+            <img
+              src={sightImg}
+              alt="Sight"
+              className="icon-sight"
+              style={styles.moon("40px", "calc(100% + 60px)", -3)}
+            />
+          )}
+        </div>
+
+        {/* Description Second */}
+        <p className="welcome-text" style={styles.welcomeText}>
+          {content[currentLang].welcome}
+        </p>
+
+        {/* Info Items Third */}
+        <div className="info-grid" style={styles.infoGrid}>
+          {content[currentLang].details.map((item, index) => (
+            <div key={index} className="info-item" style={styles.infoItem}>
+              <div style={{ display: "flex", opacity: 0.7 }}>{item.icon}</div>
+              <span style={styles.infoLabel}>{item.text}</span>
+            </div>
+          ))}
+        </div>
       </main>
     </div>
   );

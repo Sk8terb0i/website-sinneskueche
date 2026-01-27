@@ -41,7 +41,10 @@
 
 body {
   font-family: "Satoshi", sans-serif;
+  height: auto !important;
+  min-height: 0 !important;
   margin: 0;
+  padding: 0;
   background: #fffce3;
   overflow: hidden;
 }

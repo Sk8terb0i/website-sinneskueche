@@ -20,7 +20,8 @@ export default function PageTransition({ children }) {
         position: "fixed", // Use fixed to stack pages during 'wait'
         top: 0,
         left: 0,
-        overflow: "hidden", // Kill any leaking content during animation
+        overflowY: "auto",
+        overflowX: "hidden",
       }}
     >
       {children}

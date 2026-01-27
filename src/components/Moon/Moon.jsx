@@ -32,7 +32,7 @@ export default function Moon({
     : 0;
   const deterministicOffset = (planetSeed % 10) * 0.2;
 
-  let baseMoonRadius = 100;
+  let baseMoonRadius = 110;
   if (planetType === "info") baseMoonRadius -= 20;
   if (planetType === "action") baseMoonRadius -= 40;
   const moonOrbitRadius = baseMoonRadius * scaleFactor;
