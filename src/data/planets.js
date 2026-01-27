@@ -131,7 +131,7 @@ export const planets = [
     get icon() {
       return {
         en: getImage("events_en.png"),
-        de: getImage("events_de.png"),
+        de: getImage("events_en.png"),
       };
     },
     courses: [
