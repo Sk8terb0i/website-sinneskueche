@@ -17,6 +17,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [closeActive, setCloseActive] = useState(false);
 
+  // 1. Logic inside the component
   const isMobile = window.innerWidth < 768;
 
   useEffect(() => {
@@ -51,11 +52,10 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
     return planet.icon;
   };
 
-  // Dot object with customWidth to trigger smaller size in MenuLink
   const dotIconObj = {
     en: dotIcon,
     de: dotIcon,
-    isDot: true, // Flag to identify it's a dot
+    isDot: true,
   };
 
   const menuData = useMemo(
@@ -179,28 +179,26 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           transition: "transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
           display: "flex",
           flexDirection: "column",
-          padding: isMobile ? "2.5rem 1.5rem 1.5rem 1.5rem" : "3rem 4rem",
+          padding: isMobile
+            ? "1.5rem 1.5rem 1rem 1.5rem"
+            : "3rem 4rem 2rem 4rem",
           boxSizing: "border-box",
           overflow: "hidden",
         }}
       >
+        {/* Header Section */}
         <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            marginBottom: isMobile ? "2.5rem" : "2rem",
-            flexShrink: 0,
-          }}
+          style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}
         >
           <button
             onClick={onClose}
             onMouseEnter={() => setCloseActive(true)}
             onMouseLeave={() => setCloseActive(false)}
-            onTouchStart={() => setCloseActive(true)}
-            onTouchEnd={() => setCloseActive(false)}
             style={{
               ...closeBtnStyle,
               color: closeActive ? "#9960a8" : "#1c0700",
+              // 2. Applying mobile padding here directly
+              paddingBottom: isMobile ? "5vh" : "0px",
               transition: "color 0.2s ease",
             }}
           >
@@ -209,13 +207,14 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           </button>
         </div>
 
+        <div style={{ flexGrow: isMobile ? 0.5 : 1 }} />
+
         <div
           style={{
-            flex: 1,
             display: "flex",
             flexDirection: "column",
-            gap: isMobile ? "1.8rem" : "1.2rem",
-            overflow: "hidden",
+            gap: isMobile ? "1.5rem" : "2.5rem",
+            flexShrink: 0,
           }}
         >
           <Section
@@ -265,7 +264,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
               toggle={() => setIsCalendarOpen(!isCalendarOpen)}
               isMobile={isMobile}
             >
-              <div style={{ paddingTop: "0.5rem" }}>
+              <div style={{ paddingTop: "0.2rem" }}>
                 <AtelierCalendar
                   currentLang={currentLang}
                   isMobile={true}
@@ -274,15 +273,15 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
               </div>
             </Section>
           )}
-
-          {isMobile && <div style={{ flexGrow: 1 }} />}
         </div>
+
+        <div style={{ flexGrow: 2 }} />
 
         <div
           style={{
             ...footerStyle,
-            marginTop: isMobile ? "0.5rem" : "3rem",
-            paddingBottom: isMobile ? "1rem" : "3rem",
+            paddingBottom: isMobile ? "1rem" : "1.5rem",
+            flexShrink: 0,
           }}
         >
           <a
@@ -300,7 +299,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
       </div>
 
       <style>{`
-        .footer-link { color: #caaff3; text-decoration: none; font-family: Satoshi; font-size: 1rem; transition: color 0.3s; }
+        .footer-link { color: #caaff3; text-decoration: none; font-family: Satoshi; font-size: 0.95rem; transition: color 0.3s; width: fit-content; }
         .footer-link:hover { color: #9960a8; }
         @keyframes fadeInBlur { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
       `}</style>
@@ -308,47 +307,49 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   );
 }
 
+// Sub-components and styles kept clean
 function Section({ title, children, isOpen, toggle, isMobile }) {
   const [isSectionActive, setIsSectionActive] = useState(false);
-
   return (
-    <div style={{ marginBottom: isMobile ? "0.2rem" : "0.5rem" }}>
-      <div
-        onClick={toggle}
-        onMouseEnter={() => setIsSectionActive(true)}
-        onMouseLeave={() => setIsSectionActive(false)}
-        onTouchStart={() => setIsSectionActive(true)}
-        onTouchEnd={() => setIsSectionActive(false)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "1rem",
-          cursor: "pointer",
-          padding: "0.3rem 0",
-        }}
-      >
+    <div style={{ marginBottom: "0.5vh" }}>
+      <div style={{ display: "flex" }}>
         <div
+          onClick={toggle}
+          onMouseEnter={() => setIsSectionActive(true)}
+          onMouseLeave={() => setIsSectionActive(false)}
           style={{
-            width: "8px",
-            height: "8px",
-            backgroundColor: isSectionActive || isOpen ? "#caaff3" : "#1c0700",
-            borderRadius: "50%",
-            transition: "all 0.4s ease",
-          }}
-        />
-        <h3
-          style={{
-            fontFamily: "Harmond-SemiBoldCondensed",
-            fontSize: isMobile ? "1.8rem" : "2.1rem",
-            margin: 0,
-            textTransform: "lowercase",
-            opacity: isOpen || isSectionActive ? 1 : 0.7,
-            color: isSectionActive ? "#9960a8" : "#1c0700",
-            transition: "all 0.2s ease",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "1rem",
+            cursor: "pointer",
+            padding: "0.2rem 0",
           }}
         >
-          {title}
-        </h3>
+          <div
+            style={{
+              width: "6px",
+              height: "6px",
+              backgroundColor:
+                isSectionActive || isOpen ? "#caaff3" : "#1c0700",
+              borderRadius: "50%",
+              transition: "all 0.4s ease",
+              flexShrink: 0,
+            }}
+          />
+          <h3
+            style={{
+              fontFamily: "Harmond-SemiBoldCondensed",
+              fontSize: isMobile ? "1.6rem" : "2rem",
+              margin: 0,
+              textTransform: "lowercase",
+              opacity: isOpen || isSectionActive ? 1 : 0.7,
+              color: isSectionActive ? "#9960a8" : "#1c0700",
+              transition: "all 0.2s ease",
+            }}
+          >
+            {title}
+          </h3>
+        </div>
       </div>
       <div
         style={{
@@ -357,12 +358,14 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
           transition: "grid-template-rows 0.5s ease",
         }}
       >
-        <div style={{ overflow: "hidden", paddingLeft: "2rem" }}>
+        <div style={{ overflow: "hidden", paddingLeft: "1.5rem" }}>
           <div
             style={{
               opacity: isOpen ? 1 : 0,
               transition: "opacity 0.4s ease",
-              paddingBottom: "0.3rem",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
             }}
           >
             {children}
@@ -375,52 +378,52 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
 
 function MenuLink({ item, lang, onNavigate, isMobile }) {
   const [isActive, setIsActive] = useState(false);
-
-  // Logic to determine icon size: dots get 8px/10px, planets get 24px/30px
   const iconSize = item.icon?.isDot
     ? isMobile
-      ? "16px"
-      : "20px"
+      ? "14px"
+      : "18px"
     : isMobile
-      ? "24px"
-      : "30px";
+      ? "22px"
+      : "28px";
 
   return (
-    <div
-      onClick={() => onNavigate(item.link)}
-      onMouseEnter={() => setIsActive(true)}
-      onMouseLeave={() => setIsActive(false)}
-      onTouchStart={() => setIsActive(true)}
-      onTouchEnd={() => setIsActive(false)}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "12px",
-        padding: isMobile ? "6px 0" : "10px 0",
-        cursor: "pointer",
-        color: isActive ? "#9960a8" : "#4e5f28",
-        fontFamily: "Satoshi",
-        fontSize: isMobile ? "1rem" : "1.1rem",
-        transition: "all 0.2s ease",
-        transform: isActive ? "translateX(5px)" : "translateX(0)",
-      }}
-    >
-      {item.icon && (
-        <img
-          src={item.icon[lang]}
-          alt=""
-          style={{
-            width: iconSize,
-            height: iconSize,
-            objectFit: "contain",
-          }}
-        />
-      )}
-      <span>{item.text[lang]}</span>
+    <div style={{ display: "flex" }}>
+      <div
+        onClick={() => onNavigate(item.link)}
+        onMouseEnter={() => setIsActive(true)}
+        onMouseLeave={() => setIsActive(false)}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: isMobile ? "4px 0" : "8px 0",
+          cursor: "pointer",
+          color: isActive ? "#9960a8" : "#4e5f28",
+          fontFamily: "Satoshi",
+          fontSize: isMobile ? "0.95rem" : "1.05rem",
+          transition: "all 0.2s ease",
+          transform: isActive ? "translateX(5px)" : "translateX(0)",
+        }}
+      >
+        {item.icon && (
+          <img
+            src={item.icon[lang]}
+            alt=""
+            style={{
+              width: iconSize,
+              height: iconSize,
+              objectFit: "contain",
+              flexShrink: 0,
+            }}
+          />
+        )}
+        <span>{item.text[lang]}</span>
+      </div>
     </div>
   );
 }
 
+// Fixed Styles
 const closeBtnStyle = {
   background: "none",
   border: "none",
@@ -429,15 +432,16 @@ const closeBtnStyle = {
   alignItems: "center",
   gap: "10px",
   fontFamily: "Satoshi",
-  fontSize: "0.85rem",
+  fontSize: "0.8rem",
   textTransform: "lowercase",
 };
 
 const footerStyle = {
   display: "flex",
   flexDirection: "column",
-  gap: "12px",
+  alignItems: "flex-start",
+  gap: "8px",
   borderTop: "1px solid rgba(28, 7, 0, 0.05)",
   flexShrink: 0,
-  paddingTop: "1.5rem",
+  paddingTop: "1rem",
 };
