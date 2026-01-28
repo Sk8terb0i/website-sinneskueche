@@ -39,14 +39,40 @@
   src: url("/src/assets/fonts/Harmond-SemiBoldCondensed.woff2") format("woff2");
 }
 
+/* --- Custom Scrollbar Styles --- */
+/* For Chrome, Safari, and Edge */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #fffce3; /* Matches your background */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #caaff3; /* Soft purple to match your site's accents */
+  border-radius: 10px;
+  border: 2px solid #fffce3; /* Creates a padding effect */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #b394e6; /* Slightly darker on hover */
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #caaff3 #fffce3;
+}
+
 body {
   font-family: "Satoshi", sans-serif;
-  height: auto !important;
-  min-height: 0 !important;
   margin: 0;
   padding: 0;
   background: #fffce3;
-  overflow: hidden;
+  /* Changed overflow to auto so scrolling is actually possible */
+  overflow-y: auto; 
+  overflow-x: hidden;
 }
 
 .landing {

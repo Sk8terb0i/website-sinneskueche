@@ -48,6 +48,7 @@ export default function Rent({ currentLang, setCurrentLang }) {
     "icon_3.png",
     "icon_4.png",
     "icon_5.png",
+    "icon_6.png",
   ];
 
   const getRandomIndex = (excludeIdx) => {
@@ -200,10 +201,16 @@ export default function Rent({ currentLang, setCurrentLang }) {
       transform: isVisible
         ? `scale(${pos.s}) rotate(0deg)`
         : `scale(0) rotate(${side === "left" ? -45 : 45}deg)`,
-      transition: `transform ${CONFIG.TRANSITION_SPEED}ms cubic-bezier(0.175, 0.885, 0.32, 1.275), 
-                    opacity ${CONFIG.TRANSITION_SPEED - 400}ms ease-in-out, 
-                    top 2s ease-in-out, left 2s ease-in-out`,
-      filter: isVisible ? "blur(0px)" : "blur(8px)",
+      // --- UPDATED FILTER ---
+      filter: isVisible ? "blur(0px)" : "blur(15px)",
+      // --- UPDATED TRANSITION ---
+      transition: `
+        transform ${CONFIG.TRANSITION_SPEED}ms cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+        opacity ${CONFIG.TRANSITION_SPEED - 400}ms ease-in-out, 
+        filter ${CONFIG.TRANSITION_SPEED}ms ease-out, 
+        top 2s ease-in-out, 
+        left 2s ease-in-out
+      `,
     }),
     infoGrid: {
       display: "flex",

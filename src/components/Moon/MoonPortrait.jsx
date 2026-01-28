@@ -234,9 +234,15 @@ export default function MoonPortrait({
             marginLeft: "12px",
             transform: "translateY(-50%)",
             display: "block",
+
+            // --- GRAMMATICAL BREAKING LOGIC ---
             whiteSpace: "normal",
-            wordWrap: "break-word",
-            overflowWrap: "break-word",
+            wordBreak: "normal", // Avoids the ungrammatical "break-all"
+            hyphens: "auto", // Breaks words at syllables (e.g., "en-ve-lope")
+            WebkitHyphens: "auto", // Safari support
+            textWrap: "pretty", // Prevents single words/letters on new lines
+            // ----------------------------------
+
             maxWidth: `${windowWidth - (centerX + moonX) - 40}px`,
             width: "max-content",
             minWidth: "80px",

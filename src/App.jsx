@@ -28,6 +28,7 @@ export default function App() {
   // 2. Sync language preference to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem("userLanguage", currentLang);
+    document.documentElement.lang = currentLang;
   }, [currentLang]);
 
   const location = useLocation();

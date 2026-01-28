@@ -33,28 +33,6 @@ import {
   Clock,
 } from "lucide-react";
 
-// --- COMPONENT DEFINED OUTSIDE TO PREVENT RE-RENDERING FOCUS ISSUES ---
-const PageWrapper = ({ children }) => (
-  <div
-    id="admin-scroll-container"
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100vw",
-      height: "100vh",
-      overflowY: "auto",
-      overflowX: "hidden",
-      backgroundColor: "#fffce3",
-      zIndex: 9999,
-      fontFamily: "Satoshi",
-      color: "#1c0700",
-    }}
-  >
-    {children}
-  </div>
-);
-
 export default function Admin() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
@@ -231,7 +209,6 @@ export default function Admin() {
     setAvailTime("");
   };
 
-  // --- NEW RENTAL STATUS HANDLERS ---
   const handleApprove = async (reqId) => {
     await updateDoc(doc(db, "rent_requests", reqId), { status: "approved" });
   };
@@ -277,9 +254,8 @@ export default function Admin() {
     } else {
       setExternalLink(event.link || "");
     }
-    document
-      .getElementById("admin-scroll-container")
-      ?.scrollTo({ top: 0, behavior: "smooth" });
+    // Updated to use standard window scroll
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const resetForm = () => {
@@ -304,517 +280,509 @@ export default function Admin() {
     }
   };
 
+  // --- RENDER LOGIC ---
+
   if (!user) {
     return (
-      <PageWrapper>
-        <div style={loginWrapperStyle}>
-          <form onSubmit={handleLogin} style={loginCardStyle(isMobile)}>
-            <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-              <Lock
-                size={isMobile ? 32 : 40}
-                color="#caaff3"
-                style={{ marginBottom: "1rem" }}
-              />
-              <h1
-                style={{
-                  fontFamily: "Harmond-SemiBoldCondensed",
-                  fontSize: "2rem",
-                }}
-              >
-                Atelier Login
-              </h1>
-            </div>
-            <label style={labelStyle}>Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{ ...inputStyle, marginBottom: "1.2rem" }}
-              required
+      <div style={loginWrapperStyle}>
+        <form onSubmit={handleLogin} style={loginCardStyle(isMobile)}>
+          <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+            <Lock
+              size={isMobile ? 32 : 40}
+              color="#caaff3"
+              style={{ marginBottom: "1rem" }}
             />
-            <div
+            <h1
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "baseline",
+                fontFamily: "Harmond-SemiBoldCondensed",
+                fontSize: "2rem",
               }}
             >
-              <label style={labelStyle}>Password</label>
-              <button
-                type="button"
-                onClick={() => sendPasswordResetEmail(auth, email)}
-                style={forgotLinkStyle}
-              >
-                Forgot?
-              </button>
-            </div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{ ...inputStyle, marginBottom: "2rem" }}
-              required
-            />
-            <button type="submit" disabled={isLoading} style={btnStyle}>
-              {isLoading ? (
-                <Loader2 className="spinner" size={18} />
-              ) : (
-                "Sign In"
-              )}
+              Atelier Login
+            </h1>
+          </div>
+          <label style={labelStyle}>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{ ...inputStyle, marginBottom: "1.2rem" }}
+            required
+          />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+            }}
+          >
+            <label style={labelStyle}>Password</label>
+            <button
+              type="button"
+              onClick={() => sendPasswordResetEmail(auth, email)}
+              style={forgotLinkStyle}
+            >
+              Forgot?
             </button>
-          </form>
-        </div>
-      </PageWrapper>
+          </div>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{ ...inputStyle, marginBottom: "2rem" }}
+            required
+          />
+          <button type="submit" disabled={isLoading} style={btnStyle}>
+            {isLoading ? <Loader2 className="spinner" size={18} /> : "Sign In"}
+          </button>
+        </form>
+      </div>
     );
   }
 
   return (
-    <PageWrapper>
-      <div style={{ padding: isMobile ? "1.5rem" : "4vw", minHeight: "101vh" }}>
-        {/* HEADER */}
-        <header style={headerStyle(isMobile)}>
-          <div style={{ flex: 1 }}>
-            <h1
+    <div
+      style={{
+        padding: isMobile ? "1.5rem" : "4vw",
+        minHeight: "100vh",
+        fontFamily: "Satoshi",
+        color: "#1c0700",
+      }}
+    >
+      {/* HEADER */}
+      <header style={headerStyle(isMobile)}>
+        <div style={{ flex: 1 }}>
+          <h1
+            style={{
+              fontFamily: "Harmond-SemiBoldCondensed",
+              fontSize: isMobile ? "2.2rem" : "3.5rem",
+              marginBottom: "0.2rem",
+            }}
+          >
+            Atelier Management
+          </h1>
+          <p style={{ opacity: 0.6, fontSize: "0.85rem" }}>
+            Admin: {user.email}
+          </p>
+        </div>
+        <button onClick={() => signOut(auth)} style={logoutBtnStyle}>
+          <LogOut size={16} /> {!isMobile && "Logout"}
+        </button>
+      </header>
+
+      {/* SECTION 1: EVENT CALENDAR MANAGEMENT */}
+      <h2
+        style={{ ...sectionTitleStyle, color: "#4e5f28", fontSize: "1.2rem" }}
+      >
+        1. Calendar Events
+      </h2>
+      <div
+        style={{
+          display: isMobile ? "block" : "flex",
+          gap: "2rem",
+          marginBottom: "5rem",
+        }}
+      >
+        <section style={{ width: isMobile ? "100%" : "400px" }}>
+          <div style={formCardStyle}>
+            <div
               style={{
-                fontFamily: "Harmond-SemiBoldCondensed",
-                fontSize: isMobile ? "2.2rem" : "3.5rem",
-                marginBottom: "0.2rem",
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "1.2rem",
               }}
             >
-              Atelier Management
-            </h1>
-            <p style={{ opacity: 0.6, fontSize: "0.85rem" }}>
-              Admin: {user.email}
-            </p>
-          </div>
-          <button onClick={() => signOut(auth)} style={logoutBtnStyle}>
-            <LogOut size={16} /> {!isMobile && "Logout"}
-          </button>
-        </header>
-
-        {/* SECTION 1: EVENT CALENDAR MANAGEMENT */}
-        <h2
-          style={{ ...sectionTitleStyle, color: "#4e5f28", fontSize: "1.2rem" }}
-        >
-          1. Calendar Events
-        </h2>
-        <div
-          style={{
-            display: isMobile ? "block" : "flex",
-            gap: "2rem",
-            marginBottom: "5rem",
-          }}
-        >
-          <section style={{ width: isMobile ? "100%" : "400px" }}>
-            <div style={formCardStyle}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "1.2rem",
-                }}
-              >
-                <h3 style={sectionTitleStyle}>
-                  {editingId ? "EDIT ENTRY" : "NEW ENTRY"}
-                </h3>
-                {editingId && (
-                  <button onClick={resetForm} style={cancelBtnStyle}>
-                    <XCircle size={14} /> CANCEL
-                  </button>
-                )}
-              </div>
-              <form
-                onSubmit={handleSubmit}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "1.2rem",
-                }}
-              >
-                <div>
-                  <label style={labelStyle}>Source</label>
-                  <div style={toggleContainerStyle}>
-                    <div
-                      onClick={() => setLinkType("course")}
-                      style={{
-                        ...toggleOptionStyle,
-                        backgroundColor:
-                          linkType === "course" ? "#caaff3" : "transparent",
-                      }}
-                    >
-                      Course
-                    </div>
-                    <div
-                      onClick={() => setLinkType("event")}
-                      style={{
-                        ...toggleOptionStyle,
-                        backgroundColor:
-                          linkType === "event" ? "#caaff3" : "transparent",
-                      }}
-                    >
-                      Event
-                    </div>
+              <h3 style={sectionTitleStyle}>
+                {editingId ? "EDIT ENTRY" : "NEW ENTRY"}
+              </h3>
+              {editingId && (
+                <button onClick={resetForm} style={cancelBtnStyle}>
+                  <XCircle size={14} /> CANCEL
+                </button>
+              )}
+            </div>
+            <form
+              onSubmit={handleSubmit}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "1.2rem",
+              }}
+            >
+              <div>
+                <label style={labelStyle}>Source</label>
+                <div style={toggleContainerStyle}>
+                  <div
+                    onClick={() => setLinkType("course")}
+                    style={{
+                      ...toggleOptionStyle,
+                      backgroundColor:
+                        linkType === "course" ? "#caaff3" : "transparent",
+                    }}
+                  >
+                    Course
+                  </div>
+                  <div
+                    onClick={() => setLinkType("event")}
+                    style={{
+                      ...toggleOptionStyle,
+                      backgroundColor:
+                        linkType === "event" ? "#caaff3" : "transparent",
+                    }}
+                  >
+                    Event
                   </div>
                 </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "10px",
-                  }}
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                }}
+              >
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  style={inputStyle}
+                />
+                <input
+                  type="text"
+                  placeholder="Time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+              {linkType === "course" ? (
+                <select
+                  value={link}
+                  onChange={(e) => handleCourseSelection(e.target.value)}
+                  style={inputStyle}
+                  required
                 >
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    required
-                    style={inputStyle}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    style={inputStyle}
-                  />
-                </div>
-                {linkType === "course" ? (
-                  <select
-                    value={link}
-                    onChange={(e) => handleCourseSelection(e.target.value)}
-                    style={inputStyle}
-                    required
-                  >
-                    {availableCourses.map((c, i) => (
-                      <option key={i} value={c.link}>
-                        {c.text.en}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="url"
-                    placeholder="URL https://..."
-                    value={externalLink}
-                    onChange={(e) => setExternalLink(e.target.value)}
-                    style={inputStyle}
-                  />
-                )}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "10px",
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Title EN"
-                    value={titleEn}
-                    onChange={(e) => setTitleEn(e.target.value)}
-                    required
-                    style={inputStyle}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Title DE"
-                    value={titleDe}
-                    onChange={(e) => setTitleDe(e.target.value)}
-                    required
-                    style={inputStyle}
-                  />
-                </div>
-                <button type="submit" style={btnStyle}>
-                  {editingId ? "Update Entry" : "Add to Calendar"}
-                </button>
-              </form>
-            </div>
-          </section>
+                  {availableCourses.map((c, i) => (
+                    <option key={i} value={c.link}>
+                      {c.text.en}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="url"
+                  placeholder="URL https://..."
+                  value={externalLink}
+                  onChange={(e) => setExternalLink(e.target.value)}
+                  style={inputStyle}
+                />
+              )}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="Title EN"
+                  value={titleEn}
+                  onChange={(e) => setTitleEn(e.target.value)}
+                  required
+                  style={inputStyle}
+                />
+                <input
+                  type="text"
+                  placeholder="Title DE"
+                  value={titleDe}
+                  onChange={(e) => setTitleDe(e.target.value)}
+                  required
+                  style={inputStyle}
+                />
+              </div>
+              <button type="submit" style={btnStyle}>
+                {editingId ? "Update Entry" : "Add to Calendar"}
+              </button>
+            </form>
+          </div>
+        </section>
 
-          <section style={{ flex: 1 }}>
+        <section style={{ flex: 1 }}>
+          <h3 style={sectionTitleStyle}>
+            <CalendarIcon size={16} /> Scheduled Events ({events.length})
+          </h3>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.8rem",
+            }}
+          >
+            {events.map((ev) => (
+              <div key={ev.id} onClick={() => startEdit(ev)} style={cardStyle}>
+                <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#caaff3",
+                      fontWeight: "800",
+                    }}
+                  >
+                    {ev.date} {ev.time && `• ${ev.time}`}
+                  </div>
+                  <span style={{ fontWeight: "600" }}>{ev.title.en}</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm("Delete?"))
+                      deleteDoc(doc(db, "events", ev.id)).then(fetchEvents);
+                  }}
+                  style={deleteBtnStyle}
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      {/* SECTION 2: RENTAL MANAGEMENT */}
+      <hr style={{ opacity: 0.1, marginBottom: "4rem" }} />
+      <h2
+        style={{ ...sectionTitleStyle, color: "#4e5f28", fontSize: "1.2rem" }}
+      >
+        2. Rental Management
+      </h2>
+
+      <div style={{ display: isMobile ? "block" : "flex", gap: "2rem" }}>
+        {/* Availability Setup */}
+        <section style={{ width: isMobile ? "100%" : "400px" }}>
+          <div style={formCardStyle}>
             <h3 style={sectionTitleStyle}>
-              <CalendarIcon size={16} /> Scheduled Events ({events.length})
+              <PlusCircle size={16} /> Set Availability
             </h3>
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "0.8rem",
+                gap: "1rem",
               }}
             >
-              {events.map((ev) => (
-                <div
-                  key={ev.id}
-                  onClick={() => startEdit(ev)}
-                  style={cardStyle}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "0.7rem",
-                        color: "#caaff3",
-                        fontWeight: "800",
-                      }}
-                    >
-                      {ev.date} {ev.time && `• ${ev.time}`}
-                    </div>
-                    <span style={{ fontWeight: "600" }}>{ev.title.en}</span>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (window.confirm("Delete?"))
-                        deleteDoc(doc(db, "events", ev.id)).then(fetchEvents);
-                    }}
-                    style={deleteBtnStyle}
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        {/* SECTION 2: RENTAL MANAGEMENT */}
-        <hr style={{ opacity: 0.1, marginBottom: "4rem" }} />
-        <h2
-          style={{ ...sectionTitleStyle, color: "#4e5f28", fontSize: "1.2rem" }}
-        >
-          2. Rental Management
-        </h2>
-
-        <div style={{ display: isMobile ? "block" : "flex", gap: "2rem" }}>
-          {/* Availability Setup */}
-          <section style={{ width: isMobile ? "100%" : "400px" }}>
-            <div style={formCardStyle}>
-              <h3 style={sectionTitleStyle}>
-                <PlusCircle size={16} /> Set Availability
-              </h3>
-              <div
+              <input
+                type="date"
+                value={availDate}
+                onChange={(e) => setAvailDate(e.target.value)}
+                style={inputStyle}
+              />
+              <input
+                type="text"
+                placeholder="Time slot (e.g. 10:00 - 16:00)"
+                value={availTime}
+                onChange={(e) => setAvailTime(e.target.value)}
+                style={inputStyle}
+              />
+              <button
+                onClick={handleAddAvailability}
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "1rem",
+                  ...btnStyle,
+                  backgroundColor: "#4e5f28",
+                  color: "white",
                 }}
               >
+                Publish Date
+              </button>
+            </div>
+
+            <div style={{ marginTop: "2rem" }}>
+              <h4 style={labelStyle}>Notification Settings</h4>
+              <div style={{ display: "flex", gap: "5px" }}>
                 <input
-                  type="date"
-                  value={availDate}
-                  onChange={(e) => setAvailDate(e.target.value)}
-                  style={inputStyle}
-                />
-                <input
-                  type="text"
-                  placeholder="Time slot (e.g. 10:00 - 16:00)"
-                  value={availTime}
-                  onChange={(e) => setAvailTime(e.target.value)}
-                  style={inputStyle}
+                  type="email"
+                  placeholder="Admin notification email"
+                  value={notifyEmail}
+                  onChange={(e) => setNotifyEmail(e.target.value)}
+                  style={{ ...inputStyle, flex: 1 }}
                 />
                 <button
-                  onClick={handleAddAvailability}
-                  style={{
-                    ...btnStyle,
-                    backgroundColor: "#4e5f28",
-                    color: "white",
-                  }}
+                  onClick={updateNotifyEmail}
+                  style={{ ...btnStyle, width: "auto", padding: "0 15px" }}
                 >
-                  Publish Date
+                  <Mail size={16} />
                 </button>
               </div>
-
-              <div style={{ marginTop: "2rem" }}>
-                <h4 style={labelStyle}>Notification Settings</h4>
-                <div style={{ display: "flex", gap: "5px" }}>
-                  <input
-                    type="email"
-                    placeholder="Admin notification email"
-                    value={notifyEmail}
-                    onChange={(e) => setNotifyEmail(e.target.value)}
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <button
-                    onClick={updateNotifyEmail}
-                    style={{ ...btnStyle, width: "auto", padding: "0 15px" }}
-                  >
-                    <Mail size={16} />
-                  </button>
-                </div>
-              </div>
             </div>
+          </div>
 
-            <div style={{ marginTop: "1.5rem" }}>
-              <h3 style={labelStyle}>Live Availabilities</h3>
-              {availabilities.map((a) => (
-                <div
-                  key={a.id}
-                  style={{
-                    ...cardStyle,
-                    padding: "0.8rem",
-                    marginBottom: "0.5rem",
-                    opacity: a.status === "available" ? 1 : 0.5,
-                  }}
+          <div style={{ marginTop: "1.5rem" }}>
+            <h3 style={labelStyle}>Live Availabilities</h3>
+            {availabilities.map((a) => (
+              <div
+                key={a.id}
+                style={{
+                  ...cardStyle,
+                  padding: "0.8rem",
+                  marginBottom: "0.5rem",
+                  opacity: a.status === "available" ? 1 : 0.5,
+                }}
+              >
+                <span style={{ fontSize: "0.85rem" }}>
+                  {a.date} — <strong>{a.status}</strong>
+                </span>
+                <button
+                  onClick={() => deleteAvailability(a.id)}
+                  style={deleteBtnStyle}
                 >
-                  <span style={{ fontSize: "0.85rem" }}>
-                    {a.date} — <strong>{a.status}</strong>
-                  </span>
-                  <button
-                    onClick={() => deleteAvailability(a.id)}
-                    style={deleteBtnStyle}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
 
-          {/* Incoming Requests */}
-          <section style={{ flex: 1 }}>
-            <h3 style={sectionTitleStyle}>
-              <Clock size={16} /> Incoming Rent Requests ({rentRequests.length})
-            </h3>
-            {rentRequests.length === 0 && (
-              <p style={{ opacity: 0.5 }}>No requests yet.</p>
-            )}
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              {rentRequests.map((req) => (
+        {/* Incoming Requests */}
+        <section style={{ flex: 1 }}>
+          <h3 style={sectionTitleStyle}>
+            <Clock size={16} /> Incoming Rent Requests ({rentRequests.length})
+          </h3>
+          {rentRequests.length === 0 && (
+            <p style={{ opacity: 0.5 }}>No requests yet.</p>
+          )}
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
+            {rentRequests.map((req) => (
+              <div
+                key={req.id}
+                style={{
+                  ...cardStyle,
+                  alignItems: "flex-start",
+                  flexDirection: "column",
+                  borderLeft:
+                    req.status === "approved"
+                      ? "6px solid #4e5f28"
+                      : req.status === "rejected"
+                        ? "6px solid #ff4d4d"
+                        : "6px solid #caaff3",
+                }}
+              >
                 <div
-                  key={req.id}
                   style={{
-                    ...cardStyle,
-                    alignItems: "flex-start",
-                    flexDirection: "column",
-                    // Visual status indicator
-                    borderLeft:
-                      req.status === "approved"
-                        ? "6px solid #4e5f28"
-                        : req.status === "rejected"
-                          ? "6px solid #ff4d4d"
-                          : "6px solid #caaff3",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    width: "100%",
+                    marginBottom: "10px",
                   }}
                 >
                   <div
                     style={{
                       display: "flex",
-                      justifyContent: "space-between",
-                      width: "100%",
-                      marginBottom: "10px",
+                      alignItems: "center",
+                      gap: "10px",
                     }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                      }}
-                    >
-                      <span style={{ fontWeight: "bold", fontSize: "1.1rem" }}>
-                        {req.name}
+                    <span style={{ fontWeight: "bold", fontSize: "1.1rem" }}>
+                      {req.name}
+                    </span>
+                    {req.status !== "pending" && (
+                      <span
+                        style={{
+                          fontSize: "0.6rem",
+                          background: "#eee",
+                          padding: "2px 8px",
+                          borderRadius: "100px",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {req.status}
                       </span>
-                      {req.status !== "pending" && (
-                        <span
-                          style={{
-                            fontSize: "0.6rem",
-                            background: "#eee",
-                            padding: "2px 8px",
-                            borderRadius: "10px",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          {req.status}
-                        </span>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "10px",
-                        alignItems: "center",
-                      }}
-                    >
-                      {/* ACTION BUTTONS: Only show if pending */}
-                      {req.status === "pending" && (
-                        <>
-                          <button
-                            onClick={() => handleApprove(req.id)}
-                            title="Approve"
-                            style={{
-                              ...deleteBtnStyle,
-                              color: "#4e5f28",
-                              opacity: 1,
-                            }}
-                          >
-                            <CheckCircle size={22} />
-                          </button>
-                          <button
-                            onClick={() =>
-                              handleReject(req.id, req.availabilityId)
-                            }
-                            title="Reject"
-                            style={{
-                              ...deleteBtnStyle,
-                              color: "#ff4d4d",
-                              opacity: 1,
-                            }}
-                          >
-                            <XCircle size={22} />
-                          </button>
-                        </>
-                      )}
-
-                      <a
-                        href={`mailto:${req.email}`}
-                        style={{ color: "#caaff3" }}
-                      >
-                        <Mail size={20} />
-                      </a>
-                      <button
-                        onClick={() => deleteRequest(req.id)}
-                        style={deleteBtnStyle}
-                      >
-                        <Trash2 size={20} />
-                      </button>
-                    </div>
+                    )}
                   </div>
+
                   <div
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                      display: "flex",
                       gap: "10px",
-                      width: "100%",
-                      fontSize: "0.9rem",
+                      alignItems: "center",
                     }}
                   >
-                    <div>
-                      <span style={labelStyle}>Email:</span> {req.email}
-                    </div>
-                    <div>
-                      <span style={labelStyle}>Phone:</span> {req.phone}
-                    </div>
-                    <div>
-                      <span style={labelStyle}>Requested Date:</span>{" "}
-                      <strong>{req.date}</strong>
-                    </div>
-                    <div>
-                      <span style={labelStyle}>Received:</span>{" "}
-                      {new Date(req.createdAt).toLocaleDateString()}
-                    </div>
+                    {req.status === "pending" && (
+                      <>
+                        <button
+                          onClick={() => handleApprove(req.id)}
+                          style={{
+                            ...deleteBtnStyle,
+                            color: "#4e5f28",
+                            opacity: 1,
+                          }}
+                        >
+                          <CheckCircle size={22} />
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleReject(req.id, req.availabilityId)
+                          }
+                          style={{
+                            ...deleteBtnStyle,
+                            color: "#ff4d4d",
+                            opacity: 1,
+                          }}
+                        >
+                          <XCircle size={22} />
+                        </button>
+                      </>
+                    )}
+                    <a
+                      href={`mailto:${req.email}`}
+                      style={{ color: "#caaff3" }}
+                    >
+                      <Mail size={20} />
+                    </a>
+                    <button
+                      onClick={() => deleteRequest(req.id)}
+                      style={deleteBtnStyle}
+                    >
+                      <Trash2 size={20} />
+                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
-        </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                    gap: "10px",
+                    width: "100%",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  <div>
+                    <span style={labelStyle}>Email:</span> {req.email}
+                  </div>
+                  <div>
+                    <span style={labelStyle}>Phone:</span> {req.phone}
+                  </div>
+                  <div>
+                    <span style={labelStyle}>Requested Date:</span>{" "}
+                    <strong>{req.date}</strong>
+                  </div>
+                  <div>
+                    <span style={labelStyle}>Received:</span>{" "}
+                    {new Date(req.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
-    </PageWrapper>
+    </div>
   );
 }
 
-// STYLES
+// STYLES (Kept your existing styles below)
 const loginWrapperStyle = {
   display: "flex",
   justifyContent: "center",
