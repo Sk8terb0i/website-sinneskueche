@@ -26,7 +26,14 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
     isMenuOpenRef.current = isMenuOpen;
   }, [isMenuOpen]);
 
-  const coursePlanets = planets.filter((p) => p.type === "courses");
+  // Logic to include Atelier only when a planet is active
+  const coursePlanetsOnly = planets.filter((p) => p.type === "courses");
+  const atelierPlanet = planets.find((p) => p.id === "atelier");
+  const displayPlanets =
+    activeIndex !== null
+      ? [...coursePlanetsOnly, atelierPlanet].filter(Boolean)
+      : coursePlanetsOnly;
+
   const touchStartY = useRef(null);
   const touchLocked = useRef(false);
 
@@ -53,13 +60,12 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
       setScrollDirection(direction);
       setActiveIndex((prev) => {
         let nextIndex;
+        // Use the length of planets currently in the row
+        const total = displayPlanets.length;
         if (direction === "down") {
-          nextIndex = prev === null ? 0 : (prev + 1) % coursePlanets.length;
+          nextIndex = prev === null ? 0 : (prev + 1) % total;
         } else {
-          nextIndex =
-            prev === null
-              ? 0
-              : (prev - 1 + coursePlanets.length) % coursePlanets.length;
+          nextIndex = prev === null ? 0 : (prev - 1 + total) % total;
         }
         if (nextIndex !== prev) setPreviousIndex(prev);
         return nextIndex;
@@ -101,7 +107,7 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchmove", handleTouchMove);
     };
-  }, [coursePlanets.length]);
+  }, [displayPlanets.length]);
 
   const normalGap = planetSize * 0.2;
   const expandedGap = planetSize * 1.1;
@@ -113,7 +119,8 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
 
   const getOrbitDiameter = (targetIndex) => {
     let distance = sunSize / 2;
-    for (let i = coursePlanets.length - 1; i >= targetIndex; i--) {
+    // Orbits are only for the original course planets
+    for (let i = coursePlanetsOnly.length - 1; i >= targetIndex; i--) {
       distance += normalGap;
       if (i === targetIndex) distance += planetSize / 2;
       else distance += planetSize;
@@ -124,8 +131,8 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
   const computeTranslateY = () => {
     if (activeIndex === null) {
       const totalHeight =
-        coursePlanets.reduce((sum, _, i) => sum + getPlanetSize(i), 0) +
-        (coursePlanets.length - 1) * normalGap +
+        coursePlanetsOnly.reduce((sum, _, i) => sum + getPlanetSize(i), 0) +
+        (coursePlanetsOnly.length - 1) * normalGap +
         sunSize;
       return Math.max(
         window.innerHeight / 2 - totalHeight / 2,
@@ -149,8 +156,8 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
   const translateY = computeTranslateY();
 
   const idleTotalHeight =
-    coursePlanets.length * planetSize +
-    (coursePlanets.length - 1) * normalGap +
+    coursePlanetsOnly.length * planetSize +
+    (coursePlanetsOnly.length - 1) * normalGap +
     sunSize;
   const idleTranslateY = Math.max(
     window.innerHeight / 2 - idleTotalHeight / 2,
@@ -158,8 +165,8 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
   );
   const sunTopPosition =
     idleTranslateY +
-    coursePlanets.length * planetSize +
-    coursePlanets.length * normalGap;
+    coursePlanetsOnly.length * planetSize +
+    coursePlanetsOnly.length * normalGap;
 
   const springEase = "cubic-bezier(0.34, 1.56, 0.64, 1)";
   const smoothEase = "cubic-bezier(0.4, 0, 0.2, 1)";
@@ -202,7 +209,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
             66% { transform: translate(calc(var(--tx) * -0.7), calc(var(--ty) * 0.5)) rotate(calc(var(--tr) * -0.8)); }
           }
           .tethered-float {
-            /* Slower duration makes the struggle feel heavy/viscous */
             animation: microTension var(--fdur) ease-in-out infinite;
             animation-delay: var(--fdelay);
           }
@@ -244,7 +250,7 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
           handleReset();
         }}
       >
-        {coursePlanets.map((_, index) => (
+        {coursePlanetsOnly.map((_, index) => (
           <div
             key={`orbit-${index}`}
             style={{
@@ -280,11 +286,13 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
           zIndex: 2,
         }}
       >
-        {coursePlanets.map((planet, index) => {
-          const radius = getOrbitDiameter(index) / 2;
+        {displayPlanets.map((planet, index) => {
+          const isAtelier = planet.id === "atelier";
+          // Radius logic for course planets; atelier doesn't have an orbit radius defined here
+          const radius = !isAtelier ? getOrbitDiameter(index) / 2 : 0;
           const possibleAngles = [-90, 90, -180, 45, -45];
           let startAngle =
-            index === coursePlanets.length - 1
+            index === coursePlanetsOnly.length - 1
               ? 180
               : possibleAngles[index % possibleAngles.length];
           const currentAngle = isLoaded ? 0 : startAngle;
@@ -292,12 +300,11 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
           const isVisible =
             activeIndex === null || Math.abs(index - activeIndex) <= 2;
 
-          // Personality math - dialed back for subtlety
-          const dur = 7 + (index % 4); // Balanced speed: 7s - 10s
+          const dur = 7 + (index % 4);
           const delay = index * -1.8;
-          const tx = 1.5 + (index % 2); // Max 2.5px side pull
-          const ty = 2.5 + (index % 3); // Max 4.5px vertical pull
-          const tr = 0.8 + (index % 2) * 0.4; // Max 1.2deg rotation
+          const tx = 1.5 + (index % 2);
+          const ty = 2.5 + (index % 3);
+          const tr = 0.8 + (index % 2) * 0.4;
 
           return (
             <div
@@ -309,14 +316,19 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
                 pointerEvents: isVisible && !isMenuOpen ? "auto" : "none",
                 transition: `transform ${movementDuration} ${currentEase}, translate ${movementDuration} ${currentEase}, opacity 0.5s ease`,
                 position: "relative",
-                transformOrigin: `center ${radius}px`,
-                transform: `rotate(${currentAngle}deg)`,
+                // Only rotate course planets during entry; Atelier is only added post-load/active
+                transformOrigin: !isAtelier
+                  ? `center ${radius}px`
+                  : "center center",
+                transform: !isAtelier ? `rotate(${currentAngle}deg)` : "none",
                 translate: `${translateX} 0`,
               }}
             >
               <div
                 style={{
-                  transform: `rotate(${-currentAngle}deg)`,
+                  transform: !isAtelier
+                    ? `rotate(${-currentAngle}deg)`
+                    : "none",
                   transition: `transform ${movementDuration} ${currentEase}`,
                   display: "flex",
                   alignItems: "center",
@@ -345,6 +357,7 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
                       const isCurrentlyActive = activeIndex === index;
                       const moonCount = planet.courses?.length || 0;
 
+                      // Navigate if only one moon exists (original course behavior)
                       if (isCurrentlyActive && moonCount === 1) {
                         const targetLink = planet.courses[0].link;
                         if (targetLink) {
@@ -372,7 +385,7 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
 
       {activeIndex !== null &&
         hasShiftedLeft &&
-        coursePlanets[activeIndex].courses?.map((moon, idx) => (
+        displayPlanets[activeIndex]?.courses?.map((moon, idx) => (
           <MoonPortrait
             key={`new-${activeIndex}-${idx}`}
             moon={moon}
@@ -385,7 +398,7 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
 
       {previousIndex !== null &&
         hasShiftedLeft &&
-        coursePlanets[previousIndex].courses?.map((moon, idx) => (
+        displayPlanets[previousIndex]?.courses?.map((moon, idx) => (
           <MoonPortrait
             key={`old-${previousIndex}-${idx}`}
             moon={moon}

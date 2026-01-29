@@ -9,8 +9,6 @@ const getImage = (filename) => {
   return planetImages[key]?.default || "";
 };
 
-// 3. Planet Definitions
-// Both 'en' and 'de' now point to the '_en.png' asset.
 export const planets = [
   {
     id: "sight",
@@ -18,7 +16,8 @@ export const planets = [
     get icon() {
       return {
         en: getImage("sight_en.png"),
-        de: getImage("sight_en.png"),
+        de: getImage("sight_de.png"),
+        base: getImage("sight.png"),
       };
     },
     courses: [
@@ -34,7 +33,8 @@ export const planets = [
     get icon() {
       return {
         en: getImage("touch_en.png"),
-        de: getImage("touch_en.png"),
+        de: getImage("touch_de.png"),
+        base: getImage("touch.png"),
       };
     },
     courses: [
@@ -50,7 +50,8 @@ export const planets = [
     get icon() {
       return {
         en: getImage("hearing_en.png"),
-        de: getImage("hearing_en.png"),
+        de: getImage("hearing_de.png"),
+        base: getImage("hearing.png"),
       };
     },
     courses: [
@@ -66,7 +67,8 @@ export const planets = [
     get icon() {
       return {
         en: getImage("smell_en.png"),
-        de: getImage("smell_en.png"),
+        de: getImage("smell_de.png"),
+        base: getImage("smell.png"),
       };
     },
     courses: [
@@ -84,7 +86,8 @@ export const planets = [
     get icon() {
       return {
         en: getImage("taste_en.png"),
-        de: getImage("taste_en.png"),
+        de: getImage("taste_de.png"),
+        base: getImage("taste.png"),
       };
     },
     courses: [
@@ -162,6 +165,35 @@ export const planets = [
     },
     courses: [
       { text: { en: "rent our space", de: "raum mieten" }, link: "/rent" },
+    ],
+  },
+  {
+    id: "atelier",
+    type: "home",
+    get icon() {
+      return {
+        base: getImage("atelier.png"),
+        en: getImage("atelier.png"),
+        de: getImage("atelier.png"),
+      };
+    },
+    courses: [
+      {
+        text: { en: "about us", de: "über uns" },
+        link: "/team",
+      },
+      {
+        text: { en: "location", de: "standort" },
+        link: "/location",
+      },
+      {
+        text: { en: "rent our space", de: "raum mieten" },
+        link: "/rent",
+      },
+      {
+        text: { en: "contact", de: "kontakt" },
+        link: "/contact",
+      },
     ],
   },
 ];

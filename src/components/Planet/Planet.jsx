@@ -11,8 +11,18 @@ export default function Planet({
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
-  // Simply use the standard icon. No more swapping!
-  const currentIconSrc = planet.icon[language];
+  // Determine which icon to show
+  let currentIconSrc;
+
+  if (planet.type === "courses") {
+    // Show language icon on hover, base icon otherwise
+    currentIconSrc = isHovered
+      ? planet.icon[language]
+      : planet.icon.base || planet.icon[language];
+  } else {
+    // Standard behavior for non-course planets
+    currentIconSrc = planet.icon[language];
+  }
 
   return (
     <div
@@ -21,7 +31,6 @@ export default function Planet({
         ...style,
         width: `${size}px`,
         height: `${size}px`,
-        // We still keep the scale effect for visual feedback
         transform: isHovered
           ? `${style.transform} scale(1.15)`
           : style.transform,
@@ -53,6 +62,8 @@ export default function Planet({
           height: "100%",
           objectFit: "contain",
           pointerEvents: "none",
+          // Optional: adds a quick fade when the image source changes
+          transition: "opacity 0.2s ease-in-out",
         }}
       />
     </div>

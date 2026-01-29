@@ -40,12 +40,13 @@ export default function MoonPortrait({
   const centerY = planetCenter?.y ?? window.innerHeight * 0.5;
 
   const possibleAngles = [
-    -Math.PI / 4,
-    -Math.PI / 6,
-    -Math.PI / 12,
-    Math.PI / 12,
-    Math.PI / 6,
-    Math.PI / 4,
+    -Math.PI / 2.5, // -72 degrees
+    -Math.PI / 4, // -45 degrees
+    -Math.PI / 8, // -22.5 degrees
+    0, // 0 degrees (dead center right)
+    Math.PI / 8, // 22.5 degrees
+    Math.PI / 4, // 45 degrees
+    Math.PI / 2.5, // 72 degrees
   ];
 
   const targetAngleRef = useRef(null);

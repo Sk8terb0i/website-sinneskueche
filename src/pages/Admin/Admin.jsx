@@ -113,19 +113,30 @@ export default function Admin() {
   };
 
   const fetchSettings = async () => {
+    // We listen to settings in real-time or just fetch once
     const snap = await getDocs(collection(db, "settings"));
     if (!snap.empty) {
-      setNotifyEmail(snap.docs[0].data().adminEmail || "");
+      // Find the specific admin_config doc
+      const config = snap.docs.find((d) => d.id === "admin_config");
+      if (config) {
+        setNotifyEmail(config.data().adminEmail || "");
+      }
     }
   };
 
   const updateNotifyEmail = async () => {
-    await setDoc(
-      doc(db, "settings", "admin_config"),
-      { adminEmail: notifyEmail },
-      { merge: true },
-    );
-    alert("Notification email updated!");
+    try {
+      await setDoc(
+        doc(db, "settings", "admin_config"),
+        { adminEmail: notifyEmail },
+        { merge: true },
+      );
+      alert(
+        "Notification email saved! This email will now receive all rent request alerts.",
+      );
+    } catch (err) {
+      alert("Error saving email: " + err.message);
+    }
   };
 
   const fetchEvents = async () => {
@@ -204,6 +215,8 @@ export default function Admin() {
       date: availDate,
       time: availTime,
       status: "available",
+      // Note: We don't store the email per-date anymore,
+      // the request form will look it up from settings/admin_config
     });
     setAvailDate("");
     setAvailTime("");
@@ -254,7 +267,6 @@ export default function Admin() {
     } else {
       setExternalLink(event.link || "");
     }
-    // Updated to use standard window scroll
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -279,8 +291,6 @@ export default function Admin() {
       setIsLoading(false);
     }
   };
-
-  // --- RENDER LOGIC ---
 
   if (!user) {
     return (
@@ -349,7 +359,6 @@ export default function Admin() {
         color: "#1c0700",
       }}
     >
-      {/* HEADER */}
       <header style={headerStyle(isMobile)}>
         <div style={{ flex: 1 }}>
           <h1
@@ -370,7 +379,6 @@ export default function Admin() {
         </button>
       </header>
 
-      {/* SECTION 1: EVENT CALENDAR MANAGEMENT */}
       <h2
         style={{ ...sectionTitleStyle, color: "#4e5f28", fontSize: "1.2rem" }}
       >
@@ -514,11 +522,7 @@ export default function Admin() {
             <CalendarIcon size={16} /> Scheduled Events ({events.length})
           </h3>
           <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.8rem",
-            }}
+            style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}
           >
             {events.map((ev) => (
               <div key={ev.id} onClick={() => startEdit(ev)} style={cardStyle}>
@@ -550,7 +554,6 @@ export default function Admin() {
         </section>
       </div>
 
-      {/* SECTION 2: RENTAL MANAGEMENT */}
       <hr style={{ opacity: 0.1, marginBottom: "4rem" }} />
       <h2
         style={{ ...sectionTitleStyle, color: "#4e5f28", fontSize: "1.2rem" }}
@@ -559,18 +562,13 @@ export default function Admin() {
       </h2>
 
       <div style={{ display: isMobile ? "block" : "flex", gap: "2rem" }}>
-        {/* Availability Setup */}
         <section style={{ width: isMobile ? "100%" : "400px" }}>
           <div style={formCardStyle}>
             <h3 style={sectionTitleStyle}>
               <PlusCircle size={16} /> Set Availability
             </h3>
             <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "1rem",
-              }}
+              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
               <input
                 type="date"
@@ -598,7 +596,7 @@ export default function Admin() {
             </div>
 
             <div style={{ marginTop: "2rem" }}>
-              <h4 style={labelStyle}>Notification Settings</h4>
+              <h4 style={labelStyle}>Persistent Notification Email</h4>
               <div style={{ display: "flex", gap: "5px" }}>
                 <input
                   type="email"
@@ -610,10 +608,14 @@ export default function Admin() {
                 <button
                   onClick={updateNotifyEmail}
                   style={{ ...btnStyle, width: "auto", padding: "0 15px" }}
+                  title="Save Email to Settings"
                 >
                   <Mail size={16} />
                 </button>
               </div>
+              <p style={{ fontSize: "0.7rem", opacity: 0.5, marginTop: "5px" }}>
+                Requests will be sent to this email until changed.
+              </p>
             </div>
           </div>
 
@@ -643,7 +645,6 @@ export default function Admin() {
           </div>
         </section>
 
-        {/* Incoming Requests */}
         <section style={{ flex: 1 }}>
           <h3 style={sectionTitleStyle}>
             <Clock size={16} /> Incoming Rent Requests ({rentRequests.length})
@@ -701,7 +702,6 @@ export default function Admin() {
                       </span>
                     )}
                   </div>
-
                   <div
                     style={{
                       display: "flex",
@@ -782,7 +782,7 @@ export default function Admin() {
   );
 }
 
-// STYLES (Kept your existing styles below)
+// STYLES
 const loginWrapperStyle = {
   display: "flex",
   justifyContent: "center",

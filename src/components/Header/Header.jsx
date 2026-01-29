@@ -79,7 +79,9 @@ export default function Header({
           pointerEvents: "auto",
           gap: "1rem",
           background:
-            "linear-gradient(to bottom, #fffce3 0%, #fffce3 60%, #fffce30c 100%)",
+            isLanding && !isPortrait
+              ? "transparent"
+              : "linear-gradient(to bottom, #fffce3 0%, #fffce3 60%, #fffce30c 100%)",
         }}
       >
         <div style={{ width: "50vw", display: "flex", alignItems: "center" }}>

@@ -17,7 +17,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [closeActive, setCloseActive] = useState(false);
 
-  // 1. Logic inside the component
   const isMobile = window.innerWidth < 768;
 
   useEffect(() => {
@@ -186,7 +185,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           overflow: "hidden",
         }}
       >
-        {/* Header Section */}
         <div
           style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}
         >
@@ -197,7 +195,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
             style={{
               ...closeBtnStyle,
               color: closeActive ? "#9960a8" : "#1c0700",
-              // 2. Applying mobile padding here directly
               paddingBottom: isMobile ? "5vh" : "0px",
               transition: "color 0.2s ease",
             }}
@@ -307,7 +304,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   );
 }
 
-// Sub-components and styles kept clean
 function Section({ title, children, isOpen, toggle, isMobile }) {
   const [isSectionActive, setIsSectionActive] = useState(false);
   return (
@@ -378,6 +374,10 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
 
 function MenuLink({ item, lang, onNavigate, isMobile }) {
   const [isActive, setIsActive] = useState(false);
+
+  // LOGIC ADDED: Use base icon for courses, otherwise lang icon
+  const iconSrc = item.icon?.base || item.icon?.[lang];
+
   const iconSize = item.icon?.isDot
     ? isMobile
       ? "14px"
@@ -405,9 +405,9 @@ function MenuLink({ item, lang, onNavigate, isMobile }) {
           transform: isActive ? "translateX(5px)" : "translateX(0)",
         }}
       >
-        {item.icon && (
+        {iconSrc && (
           <img
-            src={item.icon[lang]}
+            src={iconSrc}
             alt=""
             style={{
               width: iconSize,
@@ -423,7 +423,6 @@ function MenuLink({ item, lang, onNavigate, isMobile }) {
   );
 }
 
-// Fixed Styles
 const closeBtnStyle = {
   background: "none",
   border: "none",
