@@ -41,28 +41,12 @@
 
 /* --- Custom Scrollbar Styles --- */
 /* For Chrome, Safari, and Edge */
-::-webkit-scrollbar {
-  width: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: #fffce3; /* Matches your background */
-}
-
-::-webkit-scrollbar-thumb {
-  background: #caaff3; /* Soft purple to match your site's accents */
-  border-radius: 10px;
-  border: 2px solid #fffce3; /* Creates a padding effect */
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #b394e6; /* Slightly darker on hover */
-}
-
-/* For Firefox */
+/* For Firefox and General resets */
 * {
   scrollbar-width: thin;
   scrollbar-color: #caaff3 #fffce3;
+  /* FIX 1: Remove the blue tap highlight on mobile */
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -70,9 +54,20 @@ body {
   margin: 0;
   padding: 0;
   background: #fffce3;
-  /* Changed overflow to auto so scrolling is actually possible */
   overflow-y: auto; 
   overflow-x: hidden;
+  
+  /* FIX 2: Prevent text selection across the whole site */
+  /* This prevents the "blue block" selection when people tap/hold icons and buttons */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* FIX 3: Re-enable text selection for forms so users can still type/edit */
+input, 
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .landing {

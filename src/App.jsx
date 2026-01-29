@@ -10,22 +10,25 @@ import Location from "./pages/Location";
 import Contact from "./pages/Contact";
 import Rent from "./pages/Rent";
 
+// new course imports
+import ArtisticVision from "./pages/ArtisticVision";
+import ExtendedVoiceLab from "./pages/ExtendedVoiceLab";
+import PerformingWords from "./pages/PerformingWords";
+import SingingBasics from "./pages/SingingBasicsWeekend";
+import GetInk from "./pages/GetInk";
+
 import PageTransition from "./components/PageTransition";
 import { defaultLang, languages } from "./i18n";
 
-// Dynamic Import for Admin
+// dynamic import for admin
 const Admin = lazy(() => import("./pages/Admin/Admin"));
 
 export default function App() {
-  // 1. Initialize state from localStorage.
-  // If nothing is saved, fall back to defaultLang.
   const [currentLang, setCurrentLang] = useState(() => {
     const savedLang = localStorage.getItem("userLanguage");
-    // Ensure the saved language is actually valid based on your i18n file
     return savedLang && languages[savedLang] ? savedLang : defaultLang;
   });
 
-  // 2. Sync language preference to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem("userLanguage", currentLang);
     document.documentElement.lang = currentLang;
@@ -72,6 +75,68 @@ export default function App() {
           }
         />
 
+        {/* new course routes */}
+        <Route
+          path="/artistic-vision"
+          element={
+            <PageTransition>
+              <ArtisticVision
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/extended-voice-lab"
+          element={
+            <PageTransition>
+              <ExtendedVoiceLab
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/performing-words"
+          element={
+            <PageTransition>
+              <PerformingWords
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/singing-basics"
+          element={
+            <PageTransition>
+              <SingingBasics
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/get-ink"
+          element={
+            <PageTransition>
+              <GetInk
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        {/* info and action routes */}
         <Route
           path="/team"
           element={
@@ -129,7 +194,6 @@ export default function App() {
   );
 }
 
-// Simple style to prevent layout shift while Admin loads
 const loadingContainerStyle = {
   width: "100vw",
   height: "100vh",

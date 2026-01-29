@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
-import { planets } from "../../data/planets";
+import { planets, planetIcons } from "../../data/planets";
 import { db } from "../../firebase";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import AtelierCalendar from "../Calendar/AtelierCalendar";
@@ -17,6 +17,14 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [closeActive, setCloseActive] = useState(false);
 
+  const [activeSenses, setActiveSenses] = useState([
+    "sight",
+    "touch",
+    "hearing",
+    "smell",
+    "taste",
+  ]);
+
   const isMobile = window.innerWidth < 768;
 
   useEffect(() => {
@@ -25,37 +33,43 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         const eventsCollection = collection(db, "events");
         const q = query(eventsCollection, orderBy("date", "asc"));
         const snapshot = await getDocs(q);
-        const now = new Date().setHours(0, 0, 0, 0);
 
-        const allUpcoming = snapshot.docs
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        // Calculate end of the current month
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        endOfMonth.setHours(23, 59, 59, 999);
+
+        const monthlyEvents = snapshot.docs
           .map((doc) => ({ id: doc.id, ...doc.data() }))
           .filter((event) => {
-            const eventDate = new Date(event.date).setHours(0, 0, 0, 0);
-            return eventDate >= now;
+            const eventDate = new Date(event.date);
+            return eventDate >= now && eventDate <= endOfMonth;
           });
 
-        const limit = isMobile ? 3 : 8;
-        setUpcomingEvents(allUpcoming.slice(0, limit));
+        // NO SLICE HERE - Show everything found
+        setUpcomingEvents(monthlyEvents);
       } catch (error) {
         console.error("Error fetching events:", error);
       }
     };
+
     if (isOpen) fetchEvents();
-  }, [isOpen, isMobile]);
+  }, [isOpen]); // Removed isMobile dependency as logic is now purely date-based
 
   const hasUpcomingEvents = upcomingEvents.length > 0;
 
-  const getPlanetIcon = (id) => {
-    const planet = planets.find((p) => p.id === id);
-    if (!planet) return { en: "", de: "" };
-    return planet.icon;
+  const toggleSense = (senseId) => {
+    setActiveSenses((prev) =>
+      prev.includes(senseId)
+        ? prev.filter((id) => id !== senseId)
+        : [...prev, senseId],
+    );
   };
 
-  const dotIconObj = {
-    en: dotIcon,
-    de: dotIcon,
-    isDot: true,
-  };
+  // The Icon Object structure matches what MenuLink expects
+  const dotIconObj = { en: dotIcon, de: dotIcon, isDot: true };
 
   const menuData = useMemo(
     () => ({
@@ -63,12 +77,44 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         {
           text: { en: "pottery tuesdays", de: "pottery tuesdays" },
           link: "/pottery",
-          icon: getPlanetIcon("touch"),
+          senses: ["touch", "sight"],
+          icon: dotIconObj,
         },
         {
           text: { en: "singing lessons", de: "gesangsunterricht" },
           link: "/singing",
-          icon: getPlanetIcon("hearing"),
+          senses: ["hearing"],
+          icon: dotIconObj,
+        },
+        {
+          text: { en: "artistic vision", de: "artistic vision" },
+          link: "/artistic-vision",
+          senses: ["sight", "touch", "hearing", "smell", "taste"],
+          icon: dotIconObj,
+        },
+        {
+          text: { en: "extended voice lab", de: "extended voice lab" },
+          link: "/extended-voice-lab",
+          senses: ["hearing", "touch"],
+          icon: dotIconObj,
+        },
+        {
+          text: { en: "performing words", de: "performing words" },
+          link: "/performing-words",
+          senses: ["sight", "hearing"],
+          icon: dotIconObj,
+        },
+        {
+          text: { en: "singing basics weekend", de: "singing basics weekend" },
+          link: "/singing-basics",
+          senses: ["hearing"],
+          icon: dotIconObj,
+        },
+        {
+          text: { en: "get ink!", de: "get ink!" },
+          link: "/get-ink",
+          senses: ["touch", "sight"],
+          icon: dotIconObj,
         },
       ],
       infoAction: [
@@ -95,6 +141,10 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
       ],
     }),
     [currentLang],
+  );
+
+  const filteredCourses = menuData.courses.filter((course) =>
+    course.senses.some((s) => activeSenses.includes(s)),
   );
 
   useEffect(() => {
@@ -170,7 +220,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           position: "fixed",
           top: 0,
           right: 0,
-          width: isMobile ? "85vw" : "420px",
+          width: isMobile ? "90vw" : "420px",
           height: "100dvh",
           backgroundColor: "#fffce3",
           zIndex: 9999,
@@ -178,15 +228,18 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           transition: "transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
           display: "flex",
           flexDirection: "column",
-          padding: isMobile
-            ? "1.5rem 1.5rem 1rem 1.5rem"
-            : "3rem 4rem 2rem 4rem",
+          padding: isMobile ? "1rem 1.5rem" : "3rem 4rem",
           boxSizing: "border-box",
           overflow: "hidden",
         }}
       >
         <div
-          style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            paddingBottom: "1rem",
+            flexShrink: 0,
+          }}
         >
           <button
             onClick={onClose}
@@ -195,7 +248,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
             style={{
               ...closeBtnStyle,
               color: closeActive ? "#9960a8" : "#1c0700",
-              paddingBottom: isMobile ? "5vh" : "0px",
               transition: "color 0.2s ease",
             }}
           >
@@ -204,14 +256,15 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           </button>
         </div>
 
-        <div style={{ flexGrow: isMobile ? 0.5 : 1 }} />
-
         <div
+          className="menu-scroll-container"
           style={{
+            flexGrow: 1,
+            overflowY: "auto",
+            paddingRight: "5px",
             display: "flex",
             flexDirection: "column",
-            gap: isMobile ? "1.5rem" : "2.5rem",
-            flexShrink: 0,
+            gap: isMobile ? "1rem" : "2rem",
           }}
         >
           <Section
@@ -220,7 +273,46 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
             toggle={() => setIsCoursesOpen(!isCoursesOpen)}
             isMobile={isMobile}
           >
-            {menuData.courses.map((item, i) => (
+            <div style={{ padding: isMobile ? "12px 0" : "15px 0" }}>
+              <p style={filterLabelStyle}>
+                {currentLang === "en"
+                  ? "Filter by sense"
+                  : "Nach Sinnen filtern"}
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  gap: isMobile ? "12px" : "14px",
+                  alignItems: "center",
+                }}
+              >
+                {Object.keys(planetIcons).map((senseId) => {
+                  const isActive = activeSenses.includes(senseId);
+                  return (
+                    <img
+                      key={senseId}
+                      src={planetIcons[senseId].base}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSense(senseId);
+                      }}
+                      style={{
+                        width: isMobile ? "24px" : "28px",
+                        height: isMobile ? "24px" : "28px",
+                        cursor: "pointer",
+                        transition: "all 0.3s ease",
+                        opacity: isActive ? 1 : 0.15,
+                        filter: isActive ? "none" : "grayscale(100%)",
+                        transform: isActive ? "scale(1.1)" : "scale(0.95)",
+                      }}
+                      alt={senseId}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {filteredCourses.map((item, i) => (
               <MenuLink
                 key={i}
                 item={item}
@@ -261,7 +353,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
               toggle={() => setIsCalendarOpen(!isCalendarOpen)}
               isMobile={isMobile}
             >
-              <div style={{ paddingTop: "0.2rem" }}>
+              <div style={{ paddingTop: "0.5rem" }}>
                 <AtelierCalendar
                   currentLang={currentLang}
                   isMobile={true}
@@ -272,15 +364,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           )}
         </div>
 
-        <div style={{ flexGrow: 2 }} />
-
-        <div
-          style={{
-            ...footerStyle,
-            paddingBottom: isMobile ? "1rem" : "1.5rem",
-            flexShrink: 0,
-          }}
-        >
+        <div style={footerStyle}>
           <a
             href="https://instagram.com/sinneskueche/"
             target="_blank"
@@ -296,7 +380,9 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
       </div>
 
       <style>{`
-        .footer-link { color: #caaff3; text-decoration: none; font-family: Satoshi; font-size: 0.95rem; transition: color 0.3s; width: fit-content; }
+        .menu-scroll-container::-webkit-scrollbar { display: none; }
+        .menu-scroll-container { -ms-overflow-style: none; scrollbar-width: none; }
+        .footer-link { color: #caaff3; text-decoration: none; font-family: Satoshi; font-size: 0.9rem; transition: color 0.3s; width: fit-content; }
         .footer-link:hover { color: #9960a8; }
         @keyframes fadeInBlur { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
       `}</style>
@@ -307,7 +393,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
 function Section({ title, children, isOpen, toggle, isMobile }) {
   const [isSectionActive, setIsSectionActive] = useState(false);
   return (
-    <div style={{ marginBottom: "0.5vh" }}>
+    <div style={{ marginBottom: isMobile ? "0.8rem" : "1.5rem" }}>
       <div style={{ display: "flex" }}>
         <div
           onClick={toggle}
@@ -316,7 +402,7 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: "1rem",
+            gap: "0.8rem",
             cursor: "pointer",
             padding: "0.2rem 0",
           }}
@@ -335,7 +421,7 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
           <h3
             style={{
               fontFamily: "Harmond-SemiBoldCondensed",
-              fontSize: isMobile ? "1.6rem" : "2rem",
+              fontSize: isMobile ? "1.4rem" : "2rem",
               margin: 0,
               textTransform: "lowercase",
               opacity: isOpen || isSectionActive ? 1 : 0.7,
@@ -351,21 +437,18 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
         style={{
           display: "grid",
           gridTemplateRows: isOpen ? "1fr" : "0fr",
-          transition: "grid-template-rows 0.5s ease",
+          transition: "grid-template-rows 0.4s ease",
         }}
       >
-        <div style={{ overflow: "hidden", paddingLeft: "1.5rem" }}>
-          <div
-            style={{
-              opacity: isOpen ? 1 : 0,
-              transition: "opacity 0.4s ease",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-            }}
-          >
-            {children}
-          </div>
+        <div
+          style={{
+            overflow: "hidden",
+            paddingLeft: "1.2rem",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {children}
         </div>
       </div>
     </div>
@@ -374,73 +457,68 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
 
 function MenuLink({ item, lang, onNavigate, isMobile }) {
   const [isActive, setIsActive] = useState(false);
-
-  // LOGIC ADDED: Use base icon for courses, otherwise lang icon
-  const iconSrc = item.icon?.base || item.icon?.[lang];
-
-  const iconSize = item.icon?.isDot
-    ? isMobile
-      ? "14px"
-      : "18px"
-    : isMobile
-      ? "22px"
-      : "28px";
+  // FIX: Look for lang property specifically for dotIconObj
+  const iconSrc = item.icon?.[lang] || item.icon?.base;
 
   return (
-    <div style={{ display: "flex" }}>
-      <div
-        onClick={() => onNavigate(item.link)}
-        onMouseEnter={() => setIsActive(true)}
-        onMouseLeave={() => setIsActive(false)}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "10px",
-          padding: isMobile ? "4px 0" : "8px 0",
-          cursor: "pointer",
-          color: isActive ? "#9960a8" : "#4e5f28",
-          fontFamily: "Satoshi",
-          fontSize: isMobile ? "0.95rem" : "1.05rem",
-          transition: "all 0.2s ease",
-          transform: isActive ? "translateX(5px)" : "translateX(0)",
-        }}
-      >
-        {iconSrc && (
-          <img
-            src={iconSrc}
-            alt=""
-            style={{
-              width: iconSize,
-              height: iconSize,
-              objectFit: "contain",
-              flexShrink: 0,
-            }}
-          />
-        )}
-        <span>{item.text[lang]}</span>
-      </div>
+    <div
+      onClick={() => onNavigate(item.link)}
+      onMouseEnter={() => setIsActive(true)}
+      onMouseLeave={() => setIsActive(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        padding: isMobile ? "6px 0" : "8px 0",
+        cursor: "pointer",
+        color: isActive ? "#9960a8" : "#4e5f28",
+        fontFamily: "Satoshi",
+        fontSize: isMobile ? "0.9rem" : "1.05rem",
+        transition: "all 0.2s ease",
+        transform: isActive ? "translateX(5px)" : "translateX(0)",
+      }}
+    >
+      {iconSrc && (
+        <img
+          src={iconSrc}
+          style={{
+            width: "12px",
+            height: "12px",
+            opacity: 0.6,
+            objectFit: "contain",
+          }}
+          alt=""
+        />
+      )}
+      <span>{item.text[lang]}</span>
     </div>
   );
 }
 
+const filterLabelStyle = {
+  fontFamily: "Satoshi",
+  fontSize: "0.6rem",
+  textTransform: "uppercase",
+  opacity: 0.4,
+  marginBottom: "8px",
+  letterSpacing: "1px",
+};
 const closeBtnStyle = {
   background: "none",
   border: "none",
-  cursor: "pointer",
   display: "flex",
   alignItems: "center",
-  gap: "10px",
+  gap: "8px",
   fontFamily: "Satoshi",
-  fontSize: "0.8rem",
-  textTransform: "lowercase",
+  fontSize: "0.75rem",
+  cursor: "pointer",
 };
-
 const footerStyle = {
   display: "flex",
   flexDirection: "column",
-  alignItems: "flex-start",
-  gap: "8px",
+  gap: "6px",
   borderTop: "1px solid rgba(28, 7, 0, 0.05)",
-  flexShrink: 0,
   paddingTop: "1rem",
+  flexShrink: 0,
+  marginTop: "1rem",
 };

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Header from "../components/Header/Header";
-import { Clock, Users, Coffee } from "lucide-react";
+import { Clock, Users, Music } from "lucide-react";
 
 const planetImages = import.meta.glob("../assets/planets/*.png", {
   eager: true,
@@ -11,32 +11,32 @@ const getImage = (filename) => {
   return planetImages[key]?.default || "";
 };
 
-export default function Pottery({ currentLang, setCurrentLang }) {
+export default function SingingBasicsWeekend({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const content = {
     en: {
-      title: "Pottery Tuesdays",
-      welcome: "Make Tuesdays your creative sanctuary",
+      title: "singing basics weekend",
+      welcome: "your first steps into vocal freedom",
       details: [
-        { icon: <Clock size={20} />, text: "18:30 - 21:30" },
-        { icon: <Users size={20} />, text: "All skill levels" },
-        { icon: <Coffee size={20} />, text: "Small, cozy groups" },
+        { icon: <Clock size={20} />, text: "sat & sun 10:00 - 16:00" },
+        { icon: <Users size={20} />, text: "absolute beginners" },
+        { icon: <Music size={20} />, text: "technique & joy" },
       ],
     },
     de: {
-      title: "Pottery Tuesdays",
-      welcome: "Mach den Dienstag zu deiner kreativen Auszeit",
+      title: "singing basics weekend",
+      welcome: "deine ersten schritte zur stimmlichen freiheit",
       details: [
-        { icon: <Clock size={20} />, text: "18:30 - 21:30" },
-        { icon: <Users size={20} />, text: "Alle Level willkommen" },
-        { icon: <Coffee size={20} />, text: "Kleine, gemütliche Gruppen" },
+        { icon: <Clock size={20} />, text: "sa & so 10:00 - 16:00" },
+        { icon: <Users size={20} />, text: "absolute anfänger" },
+        { icon: <Music size={20} />, text: "technik & freude" },
       ],
     },
   };
 
-  const touchImg = getImage("touch.png");
-  const sightImg = getImage("sight.png");
+  const hearingImg = getImage("hearing_en.png");
+  const atelierImg = getImage("hearing_mic.png");
 
   const styles = {
     main: {
@@ -133,12 +133,12 @@ export default function Pottery({ currentLang, setCurrentLang }) {
             }
             .title-wrapper {
               order: 1;
-              margin-bottom: 8px !important; /* Pulls text closer under title */
+              margin-bottom: 8px !important;
             }
             .welcome-text {
               order: 2;
               margin-bottom: 40px !important;
-              font-size: 0.9rem !important; /* Slight tweak to ensure it fits mobile widths */
+              font-size: 0.9rem !important;
               width: 50vw;
             }
             .info-grid {
@@ -147,11 +147,11 @@ export default function Pottery({ currentLang, setCurrentLang }) {
               gap: 12px !important;
               width: 100%;
             }
-            .icon-touch {
+            .icon-top {
               left: -10px !important; 
               top: -10px !important;
             }
-            .icon-sight {
+            .icon-bottom {
               left: calc(100% - 55px) !important;
               top: 45px !important;
             }
@@ -163,35 +163,32 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       </style>
 
       <main style={styles.main} className="main-content">
-        {/* Title Group First */}
         <div className="title-wrapper" style={styles.titleWrapper}>
-          {touchImg && (
+          {hearingImg && (
             <img
-              src={touchImg}
-              alt="Touch"
-              className="icon-touch"
+              src={hearingImg}
+              alt=""
+              className="icon-top"
               style={styles.moon("-35px", "-120px", 0)}
             />
           )}
           <h1 className="course-title" style={styles.title}>
             {content[currentLang].title}
           </h1>
-          {sightImg && (
+          {atelierImg && (
             <img
-              src={sightImg}
-              alt="Sight"
-              className="icon-sight"
+              src={atelierImg}
+              alt=""
+              className="icon-bottom"
               style={styles.moon("40px", "calc(100% + 60px)", -3)}
             />
           )}
         </div>
 
-        {/* Description Second */}
         <p className="welcome-text" style={styles.welcomeText}>
           {content[currentLang].welcome}
         </p>
 
-        {/* Info Items Third */}
         <div className="info-grid" style={styles.infoGrid}>
           {content[currentLang].details.map((item, index) => (
             <div key={index} className="info-item" style={styles.infoItem}>

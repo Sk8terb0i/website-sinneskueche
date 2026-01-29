@@ -8,42 +8,44 @@ export default function Planet({
   onHoverEnd,
   style,
   size,
+  isFocused, // Crucial: Keeps the hit-area active
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
-  // Determine which icon to show
   let currentIconSrc;
-
   if (planet.type === "courses") {
-    // Show language icon on hover, base icon otherwise
     currentIconSrc = isHovered
       ? planet.icon[language]
       : planet.icon.base || planet.icon[language];
   } else {
-    // Standard behavior for non-course planets
     currentIconSrc = planet.icon[language];
   }
 
+  // Hotbox: 10% bigger hit area than the visual planet
+  const hotboxSize = size * 1.01;
+
+  // Bridge Size: Large enough to cover the moon orbits (approx 350px)
+  const bridgeSize = 200;
+
   return (
     <div
-      className="planet-container"
+      className="planet-hotbox"
       style={{
         ...style,
-        width: `${size}px`,
-        height: `${size}px`,
-        transform: isHovered
-          ? `${style.transform} scale(1.15)`
-          : style.transform,
-        transition:
-          "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.2s ease",
-        cursor: "pointer",
+        width: `${hotboxSize}px`,
+        height: `${hotboxSize}px`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        cursor: "pointer",
+        zIndex: 10,
+        borderRadius: "50%",
+        backgroundColor: "#fffce3",
       }}
       onMouseEnter={() => {
-        setIsHovered(true);
+        // Clear any timers from the moons that might be trying to close the system
         if (onHover) onHover(planet.id);
+        setIsHovered(true);
       }}
       onMouseLeave={() => {
         setIsHovered(false);
@@ -54,18 +56,42 @@ export default function Planet({
         onActivate(planet.id);
       }}
     >
-      <img
-        src={currentIconSrc}
-        alt={planet.id}
+      {/* THE BRIDGE: Large area active when the planet is focused */}
+      {isFocused && (
+        <div
+          style={{
+            position: "absolute",
+            width: `${bridgeSize}px`,
+            height: `${bridgeSize}px`,
+            borderRadius: "50%",
+            pointerEvents: "auto",
+            zIndex: -1,
+          }}
+        />
+      )}
+
+      <div
         style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
+          width: `${size}px`,
+          height: `${size}px`,
+          transform: isHovered ? "scale(1.15)" : "scale(1)",
+          transition: "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
           pointerEvents: "none",
-          // Optional: adds a quick fade when the image source changes
-          transition: "opacity 0.2s ease-in-out",
         }}
-      />
+      >
+        <img
+          src={currentIconSrc}
+          alt={planet.id}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+          }}
+        />
+      </div>
     </div>
   );
 }

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import moonImage from "../../assets/planets/moon.png"; // Adjust path if necessary
-
-const lastUsedAngles = [];
+import moonImage from "../../assets/planets/moon.png";
 
 export default function MoonPortrait({
   moon,
+  index,
+  totalMoons = 1, // Added to calculate even spacing
+  planetId,
   orbitRadius = 100,
   currentLang,
   exitOnly = false,
@@ -39,28 +40,17 @@ export default function MoonPortrait({
   const centerX = planetCenter?.x ?? window.innerWidth * 0.3;
   const centerY = planetCenter?.y ?? window.innerHeight * 0.5;
 
-  const possibleAngles = [
-    -Math.PI / 2.5, // -72 degrees
-    -Math.PI / 4, // -45 degrees
-    -Math.PI / 8, // -22.5 degrees
-    0, // 0 degrees (dead center right)
-    Math.PI / 8, // 22.5 degrees
-    Math.PI / 4, // 45 degrees
-    Math.PI / 2.5, // 72 degrees
-  ];
+  // --- START OF DYNAMIC ANGLE LOGIC ---
+  // We define a range (in radians) to spread the moons.
+  // Math.PI / 1.5 is roughly 120 degrees.
+  const arcRange = Math.PI / 1.5;
+  const startAngle = -arcRange / 2;
 
-  const targetAngleRef = useRef(null);
-  if (targetAngleRef.current === null) {
-    const availableAngles = possibleAngles.filter(
-      (a) => !lastUsedAngles.slice(-2).includes(a),
-    );
-    const chosen =
-      availableAngles[Math.floor(Math.random() * availableAngles.length)];
-    lastUsedAngles.push(chosen);
-    targetAngleRef.current = chosen;
-  }
+  // Calculate the specific angle for this moon index
+  const targetAngle =
+    totalMoons > 1 ? startAngle + index * (arcRange / (totalMoons - 1)) : 0; // Center if only one moon
+  // --- END OF DYNAMIC ANGLE LOGIC ---
 
-  const targetAngle = targetAngleRef.current;
   const entryAngle =
     enterDirection === "top" ? -Math.PI / 2 - 0.5 : Math.PI / 2 + 0.5;
   const exitAngle =
@@ -85,7 +75,6 @@ export default function MoonPortrait({
       const elapsed = timestamp - startTimeRef.current;
       const moveT = Math.min(elapsed / moveDuration, 1);
       const easedMoveT = easeOutCubic(moveT);
-
       let targetA = targetAngle;
       let targetS = 1;
 
@@ -114,6 +103,34 @@ export default function MoonPortrait({
     return () => cancelAnimationFrame(animId);
   }, [state, targetAngle, exitAngle]);
 
+  const handleTap = (e) => {
+    e.stopPropagation();
+    if (state === "exit") return;
+
+    setIsHovered(true);
+    onHoverStart?.();
+
+    if (!href) {
+      setIsShaking(true);
+      setTimeout(() => {
+        setIsShaking(false);
+        setIsHovered(false);
+        onHoverEnd?.();
+      }, 400);
+      return;
+    }
+
+    setTimeout(() => {
+      if (href.startsWith("http")) {
+        window.open(href, "_blank", "noreferrer");
+      } else {
+        navigate(href);
+      }
+      setIsHovered(false);
+      onHoverEnd?.();
+    }, 200);
+  };
+
   const moonX = Math.cos(animatedAngle) * orbitRadius;
   const moonY = Math.sin(animatedAngle) * orbitRadius;
 
@@ -126,31 +143,6 @@ export default function MoonPortrait({
           40%, 80% { transform: translate(-45%, -50%); }
         }
       `}</style>
-
-      {/* Orbit SVG */}
-      <svg
-        style={{
-          position: "fixed",
-          left: centerX,
-          top: centerY,
-          width: orbitRadius * 2 + 4,
-          height: orbitRadius * 2 + 4,
-          transform: "translate(-50%, -50%)",
-          pointerEvents: "none",
-          zIndex: 1999,
-          opacity: 0.4,
-        }}
-      >
-        <circle
-          cx={orbitRadius + 2}
-          cy={orbitRadius + 2}
-          r={orbitRadius}
-          fill="none"
-          stroke="#1c0700"
-          strokeWidth="1"
-          strokeDasharray="4 4"
-        />
-      </svg>
 
       <div
         style={{
@@ -167,18 +159,7 @@ export default function MoonPortrait({
           WebkitTapHighlightColor: "transparent",
           animation: isShaking ? "shake 0.4s ease-in-out" : "none",
         }}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (state === "exit") return;
-          if (!href) {
-            setIsShaking(true);
-            setTimeout(() => setIsShaking(false), 400);
-            return;
-          }
-          if (href.startsWith("http"))
-            window.open(href, "_blank", "noreferrer");
-          else navigate(href);
-        }}
+        onClick={handleTap}
         onMouseEnter={() => {
           if (href && state !== "exit") {
             setIsHovered(true);
@@ -191,37 +172,22 @@ export default function MoonPortrait({
             onHoverEnd?.();
           }
         }}
-        onTouchStart={() => {
-          if (href && state !== "exit") {
-            setIsHovered(true);
-            onHoverStart?.();
-          }
-        }}
-        onTouchEnd={() => {
-          setTimeout(() => {
-            setIsHovered(false);
-            onHoverEnd?.();
-          }, 150);
-        }}
       >
-        {/* REPLACED: Image instead of white circle */}
         <img
           src={moonImage}
           alt="moon"
           style={{
-            width: "32px",
-            height: "32px",
+            width: "24px",
+            height: "24px",
             objectFit: "contain",
             transition:
               "filter 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
-            transform: `scale(${isHovered ? 1.2 : animatedScale})`,
+            transform: `scale(${isHovered ? 1.3 : animatedScale})`,
             opacity: animatedOpacity,
-            // If hovering over a link, we give it a slight purple tint/glow
-            // otherwise keep it normal. Shaking makes it slightly transparent.
             filter: isShaking
               ? "brightness(1.5) opacity(0.7)"
               : href && isHovered
-                ? "drop-shadow(0 0 5px #9960a8) drop-shadow(0 0 1px #9960a8)"
+                ? "drop-shadow(0 0 8px #9960a8) drop-shadow(0 0 2px #9960a8)"
                 : "none",
             flexShrink: 0,
           }}
@@ -232,22 +198,18 @@ export default function MoonPortrait({
             position: "absolute",
             top: "50%",
             left: "100%",
-            marginLeft: "12px",
+            marginLeft: "6px",
             transform: "translateY(-50%)",
             display: "block",
 
-            // --- GRAMMATICAL BREAKING LOGIC ---
-            whiteSpace: "normal",
-            wordBreak: "normal", // Avoids the ungrammatical "break-all"
-            hyphens: "auto", // Breaks words at syllables (e.g., "en-ve-lope")
-            WebkitHyphens: "auto", // Safari support
-            textWrap: "pretty", // Prevents single words/letters on new lines
-            // ----------------------------------
-
-            maxWidth: `${windowWidth - (centerX + moonX) - 40}px`,
+            // The Fix:
             width: "max-content",
-            minWidth: "80px",
-            fontSize: isHovered ? "16px" : "14px",
+            maxWidth: `calc(${100 - ((centerX + moonX) / windowWidth) * 100}vw - 40px)`,
+            whiteSpace: "normal",
+            overflowWrap: "break-word",
+
+            fontSize: isHovered ? "12px" : "10px",
+            fontWeight: isHovered ? "bold" : "normal",
             fontStyle: href ? "normal" : "italic",
             color: isShaking ? "rgba(28, 7, 0, 0.5)" : "#1c0700",
             textDecoration: href && isHovered ? "underline" : "none",

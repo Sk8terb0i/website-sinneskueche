@@ -200,7 +200,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
     },
   };
 
-  const touchImg = getImage("hearing_en.png");
+  const touchImg = getImage("hearing.png");
   const sightImg = getImage("hearing_mic.png");
   const planetShortcutImg = getImage("sing.png");
   const current = content[currentLang];

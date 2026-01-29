@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { HouseHeart } from "lucide-react";
+import homeIcon from "../../assets/menu/home.png";
 import MenuOverlay from "../Menu/MenuOverlay";
 
 export default function Header({
@@ -17,7 +17,6 @@ export default function Header({
     window.innerWidth < window.innerHeight,
   );
 
-  // Interaction States
   const [titleHovered, setTitleHovered] = useState(false);
   const [langHovered, setLangHovered] = useState(false);
   const [menuHovered, setMenuHovered] = useState(false);
@@ -29,7 +28,8 @@ export default function Header({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const hoverTransition = "transform 0.2s ease, color 0.2s ease";
+  const hoverTransition =
+    "transform 0.2s ease, color 0.2s ease, filter 0.2s ease";
   const isLanding = location.pathname === "/";
 
   let showTitle = false;
@@ -76,7 +76,8 @@ export default function Header({
           padding: "0 clamp(12px, 2vw, 32px)",
           boxSizing: "border-box",
           zIndex: 4000,
-          pointerEvents: "auto",
+          /* FIX: Allow mouse events to pass through the header bar */
+          pointerEvents: "none",
           gap: "1rem",
           background:
             isLanding && !isPortrait
@@ -84,15 +85,20 @@ export default function Header({
               : "linear-gradient(to bottom, #fffce3 0%, #fffce3 60%, #fffce30c 100%)",
         }}
       >
-        <div style={{ width: "50vw", display: "flex", alignItems: "center" }}>
+        <div
+          style={{
+            width: "50vw",
+            display: "flex",
+            alignItems: "center",
+            /* Re-enable events for the logo area */
+            pointerEvents: "auto",
+          }}
+        >
           {showTitle && (
             <div
               onClick={!isPortrait ? () => navigate("/") : undefined}
               onMouseEnter={() => !isPortrait && setTitleHovered(true)}
               onMouseLeave={() => !isPortrait && setTitleHovered(false)}
-              // Tap interaction for mobile
-              onTouchStart={() => setTitleHovered(true)}
-              onTouchEnd={() => setTitleHovered(false)}
               style={{
                 fontFamily: "Harmond-SemiBoldCondensed",
                 fontSize: titleFontSize,
@@ -118,30 +124,43 @@ export default function Header({
               onClick={() => navigate("/")}
               onMouseEnter={() => setTitleHovered(true)}
               onMouseLeave={() => setTitleHovered(false)}
-              // Tap interaction for mobile
-              onTouchStart={() => setTitleHovered(true)}
-              onTouchEnd={() => setTitleHovered(false)}
               style={{
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                transform: titleHovered ? "scale(1.05)" : "scale(1)",
+                transform: titleHovered ? "scale(1.1)" : "scale(1)",
                 transition: hoverTransition,
-                color: titleHovered ? "#9960a8" : "#4e5f28",
               }}
             >
-              <HouseHeart size={26} strokeWidth={1} />
+              <img
+                src={homeIcon}
+                alt="Home"
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  objectFit: "contain",
+                  filter: titleHovered
+                    ? "invert(46%) sepia(13%) saturate(2251%) hue-rotate(242deg) brightness(87%) contrast(81%)"
+                    : "none",
+                  transition: "filter 0.2s ease",
+                }}
+              />
             </div>
           )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: rightGap }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: rightGap,
+            /* Re-enable events for the language and hamburger area */
+            pointerEvents: "auto",
+          }}
+        >
           <div
             onMouseEnter={() => setLangHovered(true)}
             onMouseLeave={() => setLangHovered(false)}
-            // Tap interaction for mobile
-            onTouchStart={() => setLangHovered(true)}
-            onTouchEnd={() => setLangHovered(false)}
             onClick={(e) => {
               e.stopPropagation();
               setCurrentLang((prev) => (prev === "en" ? "de" : "en"));
@@ -171,9 +190,6 @@ export default function Header({
             className="hamburger-menu"
             onMouseEnter={() => setMenuHovered(true)}
             onMouseLeave={() => setMenuHovered(false)}
-            // Tap interaction for mobile
-            onTouchStart={() => setMenuHovered(true)}
-            onTouchEnd={() => setMenuHovered(false)}
             onClick={(e) => {
               e.stopPropagation();
               onMenuToggle(true);

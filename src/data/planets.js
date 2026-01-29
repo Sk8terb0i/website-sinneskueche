@@ -9,6 +9,34 @@ const getImage = (filename) => {
   return planetImages[key]?.default || "";
 };
 
+export const planetIcons = {
+  sight: {
+    en: getImage("sight_en.png"),
+    de: getImage("sight_de.png"),
+    base: getImage("sight.png"),
+  },
+  touch: {
+    en: getImage("touch_en.png"),
+    de: getImage("touch_de.png"),
+    base: getImage("touch.png"),
+  },
+  hearing: {
+    en: getImage("hearing_en.png"),
+    de: getImage("hearing_de.png"),
+    base: getImage("hearing.png"),
+  },
+  smell: {
+    en: getImage("smell_en.png"),
+    de: getImage("smell_de.png"),
+    base: getImage("smell.png"),
+  },
+  taste: {
+    en: getImage("taste_en.png"),
+    de: getImage("taste_de.png"),
+    base: getImage("taste.png"),
+  },
+};
+
 export const planets = [
   {
     id: "sight",
@@ -24,6 +52,14 @@ export const planets = [
       {
         text: { en: "pottery tuesdays", de: "pottery tuesdays" },
         link: "/pottery",
+      },
+      {
+        text: { en: "artistic vision", de: "artistic vision" },
+        link: "/artistic-vision",
+      },
+      {
+        text: { en: "get ink!", de: "get ink!" },
+        link: "/get-ink",
       },
     ],
   },
@@ -42,6 +78,14 @@ export const planets = [
         text: { en: "pottery tuesdays", de: "pottery tuesdays" },
         link: "/pottery",
       },
+      {
+        text: { en: "artistic vision", de: "artistic vision" },
+        link: "/artistic-vision",
+      },
+      {
+        text: { en: "get ink!", de: "get ink!" },
+        link: "/get-ink",
+      },
     ],
   },
   {
@@ -59,6 +103,22 @@ export const planets = [
         text: { en: "singing lessons", de: "gesangsunterricht" },
         link: "/singing",
       },
+      {
+        text: { en: "extended voice lab", de: "extended voice lab" },
+        link: "/extended-voice-lab",
+      },
+      {
+        text: { en: "artistic vision", de: "artistic vision" },
+        link: "/artistic-vision",
+      },
+      {
+        text: { en: "performing words", de: "performing words" },
+        link: "/performing-words",
+      },
+      {
+        text: { en: "singing basics weekend", de: "singing basics weekend" },
+        link: "/singing-basics",
+      },
     ],
   },
   {
@@ -73,10 +133,8 @@ export const planets = [
     },
     courses: [
       {
-        text: {
-          en: "something's in the air, smell you later!",
-          de: "ich kanns schon fast riechen!",
-        },
+        text: { en: "artistic vision", de: "artistic vision" },
+        link: "/artistic-vision",
       },
     ],
   },
@@ -92,10 +150,8 @@ export const planets = [
     },
     courses: [
       {
-        text: {
-          en: "it's on the tip of my tongue",
-          de: "es liegt mir auf der zunge",
-        },
+        text: { en: "artistic vision", de: "artistic vision" },
+        link: "/artistic-vision",
       },
     ],
   },
@@ -173,8 +229,8 @@ export const planets = [
     get icon() {
       return {
         base: getImage("atelier.png"),
-        en: getImage("atelier.png"),
-        de: getImage("atelier.png"),
+        en: getImage("atelier_en.png"),
+        de: getImage("atelier_en.png"),
       };
     },
     courses: [

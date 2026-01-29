@@ -93,6 +93,7 @@ export default function Admin() {
   }, []);
 
   const setupRealtimeListeners = () => {
+    // Requests Listener
     onSnapshot(
       query(requestsCollection, orderBy("createdAt", "desc")),
       (snap) => {
@@ -102,21 +103,35 @@ export default function Admin() {
       },
     );
 
+    // Availability Listener with AUTO-CLEANUP
     onSnapshot(
       query(availabilityCollection, orderBy("date", "asc")),
       (snap) => {
-        setAvailabilities(
-          snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-        );
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const allDocs = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+        const validAvail = allDocs.filter((item) => {
+          const itemDate = new Date(item.date);
+          itemDate.setHours(0, 0, 0, 0);
+
+          if (itemDate < today) {
+            // Delete from Firestore if date is in the past
+            deleteDoc(doc(db, "rental_availability", item.id));
+            return false;
+          }
+          return true;
+        });
+
+        setAvailabilities(validAvail);
       },
     );
   };
 
   const fetchSettings = async () => {
-    // We listen to settings in real-time or just fetch once
     const snap = await getDocs(collection(db, "settings"));
     if (!snap.empty) {
-      // Find the specific admin_config doc
       const config = snap.docs.find((d) => d.id === "admin_config");
       if (config) {
         setNotifyEmail(config.data().adminEmail || "");
@@ -131,9 +146,7 @@ export default function Admin() {
         { adminEmail: notifyEmail },
         { merge: true },
       );
-      alert(
-        "Notification email saved! This email will now receive all rent request alerts.",
-      );
+      alert("Notification email saved!");
     } catch (err) {
       alert("Error saving email: " + err.message);
     }
@@ -151,10 +164,17 @@ export default function Admin() {
         id: doc.id,
       }));
 
+      // Filter logic with AUTO-CLEANUP
       const validEvents = allFetchedEvents.filter((event) => {
         const eventDate = new Date(event.date);
         eventDate.setHours(0, 0, 0, 0);
-        return eventDate >= today;
+
+        if (eventDate < today) {
+          // Delete from Firestore if date is in the past
+          deleteDoc(doc(db, "events", event.id));
+          return false;
+        }
+        return true;
       });
 
       setEvents(validEvents);
@@ -215,8 +235,6 @@ export default function Admin() {
       date: availDate,
       time: availTime,
       status: "available",
-      // Note: We don't store the email per-date anymore,
-      // the request form will look it up from settings/admin_config
     });
     setAvailDate("");
     setAvailTime("");
@@ -782,7 +800,7 @@ export default function Admin() {
   );
 }
 
-// STYLES
+// STYLES (Kept exactly as provided)
 const loginWrapperStyle = {
   display: "flex",
   justifyContent: "center",

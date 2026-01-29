@@ -5,7 +5,6 @@ import MoonPortrait from "../components/Moon/MoonPortrait";
 import SunPortrait from "../components/Sun/SunPortrait";
 import Header from "../components/Header/Header";
 import { planets } from "../data/planets";
-import { defaultLang } from "../i18n";
 
 export default function LandingPortrait({ currentLang, setCurrentLang }) {
   const navigate = useNavigate();
@@ -26,7 +25,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
     isMenuOpenRef.current = isMenuOpen;
   }, [isMenuOpen]);
 
-  // Logic to include Atelier only when a planet is active
   const coursePlanetsOnly = planets.filter((p) => p.type === "courses");
   const atelierPlanet = planets.find((p) => p.id === "atelier");
   const displayPlanets =
@@ -60,7 +58,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
       setScrollDirection(direction);
       setActiveIndex((prev) => {
         let nextIndex;
-        // Use the length of planets currently in the row
         const total = displayPlanets.length;
         if (direction === "down") {
           nextIndex = prev === null ? 0 : (prev + 1) % total;
@@ -119,7 +116,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
 
   const getOrbitDiameter = (targetIndex) => {
     let distance = sunSize / 2;
-    // Orbits are only for the original course planets
     for (let i = coursePlanetsOnly.length - 1; i >= targetIndex; i--) {
       distance += normalGap;
       if (i === targetIndex) distance += planetSize / 2;
@@ -242,7 +238,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          cursor: "pointer",
           zIndex: 1,
         }}
         onClick={(e) => {
@@ -288,7 +283,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
       >
         {displayPlanets.map((planet, index) => {
           const isAtelier = planet.id === "atelier";
-          // Radius logic for course planets; atelier doesn't have an orbit radius defined here
           const radius = !isAtelier ? getOrbitDiameter(index) / 2 : 0;
           const possibleAngles = [-90, 90, -180, 45, -45];
           let startAngle =
@@ -299,6 +293,9 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
           let translateX = hasShiftedLeft ? "-10vw" : "0";
           const isVisible =
             activeIndex === null || Math.abs(index - activeIndex) <= 2;
+
+          //signal to shrink others
+          const isIconOnly = activeIndex !== null && activeIndex !== index;
 
           const dur = 7 + (index % 4);
           const delay = index * -1.8;
@@ -316,7 +313,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
                 pointerEvents: isVisible && !isMenuOpen ? "auto" : "none",
                 transition: `transform ${movementDuration} ${currentEase}, translate ${movementDuration} ${currentEase}, opacity 0.5s ease`,
                 position: "relative",
-                // Only rotate course planets during entry; Atelier is only added post-load/active
                 transformOrigin: !isAtelier
                   ? `center ${radius}px`
                   : "center center",
@@ -352,12 +348,12 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
                     planet={planet}
                     language={currentLang}
                     size={getPlanetSize(index)}
+                    isIconOnly={isIconOnly} // passing the prop here
                     onActivate={() => {
                       if (isMenuOpen) return;
                       const isCurrentlyActive = activeIndex === index;
                       const moonCount = planet.courses?.length || 0;
 
-                      // Navigate if only one moon exists (original course behavior)
                       if (isCurrentlyActive && moonCount === 1) {
                         const targetLink = planet.courses[0].link;
                         if (targetLink) {
@@ -383,26 +379,64 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
         })}
       </div>
 
+      {/* --- Orbit Circle (Drawn once for the active system) --- */}
+      {activeIndex !== null && hasShiftedLeft && (
+        <svg
+          style={{
+            position: "fixed",
+            left: targetCenter.x,
+            top: targetCenter.y,
+            width: 110 * 2 + 4, // 110 is your orbitRadius
+            height: 110 * 2 + 4,
+            transform: "translate(-50%, -50%)",
+            pointerEvents: "none",
+            zIndex: 1999,
+            transition: "opacity 0.5s ease",
+          }}
+        >
+          <circle
+            cx={110 + 2}
+            cy={110 + 2}
+            r={110}
+            fill="none"
+            stroke="#1c070045"
+            strokeWidth="0.4"
+            strokeDasharray="4 4"
+          />
+        </svg>
+      )}
+
+      {/* New Moons */}
       {activeIndex !== null &&
         hasShiftedLeft &&
         displayPlanets[activeIndex]?.courses?.map((moon, idx) => (
           <MoonPortrait
             key={`new-${activeIndex}-${idx}`}
+            index={idx}
+            // Pass the total count to calculate spacing
+            totalMoons={displayPlanets[activeIndex].courses.length}
+            planetId={displayPlanets[activeIndex].id}
             moon={moon}
-            orbitRadius={120}
+            // Increased radius to prevent text touching the planet
+            orbitRadius={110}
             currentLang={currentLang}
             enterDirection={scrollDirection === "down" ? "top" : "bottom"}
             planetCenter={targetCenter}
           />
         ))}
 
+      {/* Old Moons (Exit animation) */}
       {previousIndex !== null &&
         hasShiftedLeft &&
         displayPlanets[previousIndex]?.courses?.map((moon, idx) => (
           <MoonPortrait
             key={`old-${previousIndex}-${idx}`}
+            index={idx}
+            // Pass the total count here as well for consistent exit paths
+            totalMoons={displayPlanets[previousIndex].courses.length}
+            planetId={displayPlanets[previousIndex].id}
             moon={moon}
-            orbitRadius={120}
+            orbitRadius={110}
             currentLang={currentLang}
             exitOnly
             exitDirection={scrollDirection === "down" ? "bottom" : "top"}

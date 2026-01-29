@@ -1,31 +1,14 @@
-import React, { useState, useEffect } from "react";
-import { db } from "../../firebase";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 
-export default function AtelierCalendar({ currentLang, isMobile }) {
-  const [events, setEvents] = useState([]);
+// Accept 'events' as a prop from the parent
+export default function AtelierCalendar({
+  currentLang,
+  isMobile,
+  events = [],
+}) {
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const q = query(collection(db, "events"), orderBy("date", "asc"));
-        const querySnapshot = await getDocs(q);
-        const now = new Date().setHours(0, 0, 0, 0);
-
-        const fetched = querySnapshot.docs
-          .map((doc) => doc.data())
-          .filter((event) => new Date(event.date).setHours(0, 0, 0, 0) >= now);
-
-        setEvents(isMobile ? fetched.slice(0, 3) : fetched);
-      } catch (error) {
-        console.error("Error fetching events:", error);
-      }
-    };
-    fetchEvents();
-  }, [isMobile]);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -34,7 +17,6 @@ export default function AtelierCalendar({ currentLang, isMobile }) {
 
   const handleNavigate = (e, link) => {
     if (!link) return;
-    // Internal Link Logic (SPA navigation)
     if (!link.startsWith("http")) {
       e.preventDefault();
       navigate(link);
@@ -54,23 +36,19 @@ export default function AtelierCalendar({ currentLang, isMobile }) {
         {events.map((event, i) => {
           const hasLink = !!event.link;
           const isExternal = event.link?.startsWith("http");
-
-          // CRITICAL FIX: Use 'type' from DB if available, fallback to link check for old data
           const isCourse =
             event.type === "course" || (event.link && !isExternal);
 
           return (
             <div
-              key={i}
+              key={event.id || i}
               style={{
                 width: "100%",
                 display: "block",
                 borderLeft: "2px solid #caaff3",
-                // Visual logic: Courses are transparent, Events have the purple glow
                 background: isCourse
                   ? "transparent"
                   : "linear-gradient(90deg, rgba(202, 175, 243, 0.2) 10%, rgba(202, 175, 243, 0) 90%)",
-
                 boxSizing: "border-box",
                 paddingLeft: "1rem",
                 paddingRight: "3rem",
@@ -112,7 +90,7 @@ export default function AtelierCalendar({ currentLang, isMobile }) {
                 }}
               >
                 <span style={{ fontWeight: isCourse ? "500" : "700" }}>
-                  {event.title[currentLang]}
+                  {event.title?.[currentLang] || "Untitled"}
                 </span>
 
                 {hasLink && (
