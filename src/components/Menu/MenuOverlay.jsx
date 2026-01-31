@@ -37,26 +37,52 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         const now = new Date();
         now.setHours(0, 0, 0, 0);
 
-        // Calculate end of the current month
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        endOfMonth.setHours(23, 59, 59, 999);
+        // 1. Calculate end of the current month (for courses)
+        const endOfCurrentMonth = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0,
+        );
+        endOfCurrentMonth.setHours(23, 59, 59, 999);
 
-        const monthlyEvents = snapshot.docs
+        // 2. Calculate end of the month 6 months from now (for events)
+        const endOfSixMonths = new Date(
+          now.getFullYear(),
+          now.getMonth() + 7,
+          0,
+        );
+        endOfSixMonths.setHours(23, 59, 59, 999);
+
+        const filtered = snapshot.docs
           .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter((event) => {
-            const eventDate = new Date(event.date);
-            return eventDate >= now && eventDate <= endOfMonth;
+          .filter((item) => {
+            const itemDate = new Date(item.date);
+
+            // Basic check: skip past items
+            if (itemDate < now) return false;
+
+            // Logic: Courses only show this month
+            if (item.type === "course") {
+              return itemDate <= endOfCurrentMonth;
+            }
+
+            // Logic: Events show current month + 6 months
+            if (item.type === "event") {
+              return itemDate <= endOfSixMonths;
+            }
+
+            // Fallback for safety (shows this month if type is missing)
+            return itemDate <= endOfCurrentMonth;
           });
 
-        // NO SLICE HERE - Show everything found
-        setUpcomingEvents(monthlyEvents);
+        setUpcomingEvents(filtered);
       } catch (error) {
         console.error("Error fetching events:", error);
       }
     };
 
     if (isOpen) fetchEvents();
-  }, [isOpen]); // Removed isMobile dependency as logic is now purely date-based
+  }, [isOpen]);
 
   const hasUpcomingEvents = upcomingEvents.length > 0;
 
@@ -68,7 +94,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
     );
   };
 
-  // The Icon Object structure matches what MenuLink expects
   const dotIconObj = { en: dotIcon, de: dotIcon, isDot: true };
 
   const menuData = useMemo(
@@ -457,7 +482,6 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
 
 function MenuLink({ item, lang, onNavigate, isMobile }) {
   const [isActive, setIsActive] = useState(false);
-  // FIX: Look for lang property specifically for dotIconObj
   const iconSrc = item.icon?.[lang] || item.icon?.base;
 
   return (
