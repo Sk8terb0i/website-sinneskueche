@@ -1,38 +1,23 @@
-import { useState } from "react";
-import Header from "../components/Header/Header";
-import "./Course.css";
+import React, { useState, useEffect } from "react";
+import TeamDesktop from "./TeamDesktop";
+import TeamPortrait from "./TeamPortrait"; // Assuming you have or will create this
 
-export default function Pottery({ currentLang, setCurrentLang }) {
-  const [currentTab, setCurrentTab] = useState("info"); // optional: tabs for sessions, materials, etc.
+export default function Team({ currentLang, setCurrentLang }) {
+  const [isMobile, setIsMobile] = useState(
+    window.innerWidth / window.innerHeight < 1.1,
+  );
 
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth / window.innerHeight < 1.1);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
-  const content = {
-    en: {
-      title: "Team",
-      description: "",
-    },
-    de: {
-      title: "Team",
-      description: "",
-    },
-  };
-
-  const lang = currentLang;
-
-  return (
-    <div className="course-container">
-      <Header
-        currentLang={currentLang}
-        setCurrentLang={setCurrentLang}
-        isMenuOpen={isMenuOpen}
-        onMenuToggle={setIsMenuOpen}
-      />
-
-      <main className="course-main">
-        <h1 className="course-title">{content[lang].title}</h1>
-        <p className="course-description">{content[lang].description}</p>
-      </main>
-    </div>
+  return isMobile ? (
+    <TeamPortrait currentLang={currentLang} setCurrentLang={setCurrentLang} />
+  ) : (
+    <TeamDesktop currentLang={currentLang} setCurrentLang={setCurrentLang} />
   );
 }

@@ -88,7 +88,7 @@ export default function Moon({
         left: "50%",
         transform: `translate3d(${planetPosition.x + moonX}px, ${planetPosition.y + moonY}px, 0) translate(-50%, -50%)`,
         willChange: "transform",
-        zIndex: 2000,
+        zIndex: 4002,
         pointerEvents: "auto",
         cursor: href ? "pointer" : "default",
         /* ADDED: A larger padding makes the label part of the hoverable area */
@@ -137,7 +137,7 @@ export default function Moon({
             transition: "filter 0.2s, transform 0.2s",
             transform: href ? `scale(${isHovered ? 1.2 : 1})` : "scale(1)",
             position: "relative",
-            zIndex: 2,
+            zIndex: 4003,
             display: "block",
           }}
         />
@@ -159,7 +159,7 @@ export default function Moon({
             textDecoration: href && isHovered ? "underline" : "none",
             /* CHANGE: pointerEvents is now auto so the text itself triggers the hover */
             pointerEvents: "auto",
-            zIndex: 3,
+            zIndex: 4004,
             transition:
               "font-size 0.2s ease, text-decoration 0.2s ease, color 0.2s ease",
             textAlign: isOnRight ? "left" : "right",
