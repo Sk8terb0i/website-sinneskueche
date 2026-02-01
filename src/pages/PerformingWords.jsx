@@ -14,6 +14,21 @@ const getImage = (filename) => {
 export default function PerformingWords({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  // --- EASY CONFIG SECTION ---
+  const config = {
+    desktop: {
+      topIcon: { top: "-35px", left: "-120px" },
+      bottomIcon: { top: "40px", left: "calc(100% + 60px)" },
+      titleSize: "4.5rem",
+    },
+    mobile: {
+      topIcon: { top: "-10px", left: "-10px" },
+      bottomIcon: { top: "45px", left: "calc(100% - 55px)" },
+      titleSize: "3.5rem",
+    },
+  };
+  // ---------------------------
+
   const content = {
     en: {
       title: "performing words",
@@ -62,9 +77,10 @@ export default function PerformingWords({ currentLang, setCurrentLang }) {
       position: "relative",
       display: "inline-block",
       marginBottom: "40px",
+      lineHeight: 1,
     },
     title: {
-      fontSize: "3.5rem",
+      fontSize: config.desktop.titleSize,
       margin: 0,
       zIndex: 2,
       position: "relative",
@@ -134,6 +150,10 @@ export default function PerformingWords({ currentLang, setCurrentLang }) {
             .title-wrapper {
               order: 1;
               margin-bottom: 8px !important;
+              width: fit-content;
+            }
+            .course-title {
+              font-size: ${config.mobile.titleSize} !important;
             }
             .welcome-text {
               order: 2;
@@ -148,12 +168,12 @@ export default function PerformingWords({ currentLang, setCurrentLang }) {
               width: 100%;
             }
             .icon-top {
-              left: -10px !important; 
-              top: -10px !important;
+              top: ${config.mobile.topIcon.top} !important;
+              left: ${config.mobile.topIcon.left} !important;
             }
             .icon-bottom {
-              left: calc(100% - 55px) !important;
-              top: 45px !important;
+              top: ${config.mobile.bottomIcon.top} !important;
+              left: ${config.mobile.bottomIcon.left} !important;
             }
             .info-item:nth-child(1) { transform: translateX(-15px); }
             .info-item:nth-child(2) { transform: translateX(15px); }
@@ -169,7 +189,11 @@ export default function PerformingWords({ currentLang, setCurrentLang }) {
               src={sightImg}
               alt=""
               className="icon-top"
-              style={styles.moon("-35px", "-120px", 0)}
+              style={styles.moon(
+                config.desktop.topIcon.top,
+                config.desktop.topIcon.left,
+                0,
+              )}
             />
           )}
           <h1 className="course-title" style={styles.title}>
@@ -180,7 +204,11 @@ export default function PerformingWords({ currentLang, setCurrentLang }) {
               src={hearingImg}
               alt=""
               className="icon-bottom"
-              style={styles.moon("40px", "calc(100% + 60px)", -3)}
+              style={styles.moon(
+                config.desktop.bottomIcon.top,
+                config.desktop.bottomIcon.left,
+                -3,
+              )}
             />
           )}
         </div>

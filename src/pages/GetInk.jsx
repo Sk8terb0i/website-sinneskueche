@@ -14,6 +14,21 @@ const getImage = (filename) => {
 export default function GetInk({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  // --- EASY CONFIG SECTION ---
+  const config = {
+    desktop: {
+      touch: { top: "-35px", left: "-120px" },
+      sight: { top: "40px", left: "calc(100% + 60px)" },
+      titleSize: "4.5rem",
+    },
+    mobile: {
+      touch: { top: "-10px", left: "-10px" },
+      sight: { top: "45px", left: "calc(100% - 55px)" },
+      titleSize: "4.5rem",
+    },
+  };
+  // ---------------------------
+
   const content = {
     en: {
       title: "get ink!",
@@ -36,7 +51,7 @@ export default function GetInk({ currentLang, setCurrentLang }) {
   };
 
   const touchImg = getImage("touch.png");
-  const smellImg = getImage("sight.png");
+  const sightImg = getImage("sight.png");
 
   const styles = {
     main: {
@@ -62,9 +77,10 @@ export default function GetInk({ currentLang, setCurrentLang }) {
       position: "relative",
       display: "inline-block",
       marginBottom: "40px",
+      lineHeight: 1,
     },
     title: {
-      fontSize: "3.5rem",
+      fontSize: config.desktop.titleSize,
       margin: 0,
       zIndex: 2,
       position: "relative",
@@ -134,6 +150,10 @@ export default function GetInk({ currentLang, setCurrentLang }) {
             .title-wrapper {
               order: 1;
               margin-bottom: 8px !important;
+              width: fit-content; 
+            }
+            .course-title {
+              font-size: ${config.mobile.titleSize} !important;
             }
             .welcome-text {
               order: 2;
@@ -147,14 +167,16 @@ export default function GetInk({ currentLang, setCurrentLang }) {
               gap: 12px !important;
               width: 100%;
             }
+            
             .icon-top {
-              left: -10px !important; 
-              top: -10px !important;
+              top: ${config.mobile.touch.top} !important;
+              left: ${config.mobile.touch.left} !important;
             }
             .icon-bottom {
-              left: calc(100% - 55px) !important;
-              top: 45px !important;
+              top: ${config.mobile.sight.top} !important;
+              left: ${config.mobile.sight.left} !important;
             }
+
             .info-item:nth-child(1) { transform: translateX(-15px); }
             .info-item:nth-child(2) { transform: translateX(15px); }
             .info-item:nth-child(3) { transform: translateX(-10px); }
@@ -167,20 +189,28 @@ export default function GetInk({ currentLang, setCurrentLang }) {
           {touchImg && (
             <img
               src={touchImg}
-              alt=""
+              alt="Touch"
               className="icon-top"
-              style={styles.moon("-35px", "-120px", 0)}
+              style={styles.moon(
+                config.desktop.touch.top,
+                config.desktop.touch.left,
+                0,
+              )}
             />
           )}
           <h1 className="course-title" style={styles.title}>
             {content[currentLang].title}
           </h1>
-          {smellImg && (
+          {sightImg && (
             <img
-              src={smellImg}
-              alt=""
+              src={sightImg}
+              alt="Sight"
               className="icon-bottom"
-              style={styles.moon("40px", "calc(100% + 60px)", -3)}
+              style={styles.moon(
+                config.desktop.sight.top,
+                config.desktop.sight.left,
+                -3,
+              )}
             />
           )}
         </div>

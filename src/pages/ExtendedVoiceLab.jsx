@@ -14,6 +14,21 @@ const getImage = (filename) => {
 export default function ExtendedVoiceLab({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  // --- EASY CONFIG SECTION ---
+  const config = {
+    desktop: {
+      hearing: { top: "-35px", left: "-120px" },
+      taste: { top: "40px", left: "calc(100% + 60px)" },
+      titleSize: "4.5rem",
+    },
+    mobile: {
+      hearing: { top: "-10px", left: "-10px" },
+      taste: { top: "45px", left: "calc(100% - 55px)" },
+      titleSize: "4rem",
+    },
+  };
+  // ---------------------------
+
   const content = {
     en: {
       title: "extended voice lab",
@@ -62,9 +77,10 @@ export default function ExtendedVoiceLab({ currentLang, setCurrentLang }) {
       position: "relative",
       display: "inline-block",
       marginBottom: "40px",
+      lineHeight: 1,
     },
     title: {
-      fontSize: "3.5rem",
+      fontSize: config.desktop.titleSize,
       margin: 0,
       zIndex: 2,
       position: "relative",
@@ -126,34 +142,32 @@ export default function ExtendedVoiceLab({ currentLang, setCurrentLang }) {
 
           @media (max-width: 768px) {
             .main-content {
-              display: flex;
-              flex-direction: column;
-              align-items: center;
               padding-top: 120px !important;
             }
             .title-wrapper {
-              order: 1;
+              width: fit-content;
               margin-bottom: 8px !important;
             }
+            .course-title {
+              font-size: ${config.mobile.titleSize} !important;
+            }
             .welcome-text {
-              order: 2;
               margin-bottom: 40px !important;
               font-size: 0.9rem !important;
               width: 50vw;
             }
             .info-grid {
-              order: 3;
               flex-direction: column !important;
               gap: 12px !important;
               width: 100%;
             }
             .icon-top {
-              left: -10px !important; 
-              top: -10px !important;
+              top: ${config.mobile.hearing.top} !important;
+              left: ${config.mobile.hearing.left} !important;
             }
             .icon-bottom {
-              left: calc(100% - 55px) !important;
-              top: 45px !important;
+              top: ${config.mobile.taste.top} !important;
+              left: ${config.mobile.taste.left} !important;
             }
             .info-item:nth-child(1) { transform: translateX(-15px); }
             .info-item:nth-child(2) { transform: translateX(15px); }
@@ -169,7 +183,11 @@ export default function ExtendedVoiceLab({ currentLang, setCurrentLang }) {
               src={hearingImg}
               alt=""
               className="icon-top"
-              style={styles.moon("-35px", "-120px", 0)}
+              style={styles.moon(
+                config.desktop.hearing.top,
+                config.desktop.hearing.left,
+                0,
+              )}
             />
           )}
           <h1 className="course-title" style={styles.title}>
@@ -180,7 +198,11 @@ export default function ExtendedVoiceLab({ currentLang, setCurrentLang }) {
               src={tasteImg}
               alt=""
               className="icon-bottom"
-              style={styles.moon("40px", "calc(100% + 60px)", -3)}
+              style={styles.moon(
+                config.desktop.taste.top,
+                config.desktop.taste.left,
+                -3,
+              )}
             />
           )}
         </div>

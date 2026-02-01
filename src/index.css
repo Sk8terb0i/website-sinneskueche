@@ -64,11 +64,6 @@ html, body {
 
   /* Prevents pull-to-refresh and the white "bounce" area on mobile */
   overscroll-behavior-y: none;
-  
-  /* Standard safety for full-screen apps */
-  margin: 0;
-  height: 100%;
-  overflow: hidden;
 }
 
 /* FIX 3: Re-enable text selection for forms so users can still type/edit */

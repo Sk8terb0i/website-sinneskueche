@@ -106,7 +106,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           icon: dotIconObj,
         },
         {
-          text: { en: "singing lessons", de: "gesangsunterricht" },
+          text: { en: "vocal coaching", de: "gesangscoaching" },
           link: "/singing",
           senses: ["hearing"],
           icon: dotIconObj,

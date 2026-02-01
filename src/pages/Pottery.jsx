@@ -14,9 +14,24 @@ const getImage = (filename) => {
 export default function Pottery({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  // --- EASY CONFIG SECTION ---
+  const config = {
+    desktop: {
+      touch: { top: "-35px", left: "-80px" },
+      sight: { top: "60px", left: "400px" },
+      titleSize: "4.5rem",
+    },
+    mobile: {
+      touch: { top: "-10px", left: "-10px" },
+      sight: { top: "45px", left: "calc(100% - 55px)" },
+      titleSize: "3.5rem", // Adjust this for mobile
+    },
+  };
+  // ---------------------------
+
   const content = {
     en: {
-      title: "Pottery Tuesdays",
+      title: "pottery tuesdays",
       welcome: "Make Tuesdays your creative sanctuary",
       details: [
         { icon: <Clock size={20} />, text: "18:30 - 21:30" },
@@ -25,7 +40,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       ],
     },
     de: {
-      title: "Pottery Tuesdays",
+      title: "pottery tuesdays",
       welcome: "Mach den Dienstag zu deiner kreativen Auszeit",
       details: [
         { icon: <Clock size={20} />, text: "18:30 - 21:30" },
@@ -62,9 +77,11 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       position: "relative",
       display: "inline-block",
       marginBottom: "40px",
+      /* Ensure the wrapper is purely a reference point */
+      lineHeight: 1,
     },
     title: {
-      fontSize: "3.5rem",
+      fontSize: config.desktop.titleSize,
       margin: 0,
       zIndex: 2,
       position: "relative",
@@ -133,12 +150,18 @@ export default function Pottery({ currentLang, setCurrentLang }) {
             }
             .title-wrapper {
               order: 1;
-              margin-bottom: 8px !important; /* Pulls text closer under title */
+              margin-bottom: 8px !important;
+              /* On mobile, sometimes display: inline-block behaves differently, 
+                 ensuring it stays tight to the text here */
+              width: fit-content; 
+            }
+            .course-title {
+              font-size: ${config.mobile.titleSize} !important;
             }
             .welcome-text {
               order: 2;
               margin-bottom: 40px !important;
-              font-size: 0.9rem !important; /* Slight tweak to ensure it fits mobile widths */
+              font-size: 0.9rem !important;
               width: 50vw;
             }
             .info-grid {
@@ -147,14 +170,16 @@ export default function Pottery({ currentLang, setCurrentLang }) {
               gap: 12px !important;
               width: 100%;
             }
+            
             .icon-touch {
-              left: -10px !important; 
-              top: -10px !important;
+              top: ${config.mobile.touch.top} !important;
+              left: ${config.mobile.touch.left} !important;
             }
             .icon-sight {
-              left: calc(100% - 55px) !important;
-              top: 45px !important;
+              top: ${config.mobile.sight.top} !important;
+              left: ${config.mobile.sight.left} !important;
             }
+
             .info-item:nth-child(1) { transform: translateX(-15px); }
             .info-item:nth-child(2) { transform: translateX(15px); }
             .info-item:nth-child(3) { transform: translateX(-10px); }
@@ -163,14 +188,17 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       </style>
 
       <main style={styles.main} className="main-content">
-        {/* Title Group First */}
         <div className="title-wrapper" style={styles.titleWrapper}>
           {touchImg && (
             <img
               src={touchImg}
               alt="Touch"
               className="icon-touch"
-              style={styles.moon("-35px", "-120px", 0)}
+              style={styles.moon(
+                config.desktop.touch.top,
+                config.desktop.touch.left,
+                0,
+              )}
             />
           )}
           <h1 className="course-title" style={styles.title}>
@@ -181,17 +209,19 @@ export default function Pottery({ currentLang, setCurrentLang }) {
               src={sightImg}
               alt="Sight"
               className="icon-sight"
-              style={styles.moon("40px", "calc(100% + 60px)", -3)}
+              style={styles.moon(
+                config.desktop.sight.top,
+                config.desktop.sight.left,
+                -3,
+              )}
             />
           )}
         </div>
 
-        {/* Description Second */}
         <p className="welcome-text" style={styles.welcomeText}>
           {content[currentLang].welcome}
         </p>
 
-        {/* Info Items Third */}
         <div className="info-grid" style={styles.infoGrid}>
           {content[currentLang].details.map((item, index) => (
             <div key={index} className="info-item" style={styles.infoItem}>

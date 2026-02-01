@@ -31,37 +31,37 @@ export default function Singing({ currentLang, setCurrentLang }) {
   const [isVisible, setIsVisible] = useState(true);
   const [isIdle, setIsIdle] = useState(false);
 
-  // 1. Initial Scroll Visibility & Reset Idle on Scroll
+  // --- EASY CONFIG SECTION ---
+  const config = {
+    desktop: {
+      touch: { top: "-30px", left: "-35px" },
+      sight: { top: "50px", left: "calc(100% - 60px)" },
+      titleSize: "4.5rem",
+    },
+    mobile: {
+      touch: { top: "-15px", left: "-10px" },
+      sight: { top: "45px", left: "calc(100% - 40px)" },
+      titleSize: "3.5rem",
+    },
+  };
+  // ---------------------------
+
   useEffect(() => {
     const handleScroll = () => {
-      // Logic for top-of-page visibility
-      if (window.scrollY > 50) {
-        setIsVisible(false);
-      } else {
-        setIsVisible(true);
-      }
-
-      // Hide the idle planet specifically when the user starts scrolling
+      if (window.scrollY > 50) setIsVisible(false);
+      else setIsVisible(true);
       setIsIdle(false);
     };
-
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // 2. Inactivity Timer
   useEffect(() => {
     let timeout;
-
     const startTimer = () => {
       clearTimeout(timeout);
-      timeout = setTimeout(() => {
-        setIsIdle(true);
-      }, 7000); // 7 seconds
+      timeout = setTimeout(() => setIsIdle(true), 7000);
     };
-
-    // Events that reset the 15s countdown
-    // Note: We don't set setIsIdle(false) here so mouse movement doesn't hide it
     const resetEvents = [
       "mousedown",
       "mousemove",
@@ -69,16 +69,11 @@ export default function Singing({ currentLang, setCurrentLang }) {
       "touchstart",
       "scroll",
     ];
-
-    const handleActivity = () => {
-      startTimer();
-    };
-
+    const handleActivity = () => startTimer();
     resetEvents.forEach((event) =>
       window.addEventListener(event, handleActivity),
     );
     startTimer();
-
     return () => {
       clearTimeout(timeout);
       resetEvents.forEach((event) =>
@@ -210,16 +205,11 @@ export default function Singing({ currentLang, setCurrentLang }) {
     const isMobile = window.innerWidth <= 768;
     const targetId = isMobile ? "register-mobile" : "register-desktop";
     const element = document.getElementById(targetId);
-
     if (element) {
       const elementPosition =
         element.getBoundingClientRect().top + window.pageYOffset;
       const offset = isMobile ? 280 : 120;
-
-      window.scrollTo({
-        top: elementPosition - offset,
-        behavior: "smooth",
-      });
+      window.scrollTo({ top: elementPosition - offset, behavior: "smooth" });
     }
   };
 
@@ -247,9 +237,10 @@ export default function Singing({ currentLang, setCurrentLang }) {
       position: "relative",
       display: "inline-block",
       marginBottom: "40px",
+      lineHeight: 1, // Locks icons to box
     },
     title: {
-      fontSize: "4rem",
+      fontSize: config.desktop.titleSize,
       margin: 0,
       zIndex: 2,
       position: "relative",
@@ -342,11 +333,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
     },
     priceAmount: { fontSize: "1.8rem", lineHeight: "1" },
     priceCurrency: { fontSize: "0.9rem" },
-    priceSubText: {
-      fontSize: "0.8rem",
-      opacity: 0.7,
-      fontWeight: "500",
-    },
+    priceSubText: { fontSize: "0.8rem", opacity: 0.7, fontWeight: "500" },
     locationCard: {
       background: "#caaff312",
       borderRadius: "18px",
@@ -384,7 +371,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
       justifyContent: "center",
       gap: "12px",
       height: "185px",
-      marginTop: "60px",
+      marginTop: "50px",
     },
     floatingPlanetWrapper: {
       position: "fixed",
@@ -523,14 +510,24 @@ export default function Singing({ currentLang, setCurrentLang }) {
             .register-box-desktop { display: none !important; }
             .register-box-mobile { 
                 display: flex !important;
-                flex-direction: column; /* Ensures vertical stacking */
-                margin: 40px 0 !important; /* Remove 'auto' to let it sit naturally */
+                margin: 40px 0 !important;
                 height: auto !important; 
                 padding: 40px 20px !important; 
-                width: 100% !important; /* Take full available width of parent */
-                box-sizing: border-box !important; /* Crucial: includes padding in the width calculation */
+                width: 100% !important;
+                box-sizing: border-box !important;
             }
-            .course-title { font-size: 2.8rem !important; }
+
+            /* Config Injection */
+            .course-title { font-size: ${config.mobile.titleSize} !important; }
+            .icon-touch {
+              top: ${config.mobile.touch.top} !important;
+              left: ${config.mobile.touch.left} !important;
+            }
+            .icon-sight {
+              top: ${config.mobile.sight.top} !important;
+              left: ${config.mobile.sight.left} !important;
+            }
+
             .luca-image { display: none !important; }
           }
           
@@ -588,7 +585,11 @@ export default function Singing({ currentLang, setCurrentLang }) {
             <img
               src={touchImg}
               alt="Deco"
-              style={styles.moon("-30px", "-35px", 0)}
+              style={styles.moon(
+                config.desktop.touch.top,
+                config.desktop.touch.left,
+                0,
+              )}
               className="icon-touch"
             />
           )}
@@ -599,7 +600,11 @@ export default function Singing({ currentLang, setCurrentLang }) {
             <img
               src={sightImg}
               alt="Deco"
-              style={styles.moon("50px", "calc(100% - 60px)", -3)}
+              style={styles.moon(
+                config.desktop.sight.top,
+                config.desktop.sight.left,
+                -3,
+              )}
               className="icon-sight"
             />
           )}
@@ -669,7 +674,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
               <MapPin size={18} /> {current.locationTitle}
             </h3>
             <a
-              href="https://maps.google.com/?q=Sägestrasse+11,+8952+Schlieren"
+              href="https://maps.google.com"
               target="_blank"
               rel="noopener noreferrer"
               style={styles.locationCard}
@@ -696,7 +701,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
                 key={i}
                 style={{
                   ...styles.bodyText,
-                  fontSize: "0.85rem",
+                  fontSize: "0.95rem",
                   marginBottom: "10px",
                 }}
               >
@@ -713,14 +718,12 @@ export default function Singing({ currentLang, setCurrentLang }) {
             <p style={{ ...styles.bodyText, marginBottom: "0" }}>
               {current.repertoireDetail}
             </p>
-
             <RegisterBox
               id="register-desktop"
               className="register-box-desktop"
             />
           </section>
         </div>
-
         <RegisterBox id="register-mobile" className="register-box-mobile" />
       </main>
     </div>

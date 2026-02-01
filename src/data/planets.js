@@ -100,7 +100,7 @@ export const planets = [
     },
     courses: [
       {
-        text: { en: "singing lessons", de: "gesangsunterricht" },
+        text: { en: "vocal coaching", de: "gesangscoaching" },
         link: "/singing",
       },
       {

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import Header from "../components/Header/Header";
 import { Clock, Users, Sparkles } from "lucide-react";
 
-const CONFIG = {
+const CONFIG_ANIM = {
   TRANSITION_SPEED: 1400,
   EMPTY_PAUSE: 1000,
   MIN_WAIT: 8000,
@@ -21,7 +21,21 @@ const getImage = (filename) => {
 export default function ArtisticVision({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // --- ICON LOGIC START ---
+  // --- EASY CONFIG SECTION ---
+  const config = {
+    desktop: {
+      topIcon: { top: -35, left: -100 },
+      bottomIcon: { top: 30, left: 40 },
+      titleSize: "4.5rem",
+    },
+    mobile: {
+      topIcon: { top: "-10px", left: "-10px" },
+      bottomIcon: { top: "45px", left: "calc(100% - 55px)" },
+      titleSize: "4rem",
+    },
+  };
+  // ---------------------------
+
   const leftIdxRef = useRef(0);
   const rightIdxRef = useRef(1);
 
@@ -30,8 +44,17 @@ export default function ArtisticVision({ currentLang, setCurrentLang }) {
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(true);
 
-  const [leftPos, setLeftPos] = useState({ t: -35, l: -100, s: 1 });
-  const [rightPos, setRightPos] = useState({ t: 30, l: 40, s: 1 });
+  // Initialize positions from desktop config
+  const [leftPos, setLeftPos] = useState({
+    t: config.desktop.topIcon.top,
+    l: config.desktop.topIcon.left,
+    s: 1,
+  });
+  const [rightPos, setRightPos] = useState({
+    t: config.desktop.bottomIcon.top,
+    l: config.desktop.bottomIcon.left,
+    s: 1,
+  });
 
   const allPlanets = [
     "sight.png",
@@ -49,17 +72,13 @@ export default function ArtisticVision({ currentLang, setCurrentLang }) {
     return newIdx;
   };
 
+  // Logic now uses config values as base for random variance
   const getRandomPos = (side) => {
-    if (side === "left") {
-      return {
-        t: Math.floor(Math.random() * 30) - 50,
-        l: Math.floor(Math.random() * 40) - 120,
-        s: 0.8 + Math.random() * 0.4,
-      };
-    }
+    const base =
+      side === "left" ? config.desktop.topIcon : config.desktop.bottomIcon;
     return {
-      t: Math.floor(Math.random() * 40) + 10,
-      l: Math.floor(Math.random() * 40) + 20,
+      t: base.top + (Math.floor(Math.random() * 20) - 10),
+      l: base.left + (Math.floor(Math.random() * 20) - 10),
       s: 0.8 + Math.random() * 0.4,
     };
   };
@@ -77,12 +96,12 @@ export default function ArtisticVision({ currentLang, setCurrentLang }) {
           setShowLeft(true);
           timeoutId = setTimeout(
             swapLeft,
-            CONFIG.MIN_WAIT + Math.random() * CONFIG.RANDOM_WAIT,
+            CONFIG_ANIM.MIN_WAIT + Math.random() * CONFIG_ANIM.RANDOM_WAIT,
           );
-        }, CONFIG.EMPTY_PAUSE);
-      }, CONFIG.TRANSITION_SPEED);
+        }, CONFIG_ANIM.EMPTY_PAUSE);
+      }, CONFIG_ANIM.TRANSITION_SPEED);
     };
-    timeoutId = setTimeout(swapLeft, CONFIG.MIN_WAIT);
+    timeoutId = setTimeout(swapLeft, CONFIG_ANIM.MIN_WAIT);
     return () => clearTimeout(timeoutId);
   }, []);
 
@@ -99,15 +118,16 @@ export default function ArtisticVision({ currentLang, setCurrentLang }) {
           setShowRight(true);
           timeoutId = setTimeout(
             swapRight,
-            CONFIG.MIN_WAIT + 2000 + Math.random() * CONFIG.RANDOM_WAIT,
+            CONFIG_ANIM.MIN_WAIT +
+              2000 +
+              Math.random() * CONFIG_ANIM.RANDOM_WAIT,
           );
-        }, CONFIG.EMPTY_PAUSE);
-      }, CONFIG.TRANSITION_SPEED);
+        }, CONFIG_ANIM.EMPTY_PAUSE);
+      }, CONFIG_ANIM.TRANSITION_SPEED);
     };
-    timeoutId = setTimeout(swapRight, CONFIG.MIN_WAIT + 5000);
+    timeoutId = setTimeout(swapRight, CONFIG_ANIM.MIN_WAIT + 5000);
     return () => clearTimeout(timeoutId);
   }, []);
-  // --- ICON LOGIC END ---
 
   const content = {
     en: {
@@ -154,9 +174,10 @@ export default function ArtisticVision({ currentLang, setCurrentLang }) {
       position: "relative",
       display: "inline-block",
       marginBottom: "40px",
+      lineHeight: 1,
     },
     title: {
-      fontSize: "3.5rem",
+      fontSize: config.desktop.titleSize,
       margin: 0,
       zIndex: 2,
       position: "relative",
@@ -179,9 +200,9 @@ export default function ArtisticVision({ currentLang, setCurrentLang }) {
         : `scale(0) rotate(${side === "left" ? -45 : 45}deg)`,
       filter: isVisible ? "blur(0px)" : "blur(15px)",
       transition: `
-        transform ${CONFIG.TRANSITION_SPEED}ms cubic-bezier(0.175, 0.885, 0.32, 1.275), 
-        opacity ${CONFIG.TRANSITION_SPEED - 400}ms ease-in-out, 
-        filter ${CONFIG.TRANSITION_SPEED}ms ease-out, 
+        transform ${CONFIG_ANIM.TRANSITION_SPEED}ms cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+        opacity ${CONFIG_ANIM.TRANSITION_SPEED - 400}ms ease-in-out, 
+        filter ${CONFIG_ANIM.TRANSITION_SPEED}ms ease-out, 
         top 2s ease-in-out, 
         left 2s ease-in-out
       `,
@@ -229,38 +250,31 @@ export default function ArtisticVision({ currentLang, setCurrentLang }) {
 
           @media (max-width: 768px) {
             .main-content {
-              display: flex;
-              flex-direction: column;
-              align-items: center;
               padding-top: 120px !important;
             }
             .title-wrapper {
-              order: 1;
+              width: fit-content;
               margin-bottom: 8px !important;
             }
+            .course-title {
+              font-size: ${config.mobile.titleSize} !important;
+            }
             .welcome-text {
-              order: 2;
               margin-bottom: 40px !important;
-              font-size: 0.9rem !important;
               width: 50vw;
             }
             .info-grid {
-              order: 3;
               flex-direction: column !important;
-              gap: 12px !important;
               width: 100%;
             }
             .icon-top {
-              left: -10px !important; 
-              top: -10px !important;
+              top: ${config.mobile.topIcon.top} !important;
+              left: ${config.mobile.topIcon.left} !important;
             }
             .icon-bottom {
-              left: calc(100% - 55px) !important;
-              top: 45px !important;
+              top: ${config.mobile.bottomIcon.top} !important;
+              left: ${config.mobile.bottomIcon.left} !important;
             }
-            .info-item:nth-child(1) { transform: translateX(-15px); }
-            .info-item:nth-child(2) { transform: translateX(15px); }
-            .info-item:nth-child(3) { transform: translateX(-10px); }
           }
         `}
       </style>
