@@ -222,6 +222,7 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
         position: "relative",
         cursor: activeIndex !== null ? "pointer" : "default",
         pointerEvents: isMenuOpen ? "none" : "auto",
+        touchAction: "none",
       }}
     >
       <style>

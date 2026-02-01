@@ -49,7 +49,7 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-body {
+html, body {
   font-family: "Satoshi", sans-serif;
   margin: 0;
   padding: 0;
@@ -61,6 +61,14 @@ body {
   /* This prevents the "blue block" selection when people tap/hold icons and buttons */
   -webkit-user-select: none;
   user-select: none;
+
+  /* Prevents pull-to-refresh and the white "bounce" area on mobile */
+  overscroll-behavior-y: none;
+  
+  /* Standard safety for full-screen apps */
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* FIX 3: Re-enable text selection for forms so users can still type/edit */
