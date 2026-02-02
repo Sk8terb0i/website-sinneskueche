@@ -19,8 +19,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
   const [isResetting, setIsResetting] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // --- NEW: Stable Viewport State ---
-  // This prevents the "jump" when mobile address bars hide/show
   const [viewport, setViewport] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -28,8 +26,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
 
   useEffect(() => {
     const handleResize = () => {
-      // We only update if the width changes (orientation change)
-      // or if the height change is significant (not just address bar)
       setViewport({
         width: window.innerWidth,
         height: window.innerHeight,
@@ -53,10 +49,11 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
     [],
   );
 
-  const displayPlanets =
-    activeIndex !== null
-      ? [...coursePlanetsOnly, atelierPlanet].filter(Boolean)
-      : coursePlanetsOnly;
+  // Keep Atelier in the list so we can target its index
+  const displayPlanets = useMemo(
+    () => [...coursePlanetsOnly, atelierPlanet].filter(Boolean),
+    [coursePlanetsOnly, atelierPlanet],
+  );
 
   const touchStartY = useRef(null);
   const touchLocked = useRef(false);
@@ -76,6 +73,19 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
       setIsLoaded(true);
       setIsResetting(false);
     }, 400);
+  };
+
+  // Logic to switch specifically to the Atelier planet layout
+  const handleSunClick = (e) => {
+    e.stopPropagation();
+    if (isMenuOpenRef.current) return;
+
+    const atelierIdx = displayPlanets.findIndex((p) => p.id === "atelier");
+    if (atelierIdx !== -1) {
+      setPreviousIndex(activeIndex);
+      setActiveIndex(atelierIdx);
+      setScrollDirection("down");
+    }
   };
 
   useEffect(() => {
@@ -150,7 +160,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
     return distance * 2;
   };
 
-  // --- UPDATED: Calculations now use stable viewport state ---
   const computeTranslateY = () => {
     const vh = viewport.height;
     if (activeIndex === null) {
@@ -175,17 +184,14 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
   };
 
   const translateY = computeTranslateY();
-
   const idleTotalHeight =
     coursePlanetsOnly.length * planetSize +
     (coursePlanetsOnly.length - 1) * normalGap +
     sunSize;
-
   const idleTranslateY = Math.max(
     viewport.height / 2 - idleTotalHeight / 2,
     viewport.height * 0.07,
   );
-
   const sunTopPosition =
     idleTranslateY +
     coursePlanetsOnly.length * planetSize +
@@ -204,16 +210,13 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
     }
   }, [activeIndex]);
 
-  const targetCenter = {
-    x: viewport.width * 0.4,
-    y: viewport.height * 0.5,
-  };
+  const targetCenter = { x: viewport.width * 0.4, y: viewport.height * 0.5 };
 
   return (
     <div
       onClick={handleReset}
       style={{
-        height: "100dvh", // Modern unit: Dynamic Viewport Height
+        height: "100dvh",
         width: "100vw",
         display: "flex",
         flexDirection: "column",
@@ -249,10 +252,10 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
           isPlanetActive={activeIndex !== null}
           isMenuOpen={isMenuOpen}
           onMenuToggle={setIsMenuOpen}
+          onReset={handleReset}
         />
       </div>
 
-      {/* Sun and Orbits */}
       <div
         style={{
           position: "absolute",
@@ -268,11 +271,9 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
           alignItems: "center",
           justifyContent: "center",
           zIndex: 1,
+          cursor: "pointer",
         }}
-        onClick={(e) => {
-          e.stopPropagation();
-          handleReset();
-        }}
+        onClick={handleSunClick}
       >
         {coursePlanetsOnly.map((_, index) => (
           <div
@@ -295,7 +296,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
         <SunPortrait style={{ width: "100%", height: "100%", zIndex: 1 }} />
       </div>
 
-      {/* Planets Container */}
       <div
         onClick={(e) =>
           e.target === e.currentTarget ? handleReset() : e.stopPropagation()
@@ -313,6 +313,9 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
       >
         {displayPlanets.map((planet, index) => {
           const isAtelier = planet.id === "atelier";
+          // We hide atelier in visual list if activeIndex is null (idle layout)
+          if (isAtelier && activeIndex === null) return null;
+
           const radius = !isAtelier ? getOrbitDiameter(index) / 2 : 0;
           const possibleAngles = [-90, 90, -180, 45, -45];
           let startAngle =
@@ -324,12 +327,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
           const isVisible =
             activeIndex === null || Math.abs(index - activeIndex) <= 2;
           const isIconOnly = activeIndex !== null && activeIndex !== index;
-
-          const dur = 7 + (index % 4);
-          const delay = index * -1.8;
-          const tx = 1.5 + (index % 2);
-          const ty = 2.5 + (index % 3);
-          const tr = 0.8 + (index % 2) * 0.4;
 
           return (
             <div
@@ -363,11 +360,11 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
                   className={activeIndex === null ? "tethered-float" : ""}
                   style={{
                     transition: "transform 0.4s ease",
-                    "--fdur": `${dur}s`,
-                    "--fdelay": `${delay}s`,
-                    "--tx": `${tx}px`,
-                    "--ty": `${ty}px`,
-                    "--tr": `${tr}deg`,
+                    "--fdur": `${7 + (index % 4)}s`,
+                    "--fdelay": `${index * -1.8}s`,
+                    "--tx": `${1.5 + (index % 2)}px`,
+                    "--ty": `${2.5 + (index % 3)}px`,
+                    "--tr": `${0.8 + (index % 2) * 0.4}deg`,
                     transform:
                       hoveredIndex === index ? "scale(1.1)" : "scale(1)",
                   }}
@@ -379,18 +376,12 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
                     isIconOnly={isIconOnly}
                     onActivate={() => {
                       if (isMenuOpen) return;
-                      const isCurrentlyActive = activeIndex === index;
-                      const moonCount = planet.courses?.length || 0;
-
-                      if (isCurrentlyActive && moonCount === 1) {
-                        const targetLink = planet.courses[0].link;
-                        if (targetLink) {
-                          navigate(targetLink);
+                      if (activeIndex === index) {
+                        const moonCount = planet.courses?.length || 0;
+                        if (moonCount === 1 && planet.courses[0].link) {
+                          navigate(planet.courses[0].link);
                           return;
                         }
-                      }
-
-                      if (isCurrentlyActive) {
                         handleReset();
                       } else {
                         setPreviousIndex(activeIndex);
@@ -407,7 +398,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
         })}
       </div>
 
-      {/* Orbit Circle */}
       {activeIndex !== null && hasShiftedLeft && (
         <svg
           style={{
@@ -419,7 +409,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
             transform: "translate(-50%, -50%)",
             pointerEvents: "none",
             zIndex: 1999,
-            transition: "opacity 0.5s ease",
           }}
         >
           <circle
@@ -434,12 +423,11 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
         </svg>
       )}
 
-      {/* Moons Logic */}
       {activeIndex !== null &&
         hasShiftedLeft &&
         displayPlanets[activeIndex]?.courses?.map((moon, idx) => (
           <MoonPortrait
-            key={`new-${activeIndex}-${idx}`}
+            key={`moon-${activeIndex}-${idx}`}
             index={idx}
             totalMoons={displayPlanets[activeIndex].courses.length}
             planetId={displayPlanets[activeIndex].id}
@@ -447,23 +435,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
             orbitRadius={110}
             currentLang={currentLang}
             enterDirection={scrollDirection === "down" ? "top" : "bottom"}
-            planetCenter={targetCenter}
-          />
-        ))}
-
-      {previousIndex !== null &&
-        hasShiftedLeft &&
-        displayPlanets[previousIndex]?.courses?.map((moon, idx) => (
-          <MoonPortrait
-            key={`old-${previousIndex}-${idx}`}
-            index={idx}
-            totalMoons={displayPlanets[previousIndex].courses.length}
-            planetId={displayPlanets[previousIndex].id}
-            moon={moon}
-            orbitRadius={110}
-            currentLang={currentLang}
-            exitOnly
-            exitDirection={scrollDirection === "down" ? "bottom" : "top"}
             planetCenter={targetCenter}
           />
         ))}

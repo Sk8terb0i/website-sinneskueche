@@ -9,6 +9,7 @@ export default function Header({
   isPlanetActive,
   isMenuOpen,
   onMenuToggle,
+  onReset, // NEW: added reset callback
 }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -76,7 +77,6 @@ export default function Header({
           padding: "0 clamp(12px, 2vw, 32px)",
           boxSizing: "border-box",
           zIndex: 4000,
-          /* FIX: Allow mouse events to pass through the header bar */
           pointerEvents: "none",
           gap: "1rem",
           background:
@@ -90,13 +90,20 @@ export default function Header({
             width: "50vw",
             display: "flex",
             alignItems: "center",
-            /* Re-enable events for the logo area */
             pointerEvents: "auto",
           }}
         >
           {showTitle && (
             <div
-              onClick={!isPortrait ? () => navigate("/") : undefined}
+              onClick={() => {
+                if (isLanding) {
+                  // On landing page: Clicking title resets the view
+                  if (onReset) onReset();
+                } else {
+                  // Not on landing: Standard go home
+                  navigate("/");
+                }
+              }}
               onMouseEnter={() => !isPortrait && setTitleHovered(true)}
               onMouseLeave={() => !isPortrait && setTitleHovered(false)}
               style={{
@@ -110,7 +117,7 @@ export default function Header({
                   : isPortrait && isLanding
                     ? "#1c0700"
                     : "#4e5f28",
-                cursor: !isPortrait ? "pointer" : "default",
+                cursor: "pointer", // Enabled cursor for mobile clickability
                 transform: titleHovered ? "scale(1.05)" : "scale(1)",
                 transition: hoverTransition,
               }}
@@ -154,7 +161,6 @@ export default function Header({
             display: "flex",
             alignItems: "center",
             gap: rightGap,
-            /* Re-enable events for the language and hamburger area */
             pointerEvents: "auto",
           }}
         >

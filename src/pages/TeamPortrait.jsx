@@ -19,8 +19,6 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
   const [isResetting, setIsResetting] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // --- NEW: Stable Viewport State ---
-  // This prevents the "jump" when mobile address bars hide/show
   const [viewport, setViewport] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -28,8 +26,6 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
 
   useEffect(() => {
     const handleResize = () => {
-      // We only update if the width changes (orientation change)
-      // or if the height change is significant (not just address bar)
       setViewport({
         width: window.innerWidth,
         height: window.innerHeight,
@@ -44,19 +40,10 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
     isMenuOpenRef.current = isMenuOpen;
   }, [isMenuOpen]);
 
-  const coursePlanetsOnly = useMemo(
+  const displayPlanets = useMemo(
     () => planets.filter((p) => p.type === "courses"),
     [],
   );
-  const atelierPlanet = useMemo(
-    () => planets.find((p) => p.id === "atelier"),
-    [],
-  );
-
-  const displayPlanets =
-    activeIndex !== null
-      ? [...coursePlanetsOnly, atelierPlanet].filter(Boolean)
-      : coursePlanetsOnly;
 
   const touchStartY = useRef(null);
   const touchLocked = useRef(false);
@@ -142,7 +129,7 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
 
   const getOrbitDiameter = (targetIndex) => {
     let distance = sunSize / 2;
-    for (let i = coursePlanetsOnly.length - 1; i >= targetIndex; i--) {
+    for (let i = displayPlanets.length - 1; i >= targetIndex; i--) {
       distance += normalGap;
       if (i === targetIndex) distance += planetSize / 2;
       else distance += planetSize;
@@ -150,13 +137,12 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
     return distance * 2;
   };
 
-  // --- UPDATED: Calculations now use stable viewport state ---
   const computeTranslateY = () => {
     const vh = viewport.height;
     if (activeIndex === null) {
       const totalHeight =
-        coursePlanetsOnly.reduce((sum, _, i) => sum + getPlanetSize(i), 0) +
-        (coursePlanetsOnly.length - 1) * normalGap +
+        displayPlanets.reduce((sum, _, i) => sum + getPlanetSize(i), 0) +
+        (displayPlanets.length - 1) * normalGap +
         sunSize;
       return Math.max(vh / 2 - totalHeight / 2, vh * 0.07);
     }
@@ -177,8 +163,8 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
   const translateY = computeTranslateY();
 
   const idleTotalHeight =
-    coursePlanetsOnly.length * planetSize +
-    (coursePlanetsOnly.length - 1) * normalGap +
+    displayPlanets.length * planetSize +
+    (displayPlanets.length - 1) * normalGap +
     sunSize;
 
   const idleTranslateY = Math.max(
@@ -188,8 +174,8 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
 
   const sunTopPosition =
     idleTranslateY +
-    coursePlanetsOnly.length * planetSize +
-    coursePlanetsOnly.length * normalGap;
+    displayPlanets.length * planetSize +
+    displayPlanets.length * normalGap;
 
   const springEase = "cubic-bezier(0.34, 1.56, 0.64, 1)";
   const smoothEase = "cubic-bezier(0.4, 0, 0.2, 1)";
@@ -213,7 +199,7 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
     <div
       onClick={handleReset}
       style={{
-        height: "100dvh", // Modern unit: Dynamic Viewport Height
+        height: "100dvh",
         width: "100vw",
         display: "flex",
         flexDirection: "column",
@@ -252,7 +238,6 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
         />
       </div>
 
-      {/* Sun and Orbits */}
       <div
         style={{
           position: "absolute",
@@ -274,7 +259,7 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
           handleReset();
         }}
       >
-        {coursePlanetsOnly.map((_, index) => (
+        {displayPlanets.map((_, index) => (
           <div
             key={`orbit-${index}`}
             style={{
@@ -295,7 +280,6 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
         <SunPortrait style={{ width: "100%", height: "100%", zIndex: 1 }} />
       </div>
 
-      {/* Planets Container */}
       <div
         onClick={(e) =>
           e.target === e.currentTarget ? handleReset() : e.stopPropagation()
@@ -312,12 +296,11 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
         }}
       >
         {displayPlanets.map((planet, index) => {
-          const isAtelier = planet.id === "atelier";
-          const radius = !isAtelier ? getOrbitDiameter(index) / 2 : 0;
+          const radius = getOrbitDiameter(index) / 2;
           const possibleAngles = [-90, 90, -180, 45, -45];
-          let startAngle = possibleAngles[index % possibleAngles.length];
+          const startAngle = possibleAngles[index % possibleAngles.length];
           const currentAngle = isLoaded ? 0 : startAngle;
-          let translateX = hasShiftedLeft ? "-10vw" : "0";
+          const translateX = hasShiftedLeft ? "-10vw" : "0";
           const isVisible =
             activeIndex === null || Math.abs(index - activeIndex) <= 2;
           const isIconOnly = activeIndex !== null && activeIndex !== index;
@@ -338,18 +321,14 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
                 pointerEvents: isVisible && !isMenuOpen ? "auto" : "none",
                 transition: `transform ${movementDuration} ${currentEase}, translate ${movementDuration} ${currentEase}, opacity 0.5s ease`,
                 position: "relative",
-                transformOrigin: !isAtelier
-                  ? `center ${radius}px`
-                  : "center center",
-                transform: !isAtelier ? `rotate(${currentAngle}deg)` : "none",
+                transformOrigin: `center ${radius}px`,
+                transform: `rotate(${currentAngle}deg)`,
                 translate: `${translateX} 0`,
               }}
             >
               <div
                 style={{
-                  transform: !isAtelier
-                    ? `rotate(${-currentAngle}deg)`
-                    : "none",
+                  transform: `rotate(${-currentAngle}deg)`,
                   transition: `transform ${movementDuration} ${currentEase}`,
                   display: "flex",
                   alignItems: "center",
@@ -404,7 +383,6 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
         })}
       </div>
 
-      {/* Orbit Circle */}
       {activeIndex !== null && hasShiftedLeft && (
         <svg
           style={{
@@ -431,7 +409,6 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
         </svg>
       )}
 
-      {/* Moons Logic */}
       {activeIndex !== null &&
         hasShiftedLeft &&
         displayPlanets[activeIndex]?.courses?.map((moon, idx) => (
