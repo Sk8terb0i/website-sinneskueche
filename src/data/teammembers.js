@@ -22,6 +22,25 @@ export const planets = [
     courses: [{ text: { en: "horsing around", de: "pferdig mit den nerven" } }],
   },
   {
+    id: "sonja",
+    type: "courses",
+    get icon() {
+      return {
+        en: getImage("sonja_name.png"),
+        de: getImage("sonja_name.png"),
+        base: getImage("sonja.png"),
+      };
+    },
+    courses: [
+      {
+        text: {
+          en: "horse sense is the thing a horse has",
+          de: "pferdesinn ist das, was ein pferd hat",
+        },
+      },
+    ],
+  },
+  {
     id: "lu",
     type: "courses",
     get icon() {

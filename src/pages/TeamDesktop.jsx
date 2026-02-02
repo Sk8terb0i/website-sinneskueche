@@ -263,7 +263,7 @@ export default function Teams({ currentLang, setCurrentLang }) {
           pointerEvents: "none",
         }}
       >
-        the herd
+        team
       </div>
 
       {Object.entries(staticOrbitRadii).map(([type, radius]) => (

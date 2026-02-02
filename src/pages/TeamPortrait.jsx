@@ -315,10 +315,7 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
           const isAtelier = planet.id === "atelier";
           const radius = !isAtelier ? getOrbitDiameter(index) / 2 : 0;
           const possibleAngles = [-90, 90, -180, 45, -45];
-          let startAngle =
-            index === coursePlanetsOnly.length - 1
-              ? 180
-              : possibleAngles[index % possibleAngles.length];
+          let startAngle = possibleAngles[index % possibleAngles.length];
           const currentAngle = isLoaded ? 0 : startAngle;
           let translateX = hasShiftedLeft ? "-10vw" : "0";
           const isVisible =
