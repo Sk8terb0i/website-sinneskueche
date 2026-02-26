@@ -195,8 +195,9 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         {currentLang === "en" ? "Available Dates" : "Verfügbare Termine"}
       </h2>
 
-      <div style={S.containerStyle(isMobile, selectedDates.length > 0)}>
-        <div style={S.calendarCardStyle(isMobile, selectedDates.length > 0)}>
+      {/* CHANGED: Container and Calendar show summary as soon as pricing is loaded */}
+      <div style={S.containerStyle(isMobile, !!pricing)}>
+        <div style={S.calendarCardStyle(isMobile, !!pricing)}>
           <div style={S.calendarHeaderStyle(isMobile)}>
             <button
               onClick={() =>
