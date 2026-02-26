@@ -22,7 +22,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     mobile: {
       topIcon: { top: "-10px", left: "-10px" },
       bottomIcon: { top: "45px", left: "calc(100% - 55px)" },
-      titleSize: "3.5rem",
+      titleSize: "2.8rem", // Reduziert für weniger Streckung
     },
   };
 
@@ -31,18 +31,18 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       title: "pottery tuesdays",
       welcome: "Make Tuesdays your creative sanctuary",
       details: [
-        { icon: <Clock size={20} />, text: "18:30 - 21:30" },
-        { icon: <Users size={20} />, text: "All skill levels" },
-        { icon: <Coffee size={20} />, text: "Small, cozy groups" },
+        { icon: <Clock size={18} />, text: "18:30 - 21:30" },
+        { icon: <Users size={18} />, text: "All skill levels" },
+        { icon: <Coffee size={18} />, text: "Small, cozy groups" },
       ],
     },
     de: {
       title: "pottery tuesdays",
       welcome: "Mach den Dienstag zu deiner kreativen Auszeit",
       details: [
-        { icon: <Clock size={20} />, text: "18:30 - 21:30" },
-        { icon: <Users size={20} />, text: "Alle Level willkommen" },
-        { icon: <Coffee size={20} />, text: "Kleine, gemütliche Gruppen" },
+        { icon: <Clock size={18} />, text: "18:30 - 21:30" },
+        { icon: <Users size={18} />, text: "Alle Level willkommen" },
+        { icon: <Coffee size={18} />, text: "Kleine, gemütliche Gruppen" },
       ],
     },
   };
@@ -58,6 +58,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       flexDirection: "column",
       alignItems: "center",
       textAlign: "center",
+      position: "relative", // Wichtig für die absolute Positionierung der Icons im Titel
     },
     welcomeText: {
       fontSize: "0.9rem",
@@ -87,7 +88,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       color: "#1c0700",
       whiteSpace: "nowrap",
     },
-    infoLabel: { fontSize: "0.9rem", lineHeight: "1.4", fontWeight: "500" },
+    infoLabel: { fontSize: "0.85rem", lineHeight: "1.4", fontWeight: "500" },
   };
 
   return (
@@ -102,22 +103,47 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       <style>
         {`
           @media (max-width: 768px) {
-            .main-content { display: flex; flex-direction: column; align-items: center; padding-top: 120px !important; }
-            .welcome-text { margin-bottom: 40px !important; font-size: 0.9rem !important; width: 50vw; }
-            .info-grid { flex-direction: column !important; gap: 12px !important; width: 100%; }
-            .info-item:nth-child(1) { transform: translateX(-15px); }
-            .info-item:nth-child(2) { transform: translateX(15px); }
-            .info-item:nth-child(3) { transform: translateX(-10px); }
+            .main-content { 
+              display: flex !important; 
+              flex-direction: column !important; // Erzwingt die korrekte Reihenfolge
+              align-items: center; 
+              padding-top: 100px !important; // Weniger Padding oben auf Mobile
+              padding-bottom: 40px !important;
+            }
+            .course-title-wrapper { 
+              order: -1; // Stellt sicher, dass der Titel ganz oben steht
+              margin-bottom: 10px;
+              font-weight: 500 !important; // Reduzierte Stärke für Mobile
+            }
+            .welcome-text { 
+              margin-bottom: 25px !important; 
+              font-size: 0.85rem !important; 
+              width: 80vw !important; // Breite angepasst für bessere Lesbarkeit
+            }
+            .info-grid { 
+              flex-direction: column !important; 
+              gap: 8px !important; 
+              width: 100%; 
+              margin-top: 10px !important;
+            }
+            .info-item {
+              padding: 8px 20px !important;
+            }
+            .info-item:nth-child(1) { transform: translateX(0); }
+            .info-item:nth-child(2) { transform: translateX(0); }
+            .info-item:nth-child(3) { transform: translateX(0); }
           }
         `}
       </style>
 
       <main style={styles.main} className="main-content">
-        <CourseTitle
-          title={content[currentLang].title}
-          config={config}
-          icons={icons}
-        />
+        <div className="course-title-wrapper">
+          <CourseTitle
+            title={content[currentLang].title}
+            config={config}
+            icons={icons}
+          />
+        </div>
 
         <p className="welcome-text" style={styles.welcomeText}>
           {content[currentLang].welcome}
