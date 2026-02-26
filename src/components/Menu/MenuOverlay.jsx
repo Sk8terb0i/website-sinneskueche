@@ -37,15 +37,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         const now = new Date();
         now.setHours(0, 0, 0, 0);
 
-        // 1. Calculate end of the current month (for courses)
-        const endOfCurrentMonth = new Date(
-          now.getFullYear(),
-          now.getMonth() + 1,
-          0,
-        );
-        endOfCurrentMonth.setHours(23, 59, 59, 999);
-
-        // 2. Calculate end of the month 6 months from now (for events)
+        // Calculate end of the month 6 months from now (for events)
         const endOfSixMonths = new Date(
           now.getFullYear(),
           now.getMonth() + 7,
@@ -53,29 +45,45 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         );
         endOfSixMonths.setHours(23, 59, 59, 999);
 
-        const filtered = snapshot.docs
+        // 1. Filter out past items completely
+        const futureItems = snapshot.docs
           .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter((item) => {
-            const itemDate = new Date(item.date);
+          .filter((item) => new Date(item.date) >= now);
 
-            // Basic check: skip past items
-            if (itemDate < now) return false;
+        // 2. Separate into Events and Courses (fallback to 'course' if no type)
+        const rawEvents = futureItems.filter((item) => item.type === "event");
+        const rawCourses = futureItems.filter(
+          (item) => item.type === "course" || !item.type,
+        );
 
-            // Logic: Courses only show this month
-            if (item.type === "course") {
-              return itemDate <= endOfCurrentMonth;
-            }
+        // 3. Process Events: Show current month + 6 months
+        const filteredEvents = rawEvents.filter(
+          (item) => new Date(item.date) <= endOfSixMonths,
+        );
 
-            // Logic: Events show current month + 6 months
-            if (item.type === "event") {
-              return itemDate <= endOfSixMonths;
-            }
+        // 4. Process Courses: Find the first month that actually has courses
+        let filteredCourses = [];
+        if (rawCourses.length > 0) {
+          // Since the firestore query is ordered by date asc, index 0 is the closest upcoming course
+          const firstCourseDate = new Date(rawCourses[0].date);
+          const targetMonth = firstCourseDate.getMonth();
+          const targetYear = firstCourseDate.getFullYear();
 
-            // Fallback for safety (shows this month if type is missing)
-            return itemDate <= endOfCurrentMonth;
+          // Keep ONLY courses that match the target month & year
+          filteredCourses = rawCourses.filter((course) => {
+            const d = new Date(course.date);
+            return (
+              d.getMonth() === targetMonth && d.getFullYear() === targetYear
+            );
           });
+        }
 
-        setUpcomingEvents(filtered);
+        // 5. Combine and sort back by date
+        const combined = [...filteredCourses, ...filteredEvents].sort(
+          (a, b) => new Date(a.date) - new Date(b.date),
+        );
+
+        setUpcomingEvents(combined);
       } catch (error) {
         console.error("Error fetching events:", error);
       }
