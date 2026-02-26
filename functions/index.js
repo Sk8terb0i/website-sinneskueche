@@ -109,48 +109,52 @@ exports.handleStripeWebhook = onRequest(async (req, res) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
-    // Retrieve the data we tucked away in createStripeCheckout
-    const { userId, mode, packSize, selectedDates } = session.metadata;
+    // 1. We now extract coursePath from the metadata!
+    const { userId, mode, packSize, selectedDates, coursePath } =
+      session.metadata;
     const parsedDates = JSON.parse(selectedDates);
 
     const userRef = db.collection("users").doc(userId);
 
     try {
       await db.runTransaction(async (transaction) => {
-        // A. If it was a pack purchase, calculate and add new credits
+        // A. Update course-specific credits
         if (mode === "pack") {
           const packAmount = parseInt(packSize);
           const deduction = parsedDates.length;
-
-          // They bought 10, but immediately booked 3. Net increase = 7.
           const netCreditIncrease = packAmount - deduction;
 
-          // Note: Using { merge: true } or checking if doc exists is safer if the user doc is totally empty,
-          // but FieldValue.increment handles missing fields by setting them to the increment amount.
+          // We use nested objects so credits are stored by course (e.g., credits.pottery)
           transaction.set(
             userRef,
             {
-              credits: admin.firestore.FieldValue.increment(netCreditIncrease),
+              credits: {
+                [coursePath]:
+                  admin.firestore.FieldValue.increment(netCreditIncrease),
+              },
             },
             { merge: true },
           );
         }
 
-        // B. Register the actual dates as confirmed bookings
+        // B. Register bookings WITH the coursePath
         parsedDates.forEach((sessionDate) => {
           const bookingRef = db.collection("bookings").doc();
           transaction.set(bookingRef, {
             userId: userId,
             eventId: sessionDate.id,
             date: sessionDate.date,
-            type: mode, // 'pack' or 'individual'
+            type: mode,
+            coursePath: coursePath, // <--- NOW SAVED TO THE DATABASE
             status: "confirmed",
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           });
         });
       });
 
-      console.log(`Successfully processed ${mode} for user ${userId}`);
+      console.log(
+        `Successfully processed ${mode} for user ${userId} in course ${coursePath}`,
+      );
     } catch (error) {
       console.error("Firestore update failed in webhook:", error);
     }
