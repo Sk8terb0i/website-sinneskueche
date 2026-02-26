@@ -1,519 +1,772 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import { db } from "../../firebase";
 import {
   collection,
   addDoc,
+  query,
+  where,
   getDocs,
   deleteDoc,
   doc,
-  query,
   orderBy,
-  where,
-  serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
-import { db } from "../../firebase";
+import { planets } from "../../data/planets";
 import {
-  Plus,
-  Trash2,
-  Calendar,
-  Clock,
-  Loader2,
-  Users,
+  XCircle,
+  BookOpen,
+  Star,
   ChevronDown,
-  ChevronUp,
+  ChevronRight,
+  Users,
   User,
+  Phone,
+  Mail,
+  Edit2,
+  Clock,
   LayoutGrid,
 } from "lucide-react";
-import { planets } from "../../data/planets";
+import {
+  formCardStyle,
+  sectionTitleStyle,
+  cancelBtnStyle,
+  labelStyle,
+  toggleContainerStyle,
+  toggleOptionStyle,
+  inputStyle,
+  btnStyle,
+  cardStyle,
+} from "./AdminStyles";
 
-export default function EventsTab({ currentLang }) {
+export default function EventsTab({ isMobile, currentLang }) {
   const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedCourse, setExpandedCourse] = useState(null);
-  const [selectedEventParticipants, setSelectedEventParticipants] =
-    useState(null);
-
-  // Form State
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [courseLink, setCourseLink] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [titleEn, setTitleEn] = useState("");
+  const [titleDe, setTitleDe] = useState("");
+  const [linkType, setLinkType] = useState("course");
+  const [isCustomCourseLink, setIsCustomCourseLink] = useState(false);
+  const [link, setLink] = useState("");
+  const [externalLink, setExternalLink] = useState("");
+  const [editingId, setEditingId] = useState(null);
 
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const [showParticipantsFor, setShowParticipantsFor] = useState(null);
+  const [participantCache, setParticipantCache] = useState({});
+
+  // Translation Dictionary
   const labels = {
     en: {
-      addSession: "Create New Event (Session)",
-      upcoming: "Manage Scheduled Events",
-      date: "Event Date",
-      timeLabel: "Event Time (e.g. 18:30 - 21:30)",
-      course: "Assign to Course",
-      select: "-- Choose Course Type --",
-      create: "Add Event to Calendar",
-      confirmDelete:
-        "Delete this event? Users who booked this will still see it in their history.",
-      booked: "booked",
+      newEntry: "NEW ENTRY",
+      editEntry: "EDIT ENTRY",
+      cancel: "CANCEL",
+      source: "Source",
+      course: "Course",
+      event: "Event",
+      dateLabel: "Date",
+      timeLabel: "Time",
+      titleEn: "Title EN",
+      titleDe: "Title DE",
+      addBtn: "Add to Calendar",
+      updateBtn: "Update Entry",
+      courseHeader: "COURSES",
+      eventHeader: "INDIVIDUAL EVENTS",
+      noCourses: "No courses scheduled.",
+      noEvents: "No events scheduled.",
+      cancelCourse: "CANCEL COURSE",
+      deleteConfirm: "Delete this session?",
       participants: "Participants",
       noParticipants: "No bookings yet.",
     },
     de: {
-      addSession: "Neues Event (Termin) erstellen",
-      upcoming: "Events verwalten",
-      date: "Event-Datum",
-      timeLabel: "Event-Zeit (z.B. 18:30 - 21:30)",
-      course: "Kurs zuweisen",
-      select: "-- Kurstyp wählen --",
-      create: "Event hinzufügen",
-      confirmDelete:
-        "Dieses Event löschen? Nutzer, die bereits gebucht haben, sehen es weiterhin in ihrer Historie.",
-      booked: "gebucht",
+      newEntry: "NEUER EINTRAG",
+      editEntry: "EINTRAG BEARBEITEN",
+      cancel: "ABBRECHEN",
+      source: "Quelle",
+      course: "Kurs",
+      event: "Event",
+      dateLabel: "Datum",
+      timeLabel: "Uhrzeit",
+      titleEn: "Titel EN",
+      titleDe: "Titel DE",
+      addBtn: "Zum Kalender hinzufügen",
+      updateBtn: "Eintrag aktualisieren",
+      courseHeader: "KURSE",
+      eventHeader: "EINZEL-EVENTS",
+      noCourses: "Keine Kurse geplant.",
+      noEvents: "Keine Events geplant.",
+      cancelCourse: "KURS ABSAGEN",
+      deleteConfirm: "Diesen Termin löschen?",
       participants: "Teilnehmer",
       noParticipants: "Noch keine Buchungen.",
     },
   }[currentLang || "en"];
 
-  // Unique courses for the dropdown
-  const allCourses = planets
-    .flatMap((p) => p.courses || [])
-    .filter(
-      (course, index, self) =>
-        index === self.findIndex((t) => t.link === course.link),
-    );
+  const eventsCollection = collection(db, "events");
+
+  const availableCourses = Array.from(
+    new Map(
+      planets
+        .filter((p) => p.type === "courses")
+        .flatMap((p) => p.courses || [])
+        .filter((c) => c.link)
+        .map((course) => [course.link, course]),
+    ).values(),
+  );
 
   useEffect(() => {
     fetchEvents();
+    autoFillFirstCourse();
   }, []);
 
   const fetchEvents = async () => {
-    setLoading(true);
     try {
-      const q = query(collection(db, "events"), orderBy("date", "asc"));
+      const q = query(eventsCollection, orderBy("date", "asc"));
       const querySnapshot = await getDocs(q);
-      const eventsList = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-      const eventsWithCounts = await Promise.all(
-        eventsList.map(async (event) => {
+      const allFetchedEvents = await Promise.all(
+        querySnapshot.docs.map(async (docSnap) => {
+          const data = docSnap.data();
           const bQuery = query(
             collection(db, "bookings"),
-            where("eventId", "==", event.id),
+            where("eventId", "==", docSnap.id),
           );
           const bSnap = await getDocs(bQuery);
-          const participantData = bSnap.docs.map((d) => d.data().userId);
+
           return {
-            ...event,
+            ...data,
+            id: docSnap.id,
             bookedCount: bSnap.size,
-            participantIds: participantData,
+            uids: bSnap.docs.map((d) => d.data().userId),
           };
         }),
       );
-      setEvents(eventsWithCounts);
-    } catch (err) {
-      console.error("Error fetching events:", err);
-    } finally {
-      setLoading(false);
+
+      const validEvents = allFetchedEvents.filter((event) => {
+        const eventDate = new Date(event.date);
+        eventDate.setHours(0, 0, 0, 0);
+        if (eventDate < today) {
+          deleteDoc(doc(db, "events", event.id));
+          return false;
+        }
+        return true;
+      });
+      setEvents(validEvents);
+    } catch (error) {
+      console.error("Error fetching events:", error);
     }
   };
 
   const handleShowParticipants = async (event) => {
-    if (selectedEventParticipants?.id === event.id) {
-      setSelectedEventParticipants(null);
+    if (showParticipantsFor === event.id) {
+      setShowParticipantsFor(null);
       return;
     }
     if (event.bookedCount === 0) return alert(labels.noParticipants);
 
-    const userData = await Promise.all(
-      event.participantIds.map(async (uid) => {
-        const uSnap = await getDocs(
-          query(collection(db, "users"), where("__name__", "==", uid)),
-        );
-        return (
-          uSnap.docs[0]?.data() || {
-            firstName: "Unknown",
-            lastName: "User",
-            email: "N/A",
-          }
-        );
-      }),
-    );
-    setSelectedEventParticipants({ id: event.id, users: userData });
+    if (!participantCache[event.id]) {
+      const userDetails = await Promise.all(
+        event.uids.map(async (uid) => {
+          const uSnap = await getDocs(
+            query(collection(db, "users"), where("__name__", "==", uid)),
+          );
+          return (
+            uSnap.docs[0]?.data() || {
+              firstName: "Unknown",
+              lastName: "User",
+              email: "N/A",
+            }
+          );
+        }),
+      );
+      setParticipantCache((prev) => ({ ...prev, [event.id]: userDetails }));
+    }
+    setShowParticipantsFor(event.id);
   };
 
-  const groupedEvents = events.reduce((acc, event) => {
-    if (!acc[event.link]) acc[event.link] = [];
-    acc[event.link].push(event);
-    return acc;
-  }, {});
-
-  const handleAddEvent = async (e) => {
-    e.preventDefault();
-    if (!date || !time || !courseLink) return;
-    setIsSubmitting(true);
-    try {
-      await addDoc(collection(db, "events"), {
-        date,
-        time,
-        link: courseLink,
-        createdAt: serverTimestamp(),
-      });
-      setDate("");
-      setTime("");
-      setCourseLink("");
-      fetchEvents();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSubmitting(false);
+  const autoFillFirstCourse = () => {
+    if (availableCourses.length > 0 && !editingId && !isCustomCourseLink) {
+      handleCourseSelection(availableCourses[0].link);
     }
   };
 
-  const handleDeleteEvent = async (id) => {
-    if (!window.confirm(labels.confirmDelete)) return;
-    await deleteDoc(doc(db, "events", id));
-    fetchEvents();
+  const handleCourseSelection = (courseLink) => {
+    const sel = availableCourses.find((c) => c.link === courseLink);
+    setLink(courseLink);
+    if (sel) {
+      setTitleEn(sel.text.en);
+      setTitleDe(sel.text.de);
+      if (sel.text.en.toLowerCase().includes("pottery tuesdays")) {
+        setTime("18:30 - 21:30");
+      } else {
+        setTime("");
+      }
+    }
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const finalLink =
+        linkType === "event" || isCustomCourseLink ? externalLink : link;
+      const eventData = {
+        date,
+        time,
+        title: { en: titleEn, de: titleDe },
+        link: finalLink,
+        type: linkType,
+      };
+
+      if (editingId) {
+        await setDoc(doc(db, "events", editingId), eventData);
+      } else {
+        await addDoc(eventsCollection, eventData);
+      }
+      resetForm();
+      fetchEvents();
+    } catch (e) {
+      alert("Error saving: " + e.message);
+    }
+  };
+
+  const startEdit = (event) => {
+    setEditingId(event.id);
+    setDate(event.date);
+    setTime(event.time || "");
+    setTitleEn(event.title.en);
+    setTitleDe(event.title.de);
+    const type =
+      event.type || (event.link?.startsWith("http") ? "event" : "course");
+    setLinkType(type);
+
+    if (type === "course") {
+      const isStandard = availableCourses.some((c) => c.link === event.link);
+      if (isStandard) {
+        setLink(event.link);
+        setExternalLink("");
+        setIsCustomCourseLink(false);
+      } else {
+        setExternalLink(event.link);
+        setIsCustomCourseLink(true);
+      }
+    } else {
+      setExternalLink(event.link || "");
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setDate("");
+    setTime("");
+    setExternalLink("");
+    setTitleEn("");
+    setTitleDe("");
+    setIsCustomCourseLink(false);
+    if (linkType === "course") autoFillFirstCourse();
+  };
+
+  const toggleGroup = (link) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [link]: !prev[link],
+    }));
+  };
+
+  const scheduledCourses = events.filter((ev) => ev.type === "course");
+  const scheduledEvents = events.filter((ev) => ev.type === "event");
+
+  const groupedCourses = scheduledCourses.reduce((acc, course) => {
+    const key = course.link;
+    if (!acc[key]) {
+      acc[key] = {
+        title: course.title[currentLang || "en"],
+        link: course.link,
+        dates: [],
+      };
+    }
+    acc[key].dates.push(course);
+    return acc;
+  }, {});
+
   return (
-    <div style={styles.container}>
-      {/* 1. ADD EVENT FORM SECTION */}
-      <section style={styles.card}>
-        <h3 style={styles.cardTitle}>
-          <LayoutGrid size={20} /> {labels.addSession}
-        </h3>
-        <form onSubmit={handleAddEvent} style={styles.form}>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>{labels.date}</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              style={styles.input}
-              required
-            />
-          </div>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>{labels.timeLabel}</label>
-            <input
-              type="text"
-              placeholder="18:30 - 21:30"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              style={styles.input}
-              required
-            />
-          </div>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>{labels.course}</label>
-            <select
-              value={courseLink}
-              onChange={(e) => setCourseLink(e.target.value)}
-              style={styles.selectInput}
-              required
-            >
-              <option value="" style={styles.optionText}>
-                {labels.select}
-              </option>
-              {allCourses.map((c) => (
-                <option key={c.link} value={c.link} style={styles.optionText}>
-                  {c.text[currentLang]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button type="submit" disabled={isSubmitting} style={styles.addBtn}>
-            {isSubmitting ? (
-              <Loader2 className="spinner" size={18} />
-            ) : (
-              labels.create
+    <div
+      style={{
+        display: isMobile ? "block" : "flex",
+        gap: "2rem",
+        marginBottom: "5rem",
+      }}
+    >
+      {/* 1. FORM SECTION */}
+      <section style={{ width: isMobile ? "100%" : "400px" }}>
+        <div style={formCardStyle}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginBottom: "1.2rem",
+            }}
+          >
+            <h3 style={sectionTitleStyle}>
+              {editingId ? labels.editEntry : labels.newEntry}
+            </h3>
+            {editingId && (
+              <button onClick={resetForm} style={cancelBtnStyle}>
+                <XCircle size={14} /> {labels.cancel}
+              </button>
             )}
-          </button>
-        </form>
+          </div>
+          <form
+            onSubmit={handleSubmit}
+            style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}
+          >
+            <div>
+              <label style={labelStyle}>{labels.source}</label>
+              <div style={toggleContainerStyle}>
+                <div
+                  onClick={() => {
+                    setLinkType("course");
+                    setIsCustomCourseLink(false);
+                  }}
+                  style={{
+                    ...toggleOptionStyle,
+                    backgroundColor:
+                      linkType === "course" ? "#caaff3" : "transparent",
+                  }}
+                >
+                  {" "}
+                  {labels.course}{" "}
+                </div>
+                <div
+                  onClick={() => setLinkType("event")}
+                  style={{
+                    ...toggleOptionStyle,
+                    backgroundColor:
+                      linkType === "event" ? "#caaff3" : "transparent",
+                  }}
+                >
+                  {" "}
+                  {labels.event}{" "}
+                </div>
+              </div>
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "10px",
+              }}
+            >
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+              >
+                <label style={{ ...labelStyle, opacity: 0.5 }}>
+                  {labels.dateLabel}
+                </label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  style={inputStyle}
+                />
+              </div>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+              >
+                <label style={{ ...labelStyle, opacity: 0.5 }}>
+                  {labels.timeLabel}
+                </label>
+                <input
+                  type="text"
+                  placeholder="18:30"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+            {linkType === "course" && !isCustomCourseLink ? (
+              <select
+                value={link}
+                onChange={(e) => handleCourseSelection(e.target.value)}
+                style={inputStyle}
+                required
+              >
+                {availableCourses.map((c, i) => (
+                  <option key={i} value={c.link}>
+                    {c.text[currentLang || "en"]}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="url"
+                placeholder="URL https://..."
+                value={externalLink}
+                onChange={(e) => setExternalLink(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            )}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "10px",
+              }}
+            >
+              <input
+                type="text"
+                placeholder={labels.titleEn}
+                value={titleEn}
+                onChange={(e) => setTitleEn(e.target.value)}
+                required
+                style={inputStyle}
+              />
+              <input
+                type="text"
+                placeholder={labels.titleDe}
+                value={titleDe}
+                onChange={(e) => setTitleDe(e.target.value)}
+                required
+                style={inputStyle}
+              />
+            </div>
+            <button type="submit" style={btnStyle}>
+              {editingId ? labels.updateBtn : labels.addBtn}
+            </button>
+          </form>
+        </div>
       </section>
 
-      {/* 2. COLLAPSIBLE UPCOMING SESSIONS LIST */}
-      <section style={styles.card}>
-        <h3 style={styles.cardTitle}>
-          <Calendar size={20} /> {labels.upcoming}
+      {/* 2. SCHEDULE VIEW SECTION */}
+      <section style={{ flex: 1 }}>
+        <h3 style={{ ...sectionTitleStyle, marginBottom: "1rem" }}>
+          <BookOpen size={16} /> {labels.courseHeader} (
+          {scheduledCourses.length})
         </h3>
-        {loading ? (
-          <div style={styles.loading}>
-            <Loader2 className="spinner" size={30} color="#caaff3" />
-          </div>
-        ) : (
-          <div style={styles.groupList}>
-            {Object.entries(groupedEvents).map(([link, courseEvents]) => {
-              const courseTitle =
-                allCourses.find((c) => c.link === link)?.text[currentLang] ||
-                link;
-              const isExpanded = expandedCourse === link;
-
-              return (
-                <div key={link} style={styles.courseGroup}>
-                  <button
-                    onClick={() => setExpandedCourse(isExpanded ? null : link)}
-                    style={styles.groupHeader}
-                  >
-                    <span style={styles.groupTitle}>
-                      {courseTitle} ({courseEvents.length})
-                    </span>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
+            marginBottom: "3rem",
+          }}
+        >
+          {Object.values(groupedCourses).map((group) => {
+            const isExpanded = expandedGroups[group.link];
+            return (
+              <div key={group.link} style={styles.courseGroupWrapper}>
+                <div
+                  onClick={() => toggleGroup(group.link)}
+                  style={styles.groupHeader}
+                >
+                  <div style={styles.groupTitleText}>
                     {isExpanded ? (
-                      <ChevronUp size={20} />
+                      <ChevronDown size={14} />
                     ) : (
-                      <ChevronDown size={20} />
+                      <ChevronRight size={14} />
                     )}
-                  </button>
+                    {group.title} ({group.dates.length})
+                  </div>
+                </div>
 
-                  {isExpanded && (
-                    <div style={styles.expandedContent}>
-                      {courseEvents.map((event) => (
-                        <div key={event.id} style={styles.eventContainer}>
-                          <div style={styles.eventRow}>
-                            <div style={styles.eventMain}>
-                              <div style={styles.dateBadge}>
-                                <span style={styles.dateText}>
-                                  {event.date.split("-")[2]}
-                                </span>
-                                <span style={styles.monthText}>
-                                  {new Date(event.date).toLocaleString(
-                                    currentLang === "en" ? "en-US" : "de-DE",
-                                    { month: "short" },
-                                  )}
-                                </span>
-                              </div>
-                              <div style={styles.eventInfo}>
-                                <div style={styles.metaRow}>
-                                  <Clock size={14} /> <span>{event.time}</span>
-                                </div>
-                                <button
-                                  onClick={() => handleShowParticipants(event)}
-                                  style={styles.participantToggle}
-                                >
-                                  <Users size={14} /> {event.bookedCount}{" "}
-                                  {labels.booked}
-                                </button>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => handleDeleteEvent(event.id)}
-                              style={styles.deleteBtn}
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                {isExpanded && (
+                  <div style={styles.expandedContent}>
+                    {group.dates.map((ev) => (
+                      <div key={ev.id} style={styles.eventItemWrapper}>
+                        <div
+                          style={{
+                            ...cardStyle,
+                            padding: "0.8rem 1.2rem",
+                            backgroundColor: "#fdf8e1",
+                          }}
+                        >
+                          <button
+                            onClick={() => startEdit(ev)}
+                            style={styles.editBtnIcon}
+                          >
+                            <Edit2 size={16} />
+                          </button>
+
+                          <div style={styles.eventMainInfo}>
+                            <span style={styles.dateLabel}>{ev.date}</span>
+                            {ev.time && (
+                              <span style={styles.timeLabel}>
+                                <Clock size={12} /> {ev.time}
+                              </span>
+                            )}
                           </div>
 
-                          {selectedEventParticipants?.id === event.id && (
-                            <div style={styles.participantList}>
-                              <h5 style={styles.participantListTitle}>
+                          <div style={styles.actionRow}>
+                            <button
+                              onClick={() => handleShowParticipants(ev)}
+                              style={{
+                                ...styles.participantBadge,
+                                opacity: ev.bookedCount > 0 ? 1 : 0.3,
+                              }}
+                            >
+                              <Users size={16} color="#4e5f28" />
+                              <span style={{ fontWeight: "800" }}>
+                                {ev.bookedCount}
+                              </span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                if (window.confirm(labels.deleteConfirm))
+                                  deleteDoc(doc(db, "events", ev.id)).then(
+                                    fetchEvents,
+                                  );
+                              }}
+                              style={styles.cancelCourseBtn}
+                            >
+                              {labels.cancelCourse}
+                            </button>
+                          </div>
+                        </div>
+
+                        {showParticipantsFor === ev.id &&
+                          participantCache[ev.id] && (
+                            <div style={styles.participantPanel}>
+                              <h5
+                                style={{
+                                  fontSize: "0.6rem",
+                                  marginBottom: "8px",
+                                  opacity: 0.5,
+                                }}
+                              >
                                 {labels.participants}
                               </h5>
-                              {selectedEventParticipants.users.map((u, i) => (
+                              {participantCache[ev.id].map((u, i) => (
                                 <div key={i} style={styles.userRow}>
-                                  <User size={14} opacity={0.5} />
-                                  <div style={styles.userData}>
-                                    <span style={styles.userName}>
-                                      {u.firstName} {u.lastName}
+                                  <User size={12} />
+                                  <strong>
+                                    {u.firstName} {u.lastName}
+                                  </strong>
+                                  <span style={styles.contactText}>
+                                    <Mail size={10} /> {u.email}
+                                  </span>
+                                  {u.phone && (
+                                    <span style={styles.contactText}>
+                                      <Phone size={10} /> {u.phone}
                                     </span>
-                                    <span style={styles.userContact}>
-                                      {u.email} {u.phone && `• ${u.phone}`}
-                                    </span>
-                                  </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
                           )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {scheduledCourses.length === 0 && (
+            <p style={{ opacity: 0.4, fontSize: "0.8rem" }}>
+              {labels.noCourses}
+            </p>
+          )}
+        </div>
+
+        <h3 style={{ ...sectionTitleStyle, marginBottom: "1rem" }}>
+          <Star size={16} /> {labels.eventHeader} ({scheduledEvents.length})
+        </h3>
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}
+        >
+          {scheduledEvents.map((ev) => (
+            <div key={ev.id} style={styles.eventItemWrapper}>
+              <div
+                onClick={() => startEdit(ev)}
+                style={{ ...cardStyle, backgroundColor: "#fdf8e1" }}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(ev);
+                  }}
+                  style={styles.editBtnIcon}
+                >
+                  <Edit2 size={16} />
+                </button>
+                <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#caaff3",
+                      fontWeight: "800",
+                    }}
+                  >
+                    {ev.date} {ev.time && `• ${ev.time}`}
+                  </div>
+                  <span style={{ fontWeight: "600" }}>
+                    {ev.title[currentLang || "en"]}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <div style={styles.actionRow}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleShowParticipants(ev);
+                    }}
+                    style={{
+                      ...styles.participantBadge,
+                      opacity: ev.bookedCount > 0 ? 1 : 0.3,
+                    }}
+                  >
+                    <Users size={18} color="#4e5f28" />
+                    <span style={{ fontWeight: "800" }}>{ev.bookedCount}</span>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm(labels.deleteConfirm))
+                        deleteDoc(doc(db, "events", ev.id)).then(fetchEvents);
+                    }}
+                    style={styles.cancelCourseBtn}
+                  >
+                    {labels.cancelCourse}
+                  </button>
+                </div>
+              </div>
+              {showParticipantsFor === ev.id && participantCache[ev.id] && (
+                <div style={styles.participantPanel}>
+                  {participantCache[ev.id].map((u, i) => (
+                    <div key={i} style={styles.userRow}>
+                      <User size={12} />
+                      <strong>
+                        {u.firstName} {u.lastName}
+                      </strong>
+                      <span style={styles.contactText}>
+                        <Mail size={10} /> {u.email}
+                      </span>
+                      {u.phone && (
+                        <span style={styles.contactText}>
+                          <Phone size={10} /> {u.phone}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {scheduledEvents.length === 0 && (
+            <p style={{ opacity: 0.4, fontSize: "0.8rem" }}>
+              {labels.noEvents}
+            </p>
+          )}
+        </div>
       </section>
+
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
     </div>
   );
 }
 
 const styles = {
-  container: { display: "flex", flexDirection: "column", gap: "2rem" },
-  card: {
-    backgroundColor: "#fdf8e1",
-    padding: "2rem",
-    borderRadius: "24px",
-    border: "1px solid rgba(28, 7, 0, 0.05)",
-  },
-  cardTitle: {
-    fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: "1.5rem",
-    marginBottom: "1.5rem",
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    color: "#1c0700",
-  },
-  form: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-    gap: "1.5rem",
-    alignItems: "flex-end",
-  },
-  inputGroup: { display: "flex", flexDirection: "column", gap: "8px" },
-  label: {
-    fontSize: "0.7rem",
-    fontWeight: "800",
-    textTransform: "uppercase",
-    opacity: 0.4,
-    fontFamily: "Satoshi",
-  },
-  input: {
-    padding: "12px",
-    borderRadius: "12px",
-    border: "1px solid rgba(28,7,0,0.1)",
-    fontFamily: "Satoshi",
-    backgroundColor: "white",
-    color: "#1c0700",
-  },
-  // FORCED DARK TEXT FOR SELECT
-  selectInput: {
-    padding: "12px",
-    borderRadius: "12px",
-    border: "1px solid rgba(28,7,0,0.1)",
-    fontFamily: "Satoshi",
-    backgroundColor: "white",
-    color: "#1c0700",
-    appearance: "auto",
-  },
-  optionText: { color: "#1c0700", backgroundColor: "white" },
-
-  addBtn: {
-    padding: "12px",
-    backgroundColor: "#9960a8",
-    color: "white",
-    border: "none",
-    borderRadius: "12px",
-    fontWeight: "bold",
-    cursor: "pointer",
-    fontFamily: "Satoshi",
-  },
-  groupList: { display: "flex", flexDirection: "column", gap: "12px" },
-  courseGroup: {
-    border: "1px solid rgba(28, 7, 0, 0.05)",
-    borderRadius: "16px",
-    overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.3)",
+  courseGroupWrapper: {
+    borderLeft: "3px solid #caaff3",
+    backgroundColor: "rgba(28, 7, 0, 0.02)",
+    borderRadius: "0 12px 12px 0",
+    padding: "0.5rem 1rem",
+    marginBottom: "0.5rem",
   },
   groupHeader: {
-    width: "100%",
-    padding: "1.2rem",
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
+    cursor: "pointer",
+    padding: "0.5rem 0",
+  },
+  groupTitleText: {
+    fontWeight: "800",
+    fontSize: "0.85rem",
+    color: "#1c0700",
+    textTransform: "uppercase",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+  expandedContent: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.8rem",
+    marginTop: "1rem",
+  },
+  eventItemWrapper: { display: "flex", flexDirection: "column", gap: "8px" },
+  editBtnIcon: {
     background: "none",
     border: "none",
     cursor: "pointer",
-    textAlign: "left",
-  },
-  groupTitle: {
-    fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: "1.2rem",
-    color: "#1c0700",
-    textTransform: "lowercase",
-  },
-  expandedContent: {
-    padding: "1rem",
-    backgroundColor: "rgba(255,255,255,0.4)",
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-  },
-  eventContainer: {
-    display: "flex",
-    flexDirection: "column",
-    border: "1px solid rgba(0,0,0,0.03)",
-    borderRadius: "12px",
-    backgroundColor: "white",
-  },
-  eventRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "0.8rem",
-  },
-  eventMain: { display: "flex", alignItems: "center", gap: "1rem" },
-  dateBadge: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    backgroundColor: "#caaff3",
+    color: "#caaff3",
     padding: "4px",
-    borderRadius: "8px",
-    width: "40px",
-    color: "#1c0700",
-  },
-  dateText: {
-    fontWeight: "bold",
-    fontSize: "1rem",
-    lineHeight: 1,
-    fontFamily: "Harmond-SemiBoldCondensed",
-  },
-  monthText: {
-    fontSize: "0.5rem",
-    textTransform: "uppercase",
-    fontWeight: "800",
-    fontFamily: "Satoshi",
-  },
-  eventInfo: { display: "flex", gap: "15px", alignItems: "center" },
-  metaRow: {
+    marginRight: "8px",
     display: "flex",
     alignItems: "center",
-    gap: "5px",
+    opacity: 0.7,
+  },
+  eventMainInfo: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
     fontSize: "0.85rem",
-    opacity: 0.6,
-    fontFamily: "Satoshi",
-    fontWeight: "700",
   },
-  participantToggle: {
+  dateLabel: { color: "#caaff3", fontWeight: "700" },
+  timeLabel: {
+    opacity: 0.6,
     display: "flex",
     alignItems: "center",
-    gap: "6px",
-    background: "rgba(78, 95, 40, 0.1)",
+    gap: "4px",
+  },
+  actionRow: { display: "flex", gap: "15px", alignItems: "center" },
+  participantBadge: {
     border: "none",
-    color: "#4e5f28",
-    padding: "4px 10px",
+    background: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+    cursor: "pointer",
+  },
+  cancelCourseBtn: {
+    background: "rgba(255, 77, 77, 0.1)",
+    border: "none",
+    color: "#ff4d4d",
+    padding: "6px 12px",
     borderRadius: "100px",
-    fontSize: "0.75rem",
+    fontSize: "0.7rem",
     fontWeight: "800",
     cursor: "pointer",
-    fontFamily: "Satoshi",
-  },
-  participantList: {
-    padding: "1rem",
-    borderTop: "1px solid rgba(0,0,0,0.05)",
-    backgroundColor: "rgba(78, 95, 40, 0.02)",
-  },
-  participantListTitle: {
-    margin: "0 0 10px 0",
-    fontSize: "0.7rem",
     textTransform: "uppercase",
-    opacity: 0.5,
-    letterSpacing: "0.05rem",
+    letterSpacing: "0.03rem",
+  },
+  participantPanel: {
+    backgroundColor: "rgba(78, 95, 40, 0.05)",
+    padding: "10px 15px",
+    borderRadius: "12px",
+    border: "1px solid rgba(78, 95, 40, 0.1)",
   },
   userRow: {
     display: "flex",
     alignItems: "center",
     gap: "10px",
-    marginBottom: "8px",
+    fontSize: "0.8rem",
+    marginBottom: "5px",
+    color: "#1c0700",
   },
-  userData: { display: "flex", flexDirection: "column" },
-  userName: { fontSize: "0.9rem", fontWeight: "700", color: "#1c0700" },
-  userContact: { fontSize: "0.75rem", opacity: 0.6 },
-  deleteBtn: {
-    padding: "8px",
-    background: "none",
-    border: "none",
-    color: "#ff4d4d",
-    cursor: "pointer",
-    opacity: 0.3,
+  contactText: {
+    opacity: 0.6,
+    fontSize: "0.75rem",
+    display: "flex",
+    alignItems: "center",
+    gap: "3px",
   },
-  loading: { display: "flex", justifyContent: "center", padding: "2rem" },
 };
