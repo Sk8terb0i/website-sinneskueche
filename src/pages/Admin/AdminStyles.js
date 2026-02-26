@@ -2,7 +2,7 @@ export const tabContainerStyle = {
   display: "flex",
   gap: "10px",
   marginBottom: "2.5rem",
-  borderBottom: "1px solid #eee",
+  borderBottom: "1px solid rgba(28, 7, 0, 0.1)",
   paddingBottom: "10px",
   overflowX: "auto",
 };
@@ -12,7 +12,7 @@ export const tabButtonStyle = (isActive) => ({
   alignItems: "center",
   gap: "8px",
   padding: "12px 24px",
-  borderRadius: "12px",
+  borderRadius: "100px", // Pill style
   border: "none",
   cursor: "pointer",
   fontFamily: "Satoshi",
@@ -30,15 +30,17 @@ export const loginWrapperStyle = {
   alignItems: "center",
   minHeight: "100vh",
   padding: "1.5rem",
+  backgroundColor: "#fffce3",
 };
 
 export const loginCardStyle = (isMobile) => ({
-  backgroundColor: "white",
+  backgroundColor: "#fdf8e1", // Theme beige
   padding: isMobile ? "2rem" : "3rem",
   borderRadius: "24px",
-  boxShadow: "0 10px 40px rgba(0,0,0,0.05)",
+  boxShadow: "0 10px 40px rgba(28, 7, 0, 0.05)",
   width: "100%",
   maxWidth: "400px",
+  border: "1px solid rgba(28, 7, 0, 0.05)",
 });
 
 export const headerStyle = (isMobile) => ({
@@ -53,26 +55,29 @@ export const logoutBtnStyle = {
   display: "flex",
   alignItems: "center",
   gap: "8px",
-  background: "white",
-  border: "1px solid #1c0700",
-  padding: "10px 14px",
-  borderRadius: "10px",
+  background: "#fdf8e1",
+  border: "1px solid rgba(28, 7, 0, 0.2)",
+  padding: "10px 18px",
+  borderRadius: "100px",
   cursor: "pointer",
   fontWeight: "bold",
+  fontFamily: "Satoshi",
+  fontSize: "0.85rem",
 };
 
 export const formCardStyle = {
-  backgroundColor: "#ffffff",
+  backgroundColor: "#fdf8e1", // Theme beige
   padding: "1.8rem",
   borderRadius: "24px",
   boxShadow: "0 10px 40px rgba(28, 7, 0, 0.04)",
+  border: "1px solid rgba(28, 7, 0, 0.05)",
 };
 
 export const labelStyle = {
   display: "block",
-  fontSize: "0.65rem",
+  fontSize: "0.6rem",
   marginBottom: "6px",
-  opacity: 0.5,
+  opacity: 0.4,
   fontWeight: "bold",
   textTransform: "uppercase",
   letterSpacing: "0.05rem",
@@ -82,11 +87,13 @@ export const inputStyle = {
   width: "100%",
   padding: "0.85rem",
   borderRadius: "12px",
-  border: "1px solid #eee",
+  border: "1px solid rgba(28, 7, 0, 0.1)",
+  backgroundColor: "rgba(255, 252, 227, 0.5)", // Semi-transparent theme
   fontFamily: "Satoshi",
   boxSizing: "border-box",
   outline: "none",
   fontSize: "1rem",
+  color: "#1c0700",
 };
 
 export const btnStyle = {
@@ -94,23 +101,25 @@ export const btnStyle = {
   padding: "1rem",
   backgroundColor: "#caaff3",
   border: "none",
-  borderRadius: "12px",
+  borderRadius: "100px",
   cursor: "pointer",
   fontWeight: "bold",
   color: "#1c0700",
   fontSize: "1rem",
   width: "100%",
+  fontFamily: "Satoshi",
 };
 
 export const forgotLinkStyle = {
   background: "none",
   border: "none",
-  color: "#caaff3",
+  color: "#9960a8",
   cursor: "pointer",
   fontSize: "0.65rem",
   fontWeight: "bold",
-  textTransform: "uppercase",
+  textTransform: "lowercase",
   padding: 0,
+  opacity: 0.8,
 };
 
 export const sectionTitleStyle = {
@@ -121,7 +130,8 @@ export const sectionTitleStyle = {
   gap: "8px",
   fontWeight: "bold",
   textTransform: "uppercase",
-  letterSpacing: "0.05rem",
+  letterSpacing: "0.1rem",
+  color: "#1c0700",
 };
 
 export const cancelBtnStyle = {
@@ -141,10 +151,12 @@ export const cardStyle = {
   justifyContent: "space-between",
   alignItems: "center",
   padding: "1.2rem",
-  backgroundColor: "#fff",
+  backgroundColor: "#fdf8e1",
   borderRadius: "18px",
+  border: "1px solid rgba(28, 7, 0, 0.05)",
   boxShadow: "0 4px 15px rgba(28, 7, 0, 0.02)",
   transition: "all 0.2s ease",
+  cursor: "pointer",
 };
 
 export const deleteBtnStyle = {
@@ -158,7 +170,7 @@ export const deleteBtnStyle = {
 
 export const toggleContainerStyle = {
   display: "flex",
-  backgroundColor: "#f0f0f0",
+  backgroundColor: "rgba(28, 7, 0, 0.05)",
   padding: "4px",
   borderRadius: "12px",
   width: "fit-content",

@@ -2,6 +2,11 @@ import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import homeIcon from "../../assets/menu/home.png";
 import MenuOverlay from "../Menu/MenuOverlay";
+import AuthOverlay from "../Auth/AuthOverlay";
+import { useAuth } from "../../contexts/AuthContext";
+import { auth } from "../../firebase";
+import { signOut } from "firebase/auth";
+import { User, LogOut } from "lucide-react";
 
 export default function Header({
   currentLang,
@@ -9,18 +14,21 @@ export default function Header({
   isPlanetActive,
   isMenuOpen,
   onMenuToggle,
-  onReset, // NEW: added reset callback
+  onReset,
 }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { currentUser, userData, loading } = useAuth();
 
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isPortrait, setIsPortrait] = useState(
     window.innerWidth < window.innerHeight,
   );
-
   const [titleHovered, setTitleHovered] = useState(false);
   const [langHovered, setLangHovered] = useState(false);
   const [menuHovered, setMenuHovered] = useState(false);
+  const [userHovered, setUserHovered] = useState(false);
+  const [logoutHovered, setLogoutHovered] = useState(false);
 
   useEffect(() => {
     const handleResize = () =>
@@ -28,6 +36,26 @@ export default function Header({
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate("/");
+    } catch (err) {
+      console.error("Logout error", err);
+    }
+  };
+
+  const handleProfileClick = () => {
+    if (loading) return;
+    if (!currentUser) {
+      setIsAuthOpen(true);
+    } else if (userData?.role === "admin") {
+      navigate("/admin-sinneskueche");
+    } else {
+      navigate("/profile");
+    }
+  };
 
   const hoverTransition =
     "transform 0.2s ease, color 0.2s ease, filter 0.2s ease";
@@ -56,10 +84,13 @@ export default function Header({
 
   const langFontSize = isPortrait ? "0.85rem" : "1rem";
   const rightGap = isPortrait ? "0.8rem" : "1.5rem";
+  const iconGap = isPortrait ? "0.6rem" : "1rem";
   const hamburgerSize = isPortrait
     ? { width: 18, height: 16 }
     : { width: 24, height: 20 };
   const hamburgerBarHeight = isPortrait ? 2.4 : 4;
+
+  const isAdmin = userData?.role === "admin";
 
   return (
     <>
@@ -96,13 +127,7 @@ export default function Header({
           {showTitle && (
             <div
               onClick={() => {
-                if (isLanding) {
-                  // On landing page: Clicking title resets the view
-                  if (onReset) onReset();
-                } else {
-                  // Not on landing: Standard go home
-                  navigate("/");
-                }
+                isLanding ? onReset?.() : navigate("/");
               }}
               onMouseEnter={() => !isPortrait && setTitleHovered(true)}
               onMouseLeave={() => !isPortrait && setTitleHovered(false)}
@@ -117,7 +142,7 @@ export default function Header({
                   : isPortrait && isLanding
                     ? "#1c0700"
                     : "#4e5f28",
-                cursor: "pointer", // Enabled cursor for mobile clickability
+                cursor: "pointer",
                 transform: titleHovered ? "scale(1.05)" : "scale(1)",
                 transition: hoverTransition,
               }}
@@ -164,6 +189,46 @@ export default function Header({
             pointerEvents: "auto",
           }}
         >
+          <div style={{ display: "flex", alignItems: "center", gap: iconGap }}>
+            <div
+              onClick={handleProfileClick}
+              onMouseEnter={() => setUserHovered(true)}
+              onMouseLeave={() => setUserHovered(false)}
+              style={{
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                color: userHovered ? "#9960a8" : "#4e5f28",
+                transform: userHovered ? "scale(1.1)" : "scale(1)",
+                transition: hoverTransition,
+              }}
+            >
+              <User
+                size={isPortrait ? 18 : 22}
+                strokeWidth={isAdmin ? 2.5 : 2}
+              />
+            </div>
+
+            {currentUser && (
+              <div
+                onClick={handleLogout}
+                onMouseEnter={() => setLogoutHovered(true)}
+                onMouseLeave={() => setLogoutHovered(false)}
+                style={{
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  color: logoutHovered ? "#9960a8" : "#4e5f28",
+                  transform: logoutHovered ? "scale(1.1)" : "scale(1)",
+                  transition: hoverTransition,
+                }}
+                title={currentLang === "en" ? "Sign Out" : "Abmelden"}
+              >
+                <LogOut size={isPortrait ? 16 : 20} strokeWidth={2} />
+              </div>
+            )}
+          </div>
+
           <div
             onMouseEnter={() => setLangHovered(true)}
             onMouseLeave={() => setLangHovered(false)}
@@ -228,6 +293,11 @@ export default function Header({
         </div>
       </header>
 
+      <AuthOverlay
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        currentLang={currentLang}
+      />
       <MenuOverlay
         isOpen={isMenuOpen}
         onClose={() => onMenuToggle(false)}
