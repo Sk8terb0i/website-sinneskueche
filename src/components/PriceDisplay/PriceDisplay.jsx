@@ -12,8 +12,9 @@ import {
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { loadStripe } from "@stripe/stripe-js";
 import { db } from "../../firebase";
-import { ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { ChevronLeft, ChevronRight, Info, Ticket, Loader2 } from "lucide-react"; // Added Loader2
 import { useAuth } from "../../contexts/AuthContext";
+import { planets } from "../../data/planets";
 
 const stripePromise = loadStripe("pk_test_YOUR_PUBLISHABLE_KEY_HERE");
 
@@ -25,8 +26,23 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const [selectedDates, setSelectedDates] = useState([]);
   const [userBookedIds, setUserBookedIds] = useState([]);
   const [loading, setLoading] = useState(true);
+  // NEW: Track total bookings for capacity logic
+  const [eventBookingCounts, setEventBookingCounts] = useState({});
+  // NEW: State for the booking transaction process
+  const [isProcessing, setIsProcessing] = useState(false);
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
+  const getCreditKey = (link) => {
+    for (const planet of planets) {
+      const course = planet.courses?.find((c) => c.link === link);
+      if (course) return course.text[currentLang];
+    }
+    return link.replace(/\//g, "");
+  };
+
+  const courseKey = getCreditKey(coursePath);
+  const availableCredits = userData?.credits?.[courseKey] || 0;
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
@@ -36,12 +52,13 @@ export default function PriceDisplay({ coursePath, currentLang }) {
       const docId = coursePath.replace(/\//g, "");
       try {
         const priceSnap = await getDoc(doc(db, "course_settings", docId));
+        let pricingData = null; // Reference for jump logic
         if (priceSnap.exists()) {
-          setPricing(priceSnap.data());
+          pricingData = priceSnap.data();
+          setPricing(pricingData);
         }
 
-        const eventsRef = collection(db, "events");
-        const q = query(eventsRef, orderBy("date", "asc"));
+        const q = query(collection(db, "events"), orderBy("date", "asc"));
         const eventSnap = await getDocs(q);
         const allEvents = eventSnap.docs.map((d) => ({
           id: d.id,
@@ -51,11 +68,23 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         const filteredEvents = allEvents.filter((ev) => ev.link === coursePath);
         setAvailableDates(filteredEvents);
 
+        // CAPACITY LOGIC: Fetch global booking counts
+        const globalBQuery = query(
+          collection(db, "bookings"),
+          where("coursePath", "==", coursePath),
+        );
+        const globalBSnap = await getDocs(globalBQuery);
+        const counts = {};
+        globalBSnap.docs.forEach((d) => {
+          const eid = d.data().eventId;
+          counts[eid] = (counts[eid] || 0) + 1;
+        });
+        setEventBookingCounts(counts);
+
         let bookedIds = [];
         if (currentUser) {
-          const bookingsRef = collection(db, "bookings");
           const bQuery = query(
-            bookingsRef,
+            collection(db, "bookings"),
             where("userId", "==", currentUser.uid),
           );
           const bSnap = await getDocs(bQuery);
@@ -63,11 +92,16 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           setUserBookedIds(bookedIds);
         }
 
-        // Logic to jump to the next bookable date (not yet booked by user)
+        // JUMP LOGIC: Now skips dates that are full OR already booked
         if (filteredEvents.length > 0) {
           const nextAvailable =
-            filteredEvents.find((ev) => !bookedIds.includes(ev.id)) ||
-            filteredEvents[0];
+            filteredEvents.find((ev) => {
+              const isFull =
+                pricingData?.hasCapacity &&
+                (counts[ev.id] || 0) >= parseInt(pricingData.capacity);
+              return !bookedIds.includes(ev.id) && !isFull;
+            }) || filteredEvents[0];
+
           const jumpDate = new Date(nextAvailable.date);
           setCurrentViewDate(
             new Date(jumpDate.getFullYear(), jumpDate.getMonth(), 1),
@@ -93,6 +127,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
     const createCheckout = httpsCallable(functions, "createStripeCheckout");
 
     try {
+      setIsProcessing(true); // Show overlay during redirect preparation
       const result = await createCheckout({
         mode: mode,
         packPrice: parseFloat(pricing.priceFull),
@@ -101,20 +136,15 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         coursePath: coursePath,
         selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
       });
-
-      if (result.data && result.data.url) {
-        window.location.assign(result.data.url);
-      }
+      if (result.data?.url) window.location.assign(result.data.url);
     } catch (err) {
       console.error("Payment failed:", err);
+      setIsProcessing(false);
     }
   };
 
   const handleBookWithCredits = async () => {
-    const cleanPath = coursePath.replace(/\//g, "");
-    const userCredits = userData?.credits?.[cleanPath] || 0;
-
-    if (selectedDates.length > userCredits) {
+    if (selectedDates.length > availableCredits) {
       alert(
         currentLang === "en" ? "Not enough credits!" : "Nicht genug Guthaben!",
       );
@@ -125,21 +155,26 @@ export default function PriceDisplay({ coursePath, currentLang }) {
     const bookWithCredits = httpsCallable(functions, "bookWithCredits");
 
     try {
-      setLoading(true);
+      setIsProcessing(true); // FIX: Use isProcessing instead of loading to prevent blank screen
       await bookWithCredits({
         coursePath: coursePath,
         selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
       });
       navigate("/success");
     } catch (err) {
-      console.error(err);
       alert("Booking failed.");
-    } finally {
-      setLoading(false);
+      setIsProcessing(false);
     }
   };
 
-  if (loading || !pricing) return null;
+  // FIX: Only return null/loader for the initial data fetch
+  if (loading && !pricing) {
+    return (
+      <div style={initialLoaderStyle}>
+        <Loader2 className="spinner" size={40} color="#caaff3" />
+      </div>
+    );
+  }
 
   const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = new Date(
@@ -155,6 +190,12 @@ export default function PriceDisplay({ coursePath, currentLang }) {
 
   const toggleDate = (event) => {
     if (userBookedIds.includes(event.id)) return;
+    // CAPACITY LOGIC: Prevent selection if full
+    const isFull =
+      pricing?.hasCapacity &&
+      (eventBookingCounts[event.id] || 0) >= parseInt(pricing.capacity);
+    if (isFull) return;
+
     setSelectedDates((prev) =>
       prev.find((d) => d.id === event.id)
         ? prev.filter((d) => d.id !== event.id)
@@ -164,14 +205,22 @@ export default function PriceDisplay({ coursePath, currentLang }) {
 
   const pricePerSession = parseFloat(pricing.priceSingle) || 0;
   const totalPrice = selectedDates.length * pricePerSession;
-  const packSize = parseInt(pricing.packSize) || 10;
-  const packPrice = parseFloat(pricing.priceFull) || 0;
   const hasSelection = selectedDates.length > 0;
-  const cleanPath = coursePath.replace(/\//g, "");
-  const availableCredits = userData?.credits?.[cleanPath] || 0;
 
   return (
-    <div style={outerWrapperStyle}>
+    <div style={{ ...outerWrapperStyle, position: "relative" }}>
+      {/* PROCESSING OVERLAY */}
+      {isProcessing && (
+        <div style={overlayStyle}>
+          <Loader2 className="spinner" size={50} color="#caaff3" />
+          <p style={overlayTextStyle}>
+            {currentLang === "en"
+              ? "Processing your booking..."
+              : "Deine Buchung wird verarbeitet..."}
+          </p>
+        </div>
+      )}
+
       <h2 style={overarchingTitleStyle(isMobile)}>
         {currentLang === "en" ? "Available Dates" : "Verfügbare Termine"}
       </h2>
@@ -221,23 +270,43 @@ export default function PriceDisplay({ coursePath, currentLang }) {
                   event && selectedDates.find((d) => d.id === event.id);
                 const isAlreadyBooked =
                   event && userBookedIds.includes(event.id);
+                // CAPACITY LOGIC: Check if this session is full
+                const isFull =
+                  event &&
+                  pricing?.hasCapacity &&
+                  (eventBookingCounts[event.id] || 0) >=
+                    parseInt(pricing.capacity);
 
                 return (
                   <div
                     key={day}
                     onClick={() =>
-                      event && !isAlreadyBooked && toggleDate(event)
+                      event && !isAlreadyBooked && !isFull && toggleDate(event)
                     }
                     style={dayStyle(
                       event,
                       isSelected,
                       isMobile,
-                      isAlreadyBooked,
+                      isAlreadyBooked || isFull, // GREY OUT if booked OR full
                     )}
                   >
                     {day}
-                    {event && (
+                    {event && !isFull && (
                       <div style={dotStyle(isSelected, isAlreadyBooked)} />
+                    )}
+                    {/* Visual Label for Full sessions */}
+                    {isFull && (
+                      <span
+                        style={{
+                          fontSize: "0.5rem",
+                          fontWeight: "900",
+                          color: "#ff4d4d",
+                          position: "absolute",
+                          bottom: "4px",
+                        }}
+                      >
+                        {currentLang === "en" ? "FULL" : "VOLL"}
+                      </span>
                     )}
                   </div>
                 );
@@ -257,6 +326,15 @@ export default function PriceDisplay({ coursePath, currentLang }) {
             <h3 style={summaryTitleStyle(isMobile)}>
               {currentLang === "en" ? "Booking Summary" : "Buchungsübersicht"}
             </h3>
+
+            <div style={creditBadgeStyle}>
+              <Ticket size={16} />
+              <span>
+                {currentLang === "en" ? "Your Balance:" : "Dein Guthaben:"}
+                <strong> {availableCredits}</strong>
+              </span>
+            </div>
+
             <div style={selectionInfoStyle(isMobile)}>
               <span style={labelStyle(isMobile)}>
                 {selectedDates.length}{" "}
@@ -271,22 +349,25 @@ export default function PriceDisplay({ coursePath, currentLang }) {
               {availableCredits >= selectedDates.length && (
                 <button
                   onClick={handleBookWithCredits}
-                  style={primaryBtnStyle(isMobile)}
+                  style={creditBtnStyle(isMobile)}
                 >
                   {currentLang === "en"
-                    ? `Use ${selectedDates.length} Credits`
-                    : `${selectedDates.length} Guthaben nutzen`}
+                    ? `Book with ${selectedDates.length} ${selectedDates.length === 1 ? "Credit" : "Credits"}`
+                    : `Mit ${selectedDates.length} ${selectedDates.length === 1 ? "Guthaben" : "Guthaben"} buchen`}
                 </button>
               )}
+
               {pricing.hasPack && (
                 <div style={highlightedPackStyle(isMobile)}>
                   <div style={packHeaderStyle}>
                     <p style={packTitleStyle(isMobile)}>
                       {currentLang === "en"
-                        ? `${packSize}-Session Pack`
-                        : `${packSize}er Karte`}
+                        ? `${pricing.packSize}-Session Pack`
+                        : `${pricing.packSize}er Karte`}
                     </p>
-                    <p style={packPriceStyle(isMobile)}>{packPrice} CHF</p>
+                    <p style={packPriceStyle(isMobile)}>
+                      {pricing.priceFull} CHF
+                    </p>
                   </div>
                   <button
                     onClick={() => handlePayment("pack")}
@@ -298,6 +379,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
                   </button>
                 </div>
               )}
+
               <button
                 onClick={() => handlePayment("individual")}
                 style={secondaryBtnStyle(isMobile)}
@@ -314,7 +396,68 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   );
 }
 
-const dayStyle = (hasEvent, isSelected, isMobile, isAlreadyBooked) => ({
+// --- STYLES ---
+
+const initialLoaderStyle = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  minHeight: "400px",
+};
+
+const overlayStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(253, 248, 225, 0.85)", // Matches card color with transparency
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 1000,
+  backdropFilter: "blur(5px)",
+  animation: "fadeIn 0.3s ease-out",
+};
+
+const overlayTextStyle = {
+  marginTop: "1.5rem",
+  fontFamily: "Satoshi",
+  fontWeight: "700",
+  color: "#1c0700",
+  fontSize: "1.1rem",
+};
+
+const creditBadgeStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  backgroundColor: "rgba(78, 95, 40, 0.1)",
+  color: "#4e5f28",
+  padding: "8px 16px",
+  borderRadius: "100px",
+  fontSize: "0.85rem",
+  marginBottom: "1.5rem",
+  width: "fit-content",
+  fontFamily: "Satoshi",
+  fontWeight: "600",
+};
+
+const creditBtnStyle = (isMobile) => ({
+  width: "100%",
+  padding: isMobile ? "1rem" : "1.2rem",
+  backgroundColor: "#4e5f28",
+  color: "#ffffff",
+  border: "none",
+  borderRadius: "100px",
+  cursor: "pointer",
+  fontWeight: "700",
+  fontSize: isMobile ? "1rem" : "1.1rem",
+  transition: "transform 0.2s",
+});
+
+const dayStyle = (hasEvent, isSelected, isMobile, isGreyedOut) => ({
   aspectRatio: "1/1",
   display: "flex",
   flexDirection: "column",
@@ -322,18 +465,21 @@ const dayStyle = (hasEvent, isSelected, isMobile, isAlreadyBooked) => ({
   justifyContent: "center",
   borderRadius: "50%",
   fontSize: isMobile ? "0.85rem" : "1rem",
-  cursor: hasEvent && !isAlreadyBooked ? "pointer" : "default",
-  backgroundColor: isAlreadyBooked
+  // DISALLOW cursor if greyed out
+  cursor: hasEvent && !isGreyedOut ? "pointer" : "default",
+  // GREY OUT logic
+  backgroundColor: isGreyedOut
     ? "rgba(0,0,0,0.05)"
     : isSelected
       ? "#caaff3"
       : hasEvent
         ? "rgba(202, 175, 243, 0.15)"
         : "transparent",
-  color: isAlreadyBooked ? "#ccc" : "#1c0700",
+  color: isGreyedOut ? "#ccc" : "#1c0700",
   fontWeight: hasEvent ? "800" : "400",
   opacity: hasEvent ? 1 : 0.2,
   transition: "0.2s",
+  position: "relative",
 });
 
 const dotStyle = (isSelected, isAlreadyBooked) => ({

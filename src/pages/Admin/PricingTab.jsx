@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { collection, getDocs, doc, setDoc } from "firebase/firestore";
 import { planets } from "../../data/planets";
-import { Tag, Save, Loader2 } from "lucide-react";
+import { Tag, Save, Loader2, Users } from "lucide-react"; // Added Users icon
 import {
   sectionTitleStyle,
   cardStyle,
@@ -66,10 +66,12 @@ export default function PricingTab({ isMobile }) {
         priceSingle: priceData[courseId]?.priceSingle || "",
         priceFull: priceData[courseId]?.priceFull || "",
         packSize: priceData[courseId]?.packSize || "10",
-        // Only save duration if Hour/Time is selected
         duration: isPerHour ? priceData[courseId]?.duration || "" : "",
         hasPack: priceData[courseId]?.hasPack ?? false,
         isPerHour: isPerHour,
+        // NEW: Capacity fields
+        hasCapacity: priceData[courseId]?.hasCapacity ?? false,
+        capacity: priceData[courseId]?.capacity || "",
         courseName: courseName,
         updatedAt: new Date().toISOString(),
       };
@@ -88,11 +90,10 @@ export default function PricingTab({ isMobile }) {
       style={{ maxWidth: "1000px", margin: "0 auto", paddingBottom: "5rem" }}
     >
       <h3 style={sectionTitleStyle}>
-        <Tag size={16} /> Course Pricing Management
+        <Tag size={16} /> Course Pricing & Capacity Management
       </h3>
       <p style={{ opacity: 0.6, fontSize: "0.9rem", marginBottom: "2rem" }}>
-        Set the prices for your courses here. These prices will appear directly
-        on the course pages.
+        Set the prices and booking limits for your courses here.
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -103,12 +104,15 @@ export default function PricingTab({ isMobile }) {
           const currentPackSize = priceData[courseId]?.packSize || "10";
           const currentDuration = priceData[courseId]?.duration || "";
 
+          // NEW: Capacity current values
+          const hasCapacity = priceData[courseId]?.hasCapacity ?? false;
+          const currentCapacity = priceData[courseId]?.capacity || "";
+
           const hasPack = priceData[courseId]?.hasPack ?? false;
           const isPerHour = priceData[courseId]?.isPerHour ?? false;
 
           const isSaving = savingPriceId === courseId;
 
-          // Admin dynamic preview label
           const singleLabelPreview = isPerHour
             ? currentDuration
               ? `Price Per ${currentDuration} min`
@@ -149,7 +153,7 @@ export default function PricingTab({ isMobile }) {
                   alignItems: "flex-end",
                 }}
               >
-                {/* Base Price Input with Toggle */}
+                {/* Base Price Input */}
                 <div
                   style={{
                     flex: "1.5 1 130px",
@@ -215,7 +219,6 @@ export default function PricingTab({ isMobile }) {
                       ...labelStyle,
                       marginBottom: "6px",
                       fontSize: "0.55rem",
-                      whiteSpace: "nowrap",
                     }}
                   >
                     {singleLabelPreview}
@@ -231,25 +234,22 @@ export default function PricingTab({ isMobile }) {
                   />
                 </div>
 
-                {/* Time / Duration Input (Only visible if Hour/Time is selected) */}
                 {isPerHour && (
                   <div style={{ flex: "1 1 90px" }}>
-                    <div
+                    <label
                       style={{
+                        ...labelStyle,
                         marginBottom: "6px",
                         height: "26px",
                         display: "flex",
                         alignItems: "center",
                       }}
                     >
-                      <label style={{ ...labelStyle, marginBottom: 0 }}>
-                        Duration (min)
-                      </label>
-                    </div>
+                      Duration (min)
+                    </label>
                     <input
                       type="number"
                       min="1"
-                      placeholder="e.g. 90"
                       value={currentDuration}
                       onChange={(e) =>
                         handlePriceChange(courseId, "duration", e.target.value)
@@ -259,51 +259,37 @@ export default function PricingTab({ isMobile }) {
                   </div>
                 )}
 
-                {/* Pack Enable Checkbox & Size Input */}
+                {/* Pack Logic */}
                 <div
                   style={{
                     flex: "1 1 100px",
                     paddingBottom: hasPack ? 0 : "8px",
                   }}
                 >
-                  <div
+                  <label
                     style={{
-                      marginBottom: hasPack ? "6px" : "0",
-                      height: hasPack ? "26px" : "auto",
+                      ...labelStyle,
                       display: "flex",
                       alignItems: "center",
+                      gap: "4px",
+                      marginBottom: hasPack ? "6px" : "0",
+                      height: hasPack ? "26px" : "auto",
                     }}
                   >
-                    <label
-                      style={{
-                        ...labelStyle,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        marginBottom: 0,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={hasPack}
-                        onChange={(e) =>
-                          handlePriceChange(
-                            courseId,
-                            "hasPack",
-                            e.target.checked,
-                          )
-                        }
-                        style={{ cursor: "pointer", margin: 0 }}
-                      />
-                      {hasPack ? "Pack Size" : "Enable Pack"}
-                    </label>
-                  </div>
+                    <input
+                      type="checkbox"
+                      checked={hasPack}
+                      onChange={(e) =>
+                        handlePriceChange(courseId, "hasPack", e.target.checked)
+                      }
+                      style={{ cursor: "pointer", margin: 0 }}
+                    />
+                    {hasPack ? "Pack Size" : "Enable Pack"}
+                  </label>
                   {hasPack && (
                     <input
                       type="number"
                       min="2"
-                      placeholder="10"
                       value={currentPackSize}
                       onChange={(e) =>
                         handlePriceChange(courseId, "packSize", e.target.value)
@@ -313,30 +299,21 @@ export default function PricingTab({ isMobile }) {
                   )}
                 </div>
 
-                {/* Pack Price Input (Only visible if Pack is enabled) */}
                 {hasPack && (
                   <div style={{ flex: "1.5 1 120px" }}>
-                    <div
+                    <label
                       style={{
+                        ...labelStyle,
                         marginBottom: "6px",
                         height: "26px",
                         display: "flex",
                         alignItems: "center",
                       }}
                     >
-                      <label
-                        style={{
-                          ...labelStyle,
-                          marginBottom: 0,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {currentPackSize}-Pack Price
-                      </label>
-                    </div>
+                      {currentPackSize}-Pack Price
+                    </label>
                     <input
                       type="text"
-                      placeholder="e.g. 400 CHF"
                       value={currentFull}
                       onChange={(e) =>
                         handlePriceChange(courseId, "priceFull", e.target.value)
@@ -345,6 +322,72 @@ export default function PricingTab({ isMobile }) {
                     />
                   </div>
                 )}
+
+                {/* NEW: Capacity Option */}
+                <div
+                  style={{
+                    flex: "1 1 120px",
+                    paddingBottom: hasCapacity ? 0 : "8px",
+                  }}
+                >
+                  <label
+                    style={{
+                      ...labelStyle,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      marginBottom: hasCapacity ? "6px" : "0",
+                      height: hasCapacity ? "26px" : "auto",
+                      color: hasCapacity ? "#4e5f28" : "inherit",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={hasCapacity}
+                      onChange={(e) =>
+                        handlePriceChange(
+                          courseId,
+                          "hasCapacity",
+                          e.target.checked,
+                        )
+                      }
+                      style={{ cursor: "pointer", margin: 0 }}
+                    />
+                    {hasCapacity ? "Max Students" : "Limit Capacity"}
+                  </label>
+                  {hasCapacity && (
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="e.g. 8"
+                        value={currentCapacity}
+                        onChange={(e) =>
+                          handlePriceChange(
+                            courseId,
+                            "capacity",
+                            e.target.value,
+                          )
+                        }
+                        style={{
+                          ...inputStyle,
+                          marginBottom: 0,
+                          paddingLeft: "30px",
+                        }}
+                      />
+                      <Users
+                        size={14}
+                        style={{
+                          position: "absolute",
+                          left: "10px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          opacity: 0.4,
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <button
