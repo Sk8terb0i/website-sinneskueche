@@ -5,139 +5,137 @@ const {
 } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
-// Initialize Stripe with your Secret Key (Replace with your actual sk_test_... key)
+// Initialize Stripe with your Secret Key
 const stripe = require("stripe")(
   "sk_test_51T56CkRrxXqwePSlKMOY9SYIkKC54aGlygB25R9xZ8NP1j7uQZ15aLf89SLTUc0uptjAGRfObfDqzym5cNsUZCrC004IrGlMUp",
 );
 
-// Initialize Firebase Admin to interact with Firestore
+// Initialize Firebase Admin
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 const db = admin.firestore();
 
 // ============================================================================
-// 1. CREATE CHECKOUT SESSION (Called from React Frontend)
+// HELPER: CONSISTENT COURSE MAPPING
 // ============================================================================
-exports.createStripeCheckout = onCall(
-  { cors: true }, // Explicitly allow requests from your frontend
-  async (request) => {
-    // A. Enforce Authentication Security
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "You must be logged in to initiate a checkout.",
-      );
-    }
+const courseMapping = {
+  "/pottery": "pottery tuesdays",
+  "/artistic-vision": "artistic vision",
+  "/get-ink": "get ink!",
+  "/singing": "vocal coaching",
+  "/extended-voice-lab": "extended voice lab",
+  "/performing-words": "performing words",
+  "/singing-basics": "singing basics weekend",
+};
 
-    // B. Securely get the actual User ID from the Firebase Auth token
-    const userId = request.auth.uid;
+const getCleanCourseKey = (path) => {
+  // If the path exists in our map, return the title.
+  // Otherwise, just remove slashes as a fallback.
+  return courseMapping[path] || path.replace(/\//g, "");
+};
 
-    const data = request.data;
-    const { mode, packPrice, totalPrice, packSize, selectedDates, coursePath } =
-      data;
+// ============================================================================
+// 1. CREATE CHECKOUT SESSION
+// ============================================================================
+exports.createStripeCheckout = onCall({ cors: true }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be logged in.");
+  }
 
-    try {
-      // C. Create the Stripe Session
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency: "chf",
-              product_data: {
-                name:
-                  mode === "pack"
-                    ? `${packSize}-Session Pack`
-                    : "Individual Pottery Sessions",
-              },
-              // Stripe requires amounts in cents (e.g., 300 CHF = 30000 Rappen)
-              unit_amount:
+  const userId = request.auth.uid;
+  const { mode, packPrice, totalPrice, packSize, selectedDates, coursePath } =
+    request.data;
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "chf",
+            product_data: {
+              name:
                 mode === "pack"
-                  ? Math.round(packPrice * 100)
-                  : Math.round(totalPrice * 100),
+                  ? `${packSize}-Session Pack`
+                  : "Individual Sessions",
             },
-            quantity: 1,
+            unit_amount:
+              mode === "pack"
+                ? Math.round(packPrice * 100)
+                : Math.round(totalPrice * 100),
           },
-        ],
-        mode: "payment",
-        // Update these URLs to your live domain when moving to production
-        success_url:
-          "http://localhost:5173/#/success?session_id={CHECKOUT_SESSION_ID}",
-        cancel_url: "http://localhost:5173/#/cancel",
-
-        // D. Attach critical data to metadata so the Webhook can read it later
-        metadata: {
-          userId: userId,
-          mode: mode,
-          packSize: packSize || 0,
-          coursePath: coursePath || "unknown",
-          selectedDates: JSON.stringify(selectedDates),
+          quantity: 1,
         },
-      });
+      ],
+      mode: "payment",
+      success_url:
+        "http://localhost:5173/#/success?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "http://localhost:5173/#/cancel",
+      metadata: {
+        userId: userId,
+        mode: mode,
+        packSize: packSize || 0,
+        coursePath: coursePath || "unknown",
+        selectedDates: JSON.stringify(selectedDates),
+      },
+    });
 
-      // E. Return the Session ID to the frontend to trigger the redirect
-      return { url: session.url };
-    } catch (error) {
-      console.error("Stripe Session Creation Failed:", error);
-      throw new HttpsError("internal", error.message);
-    }
-  },
-);
+    return { url: session.url };
+  } catch (error) {
+    console.error("Stripe Session Failed:", error);
+    throw new HttpsError("internal", error.message);
+  }
+});
 
 // ============================================================================
-// 2. STRIPE WEBHOOK (Called automatically by Stripe after successful payment)
+// 2. STRIPE WEBHOOK
 // ============================================================================
 exports.handleStripeWebhook = onRequest(async (req, res) => {
   const sig = req.headers["stripe-signature"];
-
-  // Replace with your actual Webhook Signing Secret (whsec_...) from the Stripe Dashboard
   const endpointSecret = "whsec_a4VdBked9dzdHfSFPGG7iyOdkujKsZEW";
 
   let event;
-
   try {
-    // Verify the event actually came from Stripe using the raw body and signature
     event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
   } catch (err) {
-    console.error("Webhook signature verification failed:", err.message);
-    res.status(400).send(`Webhook Error: ${err.message}`);
-    return;
+    return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Only run database updates if the checkout was successfully completed
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
-
-    // 1. We now extract coursePath from the metadata!
-    const { userId, mode, packSize, selectedDates, coursePath } =
-      session.metadata;
-    const parsedDates = JSON.parse(selectedDates);
-
-    const userRef = db.collection("users").doc(userId);
+    const sessionId = session.id;
+    const paymentCheckRef = db.collection("processed_payments").doc(sessionId);
 
     try {
       await db.runTransaction(async (transaction) => {
-        // A. Update course-specific credits
+        const checkSnap = await transaction.get(paymentCheckRef);
+        if (checkSnap.exists) return; // Idempotency check
+
+        const { userId, mode, packSize, selectedDates, coursePath } =
+          session.metadata;
+        const parsedDates = JSON.parse(selectedDates);
+
+        // Use mapping helper for consistent database key
+        const courseKey = getCleanCourseKey(coursePath);
+        const userRef = db.collection("users").doc(userId);
+
         if (mode === "pack") {
           const packAmount = parseInt(packSize);
           const deduction = parsedDates.length;
-          const netCreditIncrease = packAmount - deduction;
+          const netIncrease = packAmount - deduction;
 
-          // We use nested objects so credits are stored by course (e.g., credits.pottery)
           transaction.set(
             userRef,
             {
               credits: {
-                [coursePath]:
-                  admin.firestore.FieldValue.increment(netCreditIncrease),
+                [courseKey]: admin.firestore.FieldValue.increment(netIncrease),
               },
             },
             { merge: true },
           );
         }
 
-        // B. Register bookings WITH the coursePath
         parsedDates.forEach((sessionDate) => {
           const bookingRef = db.collection("bookings").doc();
           transaction.set(bookingRef, {
@@ -145,21 +143,106 @@ exports.handleStripeWebhook = onRequest(async (req, res) => {
             eventId: sessionDate.id,
             date: sessionDate.date,
             type: mode,
-            coursePath: coursePath, // <--- NOW SAVED TO THE DATABASE
+            coursePath: coursePath,
             status: "confirmed",
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           });
         });
-      });
 
-      console.log(
-        `Successfully processed ${mode} for user ${userId} in course ${coursePath}`,
-      );
+        transaction.set(paymentCheckRef, {
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          userId: userId,
+        });
+      });
     } catch (error) {
-      console.error("Firestore update failed in webhook:", error);
+      console.error("Webhook processing failed:", error);
     }
   }
-
-  // Return a 200 response to acknowledge receipt to Stripe
   res.json({ received: true });
+});
+
+// ============================================================================
+// 3. BOOK WITH CREDITS
+// ============================================================================
+exports.bookWithCredits = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+
+  const { coursePath, selectedDates } = request.data;
+  const courseKey = getCleanCourseKey(coursePath);
+  const userRef = db.collection("users").doc(request.auth.uid);
+
+  return db.runTransaction(async (transaction) => {
+    const userSnap = await transaction.get(userRef);
+    const currentCredits = userSnap.data()?.credits?.[courseKey] || 0;
+
+    if (currentCredits < selectedDates.length) {
+      throw new HttpsError("failed-precondition", "Insufficient credits.");
+    }
+
+    transaction.update(userRef, {
+      [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(
+        -selectedDates.length,
+      ),
+    });
+
+    selectedDates.forEach((d) => {
+      const bRef = db.collection("bookings").doc();
+      transaction.set(bRef, {
+        userId: request.auth.uid,
+        eventId: d.id,
+        date: d.date,
+        coursePath: coursePath,
+        status: "confirmed",
+        type: "credit_redemption",
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+    return { success: true };
+  });
+});
+
+// ============================================================================
+// 4. CANCEL BOOKING & REFUND CREDITS
+// ============================================================================
+exports.cancelBooking = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+
+  const { bookingId } = request.data;
+  const bRef = db.collection("bookings").doc(bookingId);
+
+  try {
+    return await db.runTransaction(async (transaction) => {
+      const bSnap = await transaction.get(bRef);
+
+      if (!bSnap.exists)
+        throw new HttpsError("not-found", "Booking not found.");
+
+      const bookingData = bSnap.data();
+      if (bookingData.userId !== request.auth.uid) {
+        throw new HttpsError("permission-denied", "Unauthorized.");
+      }
+
+      // 4-day policy check
+      const bookingDate = new Date(bookingData.date);
+      const diffDays = (bookingDate - new Date()) / (1000 * 60 * 60 * 24);
+
+      if (diffDays < 4) {
+        throw new HttpsError("failed-precondition", "Too late to cancel.");
+      }
+
+      // Use mapping helper for consistent refund target
+      const courseKey = getCleanCourseKey(bookingData.coursePath || "/pottery");
+      const userRef = db.collection("users").doc(request.auth.uid);
+
+      transaction.update(userRef, {
+        [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
+      });
+
+      transaction.delete(bRef);
+      return { success: true };
+    });
+  } catch (error) {
+    console.error("Cancellation crash:", error);
+    throw new HttpsError("internal", error.message);
+  }
 });

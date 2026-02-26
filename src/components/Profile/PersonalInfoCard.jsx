@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { auth, db } from "../../firebase";
 import { updateEmail } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
+// Import planets for course title lookup
+import { planets } from "../../data/planets";
 import {
   User,
   Mail,
@@ -34,6 +36,15 @@ export default function PersonalInfoCard({
       setEditPhone(userData.phone || "");
     }
   }, [userData, isEditing]);
+
+  // Helper function to find the course title based on the link
+  const getCourseTitle = (link) => {
+    for (const planet of planets) {
+      const course = planet.courses?.find((c) => c.link === link);
+      if (course) return course.text[currentLang];
+    }
+    return link?.replace("/", "").replace(/-/g, " ") || "course";
+  };
 
   const handleUpdateProfile = async () => {
     setIsUpdating(true);
@@ -166,30 +177,42 @@ export default function PersonalInfoCard({
           )}
 
           <div style={styles.creditsBox}>
-            <div style={styles.creditsHeader}>
-              <Ticket size={20} color="#9960a8" />
-              <span style={styles.creditsTitle}>{t.credits}</span>
-            </div>
-
-            {/* Loop through the credits object to show balances per course */}
             {userData.credits && Object.keys(userData.credits).length > 0 ? (
-              Object.entries(userData.credits).map(([course, amount]) => (
-                <div key={course} style={styles.creditsBalanceRow}>
-                  <span style={styles.creditsNumber}>{amount}</span>
-                  <span style={styles.creditsLabel}>
-                    {t.remaining}{" "}
-                    <span
-                      style={{ textTransform: "capitalize", fontWeight: "800" }}
-                    >
-                      ({course})
-                    </span>
-                  </span>
-                </div>
-              ))
+              Object.entries(userData.credits).map(
+                ([course, amount], index) => (
+                  <div
+                    key={course}
+                    style={{
+                      marginBottom:
+                        index !== Object.keys(userData.credits).length - 1
+                          ? "2rem"
+                          : 0,
+                    }}
+                  >
+                    <div style={styles.creditsHeader}>
+                      <Ticket size={20} color="#9960a8" />
+                      <span style={styles.creditsTitle}>
+                        {getCourseTitle(course)} {t.credits}
+                      </span>
+                    </div>
+
+                    <div style={styles.creditsBalanceRow}>
+                      <span style={styles.creditsNumber}>{amount}</span>
+                      <span style={styles.creditsLabel}>{t.remaining}</span>
+                    </div>
+                  </div>
+                ),
+              )
             ) : (
-              <div style={styles.creditsBalanceRow}>
-                <span style={styles.creditsNumber}>0</span>
-                <span style={styles.creditsLabel}>{t.remaining}</span>
+              <div>
+                <div style={styles.creditsHeader}>
+                  <Ticket size={20} color="#9960a8" />
+                  <span style={styles.creditsTitle}>{t.credits}</span>
+                </div>
+                <div style={styles.creditsBalanceRow}>
+                  <span style={styles.creditsNumber}>0</span>
+                  <span style={styles.creditsLabel}>{t.remaining}</span>
+                </div>
               </div>
             )}
           </div>

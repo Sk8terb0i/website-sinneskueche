@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
 import {
@@ -9,53 +9,56 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
-import { Calendar, Loader2, Clock } from "lucide-react";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { Calendar, Loader2, Clock, X, Check, Info } from "lucide-react";
+import { planets } from "../../data/planets"; // Import your course data
 
 export default function BookingsCard({ userId, currentLang, t }) {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [confirmingId, setConfirmingId] = useState(null);
+
+  // Helper to get course title from planets.js based on the link (e.g., "/pottery")
+  const getCourseTitle = (link) => {
+    for (const planet of planets) {
+      const course = planet.courses?.find((c) => c.link === link);
+      if (course) return course.text[currentLang];
+    }
+    return link?.replace("/", "") || "Course";
+  };
 
   useEffect(() => {
     const fetchUserBookings = async () => {
       try {
-        // 1. Get all bookings for this user
         const q = query(
           collection(db, "bookings"),
           where("userId", "==", userId),
         );
         const querySnapshot = await getDocs(q);
 
-        // 2. Loop through each booking and fetch its matching Event data
         const bookingsWithEventData = await Promise.all(
           querySnapshot.docs.map(async (bookingDoc) => {
             const bookingData = bookingDoc.data();
             let eventData = {};
 
-            // Fetch the event using the eventId saved in the booking
             if (bookingData.eventId) {
               const eventRef = doc(db, "events", bookingData.eventId);
               const eventSnap = await getDoc(eventRef);
-              if (eventSnap.exists()) {
-                eventData = eventSnap.data();
-              }
+              if (eventSnap.exists()) eventData = eventSnap.data();
             }
 
-            // Clean up the course name (e.g., "/pottery" -> "pottery")
-            const rawCourseName =
-              eventData.link || bookingData.coursePath || "unknown";
-            const cleanCourseName = rawCourseName.replace(/\//g, "");
-
+            const coursePath = eventData.link || bookingData.coursePath;
             return {
               id: bookingDoc.id,
               ...bookingData,
-              courseName: cleanCourseName,
-              time: eventData.time || "", // Grabs the time from your events collection
+              coursePath,
+              courseTitle: getCourseTitle(coursePath),
+              time: eventData.time || "",
             };
           }),
         );
 
-        // 3. Sort by date
         bookingsWithEventData.sort(
           (a, b) => new Date(a.date) - new Date(b.date),
         );
@@ -68,7 +71,44 @@ export default function BookingsCard({ userId, currentLang, t }) {
     };
 
     if (userId) fetchUserBookings();
-  }, [userId]);
+  }, [userId, currentLang]);
+
+  // Group bookings by courseTitle
+  const groupedBookings = useMemo(() => {
+    return bookings.reduce((acc, booking) => {
+      if (!acc[booking.courseTitle]) acc[booking.courseTitle] = [];
+      acc[booking.courseTitle].push(booking);
+      return acc;
+    }, {});
+  }, [bookings]);
+
+  const handleCancel = async (bookingId) => {
+    const functions = getFunctions();
+    const cancelBooking = httpsCallable(functions, "cancelBooking");
+
+    try {
+      setDataLoading(true);
+      await cancelBooking({ bookingId });
+      setConfirmingId(null);
+      window.location.reload();
+    } catch (err) {
+      alert(err.message);
+      setDataLoading(false);
+    }
+  };
+
+  const labels = {
+    en: {
+      cancelBtn: "cancel course",
+      policyNote: "cancellations are possible up to 4 days before the start.",
+      confirm: "confirm cancellation? (+1 credit)",
+    },
+    de: {
+      cancelBtn: "termin stornieren",
+      policyNote: "stornierungen sind bis zu 4 tage vor beginn möglich.",
+      confirm: "stornierung bestätigen? (+1 guthaben)",
+    },
+  }[currentLang];
 
   return (
     <section style={styles.card}>
@@ -76,6 +116,11 @@ export default function BookingsCard({ userId, currentLang, t }) {
         <Calendar size={20} color="#4e5f28" />
         {t.myCourses}
       </h3>
+
+      <div style={styles.policyBox}>
+        <Info size={14} />
+        <span>{labels.policyNote}</span>
+      </div>
 
       {dataLoading ? (
         <div style={styles.emptyState}>
@@ -89,54 +134,85 @@ export default function BookingsCard({ userId, currentLang, t }) {
           </button>
         </div>
       ) : (
-        <div style={styles.bookingsList}>
-          {bookings.map((booking) => {
-            const dateObj = new Date(booking.date);
-            const formattedDate = dateObj.toLocaleDateString(
-              currentLang === "en" ? "en-US" : "de-DE",
-              {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              },
-            );
+        Object.entries(groupedBookings).map(([title, courseBookings]) => (
+          <div key={title} style={styles.courseGroup}>
+            <h4 style={styles.courseGroupTitle}>{title}</h4>
+            <div style={styles.bookingsList}>
+              {courseBookings.map((booking) => {
+                const dateObj = new Date(booking.date);
+                const daysUntil =
+                  (dateObj - new Date()) / (1000 * 60 * 60 * 24);
+                const canCancel = daysUntil >= 4;
+                const isConfirming = confirmingId === booking.id;
 
-            return (
-              <div key={booking.id} style={styles.bookingItem}>
-                <div style={styles.bookingDateBox}>
-                  <span style={styles.bookingMonth}>
-                    {dateObj.toLocaleString(
-                      currentLang === "en" ? "en-US" : "de-DE",
-                      { month: "short" },
-                    )}
-                  </span>
-                  <span style={styles.bookingDay}>{dateObj.getDate()}</span>
-                </div>
-
-                <div style={styles.bookingDetails}>
-                  <p style={styles.bookingTitle}>{formattedDate}</p>
-
-                  {/* NEW: Displays the Course Name, Time, and Status */}
-                  <div style={styles.badgeRow}>
-                    <span style={styles.courseBadge}>{booking.courseName}</span>
-
-                    {booking.time && (
-                      <span style={styles.timeBadge}>
-                        <Clock size={12} />
-                        {booking.time}
+                return (
+                  <div key={booking.id} style={styles.bookingItem}>
+                    <div style={styles.bookingDateBox}>
+                      <span style={styles.bookingMonth}>
+                        {dateObj.toLocaleString(
+                          currentLang === "en" ? "en-US" : "de-DE",
+                          { month: "short" },
+                        )}
                       </span>
-                    )}
+                      <span style={styles.bookingDay}>{dateObj.getDate()}</span>
+                    </div>
 
-                    <span style={styles.bookingStatus}>
-                      {currentLang === "en" ? "Confirmed" : "Bestätigt"}
-                    </span>
+                    <div style={styles.bookingDetails}>
+                      {!isConfirming ? (
+                        <div style={styles.row}>
+                          <div>
+                            <p style={styles.bookingTitle}>
+                              {dateObj.toLocaleDateString(
+                                currentLang === "en" ? "en-US" : "de-DE",
+                                {
+                                  weekday: "long",
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                },
+                              )}
+                            </p>
+                            <div style={styles.timeRow}>
+                              <Clock size={12} /> <span>{booking.time}</span>
+                            </div>
+                          </div>
+                          {canCancel && (
+                            <button
+                              onClick={() => setConfirmingId(booking.id)}
+                              style={styles.cancelActionBtn}
+                            >
+                              {labels.cancelBtn}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={styles.confirmView}>
+                          <span style={styles.confirmText}>
+                            {labels.confirm}
+                          </span>
+                          <div style={styles.confirmActions}>
+                            <button
+                              onClick={() => handleCancel(booking.id)}
+                              style={{ ...styles.iconBtn, color: "#4e5f28" }}
+                            >
+                              <Check size={18} />
+                            </button>
+                            <button
+                              onClick={() => setConfirmingId(null)}
+                              style={{ ...styles.iconBtn, color: "#ff4d4d" }}
+                            >
+                              <X size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          </div>
+        ))
       )}
     </section>
   );
@@ -155,42 +231,39 @@ const styles = {
   sectionHeading: {
     fontFamily: "Harmond-SemiBoldCondensed",
     fontSize: "1.8rem",
-    margin: "0 0 2rem 0",
+    margin: "0 0 1rem 0",
     display: "flex",
     alignItems: "center",
     gap: "10px",
     color: "#1c0700",
   },
-  emptyState: {
+  policyBox: {
     display: "flex",
-    flexDirection: "column",
     alignItems: "center",
-    justifyContent: "center",
-    padding: "4rem 1rem",
-    backgroundColor: "rgba(28, 7, 0, 0.02)",
-    borderRadius: "20px",
-    textAlign: "center",
+    gap: "8px",
+    fontSize: "0.75rem",
     fontFamily: "Satoshi",
-  },
-  browseBtn: {
-    marginTop: "1.5rem",
-    padding: "12px 30px",
-    backgroundColor: "#caaff3",
-    border: "none",
-    borderRadius: "100px",
-    cursor: "pointer",
-    fontWeight: "bold",
     color: "#1c0700",
-    fontFamily: "Satoshi",
-    fontSize: "0.9rem",
-    transition: "transform 0.2s ease",
+    opacity: 0.5,
+    marginBottom: "2rem",
+    fontStyle: "italic",
   },
-  bookingsList: { display: "flex", flexDirection: "column", gap: "1rem" },
+  courseGroup: { marginBottom: "2.5rem" },
+  courseGroupTitle: {
+    fontFamily: "Harmond-SemiBoldCondensed",
+    fontSize: "1.4rem",
+    color: "#9960a8",
+    marginBottom: "1rem",
+    textTransform: "lowercase",
+    borderBottom: "1px solid rgba(153, 96, 168, 0.2)",
+    paddingBottom: "5px",
+  },
+  bookingsList: { display: "flex", flexDirection: "column", gap: "0.8rem" },
   bookingItem: {
     display: "flex",
     alignItems: "center",
-    gap: "1.5rem",
-    padding: "1.2rem",
+    gap: "1.2rem",
+    padding: "1rem",
     backgroundColor: "#fffce3",
     borderRadius: "16px",
     border: "1px solid rgba(28, 7, 0, 0.05)",
@@ -201,67 +274,90 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#caaff3",
-    borderRadius: "12px",
-    width: "60px",
-    height: "60px",
+    borderRadius: "10px",
+    width: "50px",
+    height: "50px",
     color: "#1c0700",
     flexShrink: 0,
   },
   bookingMonth: {
-    fontSize: "0.7rem",
+    fontSize: "0.6rem",
     fontWeight: "800",
     textTransform: "uppercase",
     fontFamily: "Satoshi",
-    opacity: 0.7,
   },
   bookingDay: {
-    fontSize: "1.4rem",
+    fontSize: "1.2rem",
     fontFamily: "Harmond-SemiBoldCondensed",
-    lineHeight: "1.1",
+    lineHeight: "1",
   },
-  bookingDetails: { display: "flex", flexDirection: "column", gap: "6px" },
+  bookingDetails: { flex: 1 },
+  row: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   bookingTitle: {
     margin: 0,
     fontFamily: "Satoshi",
     fontWeight: "700",
-    fontSize: "1.1rem",
+    fontSize: "1rem",
     color: "#1c0700",
   },
-  badgeRow: {
-    display: "flex",
-    gap: "8px",
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-  courseBadge: {
-    fontSize: "0.75rem",
-    fontFamily: "Satoshi",
-    backgroundColor: "rgba(202, 175, 243, 0.3)",
-    padding: "4px 10px",
-    borderRadius: "100px",
-    textTransform: "capitalize",
-    fontWeight: "700",
-    color: "#1c0700",
-  },
-  timeBadge: {
+  timeRow: {
     display: "flex",
     alignItems: "center",
     gap: "4px",
-    fontSize: "0.75rem",
-    fontFamily: "Satoshi",
-    backgroundColor: "rgba(28, 7, 0, 0.05)",
-    padding: "4px 10px",
+    fontSize: "0.8rem",
+    opacity: 0.6,
+    marginTop: "2px",
+  },
+  cancelActionBtn: {
+    background: "rgba(255, 77, 77, 0.1)",
+    border: "none",
+    color: "#ff4d4d",
+    padding: "6px 12px",
     borderRadius: "100px",
-    fontWeight: "600",
+    fontSize: "0.7rem",
+    fontWeight: "800",
+    cursor: "pointer",
+    textTransform: "uppercase",
+    letterSpacing: "0.03rem",
+    transition: "all 0.2s",
+  },
+  confirmView: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  confirmText: {
+    fontFamily: "Satoshi",
+    fontSize: "0.85rem",
+    fontWeight: "700",
     color: "#1c0700",
   },
-  bookingStatus: {
-    fontSize: "0.75rem",
-    fontFamily: "Satoshi",
-    color: "#4e5f28",
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: "0.05rem",
-    marginLeft: "auto",
+  confirmActions: { display: "flex", gap: "8px" },
+  iconBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: "4px",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "3rem",
+    textAlign: "center",
+  },
+  browseBtn: {
+    marginTop: "1rem",
+    padding: "10px 20px",
+    backgroundColor: "#caaff3",
+    border: "none",
+    borderRadius: "100px",
+    fontWeight: "bold",
+    cursor: "pointer",
   },
 };
