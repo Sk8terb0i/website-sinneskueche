@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import Header from "../components/Header/Header";
+import CourseTitle from "../components/CourseTitle/CourseTitle";
 import {
   Music,
   Layers,
@@ -20,31 +21,26 @@ import {
 const planetImages = import.meta.glob("../assets/planets/*.png", {
   eager: true,
 });
-
-const getImage = (filename) => {
-  const key = `../assets/planets/${filename}`;
-  return planetImages[key]?.default || "";
-};
+const getImage = (filename) =>
+  planetImages[`../assets/planets/${filename}`]?.default || "";
 
 export default function Singing({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [isIdle, setIsIdle] = useState(false);
 
-  // --- EASY CONFIG SECTION ---
   const config = {
     desktop: {
-      touch: { top: "-30px", left: "-35px" },
-      sight: { top: "50px", left: "calc(100% - 60px)" },
+      topIcon: { top: "-30px", left: "-35px" },
+      bottomIcon: { top: "50px", left: "calc(100% - 60px)" },
       titleSize: "4.5rem",
     },
     mobile: {
-      touch: { top: "-15px", left: "-10px" },
-      sight: { top: "45px", left: "calc(100% - 40px)" },
+      topIcon: { top: "-15px", left: "-10px" },
+      bottomIcon: { top: "45px", left: "calc(100% - 40px)" },
       titleSize: "3.5rem",
     },
   };
-  // ---------------------------
 
   useEffect(() => {
     const handleScroll = () => {
@@ -195,8 +191,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
     },
   };
 
-  const touchImg = getImage("hearing.png");
-  const sightImg = getImage("hearing_mic.png");
+  const icons = [getImage("hearing.png"), getImage("hearing_mic.png")];
   const planetShortcutImg = getImage("sing.png");
   const current = content[currentLang];
 
@@ -233,31 +228,6 @@ export default function Singing({ currentLang, setCurrentLang }) {
       marginBottom: "12px",
       fontWeight: "500",
     },
-    titleWrapper: {
-      position: "relative",
-      display: "inline-block",
-      marginBottom: "40px",
-      lineHeight: 1, // Locks icons to box
-    },
-    title: {
-      fontSize: config.desktop.titleSize,
-      margin: 0,
-      zIndex: 2,
-      position: "relative",
-      lineHeight: "1.1",
-    },
-    moon: (top, left, delay) => ({
-      position: "absolute",
-      width: "65px",
-      height: "65px",
-      top: top,
-      left: left,
-      objectFit: "contain",
-      pointerEvents: "none",
-      zIndex: 1,
-      animation: `drift 12s ease-in-out infinite`,
-      animationDelay: `${delay}s`,
-    }),
     infoGrid: {
       display: "flex",
       flexWrap: "wrap",
@@ -481,53 +451,20 @@ export default function Singing({ currentLang, setCurrentLang }) {
 
       <style>{`
           html { scroll-behavior: smooth; }
-          @keyframes drift {
-            0%, 100% { transform: translate(0, 0) rotate(-3deg); }
-            50% { transform: translate(15px, -15px) rotate(4deg); }
-          }
-          @keyframes float-pulse {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-          }
-          @keyframes rotate-slow {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
+          @keyframes float-pulse { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+          @keyframes rotate-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
           .register-box-mobile { display: none !important; }
 
           @media (max-width: 768px) {
             .main-content { padding-top: 120px !important; }
             .welcome-text { margin-bottom: 40px !important; width: 70vw; }
-            .info-grid { 
-              flex-direction: column !important; 
-              align-items: center !important;
-              gap: 15px !important; 
-            }
+            .info-grid { flex-direction: column !important; align-items: center !important; gap: 15px !important; }
             .info-item:nth-child(odd) { transform: translateX(-15px); }
             .info-item:nth-child(even) { transform: translateX(15px); }
             .content-grid { grid-template-columns: 1fr !important; }
             .register-box-desktop { display: none !important; }
-            .register-box-mobile { 
-                display: flex !important;
-                margin: 40px 0 !important;
-                height: auto !important; 
-                padding: 40px 20px !important; 
-                width: 100% !important;
-                box-sizing: border-box !important;
-            }
-
-            /* Config Injection */
-            .course-title { font-size: ${config.mobile.titleSize} !important; }
-            .icon-touch {
-              top: ${config.mobile.touch.top} !important;
-              left: ${config.mobile.touch.left} !important;
-            }
-            .icon-sight {
-              top: ${config.mobile.sight.top} !important;
-              left: ${config.mobile.sight.left} !important;
-            }
-
+            .register-box-mobile { display: flex !important; margin: 40px 0 !important; height: auto !important; padding: 40px 20px !important; width: 100% !important; box-sizing: border-box !important; }
             .luca-image { display: none !important; }
           }
           
@@ -580,35 +517,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
       </button>
 
       <main style={styles.main} className="main-content">
-        <div className="title-wrapper" style={styles.titleWrapper}>
-          {touchImg && (
-            <img
-              src={touchImg}
-              alt="Deco"
-              style={styles.moon(
-                config.desktop.touch.top,
-                config.desktop.touch.left,
-                0,
-              )}
-              className="icon-touch"
-            />
-          )}
-          <h1 className="course-title" style={styles.title}>
-            {current.title}
-          </h1>
-          {sightImg && (
-            <img
-              src={sightImg}
-              alt="Deco"
-              style={styles.moon(
-                config.desktop.sight.top,
-                config.desktop.sight.left,
-                -3,
-              )}
-              className="icon-sight"
-            />
-          )}
-        </div>
+        <CourseTitle title={current.title} config={config} icons={icons} />
 
         <p style={styles.welcomeText} className="welcome-text">
           {current.welcome}
@@ -643,6 +552,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
         </div>
 
         <div className="content-grid" style={styles.contentGrid}>
+          {/* Section remaining identical... */}
           <section>
             <img
               src="https://s3.instrumentor.ch/p/o/32519/luca-koch_pb5ec2.jpg"

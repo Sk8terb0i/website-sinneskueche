@@ -1,33 +1,29 @@
 import { useState } from "react";
 import Header from "../components/Header/Header";
+import CourseTitle from "../components/CourseTitle/CourseTitle";
 import { Clock, Users, Coffee } from "lucide-react";
 
 const planetImages = import.meta.glob("../assets/planets/*.png", {
   eager: true,
 });
-
-const getImage = (filename) => {
-  const key = `../assets/planets/${filename}`;
-  return planetImages[key]?.default || "";
-};
+const getImage = (filename) =>
+  planetImages[`../assets/planets/${filename}`]?.default || "";
 
 export default function Pottery({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // --- EASY CONFIG SECTION ---
   const config = {
     desktop: {
-      touch: { top: "-35px", left: "-80px" },
-      sight: { top: "60px", left: "400px" },
+      topIcon: { top: "-35px", left: "-80px" },
+      bottomIcon: { top: "60px", left: "400px" },
       titleSize: "4.5rem",
     },
     mobile: {
-      touch: { top: "-10px", left: "-10px" },
-      sight: { top: "45px", left: "calc(100% - 55px)" },
-      titleSize: "3.5rem", // Adjust this for mobile
+      topIcon: { top: "-10px", left: "-10px" },
+      bottomIcon: { top: "45px", left: "calc(100% - 55px)" },
+      titleSize: "3.5rem",
     },
   };
-  // ---------------------------
 
   const content = {
     en: {
@@ -50,8 +46,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     },
   };
 
-  const touchImg = getImage("touch.png");
-  const sightImg = getImage("sight.png");
+  const icons = [getImage("touch.png"), getImage("sight.png")];
 
   const styles = {
     main: {
@@ -73,33 +68,6 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       marginBottom: "12px",
       fontWeight: "500",
     },
-    titleWrapper: {
-      position: "relative",
-      display: "inline-block",
-      marginBottom: "40px",
-      /* Ensure the wrapper is purely a reference point */
-      lineHeight: 1,
-    },
-    title: {
-      fontSize: config.desktop.titleSize,
-      margin: 0,
-      zIndex: 2,
-      position: "relative",
-      color: "#1c0700",
-      lineHeight: "1.1",
-    },
-    moon: (top, left, delay) => ({
-      position: "absolute",
-      width: "65px",
-      height: "65px",
-      top: top,
-      left: left,
-      objectFit: "contain",
-      pointerEvents: "none",
-      zIndex: 1,
-      animation: `drift 12s ease-in-out infinite`,
-      animationDelay: `${delay}s`,
-    }),
     infoGrid: {
       display: "flex",
       justifyContent: "center",
@@ -118,11 +86,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       color: "#1c0700",
       whiteSpace: "nowrap",
     },
-    infoLabel: {
-      fontSize: "0.9rem",
-      lineHeight: "1.4",
-      fontWeight: "500",
-    },
+    infoLabel: { fontSize: "0.9rem", lineHeight: "1.4", fontWeight: "500" },
   };
 
   return (
@@ -136,50 +100,10 @@ export default function Pottery({ currentLang, setCurrentLang }) {
 
       <style>
         {`
-          @keyframes drift {
-            0%, 100% { transform: translate(0, 0) rotate(-3deg); }
-            50% { transform: translate(15px, -15px) rotate(4deg); }
-          }
-
           @media (max-width: 768px) {
-            .main-content {
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              padding-top: 120px !important;
-            }
-            .title-wrapper {
-              order: 1;
-              margin-bottom: 8px !important;
-              /* On mobile, sometimes display: inline-block behaves differently, 
-                 ensuring it stays tight to the text here */
-              width: fit-content; 
-            }
-            .course-title {
-              font-size: ${config.mobile.titleSize} !important;
-            }
-            .welcome-text {
-              order: 2;
-              margin-bottom: 40px !important;
-              font-size: 0.9rem !important;
-              width: 50vw;
-            }
-            .info-grid {
-              order: 3;
-              flex-direction: column !important;
-              gap: 12px !important;
-              width: 100%;
-            }
-            
-            .icon-touch {
-              top: ${config.mobile.touch.top} !important;
-              left: ${config.mobile.touch.left} !important;
-            }
-            .icon-sight {
-              top: ${config.mobile.sight.top} !important;
-              left: ${config.mobile.sight.left} !important;
-            }
-
+            .main-content { display: flex; flex-direction: column; align-items: center; padding-top: 120px !important; }
+            .welcome-text { margin-bottom: 40px !important; font-size: 0.9rem !important; width: 50vw; }
+            .info-grid { flex-direction: column !important; gap: 12px !important; width: 100%; }
             .info-item:nth-child(1) { transform: translateX(-15px); }
             .info-item:nth-child(2) { transform: translateX(15px); }
             .info-item:nth-child(3) { transform: translateX(-10px); }
@@ -188,40 +112,15 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       </style>
 
       <main style={styles.main} className="main-content">
-        <div className="title-wrapper" style={styles.titleWrapper}>
-          {touchImg && (
-            <img
-              src={touchImg}
-              alt="Touch"
-              className="icon-touch"
-              style={styles.moon(
-                config.desktop.touch.top,
-                config.desktop.touch.left,
-                0,
-              )}
-            />
-          )}
-          <h1 className="course-title" style={styles.title}>
-            {content[currentLang].title}
-          </h1>
-          {sightImg && (
-            <img
-              src={sightImg}
-              alt="Sight"
-              className="icon-sight"
-              style={styles.moon(
-                config.desktop.sight.top,
-                config.desktop.sight.left,
-                -3,
-              )}
-            />
-          )}
-        </div>
+        <CourseTitle
+          title={content[currentLang].title}
+          config={config}
+          icons={icons}
+        />
 
         <p className="welcome-text" style={styles.welcomeText}>
           {content[currentLang].welcome}
         </p>
-
         <div className="info-grid" style={styles.infoGrid}>
           {content[currentLang].details.map((item, index) => (
             <div key={index} className="info-item" style={styles.infoItem}>
