@@ -7,8 +7,14 @@ import {
   orderBy,
   query,
 } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { loadStripe } from "@stripe/stripe-js";
 import { db } from "../../firebase";
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { getAuth } from "firebase/auth";
+
+// Initialize Stripe with your Test Publishable Key
+const stripePromise = loadStripe("pk_test_YOUR_PUBLISHABLE_KEY_HERE");
 
 export default function PriceDisplay({ coursePath, currentLang }) {
   const [pricing, setPricing] = useState(null);
@@ -58,6 +64,50 @@ export default function PriceDisplay({ coursePath, currentLang }) {
     return () => window.removeEventListener("resize", handleResize);
   }, [coursePath]);
 
+  // STRIPE CHECKOUT HANDLER
+  const handlePayment = async (mode) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+
+    if (!user) {
+      alert(
+        currentLang === "en"
+          ? "Please log in to book sessions."
+          : "Bitte logge dich ein, um zu buchen.",
+      );
+      return;
+    }
+
+    // You no longer need `await stripePromise;` here
+    const functions = getFunctions();
+    const createCheckout = httpsCallable(functions, "createStripeCheckout");
+
+    try {
+      const result = await createCheckout({
+        mode: mode,
+        packPrice: parseFloat(pricing.priceFull),
+        totalPrice: selectedDates.length * parseFloat(pricing.priceSingle),
+        packSize: parseInt(pricing.packSize),
+        coursePath: coursePath,
+        selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
+      });
+
+      // IMPORTANT CHANGE: Use window.location to redirect to the Stripe URL
+      if (result.data && result.data.url) {
+        window.location.assign(result.data.url);
+      } else {
+        throw new Error("No checkout URL returned from server.");
+      }
+    } catch (err) {
+      console.error("Payment failed:", err);
+      alert(
+        currentLang === "en"
+          ? "Payment failed. Please try again."
+          : "Zahlung fehlgeschlagen. Bitte erneut versuchen.",
+      );
+    }
+  };
+
   if (loading || !pricing) return null;
 
   const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -86,12 +136,10 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const packPrice = parseFloat(pricing.priceFull) || 0;
   const hasSelection = selectedDates.length > 0;
 
-  // --- PERCENTAGE SAVINGS CALCULATION ---
-  const normalTotal = pricePerSession * packSize;
+  // Fixed Calculation
+  const baseValue = pricePerSession * packSize;
   const savingsPercent =
-    normalTotal > 0
-      ? Math.round(((normalTotal - packPrice) / normalTotal) * 100)
-      : 0;
+    baseValue > 0 ? Math.round(((baseValue - packPrice) / baseValue) * 100) : 0;
 
   return (
     <div style={outerWrapperStyle}>
@@ -127,10 +175,9 @@ export default function PriceDisplay({ coursePath, currentLang }) {
               <ChevronRight size={isMobile ? 18 : 20} />
             </button>
           </div>
-
           <div style={calendarGridStyle(isMobile)}>
-            {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
-              <div key={d} style={dayOfWeekStyle(isMobile)}>
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, index) => (
+              <div key={`${d}-${index}`} style={dayOfWeekStyle(isMobile)}>
                 {d}
               </div>
             ))}
@@ -159,7 +206,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           </div>
         </div>
 
-        {/* 2. SUMMARY (PACK-FOCUSED) */}
+        {/* 2. SUMMARY */}
         <div style={bookingCardStyle(isMobile, hasSelection)}>
           <div
             style={{
@@ -171,7 +218,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
             <h3 style={summaryTitleStyle(isMobile)}>
               {currentLang === "en" ? "Booking Summary" : "Buchungsübersicht"}
             </h3>
-
             <div style={selectionInfoStyle(isMobile)}>
               <span style={labelStyle(isMobile)}>
                 {selectedDates.length}{" "}
@@ -179,11 +225,9 @@ export default function PriceDisplay({ coursePath, currentLang }) {
               </span>
               <span style={totalPriceStyle(isMobile)}>{totalPrice} CHF</span>
             </div>
-
             <div
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
-              {/* PRIMARY FOCUS: PACK OPTION */}
               {pricing.hasPack && pricing.priceFull && (
                 <div style={highlightedPackStyle(isMobile)}>
                   <div style={packHeaderStyle}>
@@ -207,13 +251,14 @@ export default function PriceDisplay({ coursePath, currentLang }) {
                     </div>
                     <p style={packPriceStyle(isMobile)}>{packPrice} CHF</p>
                   </div>
-
-                  <button style={primaryBtnStyle(isMobile)}>
+                  <button
+                    onClick={() => handlePayment("pack")}
+                    style={primaryBtnStyle(isMobile)}
+                  >
                     {currentLang === "en"
                       ? "Buy Pack & Book"
                       : "Karte kaufen & buchen"}
                   </button>
-
                   <div style={creditNoteStyle(isMobile)}>
                     <Info size={isMobile ? 12 : 14} style={{ flexShrink: 0 }} />
                     <p style={{ margin: 0 }}>
@@ -224,9 +269,10 @@ export default function PriceDisplay({ coursePath, currentLang }) {
                   </div>
                 </div>
               )}
-
-              {/* SECONDARY: SINGLE SESSION PAYMENT */}
-              <button style={secondaryBtnStyle(isMobile)}>
+              <button
+                onClick={() => handlePayment("individual")}
+                style={secondaryBtnStyle(isMobile)}
+              >
                 {currentLang === "en"
                   ? `Pay for ${selectedDates.length} sessions (${totalPrice} CHF)`
                   : `Nur ${selectedDates.length} Termine zahlen (${totalPrice} CHF)`}
@@ -239,8 +285,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   );
 }
 
-// --- STYLES ---
-
+// --- STYLES (Restored as per previous turn) ---
 const outerWrapperStyle = {
   width: "100%",
   marginTop: "4rem",
@@ -266,7 +311,6 @@ const containerStyle = (isMobile) => ({
   justifyContent: "center",
   alignItems: isMobile ? "center" : "stretch",
 });
-
 const calendarCardStyle = (isMobile, hasSelection) => ({
   background: "#fdf8e1",
   padding: isMobile ? "1.5rem" : "2.5rem",
@@ -294,7 +338,6 @@ const bookingCardStyle = (isMobile, hasSelection) => ({
   overflow: "hidden",
   boxSizing: "border-box",
 });
-
 const highlightedPackStyle = (isMobile) => ({
   backgroundColor: "rgba(202, 175, 243, 0.15)",
   borderRadius: "20px",
@@ -323,7 +366,6 @@ const packPriceStyle = (isMobile) => ({
   fontSize: isMobile ? "1rem" : "1.1rem",
   color: "#4e5f28",
 });
-
 const primaryBtnStyle = (isMobile) => ({
   width: "100%",
   padding: isMobile ? "1rem" : "1.2rem",
@@ -336,7 +378,6 @@ const primaryBtnStyle = (isMobile) => ({
   fontSize: isMobile ? "1rem" : "1.1rem",
   fontFamily: "Satoshi",
 });
-
 const secondaryBtnStyle = (isMobile) => ({
   width: "100%",
   padding: isMobile ? "0.9rem" : "1.1rem",
@@ -350,7 +391,6 @@ const secondaryBtnStyle = (isMobile) => ({
   opacity: 0.7,
   fontFamily: "Satoshi",
 });
-
 const savingsBadgeStyle = (isMobile) => ({
   fontSize: isMobile ? "0.55rem" : "0.65rem",
   backgroundColor: "#4e5f28",
@@ -369,7 +409,6 @@ const creditNoteStyle = (isMobile) => ({
   opacity: 0.6,
   textAlign: "left",
 });
-
 const calendarHeaderStyle = (isMobile) => ({
   display: "flex",
   justifyContent: "space-between",
@@ -425,7 +464,6 @@ const labelStyle = (isMobile) => ({
   fontWeight: "700",
   fontSize: isMobile ? "0.85rem" : "1rem",
 });
-
 const dayStyle = (hasEvent, isSelected, isMobile) => ({
   aspectRatio: "1/1",
   display: "flex",

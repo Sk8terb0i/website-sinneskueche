@@ -20,6 +20,7 @@ import GetInk from "./pages/GetInk";
 
 // New Auth & Profile imports
 import Profile from "./pages/Profile";
+import Success from "./components/Confirm/Success";
 
 import PageTransition from "./components/PageTransition";
 import { defaultLang, languages } from "./i18n";
@@ -193,6 +194,31 @@ export default function App() {
             element={
               <PageTransition>
                 <Rent
+                  currentLang={currentLang}
+                  setCurrentLang={setCurrentLang}
+                />
+              </PageTransition>
+            }
+          />
+
+          <Route
+            path="/profile"
+            element={
+              <PageTransition>
+                <Profile
+                  currentLang={currentLang}
+                  setCurrentLang={setCurrentLang}
+                />
+              </PageTransition>
+            }
+          />
+
+          {/* Add the Success route right here */}
+          <Route
+            path="/success"
+            element={
+              <PageTransition>
+                <Success
                   currentLang={currentLang}
                   setCurrentLang={setCurrentLang}
                 />
