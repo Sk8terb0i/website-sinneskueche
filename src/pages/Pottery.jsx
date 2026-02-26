@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
+import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
 import { Clock, Users, Coffee } from "lucide-react";
 
 const planetImages = import.meta.glob("../assets/planets/*.png", {
@@ -121,6 +122,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         <p className="welcome-text" style={styles.welcomeText}>
           {content[currentLang].welcome}
         </p>
+
         <div className="info-grid" style={styles.infoGrid}>
           {content[currentLang].details.map((item, index) => (
             <div key={index} className="info-item" style={styles.infoItem}>
@@ -129,6 +131,9 @@ export default function Pottery({ currentLang, setCurrentLang }) {
             </div>
           ))}
         </div>
+
+        {/* Dynamic Pricing Component */}
+        <PriceDisplay coursePath="/pottery" currentLang={currentLang} />
       </main>
     </div>
   );
