@@ -5,20 +5,15 @@ const {
 } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
-// Initialize Stripe with your Secret Key
 const stripe = require("stripe")(
   "sk_test_51T56CkRrxXqwePSlKMOY9SYIkKC54aGlygB25R9xZ8NP1j7uQZ15aLf89SLTUc0uptjAGRfObfDqzym5cNsUZCrC004IrGlMUp",
 );
 
-// Initialize Firebase Admin
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 const db = admin.firestore();
 
-// ============================================================================
-// HELPER: CONSISTENT COURSE MAPPING
-// ============================================================================
 const courseMapping = {
   "/pottery": "pottery tuesdays",
   "/artistic-vision": "artistic vision",
@@ -29,27 +24,35 @@ const courseMapping = {
   "/singing-basics": "singing basics weekend",
 };
 
-const getCleanCourseKey = (path) => {
-  // If the path exists in our map, return the title.
-  // Otherwise, just remove slashes as a fallback.
-  return courseMapping[path] || path.replace(/\//g, "");
-};
+const getCleanCourseKey = (path) =>
+  courseMapping[path] || path.replace(/\//g, "");
 
-// ============================================================================
-// 1. CREATE CHECKOUT SESSION
-// ============================================================================
 exports.createStripeCheckout = onCall({ cors: true }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be logged in.");
-  }
+  const {
+    mode,
+    packPrice,
+    totalPrice,
+    packSize,
+    selectedDates,
+    coursePath,
+    guestInfo,
+  } = request.data;
 
-  const userId = request.auth.uid;
-  const { mode, packPrice, totalPrice, packSize, selectedDates, coursePath } =
-    request.data;
+  // ALLOW if logged in OR if guest info is provided
+  const userId = request.auth ? request.auth.uid : "GUEST_USER";
+  const userEmail = request.auth ? request.auth.token.email : guestInfo?.email;
+
+  if (!request.auth && !guestInfo) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Login required or Guest Info missing.",
+    );
+  }
 
   try {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
+      customer_email: userEmail,
       line_items: [
         {
           price_data: {
@@ -74,27 +77,24 @@ exports.createStripeCheckout = onCall({ cors: true }, async (request) => {
       cancel_url: "http://localhost:5173/#/cancel",
       metadata: {
         userId: userId,
+        guestName: guestInfo
+          ? `${guestInfo.firstName} ${guestInfo.lastName}`
+          : "N/A",
         mode: mode,
         packSize: packSize || 0,
         coursePath: coursePath || "unknown",
         selectedDates: JSON.stringify(selectedDates),
       },
     });
-
     return { url: session.url };
   } catch (error) {
-    console.error("Stripe Session Failed:", error);
     throw new HttpsError("internal", error.message);
   }
 });
 
-// ============================================================================
-// 2. STRIPE WEBHOOK
-// ============================================================================
 exports.handleStripeWebhook = onRequest(async (req, res) => {
   const sig = req.headers["stripe-signature"];
   const endpointSecret = "whsec_a4VdBked9dzdHfSFPGG7iyOdkujKsZEW";
-
   let event;
   try {
     event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
@@ -104,32 +104,28 @@ exports.handleStripeWebhook = onRequest(async (req, res) => {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
-    const sessionId = session.id;
-    const paymentCheckRef = db.collection("processed_payments").doc(sessionId);
+    const paymentCheckRef = db.collection("processed_payments").doc(session.id);
 
     try {
       await db.runTransaction(async (transaction) => {
         const checkSnap = await transaction.get(paymentCheckRef);
-        if (checkSnap.exists) return; // Idempotency check
+        if (checkSnap.exists) return;
 
-        const { userId, mode, packSize, selectedDates, coursePath } =
+        const { userId, guestName, mode, packSize, selectedDates, coursePath } =
           session.metadata;
         const parsedDates = JSON.parse(selectedDates);
-
-        // Use mapping helper for consistent database key
         const courseKey = getCleanCourseKey(coursePath);
-        const userRef = db.collection("users").doc(userId);
 
-        if (mode === "pack") {
-          const packAmount = parseInt(packSize);
-          const deduction = parsedDates.length;
-          const netIncrease = packAmount - deduction;
-
+        // Update Credits ONLY for registered users
+        if (mode === "pack" && userId !== "GUEST_USER") {
+          const userRef = db.collection("users").doc(userId);
           transaction.set(
             userRef,
             {
               credits: {
-                [courseKey]: admin.firestore.FieldValue.increment(netIncrease),
+                [courseKey]: admin.firestore.FieldValue.increment(
+                  parseInt(packSize) - parsedDates.length,
+                ),
               },
             },
             { merge: true },
@@ -137,13 +133,16 @@ exports.handleStripeWebhook = onRequest(async (req, res) => {
         }
 
         parsedDates.forEach((sessionDate) => {
-          const bookingRef = db.collection("bookings").doc();
-          transaction.set(bookingRef, {
-            userId: userId,
+          const bRef = db.collection("bookings").doc();
+          transaction.set(bRef, {
+            userId,
+
+            guestName: userId === "GUEST_USER" ? guestName : null,
+            guestEmail:
+              userId === "GUEST_USER" ? session.customer_details.email : null,
             eventId: sessionDate.id,
             date: sessionDate.date,
-            type: mode,
-            coursePath: coursePath,
+            coursePath,
             status: "confirmed",
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           });
@@ -151,11 +150,11 @@ exports.handleStripeWebhook = onRequest(async (req, res) => {
 
         transaction.set(paymentCheckRef, {
           processedAt: admin.firestore.FieldValue.serverTimestamp(),
-          userId: userId,
+          userId,
         });
       });
-    } catch (error) {
-      console.error("Webhook processing failed:", error);
+    } catch (e) {
+      console.error("Webhook Error", e);
     }
   }
   res.json({ received: true });

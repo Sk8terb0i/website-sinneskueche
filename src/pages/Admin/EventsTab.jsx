@@ -8,6 +8,7 @@ import {
   getDocs,
   deleteDoc,
   doc,
+  getDoc, // Added getDoc for cleaner single-user fetching
   orderBy,
   setDoc,
 } from "firebase/firestore";
@@ -24,7 +25,6 @@ import {
   Mail,
   Edit2,
   Clock,
-  LayoutGrid,
 } from "lucide-react";
 import {
   formCardStyle,
@@ -54,7 +54,6 @@ export default function EventsTab({ isMobile, currentLang }) {
   const [showParticipantsFor, setShowParticipantsFor] = useState(null);
   const [participantCache, setParticipantCache] = useState({});
 
-  // Translation Dictionary
   const labels = {
     en: {
       newEntry: "NEW ENTRY",
@@ -139,7 +138,8 @@ export default function EventsTab({ isMobile, currentLang }) {
             ...data,
             id: docSnap.id,
             bookedCount: bSnap.size,
-            uids: bSnap.docs.map((d) => d.data().userId),
+            // CHANGED: Store full booking data instead of just UIDs to catch guest names
+            bookings: bSnap.docs.map((d) => d.data()),
           };
         }),
       );
@@ -168,17 +168,29 @@ export default function EventsTab({ isMobile, currentLang }) {
 
     if (!participantCache[event.id]) {
       const userDetails = await Promise.all(
-        event.uids.map(async (uid) => {
-          const uSnap = await getDocs(
-            query(collection(db, "users"), where("__name__", "==", uid)),
-          );
-          return (
-            uSnap.docs[0]?.data() || {
-              firstName: "Unknown",
-              lastName: "User",
-              email: "N/A",
-            }
-          );
+        event.bookings.map(async (b) => {
+          // LOGIC: If Guest, use info stored directly on the booking document
+          if (b.userId === "GUEST_USER") {
+            return {
+              firstName: b.guestName || "Guest",
+              lastName: "(Guest)",
+              email: b.guestEmail || "Email not found", // Display guest email
+              phone: "",
+              isGuest: true,
+            };
+          }
+
+          // If registered user, fetch from the users collection as before
+          const uSnap = await getDoc(doc(db, "users", b.userId));
+          if (uSnap.exists()) {
+            return uSnap.data();
+          }
+
+          return {
+            firstName: "Unknown",
+            lastName: "User",
+            email: "N/A",
+          };
         }),
       );
       setParticipantCache((prev) => ({ ...prev, [event.id]: userDetails }));
@@ -336,8 +348,7 @@ export default function EventsTab({ isMobile, currentLang }) {
                       linkType === "course" ? "#caaff3" : "transparent",
                   }}
                 >
-                  {" "}
-                  {labels.course}{" "}
+                  {labels.course}
                 </div>
                 <div
                   onClick={() => setLinkType("event")}
@@ -347,8 +358,7 @@ export default function EventsTab({ isMobile, currentLang }) {
                       linkType === "event" ? "#caaff3" : "transparent",
                   }}
                 >
-                  {" "}
-                  {labels.event}{" "}
+                  {labels.event}
                 </div>
               </div>
             </div>
@@ -544,7 +554,11 @@ export default function EventsTab({ isMobile, currentLang }) {
                               {participantCache[ev.id].map((u, i) => (
                                 <div key={i} style={styles.userRow}>
                                   <User size={12} />
-                                  <strong>
+                                  <strong
+                                    style={{
+                                      color: u.isGuest ? "#9960a8" : "inherit",
+                                    }}
+                                  >
                                     {u.firstName} {u.lastName}
                                   </strong>
                                   <span style={styles.contactText}>
@@ -639,7 +653,9 @@ export default function EventsTab({ isMobile, currentLang }) {
                   {participantCache[ev.id].map((u, i) => (
                     <div key={i} style={styles.userRow}>
                       <User size={12} />
-                      <strong>
+                      <strong
+                        style={{ color: u.isGuest ? "#9960a8" : "inherit" }}
+                      >
                         {u.firstName} {u.lastName}
                       </strong>
                       <span style={styles.contactText}>

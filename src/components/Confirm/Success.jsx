@@ -1,9 +1,11 @@
 import { CheckCircle } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
-import Header from "../Header/Header"; // Adjust import path if needed
+import Header from "../Header/Header";
 import { useState } from "react";
+import { useAuth } from "../../contexts/AuthContext"; // Import Auth context
 
 export default function Success({ currentLang, setCurrentLang }) {
+  const { currentUser } = useAuth(); // Get auth state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("session_id");
@@ -12,8 +14,9 @@ export default function Success({ currentLang, setCurrentLang }) {
     en: {
       title: "payment successful",
       message: "Thank you for your booking! Your transaction was successful.",
-      creditsNote:
-        "If you purchased a pack, your credits have been added to your profile and your selected dates are confirmed.",
+      creditsNote: currentUser
+        ? "If you purchased a pack, your credits have been added to your profile and your selected dates are confirmed."
+        : "Your selected dates are confirmed. You will receive a confirmation email shortly.",
       button: "Go to Profile",
       home: "Back to Home",
     },
@@ -21,8 +24,9 @@ export default function Success({ currentLang, setCurrentLang }) {
       title: "zahlung erfolgreich",
       message:
         "Vielen Dank für deine Buchung! Die Transaktion war erfolgreich.",
-      creditsNote:
-        "Wenn du eine Karte gekauft hast, wurde das Guthaben deinem Profil hinzugefügt und deine gewählten Termine sind bestätigt.",
+      creditsNote: currentUser
+        ? "Wenn du eine Karte gekauft hast, wurde das Guthaben deinem Profil hinzugefügt und deine gewählten Termine sind bestätigt."
+        : "Deine gewählten Termine sind bestätigt. Du erhältst in Kürze eine Bestätigungs-E-Mail.",
       button: "Zum Profil",
       home: "Zurück zur Startseite",
     },
@@ -54,15 +58,21 @@ export default function Success({ currentLang, setCurrentLang }) {
         <p style={styles.creditsNote}>{content[currentLang].creditsNote}</p>
 
         <div style={styles.buttonContainer}>
-          <Link to="/profile" style={styles.primaryBtn}>
-            {content[currentLang].button}
-          </Link>
-          <Link to="/" style={styles.secondaryBtn}>
+          {/* Only show "Go to Profile" if a user is logged in */}
+          {currentUser && (
+            <Link to="/profile" style={styles.primaryBtn}>
+              {content[currentLang].button}
+            </Link>
+          )}
+
+          <Link
+            to="/"
+            style={currentUser ? styles.secondaryBtn : styles.primaryBtn}
+          >
             {content[currentLang].home}
           </Link>
         </div>
 
-        {/* Optional: Display session ID for reference */}
         {sessionId && (
           <p style={{ marginTop: "3rem", fontSize: "0.7rem", opacity: 0.4 }}>
             Session ID: {sessionId}

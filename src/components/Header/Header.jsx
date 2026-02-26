@@ -37,6 +37,17 @@ export default function Header({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Header.jsx - Add this useEffect inside the component
+  useEffect(() => {
+    const handleOpenAuth = () => setIsAuthOpen(true);
+
+    // Listen for the custom signal
+    window.addEventListener("open-auth", handleOpenAuth);
+
+    // Cleanup listener on unmount
+    return () => window.removeEventListener("open-auth", handleOpenAuth);
+  }, []);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
