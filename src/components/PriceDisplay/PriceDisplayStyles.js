@@ -66,10 +66,11 @@ export const navBtnStyle = {
   opacity: 0.5,
 };
 
+// --- UPDATED DAY STYLE ---
 export const dayStyle = (hasEvent, isSelected, isMobile, isGreyedOut) => ({
-  aspectRatio: "1/1",
+  width: "100%", // Ensure it fills the grid cell
+  aspectRatio: "1/1", // Forces height to match width
   display: "flex",
-  flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
   borderRadius: "50%",
@@ -86,19 +87,25 @@ export const dayStyle = (hasEvent, isSelected, isMobile, isGreyedOut) => ({
   fontWeight: hasEvent ? "800" : "400",
   opacity: hasEvent ? 1 : 0.2,
   transition: "0.2s",
-  position: "relative",
+  position: "relative", // Keeps absolute children (dots/labels) contained
+  boxSizing: "border-box",
 });
 
+// --- UPDATED DOT STYLE ---
 export const dotStyle = (isSelected, isAlreadyBooked) => ({
-  width: "5px",
-  height: "5px",
+  width: "4px",
+  height: "4px",
   borderRadius: "50%",
   backgroundColor: isAlreadyBooked
     ? "#ccc"
     : isSelected
       ? "#1c0700"
       : "#caaff3",
-  marginTop: "4px",
+  // CHANGED: Absolute positioning prevents the dot from "pushing" the circle's height
+  position: "absolute",
+  bottom: "15%",
+  left: "50%",
+  transform: "translateX(-50%)",
 });
 
 // --- BOOKING SUMMARY STYLES ---

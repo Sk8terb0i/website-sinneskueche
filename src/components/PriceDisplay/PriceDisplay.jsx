@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   collection,
@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "../../firebase";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, ChevronDown } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { planets } from "../../data/planets";
 import BookingSummary from "./BookingSummary";
@@ -27,7 +27,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const [eventBookingCounts, setEventBookingCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isGuestMode, setIsGuestMode] = useState(false);
   const [guestInfo, setGuestInfo] = useState({
     firstName: "",
     lastName: "",
@@ -35,6 +34,8 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   });
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
+  const scrollRef = useRef(null);
 
   const getCreditKey = (link) => {
     for (const planet of planets) {
@@ -47,28 +48,39 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const courseKey = getCreditKey(coursePath);
   const availableCredits = userData?.credits?.[courseKey] || 0;
 
+  // 1. Handle Resize
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
     window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // 2. Fetch Data with Error Handling & Loading Guard
+  useEffect(() => {
+    let isMounted = true;
 
     const fetchData = async () => {
+      setLoading(true); // Ensure loading is true when coursePath changes
       const docId = coursePath.replace(/\//g, "");
+
       try {
+        // Fetch Pricing
         const priceSnap = await getDoc(doc(db, "course_settings", docId));
-        let pricingData = null;
-        if (priceSnap.exists()) {
-          pricingData = priceSnap.data();
-          setPricing(pricingData);
+        if (priceSnap.exists() && isMounted) {
+          setPricing(priceSnap.data());
         }
 
+        // Fetch Events
         const eventSnap = await getDocs(
           query(collection(db, "events"), orderBy("date", "asc")),
         );
         const filteredEvents = eventSnap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
           .filter((ev) => ev.link === coursePath);
-        setAvailableDates(filteredEvents);
 
+        if (isMounted) setAvailableDates(filteredEvents);
+
+        // Fetch Booking Counts
         const globalBSnap = await getDocs(
           query(
             collection(db, "bookings"),
@@ -79,9 +91,9 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         globalBSnap.docs.forEach((d) => {
           counts[d.data().eventId] = (counts[d.data().eventId] || 0) + 1;
         });
-        setEventBookingCounts(counts);
+        if (isMounted) setEventBookingCounts(counts);
 
-        let bookedIds = [];
+        // Fetch User's Own Bookings
         if (currentUser) {
           const userBSnap = await getDocs(
             query(
@@ -89,36 +101,41 @@ export default function PriceDisplay({ coursePath, currentLang }) {
               where("userId", "==", currentUser.uid),
             ),
           );
-          bookedIds = userBSnap.docs.map((d) => d.data().eventId);
-          setUserBookedIds(bookedIds);
+          if (isMounted)
+            setUserBookedIds(userBSnap.docs.map((d) => d.data().eventId));
         }
 
-        if (filteredEvents.length > 0) {
+        // Set Initial Month View
+        if (filteredEvents.length > 0 && isMounted) {
           const nextAvailable =
-            filteredEvents.find((ev) => {
-              const isFull =
-                pricingData?.hasCapacity &&
-                (counts[ev.id] || 0) >= parseInt(pricingData.capacity);
-              const isBooked = bookedIds.includes(ev.id);
-              return !isFull && !isBooked;
-            }) || filteredEvents[0];
-          setCurrentViewDate(
-            new Date(
-              new Date(nextAvailable.date).getFullYear(),
-              new Date(nextAvailable.date).getMonth(),
-              1,
-            ),
-          );
+            filteredEvents.find((ev) => true) || filteredEvents[0];
+          const d = new Date(nextAvailable.date);
+          setCurrentViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
         }
       } catch (err) {
-        console.error(err);
+        console.error("Fetch Error:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false); // STOP SPINNER REGARDLESS OF ERROR
       }
     };
+
     fetchData();
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      isMounted = false;
+    };
   }, [coursePath, currentUser]);
+
+  // 3. Smooth scroll on expansion
+  useEffect(() => {
+    if (isMobile && isMobileExpanded && scrollRef.current) {
+      setTimeout(() => {
+        scrollRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 200);
+    }
+  }, [isMobileExpanded, isMobile]);
 
   const toggleDate = (event) => {
     if (userBookedIds.includes(event.id)) return;
@@ -134,81 +151,66 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   };
 
   const handlePayment = async (mode, packCode = null) => {
-    const functions = getFunctions();
-
-    // NEW: Safety check to make sure guests actually filled out the form!
     if (!currentUser && (!guestInfo.email || !guestInfo.firstName)) {
       alert(
         currentLang === "en"
-          ? "Please enter your name and email."
-          : "Bitte geben Sie Ihren Namen und Ihre E-Mail-Adresse ein.",
+          ? "Name and email required."
+          : "Name und E-Mail erforderlich.",
       );
       return;
     }
-
+    setIsProcessing(true);
     try {
-      setIsProcessing(true);
-
+      const functions = getFunctions();
       if (mode === "redeem") {
         const redeemPack = httpsCallable(functions, "redeemPackCode");
-        // Capture the response from the backend
-        const response = await redeemPack({
+        const res = await redeemPack({
           coursePath,
           selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
           packCode,
           guestInfo: !currentUser ? guestInfo : null,
-          currentLang: currentLang,
+          currentLang,
         });
-
-        // Pass the code and the remaining credits into the URL!
         navigate(
-          `/success?code=${packCode}&remaining=${response.data.remainingCredits}`,
+          `/success?code=${packCode}&remaining=${res.data.remainingCredits}`,
         );
-        return;
+      } else {
+        const createCheckout = httpsCallable(functions, "createStripeCheckout");
+        const result = await createCheckout({
+          mode,
+          packPrice: parseFloat(pricing.priceFull),
+          totalPrice: selectedDates.length * parseFloat(pricing.priceSingle),
+          packSize: parseInt(pricing.packSize),
+          coursePath,
+          selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
+          guestInfo: !currentUser ? guestInfo : null,
+          currentLang,
+        });
+        if (result.data?.url) window.location.assign(result.data.url);
       }
-
-      const createCheckout = httpsCallable(functions, "createStripeCheckout");
-      const result = await createCheckout({
-        mode,
-        packPrice: parseFloat(pricing.priceFull),
-        totalPrice: selectedDates.length * parseFloat(pricing.priceSingle),
-        packSize: parseInt(pricing.packSize),
-        coursePath,
-        selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
-        guestInfo: !currentUser ? guestInfo : null, // <--- CHANGED
-        currentLang: currentLang,
-      });
-
-      if (result.data?.url) window.location.assign(result.data.url);
     } catch (err) {
       console.error(err);
       setIsProcessing(false);
-      if (mode === "redeem") {
-        alert(
-          currentLang === "en"
-            ? "Invalid code or insufficient pack credits."
-            : "Ungültiger Code oder unzureichendes Guthaben.",
-        );
-      }
     }
   };
 
   const handleBookWithCredits = async () => {
-    const bookWithCredits = httpsCallable(getFunctions(), "bookWithCredits");
+    setIsProcessing(true);
     try {
-      setIsProcessing(true);
-      await bookWithCredits({
+      const bookCall = httpsCallable(getFunctions(), "bookWithCredits");
+      await bookCall({
         coursePath,
         selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
-        currentLang: currentLang, // <--- Added language for emails
+        currentLang,
       });
       navigate("/success");
     } catch (err) {
+      console.error(err);
       setIsProcessing(false);
     }
   };
 
-  if (loading && !pricing)
+  if (loading)
     return (
       <div style={S.initialLoaderStyle}>
         <Loader2 className="spinner" size={40} color="#caaff3" />
@@ -222,7 +224,10 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const year = currentViewDate.getFullYear();
 
   return (
-    <div style={{ ...S.outerWrapperStyle, position: "relative" }}>
+    <div
+      ref={scrollRef}
+      style={{ ...S.outerWrapperStyle, position: "relative" }}
+    >
       {isProcessing && (
         <div style={S.overlayStyle}>
           <Loader2 className="spinner" size={50} color="#caaff3" />
@@ -232,12 +237,41 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         </div>
       )}
 
-      <h2 style={S.overarchingTitleStyle(isMobile)}>
-        {currentLang === "en" ? "Available Dates" : "Verfügbare Termine"}
-      </h2>
+      {/* FIXED ARROW: Right for collapsed, Down for expanded */}
+      <div
+        onClick={() => isMobile && setIsMobileExpanded(!isMobileExpanded)}
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          cursor: isMobile ? "pointer" : "default",
+          borderBottom:
+            isMobile && !isMobileExpanded
+              ? "1px solid rgba(28,7,0,0.1)"
+              : "none",
+          paddingBottom: isMobile ? "1rem" : "0",
+        }}
+      >
+        <h2 style={{ ...S.overarchingTitleStyle(isMobile), margin: 0 }}>
+          {currentLang === "en" ? "Available Dates" : "Verfügbare Termine"}
+        </h2>
+        {isMobile &&
+          (isMobileExpanded ? (
+            <ChevronDown size={28} opacity={0.5} />
+          ) : (
+            <ChevronRight size={28} opacity={0.5} />
+          ))}
+      </div>
 
-      {/* CHANGED: Container and Calendar show summary as soon as pricing is loaded */}
-      <div style={S.containerStyle(isMobile, !!pricing)}>
+      <div
+        style={{
+          display: !isMobile || isMobileExpanded ? "flex" : "none",
+          flexDirection: isMobile ? "column" : "row",
+          gap: "2rem",
+          marginTop: isMobile ? "2rem" : "0",
+          animation: "fadeIn 0.5s ease-out",
+        }}
+      >
         <div style={S.calendarCardStyle(isMobile, !!pricing)}>
           <div style={S.calendarHeaderStyle(isMobile)}>
             <button
@@ -288,6 +322,8 @@ export default function PriceDisplay({ coursePath, currentLang }) {
                 (eventBookingCounts[event.id] || 0) >=
                   parseInt(pricing.capacity);
               const isBooked = event && userBookedIds.includes(event.id);
+              const isSelected =
+                event && selectedDates.find((d) => d.id === event.id);
 
               return (
                 <div
@@ -297,32 +333,14 @@ export default function PriceDisplay({ coursePath, currentLang }) {
                   }
                   style={S.dayStyle(
                     event,
-                    event && selectedDates.find((d) => d.id === event.id),
+                    isSelected,
                     isMobile,
                     isBooked || isFull,
                   )}
                 >
                   {i + 1}
                   {event && !isFull && (
-                    <div
-                      style={S.dotStyle(
-                        selectedDates.find((d) => d.id === event.id),
-                        isBooked,
-                      )}
-                    />
-                  )}
-                  {isFull && (
-                    <span
-                      style={{
-                        fontSize: "0.5rem",
-                        fontWeight: "900",
-                        color: "#ff4d4d",
-                        position: "absolute",
-                        bottom: "4px",
-                      }}
-                    >
-                      {currentLang === "en" ? "FULL" : "VOLL"}
-                    </span>
+                    <div style={S.dotStyle(isSelected, isBooked)} />
                   )}
                 </div>
               );
@@ -332,11 +350,11 @@ export default function PriceDisplay({ coursePath, currentLang }) {
 
         <BookingSummary
           selectedDates={selectedDates}
-          totalPrice={selectedDates.length * parseFloat(pricing.priceSingle)}
+          totalPrice={
+            selectedDates.length * parseFloat(pricing?.priceSingle || 0)
+          }
           availableCredits={availableCredits}
           pricing={pricing}
-          isGuestMode={isGuestMode}
-          setIsGuestMode={setIsGuestMode}
           guestInfo={guestInfo}
           setGuestInfo={setGuestInfo}
           currentUser={currentUser}

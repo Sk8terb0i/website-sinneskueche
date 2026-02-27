@@ -1,5 +1,11 @@
 import React, { useState } from "react";
-import { Ticket, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import {
+  Ticket,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Calendar,
+} from "lucide-react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -80,7 +86,7 @@ export default function BookingSummary({
     }
   };
 
-  // Helper to render the Pack Option (Used in multiple states)
+  // UPDATED: Refined Pack Option layout for mobile
   const renderPackOption = () => (
     <div
       style={{
@@ -93,40 +99,74 @@ export default function BookingSummary({
         gap: "1.2rem",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-          <p style={{ fontWeight: "800", margin: 0 }}>
-            {currentLang === "en"
-              ? `${pricing.packSize}-Session Pack`
-              : `${pricing.packSize}er Karte`}
-          </p>
-          <span
+      {/* NEW: Header section is now wrapped in a conditional. 
+        It only displays if we are NOT in redemption mode.
+      */}
+      {!isRedeemingCode && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: isMobile ? "column" : "row",
+            justifyContent: "space-between",
+            alignItems: isMobile ? "flex-start" : "baseline",
+            gap: isMobile ? "8px" : "0",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <p
+              style={{
+                fontWeight: "800",
+                margin: 0,
+                fontSize: "1.1rem",
+                lineHeight: 1.2,
+              }}
+            >
+              {currentLang === "en"
+                ? `${pricing.packSize}-Session Pack`
+                : `${pricing.packSize}er Karte`}
+            </p>
+            <span
+              style={{
+                fontSize: "0.6rem",
+                color: "#9960a8",
+                backgroundColor: "rgba(153, 96, 168, 0.1)",
+                padding: "2px 8px",
+                borderRadius: "4px",
+                fontWeight: "900",
+                width: "fit-content",
+              }}
+            >
+              {currentLang === "en"
+                ? `SAVE ${savingsPercent}%`
+                : `${savingsPercent}% ERSPARNIS`}
+            </span>
+          </div>
+          <p
             style={{
-              fontSize: "0.65rem",
-              color: "#9960a8",
-              fontWeight: "900",
-              whiteSpace: "nowrap",
+              fontWeight: "700",
+              margin: 0,
+              color: "#4e5f28",
+              fontSize: isMobile ? "1.4rem" : "1.1rem",
             }}
           >
-            {currentLang === "en"
-              ? `SAVE ${savingsPercent}%`
-              : `${savingsPercent}% ERSPARNIS`}
-          </span>
+            {pricing.priceFull} CHF
+          </p>
         </div>
-        <p style={{ fontWeight: "700", margin: 0, color: "#4e5f28" }}>
-          {pricing.priceFull} CHF
-        </p>
-      </div>
+      )}
 
       {!currentUser && isRedeemingCode ? (
         // REDEEM CODE VIEW FOR GUESTS
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {/* Optional: Add a simple title so the card isn't too empty at the top */}
+          <h4
+            style={{
+              margin: "0 0 5px 0",
+              fontFamily: "Harmond-SemiBoldCondensed",
+              fontSize: "1.2rem",
+            }}
+          >
+            {currentLang === "en" ? "redeem code" : "code einlösen"}
+          </h4>
           <input
             type="text"
             placeholder={
@@ -136,8 +176,8 @@ export default function BookingSummary({
             onChange={(e) => setPackCode(e.target.value)}
             style={{
               ...S.guestInputStyle,
-              padding: "10px 14px",
-              fontSize: "0.85rem",
+              padding: "12px 14px",
+              fontSize: "0.9rem",
             }}
           />
           <button
@@ -156,8 +196,7 @@ export default function BookingSummary({
               color: "#4e5f28",
               cursor: "pointer",
               fontSize: "0.75rem",
-              padding: 0,
-              marginTop: "4px",
+              padding: "8px 0",
             }}
           >
             {currentLang === "en" ? "Back to buy pack" : "Zurück zum Kauf"}
@@ -165,7 +204,7 @@ export default function BookingSummary({
         </div>
       ) : (
         // BUY PACK VIEW
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <button
             onClick={() => onPayment("pack")}
             style={S.primaryBtnStyle(isMobile)}
@@ -186,8 +225,7 @@ export default function BookingSummary({
                 color: "#4e5f28",
                 cursor: "pointer",
                 fontSize: "0.75rem",
-                padding: 0,
-                marginTop: "4px",
+                padding: "4px 0",
               }}
             >
               {currentLang === "en"
@@ -204,6 +242,7 @@ export default function BookingSummary({
                 margin: 0,
                 fontStyle: "italic",
                 textAlign: "left",
+                lineHeight: "1.3",
               }}
             >
               {currentLang === "en"
@@ -216,7 +255,6 @@ export default function BookingSummary({
     </div>
   );
 
-  // Helper to render the Individual Option (Used in multiple states)
   const renderIndividualOption = () =>
     hasSelection && (
       <button
@@ -234,17 +272,16 @@ export default function BookingSummary({
     <div style={S.bookingCardStyle(isMobile, true)}>
       <div
         style={{
-          minWidth: isMobile ? "auto" : "380px",
+          minWidth: isMobile ? "100%" : "380px",
           opacity: 1,
           transition: "opacity 0.4s ease",
           textAlign: "left",
         }}
       >
-        {/* DYNAMIC TITLE */}
         <h3
           style={{
             fontFamily: "Harmond-SemiBoldCondensed",
-            fontSize: "2rem",
+            fontSize: isMobile ? "1.8rem" : "2rem",
             marginBottom: "1.5rem",
             textAlign: "left",
           }}
@@ -258,18 +295,14 @@ export default function BookingSummary({
               : "kursoptionen"}
         </h3>
 
-        {/* ==========================================
-            STATE C: NO USER LOGGED IN
-            ========================================== */}
         {!currentUser && (
           <div style={{ marginBottom: "1.5rem" }}>
-            {/* Collapsed Auth Toggle */}
             <button
               onClick={() => setIsAuthExpanded(!isAuthExpanded)}
               style={{
                 background: "none",
                 border: "none",
-                padding: 0,
+                padding: "10px 0",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -277,7 +310,6 @@ export default function BookingSummary({
                 color: "#4e5f28",
                 fontSize: "0.9rem",
                 fontWeight: "700",
-                marginBottom: "1rem",
               }}
             >
               {isAuthExpanded ? (
@@ -290,7 +322,6 @@ export default function BookingSummary({
                 : "Einloggen oder Registrieren"}
             </button>
 
-            {/* Inline Auth Form */}
             {isAuthExpanded && (
               <div
                 style={{
@@ -305,69 +336,50 @@ export default function BookingSummary({
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: "8px",
+                    gap: "10px",
                   }}
                 >
                   {isRegistering && (
-                    <>
-                      <div style={{ display: "flex", gap: "8px" }}>
-                        <input
-                          type="text"
-                          placeholder={
-                            currentLang === "en" ? "First Name" : "Vorname"
-                          }
-                          required
-                          style={{
-                            ...S.guestInputStyle,
-                            padding: "8px 12px",
-                            fontSize: "0.8rem",
-                            flex: 1,
-                          }}
-                          value={firstName}
-                          onChange={(e) => setFirstName(e.target.value)}
-                        />
-                        <input
-                          type="text"
-                          placeholder={
-                            currentLang === "en" ? "Last Name" : "Nachname"
-                          }
-                          required
-                          style={{
-                            ...S.guestInputStyle,
-                            padding: "8px 12px",
-                            fontSize: "0.8rem",
-                            flex: 1,
-                          }}
-                          value={lastName}
-                          onChange={(e) => setLastName(e.target.value)}
-                        />
-                      </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: isMobile ? "column" : "row",
+                        gap: "10px",
+                      }}
+                    >
                       <input
-                        type="tel"
+                        type="text"
                         placeholder={
-                          currentLang === "en"
-                            ? "Phone (optional)"
-                            : "Telefon (optional)"
+                          currentLang === "en" ? "First Name" : "Vorname"
                         }
+                        required
                         style={{
                           ...S.guestInputStyle,
-                          padding: "8px 12px",
-                          fontSize: "0.8rem",
+                          flex: 1,
                         }}
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
                       />
-                    </>
+                      <input
+                        type="text"
+                        placeholder={
+                          currentLang === "en" ? "Last Name" : "Nachname"
+                        }
+                        required
+                        style={{
+                          ...S.guestInputStyle,
+                          flex: 1,
+                        }}
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                      />
+                    </div>
                   )}
                   <input
                     type="email"
                     placeholder="Email"
                     required
-                    style={{
-                      ...S.guestInputStyle,
-                      padding: "8px 12px",
-                      fontSize: "0.8rem",
-                    }}
+                    style={S.guestInputStyle}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
@@ -375,11 +387,7 @@ export default function BookingSummary({
                     type="password"
                     placeholder={currentLang === "en" ? "Password" : "Passwort"}
                     required
-                    style={{
-                      ...S.guestInputStyle,
-                      padding: "8px 12px",
-                      fontSize: "0.8rem",
-                    }}
+                    style={S.guestInputStyle}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -394,19 +402,10 @@ export default function BookingSummary({
                       {authError}
                     </p>
                   )}
-
                   <button
                     type="submit"
                     disabled={authLoading}
-                    style={{
-                      ...S.primaryBtnStyle(isMobile),
-                      padding: "10px",
-                      fontSize: "0.8rem",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
+                    style={S.primaryBtnStyle(isMobile)}
                   >
                     {authLoading ? (
                       <Loader2 size={16} className="spinner" />
@@ -423,64 +422,73 @@ export default function BookingSummary({
                     )}
                   </button>
                 </form>
-                <div style={{ marginTop: "10px" }}>
-                  <button
-                    onClick={() => {
-                      setIsRegistering(!isRegistering);
-                      setAuthError("");
-                    }}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      padding: 0,
-                      color: "#9960a8",
-                      fontSize: "0.75rem",
-                      cursor: "pointer",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    {isRegistering
-                      ? currentLang === "en"
-                        ? "Already have an account?"
-                        : "Bereits ein Konto?"
-                      : currentLang === "en"
-                        ? "Need an account?"
-                        : "Noch kein Konto?"}
-                  </button>
-                </div>
+                <button
+                  onClick={() => setIsRegistering(!isRegistering)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#9960a8",
+                    fontSize: "0.75rem",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    marginTop: "12px",
+                  }}
+                >
+                  {isRegistering
+                    ? currentLang === "en"
+                      ? "Already have an account?"
+                      : "Bereits ein Konto?"
+                    : currentLang === "en"
+                      ? "Need an account?"
+                      : "Noch kein Konto?"}
+                </button>
               </div>
             )}
 
-            {/* Guest Details (Always visible to collect info for Stripe/Email) */}
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "10px",
-                marginBottom: "1rem",
+                gap: "12px",
+                marginBottom: "1.5rem",
               }}
             >
-              <span style={{ fontSize: "0.8rem", fontWeight: "800" }}>
+              <span
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: "900",
+                  letterSpacing: "1px",
+                  opacity: 0.6,
+                }}
+              >
                 {currentLang === "en" ? "GUEST DETAILS" : "GAST-DETAILS"}
               </span>
-              <input
-                type="text"
-                placeholder={currentLang === "en" ? "First Name" : "Vorname"}
-                style={S.guestInputStyle}
-                value={guestInfo.firstName}
-                onChange={(e) =>
-                  setGuestInfo({ ...guestInfo, firstName: e.target.value })
-                }
-              />
-              <input
-                type="text"
-                placeholder={currentLang === "en" ? "Last Name" : "Nachname"}
-                style={S.guestInputStyle}
-                value={guestInfo.lastName}
-                onChange={(e) =>
-                  setGuestInfo({ ...guestInfo, lastName: e.target.value })
-                }
-              />
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: isMobile ? "column" : "row",
+                  gap: "10px",
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder={currentLang === "en" ? "First Name" : "Vorname"}
+                  style={{ ...S.guestInputStyle, flex: 1 }}
+                  value={guestInfo.firstName}
+                  onChange={(e) =>
+                    setGuestInfo({ ...guestInfo, firstName: e.target.value })
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder={currentLang === "en" ? "Last Name" : "Nachname"}
+                  style={{ ...S.guestInputStyle, flex: 1 }}
+                  value={guestInfo.lastName}
+                  onChange={(e) =>
+                    setGuestInfo({ ...guestInfo, lastName: e.target.value })
+                  }
+                />
+              </div>
               <input
                 type="email"
                 placeholder="Email"
@@ -492,13 +500,11 @@ export default function BookingSummary({
               />
             </div>
 
-            {/* Updated Guest Explanation */}
             <div
               style={{
                 color: "#4e5f28",
                 fontSize: "0.75rem",
                 lineHeight: "1.5",
-                textAlign: "left",
                 marginBottom: "1.5rem",
               }}
             >
@@ -507,7 +513,6 @@ export default function BookingSummary({
                 : "Kaufe ohne Registrierung, um einen Code per E-Mail zu erhalten. Melde dich an, um Guthaben für einfache Zahlungen zu speichern und deine gebuchten Kurse einzusehen oder abzusagen."}
             </div>
 
-            {/* Payment Options for Guest */}
             <div
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
@@ -517,109 +522,107 @@ export default function BookingSummary({
           </div>
         )}
 
-        {/* ==========================================
-            LOGGED IN BALANCE & SELECTION
-            ========================================== */}
         {currentUser && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              backgroundColor: "rgba(78, 95, 40, 0.1)",
-              color: "#4e5f28",
-              padding: "8px 16px",
-              borderRadius: "100px",
-              fontSize: "0.85rem",
-              marginBottom: "1.5rem",
-              width: "fit-content",
-              fontWeight: "600",
-            }}
-          >
-            <Ticket size={16} />
-            <span>
-              {currentLang === "en" ? "Your Balance:" : "Dein Guthaben:"}{" "}
-              <strong>{availableCredits}</strong>
-            </span>
-          </div>
-        )}
+          <>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                backgroundColor: "rgba(78, 95, 40, 0.1)",
+                color: "#4e5f28",
+                padding: "10px 18px",
+                borderRadius: "100px",
+                fontSize: "0.85rem",
+                marginBottom: "1.5rem",
+                width: "fit-content",
+                fontWeight: "600",
+              }}
+            >
+              <Ticket size={16} />
+              <span>
+                {currentLang === "en" ? "Your Balance:" : "Dein Guthaben:"}{" "}
+                <strong>{availableCredits}</strong>
+              </span>
+            </div>
 
-        {hasSelection && currentUser && (
-          <div style={S.selectionInfoStyle(isMobile)}>
-            <span style={S.labelStyle(isMobile)}>
-              {selectedDates.length}{" "}
-              {currentLang === "en"
-                ? selectedDates.length === 1
-                  ? "Session"
-                  : "Sessions"
-                : "Termine"}
-            </span>
-            <span style={S.totalPriceStyle(isMobile)}>{totalPrice} CHF</span>
-          </div>
-        )}
-
-        {/* ==========================================
-            STATE A & B: USER LOGGED IN (WITH / WITHOUT CREDITS)
-            ========================================== */}
-        {currentUser && (
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-          >
-            {hasEnoughCredits && hasSelection ? (
-              // STATE A: Has Credits
-              <>
-                <button
-                  onClick={onBookCredits}
-                  style={S.creditBtnStyle(isMobile)}
-                >
+            {hasSelection && (
+              <div
+                style={{
+                  ...S.selectionInfoStyle(isMobile),
+                  marginBottom: "1.5rem",
+                }}
+              >
+                <span style={S.labelStyle(isMobile)}>
+                  {selectedDates.length}{" "}
                   {currentLang === "en"
-                    ? `Book with ${selectedDates.length} Credit${selectedDates.length > 1 ? "s" : ""}`
-                    : `Mit ${selectedDates.length} Guthaben buchen`}
-                </button>
+                    ? selectedDates.length === 1
+                      ? "Session"
+                      : "Sessions"
+                    : "Termine"}
+                </span>
+                <span style={S.totalPriceStyle(isMobile)}>
+                  {totalPrice} CHF
+                </span>
+              </div>
+            )}
 
-                <button
-                  onClick={() =>
-                    setShowStripeAlternative(!showStripeAlternative)
-                  }
-                  style={{
-                    background: "none",
-                    border: "none",
-                    textDecoration: "underline",
-                    color: "#4e5f28",
-                    cursor: "pointer",
-                    fontSize: "0.8rem",
-                    textAlign: "left",
-                    padding: 0,
-                    marginTop: "4px",
-                  }}
-                >
-                  {currentLang === "en"
-                    ? "Or pay with card"
-                    : "Oder mit Karte zahlen"}
-                </button>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+            >
+              {hasEnoughCredits && hasSelection ? (
+                <>
+                  <button
+                    onClick={onBookCredits}
+                    style={{ ...S.creditBtnStyle(isMobile), padding: "14px" }}
+                  >
+                    {currentLang === "en"
+                      ? `Book with ${selectedDates.length} Credits`
+                      : `Mit ${selectedDates.length} Guthaben buchen`}
+                  </button>
 
-                {showStripeAlternative && (
-                  <div
+                  <button
+                    onClick={() =>
+                      setShowStripeAlternative(!showStripeAlternative)
+                    }
                     style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "1rem",
-                      marginTop: "0.5rem",
+                      background: "none",
+                      border: "none",
+                      textDecoration: "underline",
+                      color: "#4e5f28",
+                      cursor: "pointer",
+                      fontSize: "0.8rem",
+                      textAlign: "left",
+                      padding: "4px 0",
                     }}
                   >
-                    {pricing?.hasPack && renderPackOption()}
-                    {renderIndividualOption()}
-                  </div>
-                )}
-              </>
-            ) : (
-              // STATE B: Insufficient / No Credits
-              <>
-                {pricing?.hasPack && renderPackOption()}
-                {renderIndividualOption()}
-              </>
-            )}
-          </div>
+                    {currentLang === "en"
+                      ? "Or pay with card"
+                      : "Oder mit Karte zahlen"}
+                  </button>
+
+                  {showStripeAlternative && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "1rem",
+                        marginTop: "0.5rem",
+                      }}
+                    >
+                      {pricing?.hasPack && renderPackOption()}
+                      {renderIndividualOption()}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {pricing?.hasPack && renderPackOption()}
+                  {renderIndividualOption()}
+                </>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>
