@@ -45,7 +45,7 @@ const getGoogleCalLink = (title, dateStr) => {
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent("Atelier Sinnesküche: " + title)}&dates=${start}/${end}`;
 };
 
-// --- CLEARER EMAIL HELPERS ---
+// --- EMAIL HELPERS (FIXED BILINGUAL LOGIC) ---
 
 const sendUserPackEmail = (
   transaction,
@@ -62,6 +62,7 @@ const sendUserPackEmail = (
     lang === "de"
       ? `Dein Session-Pack: ${courseKey}`
       : `Your Session Pack: ${courseKey}`;
+  const signOff = lang === "de" ? "Herzliche Grüße," : "Warm regards,";
 
   transaction.set(mailRef, {
     to: email,
@@ -73,10 +74,11 @@ const sendUserPackEmail = (
           <p style="font-size: 16px;">${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
           <p style="font-size: 16px;">${lang === "de" ? `Vielen Dank für den Kauf einer ${packSize}er Karte für <strong>${courseKey}</strong>.` : `Thank you for purchasing a ${packSize}-Session Pack for <strong>${courseKey}</strong>.`}</p>
           <div style="background-color: rgba(78, 95, 40, 0.1); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #4e5f28;">
+            <p style="margin: 0; font-size: 14px; opacity: 0.8;">${lang === "de" ? "Gutschrift:" : "Credits added:"}</p>
             <p style="margin: 0; font-size: 32px; font-weight: bold; color: #4e5f28;">+${netIncrease} Credits</p>
           </div>
           <p style="font-size: 16px;">${lang === "de" ? "Dein Guthaben wurde deinem Profil hinzugefügt." : "Your credits have been added to your profile."}</p>
-          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
+          <br/><p>${signOff}<br/>Atelier Sinnesküche</p>
         </div>`,
     },
   });
@@ -95,7 +97,8 @@ const sendGuestPackCodeEmail = (
   if (!email) return;
   const mailRef = db.collection("mail").doc();
   const subject =
-    lang === "de" ? `Code für ${courseKey}` : `Code for ${courseKey}`;
+    lang === "de" ? `Dein Code für ${courseKey}` : `Your Code for ${courseKey}`;
+  const signOff = lang === "de" ? "Herzliche Grüße," : "Warm regards,";
 
   transaction.set(mailRef, {
     to: email,
@@ -110,7 +113,7 @@ const sendGuestPackCodeEmail = (
             <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">${newCode}</p>
           </div>
           <p style="font-size: 16px;">${lang === "de" ? `Du hast noch <strong>${netIncrease} Guthaben</strong> übrig.` : `You have <strong>${netIncrease} credits</strong> remaining.`}</p>
-          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
+          <br/><p>${signOff}<br/>Atelier Sinnesküche</p>
         </div>`,
     },
   });
@@ -123,6 +126,7 @@ const sendBookingEmail = (transaction, email, name, courseKey, dates, lang) => {
     lang === "de" ? `Bestätigung: ${courseKey}` : `Confirmation: ${courseKey}`;
   const calText =
     lang === "de" ? "📅 Zum Kalender hinzufügen" : "📅 Add to Calendar";
+  const signOff = lang === "de" ? "Herzliche Grüße," : "Warm regards,";
 
   const datesHtml = dates
     .map((d) => {
@@ -148,7 +152,7 @@ const sendBookingEmail = (transaction, email, name, courseKey, dates, lang) => {
           <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">
             <ul style="margin: 0; padding: 0;">${datesHtml}</ul>
           </div>
-          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
+          <br/><p>${signOff}<br/>Atelier Sinnesküche</p>
         </div>`,
     },
   });
@@ -170,6 +174,7 @@ const sendCancellationEmail = (
       ? `Termin abgesagt: ${courseKey}`
       : `Session Cancelled: ${courseKey}`;
   const formattedDate = formatDate(date);
+  const signOff = lang === "de" ? "Herzliche Grüße," : "Warm regards,";
 
   let htmlContent = `
     <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
@@ -187,7 +192,7 @@ const sendCancellationEmail = (
     htmlContent += `<p>${lang === "de" ? "Ein Guthaben wurde deinem Profil automatisch gutgeschrieben (+1)." : "One session credit has been automatically added back to your profile (+1)."}</p>`;
   }
 
-  htmlContent += `<br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`;
+  htmlContent += `<br/><p>${signOff}<br/>Atelier Sinnesküche</p></div>`;
   transaction.set(mailRef, {
     to: email,
     message: { subject: subject, html: htmlContent },
