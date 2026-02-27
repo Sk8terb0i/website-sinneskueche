@@ -296,21 +296,23 @@ export default function PersonalInfoCard({
 const styles = {
   card: {
     backgroundColor: "#fdf8e1",
-    padding: "2.5rem",
+    // MODIFIED: Reduced padding for mobile
+    padding: window.innerWidth < 768 ? "1.5rem" : "2.5rem",
     borderRadius: "24px",
     border: "1px solid rgba(28, 7, 0, 0.05)",
     flex: 1,
-    minWidth: "320px",
+    width: "100%", // Changed from minWidth to width
+    boxSizing: "border-box",
   },
   cardHeader: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center", // Changed from flex-start to center
     marginBottom: "2rem",
   },
   avatarCircle: {
-    width: "80px",
-    height: "80px",
+    width: "60px", // Reduced from 80px
+    height: "60px",
     borderRadius: "50%",
     backgroundColor: "#caaff31e",
     display: "flex",
@@ -319,9 +321,10 @@ const styles = {
   },
   name: {
     fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: "2.2rem",
+    fontSize: window.innerWidth < 768 ? "1.8rem" : "2.2rem",
     margin: "0 0 1.5rem 0",
     color: "#1c0700",
+    wordBreak: "break-word", // Prevents long names from breaking layout
   },
   infoRow: {
     display: "flex",
@@ -331,10 +334,12 @@ const styles = {
     fontSize: "0.95rem",
     color: "#1c0700",
     marginBottom: "12px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
   creditsBox: {
     marginTop: "2rem",
-    padding: "1.5rem",
+    padding: "1.2rem", // Slightly reduced
     backgroundColor: "rgba(202, 175, 243, 0.15)",
     borderRadius: "16px",
     border: "1px solid #caaff3",
@@ -344,16 +349,17 @@ const styles = {
     alignItems: "center",
     justifyContent: "space-between",
     gap: "1rem",
+    flexWrap: "nowrap", // Ensure icon and number stay together
   },
   creditsHeader: {
     display: "flex",
     alignItems: "center",
     gap: "8px",
-    marginBottom: "8px",
+    marginBottom: "4px",
   },
   creditsTitle: {
     fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: "1.4rem",
+    fontSize: "1.2rem",
     color: "#1c0700",
     textTransform: "lowercase",
   },
@@ -361,12 +367,12 @@ const styles = {
   creditsNumber: {
     fontFamily: "Satoshi",
     fontWeight: "900",
-    fontSize: "2.5rem",
+    fontSize: "2rem", // Reduced from 2.5rem
     color: "#4e5f28",
   },
   creditsLabel: {
     fontFamily: "Satoshi",
-    fontSize: "0.9rem",
+    fontSize: "0.8rem",
     color: "#1c0700",
     opacity: 0.7,
     fontWeight: "600",
@@ -375,7 +381,7 @@ const styles = {
     background: "none",
     border: "none",
     cursor: "pointer",
-    padding: "4px",
+    padding: "8px",
     display: "flex",
     alignItems: "center",
   },
@@ -386,13 +392,13 @@ const styles = {
     color: "#1c070030",
     padding: "8px",
   },
-  editForm: { display: "flex", flexDirection: "column", gap: "1.2rem" },
+  editForm: { display: "flex", flexDirection: "column", gap: "1rem" },
   label: {
     fontSize: "0.6rem",
     fontWeight: "bold",
     textTransform: "uppercase",
     opacity: 0.4,
-    marginBottom: "6px",
+    marginBottom: "4px",
     display: "block",
   },
   input: {
@@ -402,5 +408,6 @@ const styles = {
     border: "1px solid rgba(28, 7, 0, 0.1)",
     backgroundColor: "rgba(255, 252, 227, 0.4)",
     color: "#1c0700",
+    boxSizing: "border-box",
   },
 };

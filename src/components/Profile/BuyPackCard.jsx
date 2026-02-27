@@ -81,7 +81,7 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
 const styles = {
   card: {
     background: "#fdf8e1",
-    padding: "2rem",
+    padding: window.innerWidth < 768 ? "1.5rem" : "2rem",
     borderRadius: "24px",
     border: "1px solid rgba(28, 7, 0, 0.08)",
     width: "100%",
@@ -96,7 +96,13 @@ const styles = {
     gap: "10px",
     textTransform: "lowercase",
   },
-  row: { display: "flex", gap: "10px", flexWrap: "wrap" },
+  row: {
+    display: "flex",
+    gap: "12px",
+    // MODIFIED: Stack button under select on small screens
+    flexDirection: window.innerWidth < 480 ? "column" : "row",
+    width: "100%",
+  },
   select: {
     flex: 1,
     padding: "12px",
@@ -104,7 +110,8 @@ const styles = {
     border: "1px solid rgba(28,7,0,0.1)",
     background: "#fffce3",
     fontFamily: "Satoshi",
-    minWidth: "200px",
+    width: "100%",
+    boxSizing: "border-box",
   },
   buyBtn: {
     padding: "12px 24px",
@@ -114,6 +121,7 @@ const styles = {
     color: "#fff",
     fontWeight: "bold",
     cursor: "pointer",
+    width: window.innerWidth < 480 ? "100%" : "auto", // Full width button on mobile
     transition: "opacity 0.2s",
   },
 };

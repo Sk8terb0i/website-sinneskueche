@@ -10,7 +10,7 @@ import PersonalInfoCard from "../components/Profile/PersonalInfoCard";
 import BookingsCard from "../components/Profile/BookingsCard";
 import BuyPackCard from "../components/Profile/BuyPackCard";
 
-import { LogOut, Loader2 } from "lucide-react";
+import { LogOut, Loader2, Calendar, User, Ticket } from "lucide-react";
 
 export default function Profile({ currentLang, setCurrentLang }) {
   const { currentUser, userData, loading: authLoading } = useAuth();
@@ -18,10 +18,28 @@ export default function Profile({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [packCourses, setPackCourses] = useState([]);
 
+  // --- NEW STATE FOR TABS AND RESPONSIVE DESIGN ---
+  const [activeTab, setActiveTab] = useState("bookings");
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
   useEffect(() => {
     if (authLoading) return;
     if (!currentUser || userData?.role === "admin") navigate("/");
   }, [currentUser, userData, authLoading, navigate]);
+
+  // --- HANDLE SCREEN RESIZING ---
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // --- SCROLL TO TOP ON TAB CHANGE ---
+  useEffect(() => {
+    if (isMobile) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [activeTab, isMobile]);
 
   useEffect(() => {
     const fetchPackSettings = async () => {
@@ -66,6 +84,9 @@ export default function Profile({ currentLang, setCurrentLang }) {
       selectCourse: "select a course",
       buyNow: "buy pack",
       topUp: "top up credits",
+      tabBookings: "Bookings",
+      tabProfile: "Info",
+      tabPacks: "Packs",
     },
     de: {
       title: "mein profil",
@@ -85,6 +106,9 @@ export default function Profile({ currentLang, setCurrentLang }) {
       selectCourse: "kurs auswählen",
       buyNow: "karte kaufen",
       topUp: "guthaben aufladen",
+      tabBookings: "Termine",
+      tabProfile: "Profil",
+      tabPacks: "Karten",
     },
   }[currentLang];
 
@@ -103,25 +127,61 @@ export default function Profile({ currentLang, setCurrentLang }) {
             <LogOut size={16} /> {t.logout}
           </button>
         </div>
+
+        {/* --- MOBILE TAB NAVIGATION --- */}
+        {isMobile && (
+          <div style={styles.tabNav}>
+            <button
+              onClick={() => setActiveTab("bookings")}
+              style={styles.tabBtn(activeTab === "bookings")}
+            >
+              <Calendar size={16} /> {t.tabBookings}
+            </button>
+            <button
+              onClick={() => setActiveTab("info")}
+              style={styles.tabBtn(activeTab === "info")}
+            >
+              <User size={16} /> {t.tabProfile}
+            </button>
+            <button
+              onClick={() => setActiveTab("packs")}
+              style={styles.tabBtn(activeTab === "packs")}
+            >
+              <Ticket size={16} /> {t.tabPacks}
+            </button>
+          </div>
+        )}
+
         <div style={styles.grid}>
-          <PersonalInfoCard
-            currentUser={currentUser}
-            userData={userData}
-            currentLang={currentLang}
-            packCourses={packCourses}
-            t={t}
-          />
-          <div style={styles.sideColumn}>
-            <BuyPackCard
+          {/* PERSONAL INFO CARD */}
+          {(!isMobile || activeTab === "info") && (
+            <PersonalInfoCard
+              currentUser={currentUser}
+              userData={userData}
+              currentLang={currentLang}
               packCourses={packCourses}
-              currentLang={currentLang}
               t={t}
             />
-            <BookingsCard
-              userId={currentUser.uid}
-              currentLang={currentLang}
-              t={t}
-            />
+          )}
+
+          <div style={styles.sideColumn}>
+            {/* BUY PACK CARD */}
+            {(!isMobile || activeTab === "packs") && (
+              <BuyPackCard
+                packCourses={packCourses}
+                currentLang={currentLang}
+                t={t}
+              />
+            )}
+
+            {/* BOOKINGS CARD */}
+            {(!isMobile || activeTab === "bookings") && (
+              <BookingsCard
+                userId={currentUser.uid}
+                currentLang={currentLang}
+                t={t}
+              />
+            )}
           </div>
         </div>
       </main>
@@ -145,7 +205,10 @@ const styles = {
   main: {
     maxWidth: "1200px",
     margin: "0 auto",
-    padding: "140px 20px 20px 20px",
+    padding:
+      window.innerWidth < 1024
+        ? "120px 15px 20px 15px"
+        : "140px 20px 20px 20px",
   },
   headerRow: {
     display: "flex",
@@ -157,7 +220,7 @@ const styles = {
   },
   title: {
     fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: "3.5rem",
+    fontSize: window.innerWidth < 768 ? "2.5rem" : "3.5rem",
     color: "#1c0700",
     margin: 0,
     textTransform: "lowercase",
@@ -187,5 +250,35 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: "2rem",
+    width: "100%",
   },
+  // --- STYLES FOR TABS ---
+  tabNav: {
+    display: "flex",
+    background: "rgba(202, 175, 243, 0.1)",
+    padding: "6px",
+    borderRadius: "100px",
+    marginBottom: "2rem",
+    gap: "6px",
+    border: "1px solid rgba(202, 175, 243, 0.3)",
+  },
+  tabBtn: (isActive) => ({
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    padding: "12px 10px",
+    border: "none",
+    background: isActive ? "#caaff3" : "transparent",
+    color: "#1c0700",
+    fontWeight: "800",
+    borderRadius: "100px",
+    cursor: "pointer",
+    fontFamily: "Satoshi",
+    fontSize: "0.75rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.03rem",
+    transition: "all 0.2s ease",
+  }),
 };
