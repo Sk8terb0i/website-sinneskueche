@@ -14,15 +14,15 @@ import {
   Calendar as CalendarIcon,
   Tag,
   LayoutGrid,
-  Ticket, // Added for Promotions
+  Ticket,
 } from "lucide-react";
 
 // Components & Styles
 import Header from "../../components/Header/Header";
 import EventsTab from "./EventsTab";
-import PricingTab from "./PricingTab"; // File name remains unchanged
+import PricingTab from "./PricingTab";
 import RentalTab from "./RentalTab";
-import PromotionsTab from "./PromotionsTab"; // New component
+import PromotionsTab from "./PromotionsTab";
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -100,7 +100,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
     );
   }
 
-  // --- LOGIN VIEW ---
   if (!user || !isAdminRole) {
     return (
       <div style={{ ...loginWrapperStyle, backgroundColor: "#fffce3" }}>
@@ -160,9 +159,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
             <label style={labelStyle}>Password</label>
             <button
               type="button"
-              onClick={() => {
-                if (email) sendPasswordResetEmail(auth, email);
-              }}
+              onClick={() => email && sendPasswordResetEmail(auth, email)}
               style={forgotLinkStyle}
             >
               Forgot?
@@ -188,15 +185,16 @@ export default function Admin({ currentLang, setCurrentLang }) {
     );
   }
 
-  // --- DASHBOARD VIEW ---
   return (
     <div
       style={{
-        padding: isMobile ? "100px 1.5rem 1.5rem" : "140px 4vw 4vw",
+        padding: isMobile ? "100px 1rem 2rem" : "140px 4vw 4vw",
         minHeight: "100vh",
         fontFamily: "Satoshi",
         color: "#1c0700",
         backgroundColor: "#fffce3",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       <Header
@@ -206,12 +204,12 @@ export default function Admin({ currentLang, setCurrentLang }) {
         onMenuToggle={setIsMenuOpen}
       />
 
-      <header style={{ ...headerStyle(isMobile), marginBottom: "3rem" }}>
+      <header style={{ ...headerStyle(isMobile), marginBottom: "2rem" }}>
         <div style={{ flex: 1 }}>
           <h1
             style={{
               fontFamily: "Harmond-SemiBoldCondensed",
-              fontSize: isMobile ? "2.5rem" : "3.5rem",
+              fontSize: isMobile ? "2.2rem" : "3.5rem",
               marginBottom: "0.2rem",
               textTransform: "lowercase",
             }}
@@ -221,7 +219,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
           <p
             style={{
               opacity: 0.5,
-              fontSize: "0.85rem",
+              fontSize: "0.75rem",
               textTransform: "uppercase",
               letterSpacing: "1px",
             }}
@@ -236,74 +234,84 @@ export default function Admin({ currentLang, setCurrentLang }) {
             backgroundColor: "#fdf8e1",
             border: "1px solid rgba(28, 7, 0, 0.1)",
             borderRadius: "100px",
+            padding: "8px 16px",
           }}
         >
           <LogOut size={16} /> {!isMobile && "Logout"}
         </button>
       </header>
 
-      {/* --- TAB NAVIGATION (Pill-style) --- */}
+      {/* --- REFINED TAB NAVIGATION --- */}
       <div
         style={{
-          ...tabContainerStyle,
-          backgroundColor: "rgba(28, 7, 0, 0.03)",
-          borderRadius: "100px",
-          padding: "6px",
-          display: "inline-flex",
-          flexWrap: isMobile ? "wrap" : "nowrap",
-          justifyContent: "center",
-          gap: "4px",
+          width: "100%",
+          overflowX: "auto",
+          paddingBottom: "10px",
+          marginBottom: "2rem",
         }}
       >
-        <button
-          onClick={() => setActiveTab("events")}
+        <nav
           style={{
-            ...tabButtonStyle(activeTab === "events"),
-            backgroundColor: activeTab === "events" ? "#caaff3" : "transparent",
+            ...tabContainerStyle,
+            backgroundColor: "rgba(28, 7, 0, 0.03)",
             borderRadius: "100px",
-            color: "#1c0700",
+            padding: "4px",
+            display: "inline-flex", // Keeps the background pill wrapping the content
+            minWidth: isMobile ? "max-content" : "auto",
           }}
         >
-          <CalendarIcon size={18} /> Events
-        </button>
-        <button
-          onClick={() => setActiveTab("course-management")}
-          style={{
-            ...tabButtonStyle(activeTab === "course-management"),
-            backgroundColor:
-              activeTab === "course-management" ? "#caaff3" : "transparent",
-            borderRadius: "100px",
-            color: "#1c0700",
-          }}
-        >
-          <Tag size={18} /> Course Management
-        </button>
-        <button
-          onClick={() => setActiveTab("promotions")}
-          style={{
-            ...tabButtonStyle(activeTab === "promotions"),
-            backgroundColor:
-              activeTab === "promotions" ? "#caaff3" : "transparent",
-            borderRadius: "100px",
-            color: "#1c0700",
-          }}
-        >
-          <Ticket size={18} /> Promotions
-        </button>
-        <button
-          onClick={() => setActiveTab("rental")}
-          style={{
-            ...tabButtonStyle(activeTab === "rental"),
-            backgroundColor: activeTab === "rental" ? "#caaff3" : "transparent",
-            borderRadius: "100px",
-            color: "#1c0700",
-          }}
-        >
-          <LayoutGrid size={18} /> Rental
-        </button>
+          <button
+            onClick={() => setActiveTab("events")}
+            style={{
+              ...tabButtonStyle(activeTab === "events"),
+              backgroundColor:
+                activeTab === "events" ? "#caaff3" : "transparent",
+              borderRadius: "100px",
+              color: "#1c0700",
+            }}
+          >
+            <CalendarIcon size={16} /> Events
+          </button>
+          <button
+            onClick={() => setActiveTab("course-management")}
+            style={{
+              ...tabButtonStyle(activeTab === "course-management"),
+              backgroundColor:
+                activeTab === "course-management" ? "#caaff3" : "transparent",
+              borderRadius: "100px",
+              color: "#1c0700",
+            }}
+          >
+            <Tag size={16} /> Course Management
+          </button>
+          <button
+            onClick={() => setActiveTab("promotions")}
+            style={{
+              ...tabButtonStyle(activeTab === "promotions"),
+              backgroundColor:
+                activeTab === "promotions" ? "#caaff3" : "transparent",
+              borderRadius: "100px",
+              color: "#1c0700",
+            }}
+          >
+            <Ticket size={16} /> Promotions
+          </button>
+          <button
+            onClick={() => setActiveTab("rental")}
+            style={{
+              ...tabButtonStyle(activeTab === "rental"),
+              backgroundColor:
+                activeTab === "rental" ? "#caaff3" : "transparent",
+              borderRadius: "100px",
+              color: "#1c0700",
+            }}
+          >
+            <LayoutGrid size={16} /> Rental
+          </button>
+        </nav>
       </div>
 
-      <div style={{ animation: "fadeIn 0.4s ease-out", marginTop: "2.5rem" }}>
+      <div style={{ animation: "fadeIn 0.4s ease-out" }}>
         {activeTab === "events" && (
           <EventsTab isMobile={isMobile} currentLang={currentLang} />
         )}
@@ -321,6 +329,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        div::-webkit-scrollbar { display: none; }
       `}</style>
     </div>
   );

@@ -1,29 +1,27 @@
-export const tabContainerStyle = {
-  display: "flex",
-  gap: "10px",
-  marginBottom: "2.5rem",
-  borderBottom: "1px solid rgba(28, 7, 0, 0.1)",
-  paddingBottom: "10px",
-  overflowX: "auto",
-};
-
 export const tabButtonStyle = (isActive) => ({
   display: "flex",
   alignItems: "center",
+  justifyContent: "center",
   gap: "8px",
-  padding: "12px 24px",
-  borderRadius: "100px", // Pill style
+  padding: "10px 20px", // Use horizontal padding instead of fixed width
   border: "none",
   cursor: "pointer",
   fontFamily: "Satoshi",
-  fontWeight: "bold",
   fontSize: "0.9rem",
-  whiteSpace: "nowrap",
+  fontWeight: "600",
   transition: "all 0.3s ease",
-  backgroundColor: isActive ? "#caaff3" : "transparent",
-  color: isActive ? "#1c0700" : "#1c070080",
+  whiteSpace: "nowrap", // Prevents text from wrapping inside the button
+  // Remove any fixed width/height and border-radius: 50%
 });
 
+export const tabContainerStyle = {
+  display: "flex",
+  gap: "8px",
+  overflowX: "auto", // Allows scrolling on very small screens
+  padding: "6px",
+  scrollbarWidth: "none", // Hides scrollbar on Firefox
+  msOverflowStyle: "none", // Hides scrollbar on IE/Edge
+};
 export const loginWrapperStyle = {
   display: "flex",
   justifyContent: "center",
