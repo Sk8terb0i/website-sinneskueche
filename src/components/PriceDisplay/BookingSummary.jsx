@@ -1,12 +1,5 @@
 import React, { useState } from "react";
-import {
-  Ticket,
-  LogIn,
-  UserCircle,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-} from "lucide-react";
+import { Ticket, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -20,23 +13,25 @@ export default function BookingSummary({
   totalPrice,
   availableCredits,
   pricing,
-  isGuestMode,
-  setIsGuestMode,
   guestInfo,
   setGuestInfo,
   currentUser,
   currentLang,
   isMobile,
   onBookCredits,
-  onPayment,
+  onPayment, // Expected to handle ("pack"), ("individual"), or ("redeem", packCode)
 }) {
-  const [isBenefitsExpanded, setIsBenefitsExpanded] = useState(false);
+  const [isAuthExpanded, setIsAuthExpanded] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [showPackHint, setShowPackHint] = useState(false);
 
-  // Form States matching AuthOverlay
+  // New States for Guest Pack Redemption & Logged-in Stripe toggle
+  const [isRedeemingCode, setIsRedeemingCode] = useState(false);
+  const [packCode, setPackCode] = useState("");
+  const [showStripeAlternative, setShowStripeAlternative] = useState(false);
+
+  // Form States for Inline Auth
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -44,6 +39,7 @@ export default function BookingSummary({
   const [phone, setPhone] = useState("");
 
   const hasSelection = selectedDates.length > 0;
+  const hasEnoughCredits = availableCredits >= selectedDates.length;
 
   // Calculate savings percentage
   const singlePriceTotal =
@@ -53,19 +49,6 @@ export default function BookingSummary({
     singlePriceTotal > 0
       ? Math.round(((singlePriceTotal - packPrice) / singlePriceTotal) * 100)
       : 0;
-
-  const handleTriggerAuth = () => {
-    window.dispatchEvent(new Event("open-auth"));
-  };
-
-  const handlePackClick = () => {
-    if (!currentUser) {
-      setShowPackHint(true);
-      setTimeout(() => setShowPackHint(false), 5000);
-      return;
-    }
-    onPayment("pack");
-  };
 
   const handleInlineAuth = async (e) => {
     e.preventDefault();
@@ -79,7 +62,6 @@ export default function BookingSummary({
           email,
           password,
         );
-        // Store full profile info in Firestore as done in AuthOverlay
         await setDoc(doc(db, "users", userCred.user.uid), {
           firstName,
           lastName,
@@ -98,6 +80,156 @@ export default function BookingSummary({
     }
   };
 
+  // Helper to render the Pack Option (Used in multiple states)
+  const renderPackOption = () => (
+    <div
+      style={{
+        backgroundColor: "rgba(202, 175, 243, 0.15)",
+        borderRadius: "20px",
+        padding: isMobile ? "1.2rem" : "1.8rem",
+        border: "1px solid #caaff3",
+        display: "flex",
+        flexDirection: "column",
+        gap: "1.2rem",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+          <p style={{ fontWeight: "800", margin: 0 }}>
+            {currentLang === "en"
+              ? `${pricing.packSize}-Session Pack`
+              : `${pricing.packSize}er Karte`}
+          </p>
+          <span
+            style={{
+              fontSize: "0.65rem",
+              color: "#9960a8",
+              fontWeight: "900",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {currentLang === "en"
+              ? `SAVE ${savingsPercent}%`
+              : `${savingsPercent}% ERSPARNIS`}
+          </span>
+        </div>
+        <p style={{ fontWeight: "700", margin: 0, color: "#4e5f28" }}>
+          {pricing.priceFull} CHF
+        </p>
+      </div>
+
+      {!currentUser && isRedeemingCode ? (
+        // REDEEM CODE VIEW FOR GUESTS
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <input
+            type="text"
+            placeholder={
+              currentLang === "en" ? "Enter pack code" : "Code eingeben"
+            }
+            value={packCode}
+            onChange={(e) => setPackCode(e.target.value)}
+            style={{
+              ...S.guestInputStyle,
+              padding: "10px 14px",
+              fontSize: "0.85rem",
+            }}
+          />
+          <button
+            onClick={() => onPayment("redeem", packCode)}
+            style={S.primaryBtnStyle(isMobile)}
+            disabled={!packCode || !guestInfo.email}
+          >
+            {currentLang === "en" ? "Redeem & Book" : "Einlösen & Buchen"}
+          </button>
+          <button
+            onClick={() => setIsRedeemingCode(false)}
+            style={{
+              background: "none",
+              border: "none",
+              textDecoration: "underline",
+              color: "#4e5f28",
+              cursor: "pointer",
+              fontSize: "0.75rem",
+              padding: 0,
+              marginTop: "4px",
+            }}
+          >
+            {currentLang === "en" ? "Back to buy pack" : "Zurück zum Kauf"}
+          </button>
+        </div>
+      ) : (
+        // BUY PACK VIEW
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <button
+            onClick={() => onPayment("pack")}
+            style={S.primaryBtnStyle(isMobile)}
+            disabled={
+              !currentUser && (!guestInfo.firstName || !guestInfo.email)
+            }
+          >
+            {currentLang === "en" ? "Buy Pack & Book" : "Karte kaufen & buchen"}
+          </button>
+
+          {!currentUser && (
+            <button
+              onClick={() => setIsRedeemingCode(true)}
+              style={{
+                background: "none",
+                border: "none",
+                textDecoration: "underline",
+                color: "#4e5f28",
+                cursor: "pointer",
+                fontSize: "0.75rem",
+                padding: 0,
+                marginTop: "4px",
+              }}
+            >
+              {currentLang === "en"
+                ? "Have a pack code? Redeem here."
+                : "Hast du einen Code? Hier einlösen."}
+            </button>
+          )}
+
+          {currentUser && hasSelection && (
+            <p
+              style={{
+                fontSize: "0.7rem",
+                opacity: 0.6,
+                margin: 0,
+                fontStyle: "italic",
+                textAlign: "left",
+              }}
+            >
+              {currentLang === "en"
+                ? `The remaining ${pricing.packSize - selectedDates.length} credits will be saved to your profile.`
+                : `Die restlichen ${pricing.packSize - selectedDates.length} Guthaben werden deinem Profil gutgeschrieben.`}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // Helper to render the Individual Option (Used in multiple states)
+  const renderIndividualOption = () =>
+    hasSelection && (
+      <button
+        onClick={() => onPayment("individual")}
+        style={S.secondaryBtnStyle(isMobile)}
+        disabled={!currentUser && (!guestInfo.firstName || !guestInfo.email)}
+      >
+        {currentLang === "en"
+          ? `Pay ${totalPrice} CHF`
+          : `${totalPrice} CHF zahlen`}
+      </button>
+    );
+
   return (
     <div style={S.bookingCardStyle(isMobile, true)}>
       <div
@@ -108,6 +240,7 @@ export default function BookingSummary({
           textAlign: "left",
         }}
       >
+        {/* DYNAMIC TITLE */}
         <h3
           style={{
             fontFamily: "Harmond-SemiBoldCondensed",
@@ -125,330 +258,268 @@ export default function BookingSummary({
               : "kursoptionen"}
         </h3>
 
-        {!currentUser && !isGuestMode && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.8rem",
-              marginBottom: "1.5rem",
-              padding: hasSelection ? "1.5rem" : "0",
-              backgroundColor: hasSelection
-                ? "rgba(28, 7, 0, 0.03)"
-                : "transparent",
-              borderRadius: "18px",
-            }}
-          >
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+        {/* ==========================================
+            STATE C: NO USER LOGGED IN
+            ========================================== */}
+        {!currentUser && (
+          <div style={{ marginBottom: "1.5rem" }}>
+            {/* Collapsed Auth Toggle */}
+            <button
+              onClick={() => setIsAuthExpanded(!isAuthExpanded)}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                color: "#4e5f28",
+                fontSize: "0.9rem",
+                fontWeight: "700",
+                marginBottom: "1rem",
+              }}
             >
-              <p
+              {isAuthExpanded ? (
+                <ChevronDown size={18} />
+              ) : (
+                <ChevronRight size={18} />
+              )}
+              {currentLang === "en"
+                ? "Login or Register"
+                : "Einloggen oder Registrieren"}
+            </button>
+
+            {/* Inline Auth Form */}
+            {isAuthExpanded && (
+              <div
                 style={{
-                  fontSize: "0.85rem",
-                  color: "#4e5f28",
-                  lineHeight: "1.4",
-                  margin: "0 0 5px 0",
+                  padding: "1.2rem",
+                  backgroundColor: "rgba(28, 7, 0, 0.03)",
+                  borderRadius: "16px",
+                  marginBottom: "1.5rem",
                 }}
               >
-                {isRegistering
-                  ? currentLang === "en"
-                    ? "Create an account"
-                    : "Konto erstellen"
-                  : currentLang === "en"
-                    ? "Sign in"
-                    : "Anmelden"}{" "}
-                {currentLang === "en"
-                  ? "to unlock the pack and save"
-                  : "um die Karte freizuschalten und"}{" "}
-                {savingsPercent}% {currentLang === "en" ? "" : "zu sparen."}
-              </p>
-
-              <form
-                onSubmit={handleInlineAuth}
-                style={{ display: "flex", flexDirection: "column", gap: "8px" }}
-              >
-                {isRegistering && (
-                  <>
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <input
-                        type="text"
-                        placeholder={
-                          currentLang === "en" ? "First Name" : "Vorname"
-                        }
-                        required
-                        style={{
-                          ...S.guestInputStyle,
-                          padding: "8px 12px",
-                          fontSize: "0.8rem",
-                          flex: 1,
-                        }}
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                      />
-                      <input
-                        type="text"
-                        placeholder={
-                          currentLang === "en" ? "Last Name" : "Nachname"
-                        }
-                        required
-                        style={{
-                          ...S.guestInputStyle,
-                          padding: "8px 12px",
-                          fontSize: "0.8rem",
-                          flex: 1,
-                        }}
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                      />
-                    </div>
-                    <input
-                      type="tel"
-                      placeholder={
-                        currentLang === "en"
-                          ? "Phone (optional)"
-                          : "Telefon (optional)"
-                      }
-                      style={{
-                        ...S.guestInputStyle,
-                        padding: "8px 12px",
-                        fontSize: "0.8rem",
-                      }}
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                    />
-                  </>
-                )}
-
-                <input
-                  type="email"
-                  placeholder="Email"
-                  required
+                <form
+                  onSubmit={handleInlineAuth}
                   style={{
-                    ...S.guestInputStyle,
-                    padding: "8px 12px",
-                    fontSize: "0.8rem",
-                  }}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <input
-                  type="password"
-                  placeholder={currentLang === "en" ? "Password" : "Passwort"}
-                  required
-                  style={{
-                    ...S.guestInputStyle,
-                    padding: "8px 12px",
-                    fontSize: "0.8rem",
-                  }}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-
-                {authError && (
-                  <p
-                    style={{ fontSize: "0.7rem", color: "#ff4d4d", margin: 0 }}
-                  >
-                    {authError}
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={authLoading}
-                  style={{
-                    ...S.primaryBtnStyle(isMobile),
-                    padding: "10px",
-                    fontSize: "0.8rem",
                     display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    flexDirection: "column",
                     gap: "8px",
                   }}
                 >
-                  {authLoading ? (
-                    <Loader2 size={16} className="spinner" />
-                  ) : isRegistering ? (
-                    currentLang === "en" ? (
-                      "Register"
-                    ) : (
-                      "Registrieren"
-                    )
-                  ) : currentLang === "en" ? (
-                    "Login"
-                  ) : (
-                    "Einloggen"
+                  {isRegistering && (
+                    <>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <input
+                          type="text"
+                          placeholder={
+                            currentLang === "en" ? "First Name" : "Vorname"
+                          }
+                          required
+                          style={{
+                            ...S.guestInputStyle,
+                            padding: "8px 12px",
+                            fontSize: "0.8rem",
+                            flex: 1,
+                          }}
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                        />
+                        <input
+                          type="text"
+                          placeholder={
+                            currentLang === "en" ? "Last Name" : "Nachname"
+                          }
+                          required
+                          style={{
+                            ...S.guestInputStyle,
+                            padding: "8px 12px",
+                            fontSize: "0.8rem",
+                            flex: 1,
+                          }}
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                        />
+                      </div>
+                      <input
+                        type="tel"
+                        placeholder={
+                          currentLang === "en"
+                            ? "Phone (optional)"
+                            : "Telefon (optional)"
+                        }
+                        style={{
+                          ...S.guestInputStyle,
+                          padding: "8px 12px",
+                          fontSize: "0.8rem",
+                        }}
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                      />
+                    </>
                   )}
-                </button>
-              </form>
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    required
+                    style={{
+                      ...S.guestInputStyle,
+                      padding: "8px 12px",
+                      fontSize: "0.8rem",
+                    }}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                  <input
+                    type="password"
+                    placeholder={currentLang === "en" ? "Password" : "Passwort"}
+                    required
+                    style={{
+                      ...S.guestInputStyle,
+                      padding: "8px 12px",
+                      fontSize: "0.8rem",
+                    }}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  {authError && (
+                    <p
+                      style={{
+                        fontSize: "0.7rem",
+                        color: "#ff4d4d",
+                        margin: 0,
+                      }}
+                    >
+                      {authError}
+                    </p>
+                  )}
 
-              <div
-                style={{ display: "flex", gap: "10px", alignItems: "center" }}
-              >
-                <button
-                  onClick={() => {
-                    setIsRegistering(!isRegistering);
-                    setAuthError("");
-                  }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    color: "#9960a8",
-                    fontSize: "0.75rem",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                  }}
-                >
-                  {isRegistering
-                    ? currentLang === "en"
-                      ? "Already have an account?"
-                      : "Bereits ein Konto?"
-                    : currentLang === "en"
-                      ? "Need an account?"
-                      : "Noch kein Konto?"}
-                </button>
-                {hasSelection && (
                   <button
-                    onClick={() => setIsGuestMode(true)}
+                    type="submit"
+                    disabled={authLoading}
+                    style={{
+                      ...S.primaryBtnStyle(isMobile),
+                      padding: "10px",
+                      fontSize: "0.8rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    {authLoading ? (
+                      <Loader2 size={16} className="spinner" />
+                    ) : isRegistering ? (
+                      currentLang === "en" ? (
+                        "Register"
+                      ) : (
+                        "Registrieren"
+                      )
+                    ) : currentLang === "en" ? (
+                      "Login"
+                    ) : (
+                      "Einloggen"
+                    )}
+                  </button>
+                </form>
+                <div style={{ marginTop: "10px" }}>
+                  <button
+                    onClick={() => {
+                      setIsRegistering(!isRegistering);
+                      setAuthError("");
+                    }}
                     style={{
                       background: "none",
                       border: "none",
                       padding: 0,
-                      color: "#1c0700",
+                      color: "#9960a8",
                       fontSize: "0.75rem",
                       cursor: "pointer",
                       textDecoration: "underline",
-                      opacity: 0.6,
                     }}
                   >
-                    {currentLang === "en"
-                      ? "Continue as Guest"
-                      : "Als Gast fortfahren"}
+                    {isRegistering
+                      ? currentLang === "en"
+                        ? "Already have an account?"
+                        : "Bereits ein Konto?"
+                      : currentLang === "en"
+                        ? "Need an account?"
+                        : "Noch kein Konto?"}
                   </button>
-                )}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div style={{ marginTop: "0.5rem" }}>
-              <button
-                onClick={() => setIsBenefitsExpanded(!isBenefitsExpanded)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  color: "#4e5f28",
-                  fontSize: "0.8rem",
-                  fontWeight: "400",
-                }}
-              >
-                {isBenefitsExpanded ? (
-                  <ChevronDown size={14} />
-                ) : (
-                  <ChevronRight size={14} />
-                )}
-                {currentLang === "en" ? "why sign up?" : "warum registrieren?"}
-              </button>
-
-              {isBenefitsExpanded && (
-                <ul
-                  style={{
-                    margin: "0.8rem 0 0 0",
-                    paddingLeft: "1.1rem",
-                    fontSize: "0.75rem",
-                    color: "#4e5f28",
-                    opacity: 0.9,
-                    lineHeight: "1.5",
-                    textAlign: "left",
-                  }}
-                >
-                  <li>
-                    {currentLang === "en"
-                      ? "Keep track of all your courses in one dashboard"
-                      : "Alle deine Kurse im Überblick behalten"}
-                  </li>
-                  <li>
-                    {currentLang === "en"
-                      ? "Cancel sessions with just one click"
-                      : "Termine mit einem Klick absagen"}
-                  </li>
-                  <li>
-                    {currentLang === "en"
-                      ? "Book instantly with credits - no checkout needed"
-                      : "Mit Guthaben buchen - ganz ohne Bezahlvorgang"}
-                  </li>
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
-
-        {isGuestMode && !currentUser && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-              marginBottom: "1.5rem",
-            }}
-          >
+            {/* Guest Details (Always visible to collect info for Stripe/Email) */}
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
+                flexDirection: "column",
+                gap: "10px",
+                marginBottom: "1rem",
               }}
             >
               <span style={{ fontSize: "0.8rem", fontWeight: "800" }}>
                 {currentLang === "en" ? "GUEST DETAILS" : "GAST-DETAILS"}
               </span>
-              <button
-                onClick={() => setIsGuestMode(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "0.7rem",
-                  textDecoration: "underline",
-                  cursor: "pointer",
-                  opacity: 0.5,
-                }}
-              >
-                {currentLang === "en" ? "Back" : "Zurück"}
-              </button>
+              <input
+                type="text"
+                placeholder={currentLang === "en" ? "First Name" : "Vorname"}
+                style={S.guestInputStyle}
+                value={guestInfo.firstName}
+                onChange={(e) =>
+                  setGuestInfo({ ...guestInfo, firstName: e.target.value })
+                }
+              />
+              <input
+                type="text"
+                placeholder={currentLang === "en" ? "Last Name" : "Nachname"}
+                style={S.guestInputStyle}
+                value={guestInfo.lastName}
+                onChange={(e) =>
+                  setGuestInfo({ ...guestInfo, lastName: e.target.value })
+                }
+              />
+              <input
+                type="email"
+                placeholder="Email"
+                style={S.guestInputStyle}
+                value={guestInfo.email}
+                onChange={(e) =>
+                  setGuestInfo({ ...guestInfo, email: e.target.value })
+                }
+              />
             </div>
-            <input
-              type="text"
-              placeholder={currentLang === "en" ? "First Name" : "Vorname"}
-              style={S.guestInputStyle}
-              value={guestInfo.firstName}
-              onChange={(e) =>
-                setGuestInfo({ ...guestInfo, firstName: e.target.value })
-              }
-            />
-            <input
-              type="text"
-              placeholder={currentLang === "en" ? "Last Name" : "Nachname"}
-              style={S.guestInputStyle}
-              value={guestInfo.lastName}
-              onChange={(e) =>
-                setGuestInfo({ ...guestInfo, lastName: e.target.value })
-              }
-            />
-            <input
-              type="email"
-              placeholder="Email"
-              style={S.guestInputStyle}
-              value={guestInfo.email}
-              onChange={(e) =>
-                setGuestInfo({ ...guestInfo, email: e.target.value })
-              }
-            />
+
+            {/* Updated Guest Explanation */}
+            <div
+              style={{
+                color: "#4e5f28",
+                fontSize: "0.75rem",
+                lineHeight: "1.5",
+                textAlign: "left",
+                marginBottom: "1.5rem",
+              }}
+            >
+              {currentLang === "en"
+                ? "Buy without registering to receive a pack code via email. Sign up to save credits for easy payment and to see or cancel all your booked courses."
+                : "Kaufe ohne Registrierung, um einen Code per E-Mail zu erhalten. Melde dich an, um Guthaben für einfache Zahlungen zu speichern und deine gebuchten Kurse einzusehen oder abzusagen."}
+            </div>
+
+            {/* Payment Options for Guest */}
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+            >
+              {pricing?.hasPack && renderPackOption()}
+              {renderIndividualOption()}
+            </div>
           </div>
         )}
 
+        {/* ==========================================
+            LOGGED IN BALANCE & SELECTION
+            ========================================== */}
         {currentUser && (
           <div
             style={{
@@ -473,7 +544,7 @@ export default function BookingSummary({
           </div>
         )}
 
-        {hasSelection && (
+        {hasSelection && currentUser && (
           <div style={S.selectionInfoStyle(isMobile)}>
             <span style={S.labelStyle(isMobile)}>
               {selectedDates.length}{" "}
@@ -487,126 +558,69 @@ export default function BookingSummary({
           </div>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {currentUser &&
-            availableCredits >= selectedDates.length &&
-            hasSelection && (
-              <button
-                onClick={onBookCredits}
-                style={S.creditBtnStyle(isMobile)}
-              >
-                {currentLang === "en"
-                  ? `Book with ${selectedDates.length} Credit${selectedDates.length > 1 ? "s" : ""}`
-                  : `Mit ${selectedDates.length} Guthaben buchen`}
-              </button>
-            )}
+        {/* ==========================================
+            STATE A & B: USER LOGGED IN (WITH / WITHOUT CREDITS)
+            ========================================== */}
+        {currentUser && (
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
+            {hasEnoughCredits && hasSelection ? (
+              // STATE A: Has Credits
+              <>
+                <button
+                  onClick={onBookCredits}
+                  style={S.creditBtnStyle(isMobile)}
+                >
+                  {currentLang === "en"
+                    ? `Book with ${selectedDates.length} Credit${selectedDates.length > 1 ? "s" : ""}`
+                    : `Mit ${selectedDates.length} Guthaben buchen`}
+                </button>
 
-          {pricing.hasPack && (
-            <div
-              style={{
-                backgroundColor: "rgba(202, 175, 243, 0.15)",
-                borderRadius: "20px",
-                padding: isMobile ? "1.2rem" : "1.8rem",
-                border: "1px solid #caaff3",
-                display: "flex",
-                flexDirection: "column",
-                gap: "1.2rem",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "baseline",
-                }}
-              >
-                <div
+                <button
+                  onClick={() =>
+                    setShowStripeAlternative(!showStripeAlternative)
+                  }
                   style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    gap: "8px",
+                    background: "none",
+                    border: "none",
+                    textDecoration: "underline",
+                    color: "#4e5f28",
+                    cursor: "pointer",
+                    fontSize: "0.8rem",
+                    textAlign: "left",
+                    padding: 0,
+                    marginTop: "4px",
                   }}
                 >
-                  <p style={{ fontWeight: "800", margin: 0 }}>
-                    {currentLang === "en"
-                      ? `${pricing.packSize}-Session Pack`
-                      : `${pricing.packSize}er Karte`}
-                  </p>
-                  <span
+                  {currentLang === "en"
+                    ? "Or pay with card"
+                    : "Oder mit Karte zahlen"}
+                </button>
+
+                {showStripeAlternative && (
+                  <div
                     style={{
-                      fontSize: "0.65rem",
-                      color: "#9960a8",
-                      fontWeight: "900",
-                      whiteSpace: "nowrap",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1rem",
+                      marginTop: "0.5rem",
                     }}
                   >
-                    {currentLang === "en"
-                      ? `SAVE ${savingsPercent}%`
-                      : `${savingsPercent}% ERSPARNIS`}
-                  </span>
-                </div>
-                <p style={{ fontWeight: "700", margin: 0, color: "#4e5f28" }}>
-                  {pricing.priceFull} CHF
-                </p>
-              </div>
-
-              <button
-                onClick={handlePackClick}
-                style={S.primaryBtnStyle(isMobile)}
-              >
-                {currentLang === "en"
-                  ? "Buy Pack & Book"
-                  : "Karte kaufen & buchen"}
-              </button>
-
-              {showPackHint && !currentUser && (
-                <p
-                  style={{
-                    fontSize: "0.65rem",
-                    color: "#ff4d4d",
-                    textAlign: "left",
-                    fontWeight: "700",
-                    marginTop: "-5px",
-                  }}
-                >
-                  {currentLang === "en"
-                    ? "Sign in above to purchase this pack."
-                    : "Melde dich oben an, um diese Karte zu kaufen."}
-                </p>
-              )}
-
-              {currentUser && hasSelection && (
-                <p
-                  style={{
-                    fontSize: "0.7rem",
-                    opacity: 0.6,
-                    margin: 0,
-                    fontStyle: "italic",
-                    textAlign: "left",
-                  }}
-                >
-                  {currentLang === "en"
-                    ? `The remaining ${pricing.packSize - selectedDates.length} credits will be saved to your profile.`
-                    : `Die restlichen ${pricing.packSize - selectedDates.length} Guthaben werden deinem Profil gutgeschrieben.`}
-                </p>
-              )}
-            </div>
-          )}
-
-          {(currentUser || isGuestMode) && hasSelection && (
-            <button
-              onClick={() => onPayment("individual")}
-              style={S.secondaryBtnStyle(isMobile)}
-              disabled={
-                isGuestMode && (!guestInfo.firstName || !guestInfo.email)
-              }
-            >
-              {currentLang === "en"
-                ? `Pay ${totalPrice} CHF`
-                : `${totalPrice} CHF zahlen`}
-            </button>
-          )}
-        </div>
+                    {pricing?.hasPack && renderPackOption()}
+                    {renderIndividualOption()}
+                  </div>
+                )}
+              </>
+            ) : (
+              // STATE B: Insufficient / No Credits
+              <>
+                {pricing?.hasPack && renderPackOption()}
+                {renderIndividualOption()}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

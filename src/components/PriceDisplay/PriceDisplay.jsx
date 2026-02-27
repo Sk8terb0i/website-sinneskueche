@@ -133,11 +133,30 @@ export default function PriceDisplay({ coursePath, currentLang }) {
     );
   };
 
-  const handlePayment = async (mode) => {
+  const handlePayment = async (mode, packCode = null) => {
     const functions = getFunctions();
-    const createCheckout = httpsCallable(functions, "createStripeCheckout");
+
     try {
       setIsProcessing(true);
+
+      // 1. REDEEM CODE LOGIC
+      if (mode === "redeem") {
+        const redeemPack = httpsCallable(functions, "redeemPackCode");
+
+        await redeemPack({
+          coursePath,
+          selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
+          packCode,
+          guestInfo: isGuestMode ? guestInfo : null,
+        });
+
+        // If successful, go straight to success page
+        navigate("/success");
+        return;
+      }
+
+      // 2. STRIPE CHECKOUT LOGIC (for "pack" or "individual")
+      const createCheckout = httpsCallable(functions, "createStripeCheckout");
       const result = await createCheckout({
         mode,
         packPrice: parseFloat(pricing.priceFull),
@@ -146,10 +165,22 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         coursePath,
         selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
         guestInfo: isGuestMode ? guestInfo : null,
+        currentLang: currentLang, // <--- ADD THIS LINE
       });
+
       if (result.data?.url) window.location.assign(result.data.url);
     } catch (err) {
+      console.error(err);
       setIsProcessing(false);
+
+      // Provide user feedback if the code they entered is invalid
+      if (mode === "redeem") {
+        alert(
+          currentLang === "en"
+            ? "Invalid code or insufficient pack credits."
+            : "Ungültiger Code oder unzureichendes Guthaben.",
+        );
+      }
     }
   };
 

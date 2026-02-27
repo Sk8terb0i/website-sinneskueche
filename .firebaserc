@@ -1,5 +1,13 @@
 {
   "projects": {
     "default": "sinneskueche-atelier"
+  },
+  "targets": {},
+  "etags": {
+    "sinneskueche-atelier": {
+      "extensionInstances": {
+        "firestore-send-email": "25e18ae5768aca36ad3d3e6ec127bf4b566fd75458e2449ae4a1826b89804609"
+      }
+    }
   }
 }
