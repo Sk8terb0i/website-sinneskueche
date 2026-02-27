@@ -5,7 +5,9 @@ const {
 } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const stripe = require("stripe")(
+  process.env.STRIPE_SECRET_KEY || "placeholder_key_for_analysis",
+);
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -243,7 +245,7 @@ exports.createStripeCheckout = onCall({ cors: true }, async (request) => {
 // ============================================================================
 exports.handleStripeWebhook = onRequest(async (req, res) => {
   const sig = req.headers["stripe-signature"];
-  const endpointSecret = "whsec_a4VdBked9dzdHfSFPGG7iyOdkujKsZEW";
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
   let event;
   try {
     event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
