@@ -45,7 +45,7 @@ const getGoogleCalLink = (title, dateStr) => {
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent("Atelier Sinnesküche: " + title)}&dates=${start}/${end}`;
 };
 
-// --- EMAIL HELPERS WITH COURSE NAMES ---
+// --- CLEARER EMAIL HELPERS ---
 
 const sendUserPackEmail = (
   transaction,
@@ -60,8 +60,8 @@ const sendUserPackEmail = (
   const mailRef = db.collection("mail").doc();
   const subject =
     lang === "de"
-      ? `Dein ${courseKey} Session-Pack`
-      : `Your ${courseKey} Session Pack`;
+      ? `Dein Session-Pack: ${courseKey}`
+      : `Your Session Pack: ${courseKey}`;
 
   transaction.set(mailRef, {
     to: email,
@@ -70,13 +70,13 @@ const sendUserPackEmail = (
       html: `
         <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
           <h2 style="color: #4e5f28;">${lang === "de" ? "Kauf erfolgreich!" : "Purchase Successful!"}</h2>
-          <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
-          <p>${lang === "de" ? `Vielen Dank für den Kauf einer ${packSize}er Karte für <strong>${courseKey}</strong>.` : `Thank you for purchasing a ${packSize}-Session Pack for <strong>${courseKey}</strong>.`}</p>
+          <p style="font-size: 16px;">${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
+          <p style="font-size: 16px;">${lang === "de" ? `Vielen Dank für den Kauf einer ${packSize}er Karte für <strong>${courseKey}</strong>.` : `Thank you for purchasing a ${packSize}-Session Pack for <strong>${courseKey}</strong>.`}</p>
           <div style="background-color: rgba(78, 95, 40, 0.1); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #4e5f28;">
             <p style="margin: 0; font-size: 32px; font-weight: bold; color: #4e5f28;">+${netIncrease} Credits</p>
           </div>
-          <p>${lang === "de" ? "Dein Guthaben wurde deinem Profil hinzugefügt." : "Your credits have been added to your profile."}</p>
-          <p style="font-size: 16px;">Herzliche Grüße,<br/>Atelier Sinnesküche</p>
+          <p style="font-size: 16px;">${lang === "de" ? "Dein Guthaben wurde deinem Profil hinzugefügt." : "Your credits have been added to your profile."}</p>
+          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
         </div>`,
     },
   });
@@ -95,7 +95,7 @@ const sendGuestPackCodeEmail = (
   if (!email) return;
   const mailRef = db.collection("mail").doc();
   const subject =
-    lang === "de" ? `Dein Code für ${courseKey}` : `Your Code for ${courseKey}`;
+    lang === "de" ? `Code für ${courseKey}` : `Code for ${courseKey}`;
 
   transaction.set(mailRef, {
     to: email,
@@ -104,14 +104,13 @@ const sendGuestPackCodeEmail = (
       html: `
         <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
           <h2 style="color: #4e5f28;">${lang === "de" ? "Vielen Dank für deinen Einkauf!" : "Thank you for your purchase!"}</h2>
-          <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
-          <p>${lang === "de" ? `Hier ist dein Code für die ${packSize}er Karte (<strong>${courseKey}</strong>):` : `Here is your code for the ${packSize}-Session Pack (<strong>${courseKey}</strong>):`}</p>
+          <p style="font-size: 16px;">${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
+          <p style="font-size: 16px;">${lang === "de" ? `Hier ist dein Code für die ${packSize}er Karte (<strong>${courseKey}</strong>):` : `Here is your code for the ${packSize}-Session Pack (<strong>${courseKey}</strong>):`}</p>
           <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">
-            <p style="margin: 0 0 10px 0; font-size: 14px;">${lang === "de" ? "Dein Einlösungscode:" : "Your Redemption Code:"}</p>
             <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">${newCode}</p>
           </div>
-          <p>${lang === "de" ? `Du hast noch <strong>${netIncrease} Guthaben</strong> übrig.` : `You have <strong>${netIncrease} credits</strong> remaining.`}</p>
-          <p style="font-size: 16px;">Herzliche Grüße,<br/>Atelier Sinnesküche</p>
+          <p style="font-size: 16px;">${lang === "de" ? `Du hast noch <strong>${netIncrease} Guthaben</strong> übrig.` : `You have <strong>${netIncrease} credits</strong> remaining.`}</p>
+          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
         </div>`,
     },
   });
@@ -149,7 +148,7 @@ const sendBookingEmail = (transaction, email, name, courseKey, dates, lang) => {
           <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">
             <ul style="margin: 0; padding: 0;">${datesHtml}</ul>
           </div>
-          <p style="font-size: 16px;">Herzliche Grüße,<br/>Atelier Sinnesküche</p>
+          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
         </div>`,
     },
   });
@@ -185,10 +184,10 @@ const sendCancellationEmail = (
         <p style="font-size: 32px; font-weight: bold; color: #9960a8;">${code}</p>
       </div>`;
   } else {
-    htmlContent += `<p>${lang === "de" ? "Ein Termin wurde deinem Profil automatisch gutgeschrieben (+1)." : "One session credit has been automatically added back to your profile."}</p>`;
+    htmlContent += `<p>${lang === "de" ? "Ein Guthaben wurde deinem Profil automatisch gutgeschrieben (+1)." : "One session credit has been automatically added back to your profile (+1)."}</p>`;
   }
 
-  htmlContent += `<p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`;
+  htmlContent += `<br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`;
   transaction.set(mailRef, {
     to: email,
     message: { subject: subject, html: htmlContent },
@@ -346,7 +345,6 @@ exports.handleStripeWebhook = onRequest(
                 buyerName: guestName,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
-              // FIXED: Now triggering the email for guest pack codes
               sendGuestPackCodeEmail(
                 transaction,
                 email,
@@ -503,7 +501,7 @@ exports.cancelBooking = onCall({ cors: true }, async (request) => {
 });
 
 // ============================================================================
-// 6. ADMIN CANCEL EVENT
+// 6. ADMIN CANCEL EVENT (FIXED FOR ALL USERS)
 // ============================================================================
 exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
   if (!request.auth)
@@ -525,8 +523,20 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
     .get();
 
   return await db.runTransaction(async (transaction) => {
+    // 1. FIRST: COLLECT ALL NECESSARY DATA (READS)
+    const userSnapshots = {};
     for (const bDoc of bookingsSnap.docs) {
       const bData = bDoc.data();
+      if (bData.userId !== "GUEST_USER") {
+        const userRef = db.collection("users").doc(bData.userId);
+        userSnapshots[bData.userId] = await transaction.get(userRef);
+      }
+    }
+
+    // 2. SECOND: PERFORM ALL UPDATES AND SETS (WRITES)
+    for (const bDoc of bookingsSnap.docs) {
+      const bData = bDoc.data();
+
       if (bData.userId === "GUEST_USER") {
         const newCode = generatePackCode();
         transaction.set(db.collection("pack_codes").doc(newCode), {
@@ -537,7 +547,6 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
           buyerName: bData.guestName,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        // FIXED: Now triggering cancellation email for guests with new code
         sendCancellationEmail(
           transaction,
           bData.guestEmail,
@@ -548,23 +557,33 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
           newCode,
         );
       } else {
+        const userSnap = userSnapshots[bData.userId];
         const userRef = db.collection("users").doc(bData.userId);
-        const userSnap = await transaction.get(userRef);
+
         transaction.set(
           userRef,
           { credits: { [courseKey]: admin.firestore.FieldValue.increment(1) } },
           { merge: true },
         );
-        // FIXED: Now triggering cancellation email for registered users
-        if (userSnap.exists)
+
+        const userEmail = userSnap?.exists
+          ? userSnap.data().email
+          : bData.guestEmail;
+        const userName = userSnap?.exists
+          ? userSnap.data().firstName
+          : "Customer";
+
+        if (userEmail) {
           sendCancellationEmail(
             transaction,
-            userSnap.data().email,
-            userSnap.data().firstName,
+            userEmail,
+            userName,
             courseKey,
             eventDate,
             lang,
+            null,
           );
+        }
       }
       transaction.delete(bDoc.ref);
     }
