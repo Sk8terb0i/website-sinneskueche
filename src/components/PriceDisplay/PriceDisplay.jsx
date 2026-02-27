@@ -175,8 +175,12 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         // Helper handles subfolder for GitHub Pages or root for Custom Domain
         const getBaseUrl = () => {
           const origin = window.location.origin;
-          const path = window.location.pathname;
-          return `${origin}${path}${path.endsWith("/") ? "" : "/"}`;
+          // Check if we are on github.io. If so, add the repo name.
+          if (origin.includes("github.io")) {
+            return `${origin}/website-sinneskueche/`;
+          }
+          // For local development or a custom domain that points to the root
+          return `${origin}/`;
         };
 
         const result = await createCheckout({

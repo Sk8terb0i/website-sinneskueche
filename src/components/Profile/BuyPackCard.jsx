@@ -16,6 +16,18 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
     const createCheckout = httpsCallable(functions, "createStripeCheckout");
 
     try {
+      // Robust URL helper for GitHub Pages and Custom Domains
+      const getBaseUrl = () => {
+        const origin = window.location.origin;
+        // If on github.io, explicitly add the repository subfolder
+        if (origin.includes("github.io")) {
+          return `${origin}/website-sinneskueche/`;
+        }
+        // Fallback for local development or root custom domains
+        const path = window.location.pathname;
+        return `${origin}${path}${path.endsWith("/") ? "" : "/"}`;
+      };
+
       const result = await createCheckout({
         mode: "pack",
         packPrice: parseFloat(course.priceFull),
@@ -23,7 +35,8 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
         coursePath: `/${course.id}`,
         selectedDates: [],
         currentLang: currentLang,
-        successUrl: `${window.location.origin}/#/success?session_id={CHECKOUT_SESSION_ID}`,
+        // UPDATED: Now calls the helper to ensure the correct path
+        successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: window.location.href,
       });
 
