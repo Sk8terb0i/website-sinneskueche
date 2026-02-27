@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { collection, getDocs, doc, setDoc } from "firebase/firestore";
 import { planets } from "../../data/planets";
-import { Tag, Save, Loader2, Users } from "lucide-react"; // Added Users icon
+import { Tag, Save, Loader2, Users, Eye, EyeOff } from "lucide-react";
 import {
   sectionTitleStyle,
   cardStyle,
@@ -69,9 +69,9 @@ export default function PricingTab({ isMobile }) {
         duration: isPerHour ? priceData[courseId]?.duration || "" : "",
         hasPack: priceData[courseId]?.hasPack ?? false,
         isPerHour: isPerHour,
-        // NEW: Capacity fields
         hasCapacity: priceData[courseId]?.hasCapacity ?? false,
         capacity: priceData[courseId]?.capacity || "",
+        isVisible: priceData[courseId]?.isVisible ?? true, // NEW: Visibility state
         courseName: courseName,
         updatedAt: new Date().toISOString(),
       };
@@ -79,7 +79,7 @@ export default function PricingTab({ isMobile }) {
         merge: true,
       });
     } catch (error) {
-      alert("Error saving price: " + error.message);
+      alert("Error saving: " + error.message);
     } finally {
       setSavingPriceId(null);
     }
@@ -90,10 +90,10 @@ export default function PricingTab({ isMobile }) {
       style={{ maxWidth: "1000px", margin: "0 auto", paddingBottom: "5rem" }}
     >
       <h3 style={sectionTitleStyle}>
-        <Tag size={16} /> Course Pricing & Capacity Management
+        <Tag size={16} /> Course Management
       </h3>
       <p style={{ opacity: 0.6, fontSize: "0.9rem", marginBottom: "2rem" }}>
-        Set the prices and booking limits for your courses here.
+        Manage visibility, pricing, and booking limits for your courses.
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -103,13 +103,11 @@ export default function PricingTab({ isMobile }) {
           const currentFull = priceData[courseId]?.priceFull || "";
           const currentPackSize = priceData[courseId]?.packSize || "10";
           const currentDuration = priceData[courseId]?.duration || "";
-
-          // NEW: Capacity current values
           const hasCapacity = priceData[courseId]?.hasCapacity ?? false;
           const currentCapacity = priceData[courseId]?.capacity || "";
-
           const hasPack = priceData[courseId]?.hasPack ?? false;
           const isPerHour = priceData[courseId]?.isPerHour ?? false;
+          const isVisible = priceData[courseId]?.isVisible ?? true; // NEW
 
           const isSaving = savingPriceId === courseId;
 
@@ -127,19 +125,73 @@ export default function PricingTab({ isMobile }) {
                 flexWrap: "wrap",
                 gap: "1.5rem",
                 alignItems: "flex-end",
+                borderLeft: isVisible ? "4px solid #4e5f28" : "4px solid #ccc",
+                opacity: isVisible ? 1 : 0.8,
               }}
             >
-              <div style={{ flex: "1 1 150px" }}>
-                <span style={{ fontWeight: "bold", fontSize: "1.1rem" }}>
-                  {c.text.en}
-                </span>
+              {/* Course Identity & Visibility Toggle */}
+              <div style={{ flex: "1 1 200px" }}>
                 <div
                   style={{
-                    fontSize: "0.75rem",
-                    opacity: 0.5,
-                    marginTop: "4px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    marginBottom: "8px",
                   }}
                 >
+                  <span style={{ fontWeight: "bold", fontSize: "1.1rem" }}>
+                    {c.text.en}
+                  </span>
+                </div>
+
+                <div style={{ marginBottom: "12px" }}>
+                  <label
+                    style={{
+                      ...labelStyle,
+                      fontSize: "0.6rem",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Status
+                  </label>
+                  <div
+                    style={{
+                      ...toggleContainerStyle,
+                      width: "fit-content",
+                      padding: "2px",
+                    }}
+                  >
+                    <div
+                      onClick={() =>
+                        handlePriceChange(courseId, "isVisible", true)
+                      }
+                      style={{
+                        ...toggleOptionStyle,
+                        padding: "4px 10px",
+                        fontSize: "0.7rem",
+                        backgroundColor: isVisible ? "#caaff3" : "transparent",
+                      }}
+                    >
+                      <Eye size={12} style={{ marginRight: "4px" }} /> Visible
+                    </div>
+                    <div
+                      onClick={() =>
+                        handlePriceChange(courseId, "isVisible", false)
+                      }
+                      style={{
+                        ...toggleOptionStyle,
+                        padding: "4px 10px",
+                        fontSize: "0.7rem",
+                        backgroundColor: !isVisible ? "#666" : "transparent",
+                        color: !isVisible ? "white" : "inherit",
+                      }}
+                    >
+                      <EyeOff size={12} style={{ marginRight: "4px" }} /> Hidden
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: "0.75rem", opacity: 0.5 }}>
                   Path: {c.link}
                 </div>
               </div>
@@ -153,7 +205,7 @@ export default function PricingTab({ isMobile }) {
                   alignItems: "flex-end",
                 }}
               >
-                {/* Base Price Input */}
+                {/* Pricing Type Toggle & Base Price */}
                 <div
                   style={{
                     flex: "1.5 1 130px",
@@ -169,7 +221,6 @@ export default function PricingTab({ isMobile }) {
                         borderRadius: "8px",
                         width: "100%",
                         display: "flex",
-                        boxSizing: "border-box",
                       }}
                     >
                       <div
@@ -210,7 +261,7 @@ export default function PricingTab({ isMobile }) {
                           justifyContent: "center",
                         }}
                       >
-                        Hour/Time
+                        Time-based
                       </div>
                     </div>
                   </div>
@@ -225,7 +276,6 @@ export default function PricingTab({ isMobile }) {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. 45 CHF"
                     value={currentSingle}
                     onChange={(e) =>
                       handlePriceChange(courseId, "priceSingle", e.target.value)
@@ -243,13 +293,13 @@ export default function PricingTab({ isMobile }) {
                         height: "26px",
                         display: "flex",
                         alignItems: "center",
+                        fontSize: "0.6rem",
                       }}
                     >
                       Duration (min)
                     </label>
                     <input
                       type="number"
-                      min="1"
                       value={currentDuration}
                       onChange={(e) =>
                         handlePriceChange(courseId, "duration", e.target.value)
@@ -274,6 +324,7 @@ export default function PricingTab({ isMobile }) {
                       gap: "4px",
                       marginBottom: hasPack ? "6px" : "0",
                       height: hasPack ? "26px" : "auto",
+                      fontSize: "0.6rem",
                     }}
                   >
                     <input
@@ -289,7 +340,6 @@ export default function PricingTab({ isMobile }) {
                   {hasPack && (
                     <input
                       type="number"
-                      min="2"
                       value={currentPackSize}
                       onChange={(e) =>
                         handlePriceChange(courseId, "packSize", e.target.value)
@@ -308,6 +358,7 @@ export default function PricingTab({ isMobile }) {
                         height: "26px",
                         display: "flex",
                         alignItems: "center",
+                        fontSize: "0.6rem",
                       }}
                     >
                       {currentPackSize}-Pack Price
@@ -323,7 +374,7 @@ export default function PricingTab({ isMobile }) {
                   </div>
                 )}
 
-                {/* NEW: Capacity Option */}
+                {/* Capacity Logic */}
                 <div
                   style={{
                     flex: "1 1 120px",
@@ -338,6 +389,7 @@ export default function PricingTab({ isMobile }) {
                       gap: "4px",
                       marginBottom: hasCapacity ? "6px" : "0",
                       height: hasCapacity ? "26px" : "auto",
+                      fontSize: "0.6rem",
                       color: hasCapacity ? "#4e5f28" : "inherit",
                     }}
                   >
@@ -359,8 +411,6 @@ export default function PricingTab({ isMobile }) {
                     <div style={{ position: "relative" }}>
                       <input
                         type="number"
-                        min="1"
-                        placeholder="e.g. 8"
                         value={currentCapacity}
                         onChange={(e) =>
                           handlePriceChange(

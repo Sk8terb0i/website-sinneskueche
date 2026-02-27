@@ -2,31 +2,52 @@ import { CheckCircle } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import Header from "../Header/Header";
 import { useState } from "react";
-import { useAuth } from "../../contexts/AuthContext"; // Import Auth context
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function Success({ currentLang, setCurrentLang }) {
-  const { currentUser } = useAuth(); // Get auth state
+  const { currentUser } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("session_id");
 
+  // Grab the redemption data from the URL
+  const redeemedCode = searchParams.get("code");
+  const remainingParam = searchParams.get("remaining");
+
+  // BULLETPROOF PARSING:
+  // Turns the URL text into a real number, and protects against "undefined" or "null"
+  const remainingCredits =
+    remainingParam &&
+    remainingParam !== "undefined" &&
+    remainingParam !== "null"
+      ? parseInt(remainingParam, 10)
+      : null;
+
   const content = {
     en: {
-      title: "payment successful",
+      title: "booking successful",
       message: "Thank you for your booking! Your transaction was successful.",
       creditsNote: currentUser
         ? "If you purchased a pack, your credits have been added to your profile and your selected dates are confirmed."
         : "Your selected dates are confirmed. You will receive a confirmation email shortly.",
+      redeemNote:
+        remainingCredits > 0
+          ? `You have ${remainingCredits} ${remainingCredits === 1 ? "session" : "sessions"} left on your code: ${redeemedCode}`
+          : `You have used the last session on your code: ${redeemedCode}.`,
       button: "Go to Profile",
       home: "Back to Home",
     },
     de: {
-      title: "zahlung erfolgreich",
+      title: "buchung erfolgreich",
       message:
         "Vielen Dank für deine Buchung! Die Transaktion war erfolgreich.",
       creditsNote: currentUser
         ? "Wenn du eine Karte gekauft hast, wurde das Guthaben deinem Profil hinzugefügt und deine gewählten Termine sind bestätigt."
         : "Deine gewählten Termine sind bestätigt. Du erhältst in Kürze eine Bestätigungs-E-Mail.",
+      redeemNote:
+        remainingCredits > 0
+          ? `Du hast noch ${remainingCredits} ${remainingCredits === 1 ? "Termin" : "Termine"} auf deinem Code übrig: ${redeemedCode}`
+          : `Du hast den letzten Termin auf deinem Code aufgebraucht: ${redeemedCode}.`,
       button: "Zum Profil",
       home: "Zurück zur Startseite",
     },
@@ -55,7 +76,14 @@ export default function Success({ currentLang, setCurrentLang }) {
 
         <p style={styles.message}>{content[currentLang].message}</p>
 
-        <p style={styles.creditsNote}>{content[currentLang].creditsNote}</p>
+        {/* If it was a code redemption and we successfully parsed the number, show the purple box! */}
+        {redeemedCode && remainingCredits !== null ? (
+          <div style={styles.codeBox}>
+            <p style={styles.codeText}>{content[currentLang].redeemNote}</p>
+          </div>
+        ) : (
+          <p style={styles.creditsNote}>{content[currentLang].creditsNote}</p>
+        )}
 
         <div style={styles.buttonContainer}>
           {/* Only show "Go to Profile" if a user is logged in */}
@@ -114,6 +142,19 @@ const styles = {
     opacity: 0.7,
     marginBottom: "2.5rem",
     lineHeight: "1.5",
+  },
+  codeBox: {
+    backgroundColor: "rgba(202, 175, 243, 0.2)",
+    padding: "15px 25px",
+    borderRadius: "12px",
+    border: "1px solid #caaff3",
+    marginBottom: "2.5rem",
+  },
+  codeText: {
+    color: "#9960a8",
+    fontWeight: "700",
+    margin: 0,
+    fontSize: "1.05rem",
   },
   buttonContainer: {
     display: "flex",

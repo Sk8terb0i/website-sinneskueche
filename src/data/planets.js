@@ -48,6 +48,14 @@ export const planets = [
         base: getImage("sight.png"),
       };
     },
+    // NEW: Fallback moon data
+    fallback: {
+      text: {
+        en: "I see there's nothing here.",
+        de: "Ich sehe, hier ist nichts.",
+      },
+      isItalic: true,
+    },
     courses: [
       {
         text: { en: "pottery tuesdays", de: "pottery tuesdays" },
@@ -73,6 +81,10 @@ export const planets = [
         base: getImage("touch.png"),
       };
     },
+    fallback: {
+      text: { en: "I feel you.", de: "Ich fühle dich." },
+      isItalic: true,
+    },
     courses: [
       {
         text: { en: "pottery tuesdays", de: "pottery tuesdays" },
@@ -97,6 +109,13 @@ export const planets = [
         de: getImage("hearing_de.png"),
         base: getImage("hearing.png"),
       };
+    },
+    fallback: {
+      text: {
+        en: "I can hear something in the distance.",
+        de: "Ich höre etwas in der Ferne.",
+      },
+      isItalic: true,
     },
     courses: [
       {
@@ -131,6 +150,10 @@ export const planets = [
         base: getImage("smell.png"),
       };
     },
+    fallback: {
+      text: { en: "smell you later.", de: "wir riechen uns später." },
+      isItalic: true,
+    },
     courses: [
       {
         text: { en: "artistic vision", de: "artistic vision" },
@@ -147,6 +170,13 @@ export const planets = [
         de: getImage("taste_de.png"),
         base: getImage("taste.png"),
       };
+    },
+    fallback: {
+      text: {
+        en: "it's on the tip of my tongue.",
+        de: "es liegt mir auf der Zunge.",
+      },
+      isItalic: true,
     },
     courses: [
       {

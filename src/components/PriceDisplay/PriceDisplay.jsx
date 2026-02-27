@@ -136,26 +136,37 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const handlePayment = async (mode, packCode = null) => {
     const functions = getFunctions();
 
+    // NEW: Safety check to make sure guests actually filled out the form!
+    if (!currentUser && (!guestInfo.email || !guestInfo.firstName)) {
+      alert(
+        currentLang === "en"
+          ? "Please enter your name and email."
+          : "Bitte geben Sie Ihren Namen und Ihre E-Mail-Adresse ein.",
+      );
+      return;
+    }
+
     try {
       setIsProcessing(true);
 
-      // 1. REDEEM CODE LOGIC
       if (mode === "redeem") {
         const redeemPack = httpsCallable(functions, "redeemPackCode");
-
-        await redeemPack({
+        // Capture the response from the backend
+        const response = await redeemPack({
           coursePath,
           selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
           packCode,
-          guestInfo: isGuestMode ? guestInfo : null,
+          guestInfo: !currentUser ? guestInfo : null,
+          currentLang: currentLang,
         });
 
-        // If successful, go straight to success page
-        navigate("/success");
+        // Pass the code and the remaining credits into the URL!
+        navigate(
+          `/success?code=${packCode}&remaining=${response.data.remainingCredits}`,
+        );
         return;
       }
 
-      // 2. STRIPE CHECKOUT LOGIC (for "pack" or "individual")
       const createCheckout = httpsCallable(functions, "createStripeCheckout");
       const result = await createCheckout({
         mode,
@@ -164,16 +175,14 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         packSize: parseInt(pricing.packSize),
         coursePath,
         selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
-        guestInfo: isGuestMode ? guestInfo : null,
-        currentLang: currentLang, // <--- ADD THIS LINE
+        guestInfo: !currentUser ? guestInfo : null, // <--- CHANGED
+        currentLang: currentLang,
       });
 
       if (result.data?.url) window.location.assign(result.data.url);
     } catch (err) {
       console.error(err);
       setIsProcessing(false);
-
-      // Provide user feedback if the code they entered is invalid
       if (mode === "redeem") {
         alert(
           currentLang === "en"
@@ -191,6 +200,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
       await bookWithCredits({
         coursePath,
         selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
+        currentLang: currentLang, // <--- Added language for emails
       });
       navigate("/success");
     } catch (err) {

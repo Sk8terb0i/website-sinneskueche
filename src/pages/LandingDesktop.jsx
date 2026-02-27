@@ -44,8 +44,14 @@ export default function Landing({ currentLang, setCurrentLang }) {
   const planetBaseSizes = { courses: 128, info: 96, action: 64 };
 
   useEffect(() => {
-    const fetchEvents = async () => {
+    const fetchData = async () => {
       try {
+        const settingsSnap = await getDocs(collection(db, "course_settings"));
+        const visibilityMap = {};
+        settingsSnap.docs.forEach((doc) => {
+          visibilityMap[doc.id] = doc.data().isVisible !== false;
+        });
+
         const eventsCollection = collection(db, "events");
         const q = query(eventsCollection, orderBy("date", "asc"));
         const querySnapshot = await getDocs(q);
@@ -61,26 +67,30 @@ export default function Landing({ currentLang, setCurrentLang }) {
             return event.type === "event" && eventDate >= today;
           });
 
-        if (fetchedEvents.length > 0) {
-          setPlanets((prev) =>
-            prev.map((p) =>
-              p.id === "events"
-                ? {
-                    ...p,
-                    courses: fetchedEvents.map((e) => ({
-                      text: e.title,
-                      link: e.link,
-                    })),
-                  }
-                : p,
-            ),
-          );
-        }
+        setPlanets((prev) =>
+          prev.map((p) => {
+            let updatedCourses = p.courses
+              ? p.courses.filter((course) => {
+                  const courseId = course.link?.replace(/\//g, "");
+                  return visibilityMap[courseId] !== false;
+                })
+              : p.courses;
+
+            if (p.id === "events" && fetchedEvents.length > 0) {
+              updatedCourses = fetchedEvents.map((e) => ({
+                text: e.title,
+                link: e.link,
+              }));
+            }
+
+            return { ...p, courses: updatedCourses };
+          }),
+        );
       } catch (error) {
-        console.error("Error fetching events:", error);
+        console.error("Error fetching data:", error);
       }
     };
-    fetchEvents();
+    fetchData();
   }, []);
 
   const handleLink = (link) => {
@@ -173,13 +183,6 @@ export default function Landing({ currentLang, setCurrentLang }) {
   };
   const sunSize = 200 * scaleFactor;
   const isSystemHovered = hoveredPlanet || hoveredMoonPlanet;
-
-  const clearCloseTimeout = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-  };
 
   return (
     <div
@@ -302,7 +305,6 @@ export default function Landing({ currentLang, setCurrentLang }) {
             onHover={
               isHoverable
                 ? (id) => {
-                    // FIX: Instantly kill the flicker-causing timer
                     if (hoverTimeoutRef.current) {
                       clearTimeout(hoverTimeoutRef.current);
                       hoverTimeoutRef.current = null;
@@ -314,16 +316,11 @@ export default function Landing({ currentLang, setCurrentLang }) {
             }
             onHoverEnd={() => {
               setHoveredPlanet(null);
-
-              // Clear any existing timer before starting a new one
               if (hoverTimeoutRef.current) {
                 clearTimeout(hoverTimeoutRef.current);
               }
-
-              // Start the grace period. If we don't hit a moon or the planet again, close.
               hoverTimeoutRef.current = setTimeout(() => {
                 setFocusedPlanet((prev) => {
-                  // Only set to null if we aren't currently hovering a moon
                   return hoveredMoonPlanet === prev ? prev : null;
                 });
               }, 200);
@@ -333,7 +330,17 @@ export default function Landing({ currentLang, setCurrentLang }) {
       })}
 
       {planets.map((planet) => {
-        if (focusedPlanet !== planet.id || !planet.courses) return null;
+        if (focusedPlanet !== planet.id) return null;
+
+        // CHANGED: Logic to handle fallback if courses list is empty
+        const moonsToDisplay =
+          planet.courses && planet.courses.length > 0
+            ? planet.courses
+            : planet.fallback
+              ? [planet.fallback]
+              : [];
+
+        if (moonsToDisplay.length === 0) return null;
 
         const radius = staticOrbitRadii[planet.type];
         const angle = planetAngles[planet.id] || 0;
@@ -348,7 +355,6 @@ export default function Landing({ currentLang, setCurrentLang }) {
 
         return (
           <React.Fragment key={`moons-group-${planet.id}`}>
-            {/* SVG Orbit Line */}
             <svg
               style={{
                 position: "absolute",
@@ -373,20 +379,19 @@ export default function Landing({ currentLang, setCurrentLang }) {
               />
             </svg>
 
-            {planet.courses.map((moon, index) => (
+            {moonsToDisplay.map((moon, index) => (
               <Moon
                 key={`${planet.id}-moon-${index}`}
                 planetId={planet.id}
                 moon={moon}
                 index={index}
-                totalMoons={planet.courses.length}
+                totalMoons={moonsToDisplay.length}
                 planetType={planet.type}
                 planetPosition={{ x, y }}
                 windowSize={windowSize}
                 currentLang={currentLang}
                 scaleFactor={scaleFactor}
                 onHoverStart={() => {
-                  // 1. KILL the timeout immediately when entering a moon
                   if (hoverTimeoutRef.current) {
                     clearTimeout(hoverTimeoutRef.current);
                     hoverTimeoutRef.current = null;
@@ -395,17 +400,11 @@ export default function Landing({ currentLang, setCurrentLang }) {
                 }}
                 onHoverEnd={() => {
                   setHoveredMoonPlanet(null);
-
-                  // 2. Clear any existing timer to prevent stacking
                   if (hoverTimeoutRef.current) {
                     clearTimeout(hoverTimeoutRef.current);
                   }
-
-                  // 3. Start a fresh grace period
                   hoverTimeoutRef.current = setTimeout(() => {
-                    // Only close if we haven't moved back to the planet or another moon
                     setFocusedPlanet((prev) => {
-                      // Check latest state: if mouse isn't on planet OR moon, then null
                       if (
                         hoveredPlanet === planet.id ||
                         hoveredMoonPlanet === planet.id

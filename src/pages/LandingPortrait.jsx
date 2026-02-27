@@ -5,6 +5,8 @@ import MoonPortrait from "../components/Moon/MoonPortrait";
 import SunPortrait from "../components/Sun/SunPortrait";
 import Header from "../components/Header/Header";
 import { planets } from "../data/planets";
+import { db } from "../firebase";
+import { collection, getDocs } from "firebase/firestore";
 
 export default function LandingPortrait({ currentLang, setCurrentLang }) {
   const navigate = useNavigate();
@@ -18,6 +20,7 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [courseVisibility, setCourseVisibility] = useState({});
 
   const [viewport, setViewport] = useState({
     width: window.innerWidth,
@@ -32,6 +35,21 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
       });
     };
     window.addEventListener("resize", handleResize);
+
+    const fetchVisibility = async () => {
+      try {
+        const settingsSnap = await getDocs(collection(db, "course_settings"));
+        const visibilityMap = {};
+        settingsSnap.docs.forEach((doc) => {
+          visibilityMap[doc.id] = doc.data().isVisible !== false;
+        });
+        setCourseVisibility(visibilityMap);
+      } catch (err) {
+        console.error("Error fetching course visibility:", err);
+      }
+    };
+    fetchVisibility();
+
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
@@ -49,11 +67,29 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
     [],
   );
 
-  // Keep Atelier in the list so we can target its index
-  const displayPlanets = useMemo(
-    () => [...coursePlanetsOnly, atelierPlanet].filter(Boolean),
-    [coursePlanetsOnly, atelierPlanet],
-  );
+  // CHANGED: Logic to handle fallbacks if no courses are visible
+  const displayPlanets = useMemo(() => {
+    const baseList = [...coursePlanetsOnly, atelierPlanet].filter(Boolean);
+
+    return baseList.map((p) => {
+      if (!p.courses) return p;
+
+      const filteredMoons = p.courses.filter((course) => {
+        const courseId = course.link?.replace(/\//g, "");
+        return courseVisibility[courseId] !== false;
+      });
+
+      // If filtering leaves the list empty, use the fallback moon if it exists
+      const moonsToDisplay =
+        filteredMoons.length > 0
+          ? filteredMoons
+          : p.fallback
+            ? [p.fallback]
+            : [];
+
+      return { ...p, courses: moonsToDisplay };
+    });
+  }, [coursePlanetsOnly, atelierPlanet, courseVisibility]);
 
   const touchStartY = useRef(null);
   const touchLocked = useRef(false);
@@ -75,7 +111,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
     }, 400);
   };
 
-  // Logic to switch specifically to the Atelier planet layout
   const handleSunClick = (e) => {
     e.stopPropagation();
     if (isMenuOpenRef.current) return;
@@ -313,7 +348,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
       >
         {displayPlanets.map((planet, index) => {
           const isAtelier = planet.id === "atelier";
-          // We hide atelier in visual list if activeIndex is null (idle layout)
           if (isAtelier && activeIndex === null) return null;
 
           const radius = !isAtelier ? getOrbitDiameter(index) / 2 : 0;
@@ -378,6 +412,7 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
                       if (isMenuOpen) return;
                       if (activeIndex === index) {
                         const moonCount = planet.courses?.length || 0;
+                        // If it is a fallback moon (no link), don't navigate
                         if (moonCount === 1 && planet.courses[0].link) {
                           navigate(planet.courses[0].link);
                           return;

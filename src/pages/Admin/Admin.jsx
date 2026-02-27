@@ -14,13 +14,15 @@ import {
   Calendar as CalendarIcon,
   Tag,
   LayoutGrid,
+  Ticket, // Added for Promotions
 } from "lucide-react";
 
 // Components & Styles
-import Header from "../../components/Header/Header"; // Imported from path provided
+import Header from "../../components/Header/Header";
 import EventsTab from "./EventsTab";
-import PricingTab from "./PricingTab";
+import PricingTab from "./PricingTab"; // File name remains unchanged
 import RentalTab from "./RentalTab";
+import PromotionsTab from "./PromotionsTab"; // New component
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -90,7 +92,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
     }
   };
 
-  // Loading Screen (Matches Profile palette)
   if (checkingRole && !user) {
     return (
       <div style={{ ...loginWrapperStyle, backgroundColor: "#fffce3" }}>
@@ -99,7 +100,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
     );
   }
 
-  // --- LOGIN VIEW (NO PURE WHITE) ---
+  // --- LOGIN VIEW ---
   if (!user || !isAdminRole) {
     return (
       <div style={{ ...loginWrapperStyle, backgroundColor: "#fffce3" }}>
@@ -113,7 +114,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
           onSubmit={handleLogin}
           style={{
             ...loginCardStyle(isMobile),
-            backgroundColor: "#fdf8e1", // Card background
+            backgroundColor: "#fdf8e1",
             border: "1px solid rgba(28, 7, 0, 0.05)",
             boxShadow: "0 10px 40px rgba(0,0,0,0.03)",
           }}
@@ -142,7 +143,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
             onChange={(e) => setEmail(e.target.value)}
             style={{
               ...inputStyle,
-              backgroundColor: "rgba(255, 252, 227, 0.4)", // Themed input
+              backgroundColor: "rgba(255, 252, 227, 0.4)",
               border: "1px solid rgba(28, 7, 0, 0.1)",
               marginBottom: "1.2rem",
             }}
@@ -187,11 +188,11 @@ export default function Admin({ currentLang, setCurrentLang }) {
     );
   }
 
-  // --- DASHBOARD VIEW (NO PURE WHITE) ---
+  // --- DASHBOARD VIEW ---
   return (
     <div
       style={{
-        padding: isMobile ? "100px 1.5rem 1.5rem" : "140px 4vw 4vw", // Space for fixed header
+        padding: isMobile ? "100px 1.5rem 1.5rem" : "140px 4vw 4vw",
         minHeight: "100vh",
         fontFamily: "Satoshi",
         color: "#1c0700",
@@ -249,6 +250,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
           borderRadius: "100px",
           padding: "6px",
           display: "inline-flex",
+          flexWrap: isMobile ? "wrap" : "nowrap",
+          justifyContent: "center",
+          gap: "4px",
         }}
       >
         <button
@@ -263,16 +267,28 @@ export default function Admin({ currentLang, setCurrentLang }) {
           <CalendarIcon size={18} /> Events
         </button>
         <button
-          onClick={() => setActiveTab("pricing")}
+          onClick={() => setActiveTab("course-management")}
           style={{
-            ...tabButtonStyle(activeTab === "pricing"),
+            ...tabButtonStyle(activeTab === "course-management"),
             backgroundColor:
-              activeTab === "pricing" ? "#caaff3" : "transparent",
+              activeTab === "course-management" ? "#caaff3" : "transparent",
             borderRadius: "100px",
             color: "#1c0700",
           }}
         >
-          <Tag size={18} /> Pricing
+          <Tag size={18} /> Course Management
+        </button>
+        <button
+          onClick={() => setActiveTab("promotions")}
+          style={{
+            ...tabButtonStyle(activeTab === "promotions"),
+            backgroundColor:
+              activeTab === "promotions" ? "#caaff3" : "transparent",
+            borderRadius: "100px",
+            color: "#1c0700",
+          }}
+        >
+          <Ticket size={18} /> Promotions
         </button>
         <button
           onClick={() => setActiveTab("rental")}
@@ -288,9 +304,16 @@ export default function Admin({ currentLang, setCurrentLang }) {
       </div>
 
       <div style={{ animation: "fadeIn 0.4s ease-out", marginTop: "2.5rem" }}>
-        {activeTab === "events" && <EventsTab isMobile={isMobile} />}
-        {activeTab === "pricing" && <PricingTab isMobile={isMobile} />}
+        {activeTab === "events" && (
+          <EventsTab isMobile={isMobile} currentLang={currentLang} />
+        )}
+        {activeTab === "course-management" && (
+          <PricingTab isMobile={isMobile} />
+        )}
         {activeTab === "rental" && <RentalTab isMobile={isMobile} />}
+        {activeTab === "promotions" && (
+          <PromotionsTab isMobile={isMobile} currentLang={currentLang} />
+        )}
       </div>
 
       <style>{`

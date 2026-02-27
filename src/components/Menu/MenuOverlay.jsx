@@ -16,6 +16,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const [isCalendarOpen, setIsCalendarOpen] = useState(true);
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [closeActive, setCloseActive] = useState(false);
+  const [courseVisibility, setCourseVisibility] = useState({});
 
   const [activeSenses, setActiveSenses] = useState([
     "sight",
@@ -28,8 +29,15 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const isMobile = window.innerWidth < 768;
 
   useEffect(() => {
-    const fetchEvents = async () => {
+    const fetchData = async () => {
       try {
+        const settingsSnap = await getDocs(collection(db, "course_settings"));
+        const visibilityMap = {};
+        settingsSnap.docs.forEach((doc) => {
+          visibilityMap[doc.id] = doc.data().isVisible !== false;
+        });
+        setCourseVisibility(visibilityMap);
+
         const eventsCollection = collection(db, "events");
         const q = query(eventsCollection, orderBy("date", "asc"));
         const snapshot = await getDocs(q);
@@ -37,7 +45,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         const now = new Date();
         now.setHours(0, 0, 0, 0);
 
-        // Calculate end of the month 6 months from now (for events)
         const endOfSixMonths = new Date(
           now.getFullYear(),
           now.getMonth() + 7,
@@ -45,31 +52,25 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         );
         endOfSixMonths.setHours(23, 59, 59, 999);
 
-        // 1. Filter out past items completely
         const futureItems = snapshot.docs
           .map((doc) => ({ id: doc.id, ...doc.data() }))
           .filter((item) => new Date(item.date) >= now);
 
-        // 2. Separate into Events and Courses (fallback to 'course' if no type)
         const rawEvents = futureItems.filter((item) => item.type === "event");
         const rawCourses = futureItems.filter(
           (item) => item.type === "course" || !item.type,
         );
 
-        // 3. Process Events: Show current month + 6 months
         const filteredEvents = rawEvents.filter(
-          (item) => new Date(item.date) <= endOfSixMonths,
+          (item) => item.date && new Date(item.date) <= endOfSixMonths,
         );
 
-        // 4. Process Courses: Find the first month that actually has courses
         let filteredCourses = [];
         if (rawCourses.length > 0) {
-          // Since the firestore query is ordered by date asc, index 0 is the closest upcoming course
           const firstCourseDate = new Date(rawCourses[0].date);
           const targetMonth = firstCourseDate.getMonth();
           const targetYear = firstCourseDate.getFullYear();
 
-          // Keep ONLY courses that match the target month & year
           filteredCourses = rawCourses.filter((course) => {
             const d = new Date(course.date);
             return (
@@ -78,18 +79,17 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           });
         }
 
-        // 5. Combine and sort back by date
         const combined = [...filteredCourses, ...filteredEvents].sort(
           (a, b) => new Date(a.date) - new Date(b.date),
         );
 
         setUpcomingEvents(combined);
       } catch (error) {
-        console.error("Error fetching events:", error);
+        console.error("Error fetching menu data:", error);
       }
     };
 
-    if (isOpen) fetchEvents();
+    if (isOpen) fetchData();
   }, [isOpen]);
 
   const hasUpcomingEvents = upcomingEvents.length > 0;
@@ -176,9 +176,49 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
     [currentLang],
   );
 
-  const filteredCourses = menuData.courses.filter((course) =>
-    course.senses.some((s) => activeSenses.includes(s)),
-  );
+  // CHANGED: Logic to handle Fallbacks per sense in the list
+  const displayItems = useMemo(() => {
+    let results = [];
+    const seenLinks = new Set();
+    const potentialFallbacks = [];
+
+    // 1. First, try to find ANY visible courses across all selected senses
+    activeSenses.forEach((senseId) => {
+      const visibleForSense = menuData.courses.filter((course) => {
+        const courseId = course.link.replace(/\//g, "");
+        return (
+          course.senses.includes(senseId) &&
+          courseVisibility[courseId] !== false
+        );
+      });
+
+      if (visibleForSense.length > 0) {
+        visibleForSense.forEach((c) => {
+          if (!seenLinks.has(c.link)) {
+            results.push(c);
+            seenLinks.add(c.link);
+          }
+        });
+      } else {
+        // Collect potential fallbacks in case the final list is empty
+        const planetData = planets.find((p) => p.id === senseId);
+        if (planetData?.fallback) {
+          potentialFallbacks.push(planetData.fallback);
+        }
+      }
+    });
+
+    // 2. If we found courses, return only them (No fallbacks!)
+    if (results.length > 0) return results;
+
+    // 3. If everything is empty, randomly pick ONE fallback from the selected senses
+    if (potentialFallbacks.length > 0) {
+      const randomIndex = Math.floor(Math.random() * potentialFallbacks.length);
+      return [potentialFallbacks[randomIndex]];
+    }
+
+    return [];
+  }, [activeSenses, courseVisibility, menuData.courses]);
 
   useEffect(() => {
     document.body.style.overflow = isOpen ? "hidden" : "unset";
@@ -345,15 +385,17 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
               </div>
             </div>
 
-            {filteredCourses.map((item, i) => (
+            {displayItems.map((item, i) => (
               <MenuLink
                 key={i}
                 item={item}
                 lang={currentLang}
                 isMobile={isMobile}
                 onNavigate={(p) => {
-                  navigate(p);
-                  onClose();
+                  if (p) {
+                    navigate(p);
+                    onClose();
+                  }
                 }}
               />
             ))}
@@ -492,25 +534,30 @@ function MenuLink({ item, lang, onNavigate, isMobile }) {
   const [isActive, setIsActive] = useState(false);
   const iconSrc = item.icon?.[lang] || item.icon?.base;
 
+  // NEW: Check for fallback styling and disable click
+  const isFallback = item.isItalic;
+
   return (
     <div
-      onClick={() => onNavigate(item.link)}
-      onMouseEnter={() => setIsActive(true)}
-      onMouseLeave={() => setIsActive(false)}
+      onClick={() => !isFallback && onNavigate(item.link)}
+      onMouseEnter={() => !isFallback && setIsActive(true)}
+      onMouseLeave={() => !isFallback && setIsActive(false)}
       style={{
         display: "flex",
         alignItems: "center",
         gap: "10px",
         padding: isMobile ? "6px 0" : "8px 0",
-        cursor: "pointer",
-        color: isActive ? "#9960a8" : "#4e5f28",
+        cursor: isFallback ? "default" : "pointer",
+        color: isFallback ? "#1c070099" : isActive ? "#9960a8" : "#4e5f28",
         fontFamily: "Satoshi",
+        fontStyle: isFallback ? "italic" : "normal",
         fontSize: isMobile ? "0.9rem" : "1.05rem",
         transition: "all 0.2s ease",
-        transform: isActive ? "translateX(5px)" : "translateX(0)",
+        transform:
+          !isFallback && isActive ? "translateX(5px)" : "translateX(0)",
       }}
     >
-      {iconSrc && (
+      {!isFallback && iconSrc && (
         <img
           src={iconSrc}
           style={{

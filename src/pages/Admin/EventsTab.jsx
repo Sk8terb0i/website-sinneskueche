@@ -6,12 +6,13 @@ import {
   query,
   where,
   getDocs,
-  deleteDoc,
+  deleteDoc, // Kept for filtering old events
   doc,
-  getDoc, // Added getDoc for cleaner single-user fetching
+  getDoc,
   orderBy,
   setDoc,
 } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions"; // <--- ADDED
 import { planets } from "../../data/planets";
 import {
   XCircle,
@@ -25,6 +26,7 @@ import {
   Mail,
   Edit2,
   Clock,
+  Loader2, // <--- ADDED
 } from "lucide-react";
 import {
   formCardStyle,
@@ -49,6 +51,7 @@ export default function EventsTab({ isMobile, currentLang }) {
   const [link, setLink] = useState("");
   const [externalLink, setExternalLink] = useState("");
   const [editingId, setEditingId] = useState(null);
+  const [isCancellingId, setIsCancellingId] = useState(null); // <--- ADDED loading state
 
   const [expandedGroups, setExpandedGroups] = useState({});
   const [showParticipantsFor, setShowParticipantsFor] = useState(null);
@@ -73,7 +76,8 @@ export default function EventsTab({ isMobile, currentLang }) {
       noCourses: "No courses scheduled.",
       noEvents: "No events scheduled.",
       cancelCourse: "CANCEL COURSE",
-      deleteConfirm: "Delete this session?",
+      deleteConfirm:
+        "Are you sure? This will refund all participants and delete the event.", // <--- UPDATED
       participants: "Participants",
       noParticipants: "No bookings yet.",
     },
@@ -95,7 +99,8 @@ export default function EventsTab({ isMobile, currentLang }) {
       noCourses: "Keine Kurse geplant.",
       noEvents: "Keine Events geplant.",
       cancelCourse: "KURS ABSAGEN",
-      deleteConfirm: "Diesen Termin löschen?",
+      deleteConfirm:
+        "Bist du sicher? Alle Teilnehmer erhalten eine Rückerstattung und der Termin wird gelöscht.", // <--- UPDATED
       participants: "Teilnehmer",
       noParticipants: "Noch keine Buchungen.",
     },
@@ -138,7 +143,6 @@ export default function EventsTab({ isMobile, currentLang }) {
             ...data,
             id: docSnap.id,
             bookedCount: bSnap.size,
-            // CHANGED: Store full booking data instead of just UIDs to catch guest names
             bookings: bSnap.docs.map((d) => d.data()),
           };
         }),
@@ -169,18 +173,16 @@ export default function EventsTab({ isMobile, currentLang }) {
     if (!participantCache[event.id]) {
       const userDetails = await Promise.all(
         event.bookings.map(async (b) => {
-          // LOGIC: If Guest, use info stored directly on the booking document
           if (b.userId === "GUEST_USER") {
             return {
               firstName: b.guestName || "Guest",
               lastName: "(Guest)",
-              email: b.guestEmail || "Email not found", // Display guest email
+              email: b.guestEmail || "Email not found",
               phone: "",
               isGuest: true,
             };
           }
 
-          // If registered user, fetch from the users collection as before
           const uSnap = await getDoc(doc(db, "users", b.userId));
           if (uSnap.exists()) {
             return uSnap.data();
@@ -287,6 +289,26 @@ export default function EventsTab({ isMobile, currentLang }) {
     }));
   };
 
+  // --- NEW: Handle Admin Cancellation via Cloud Function ---
+  const handleCancelEvent = async (e, ev) => {
+    e.stopPropagation();
+    if (!window.confirm(labels.deleteConfirm)) return;
+
+    setIsCancellingId(ev.id);
+    const functions = getFunctions();
+    const adminCancelFn = httpsCallable(functions, "adminCancelEvent");
+
+    try {
+      await adminCancelFn({ eventId: ev.id, currentLang: currentLang || "en" });
+      await fetchEvents();
+    } catch (err) {
+      console.error(err);
+      alert("Error cancelling event: " + err.message);
+    } finally {
+      setIsCancellingId(null);
+    }
+  };
+
   const scheduledCourses = events.filter((ev) => ev.type === "course");
   const scheduledEvents = events.filter((ev) => ev.type === "event");
 
@@ -311,7 +333,6 @@ export default function EventsTab({ isMobile, currentLang }) {
         marginBottom: "5rem",
       }}
     >
-      {/* 1. FORM SECTION */}
       <section style={{ width: isMobile ? "100%" : "400px" }}>
         <div style={formCardStyle}>
           <div
@@ -452,7 +473,6 @@ export default function EventsTab({ isMobile, currentLang }) {
         </div>
       </section>
 
-      {/* 2. SCHEDULE VIEW SECTION */}
       <section style={{ flex: 1 }}>
         <h3 style={{ ...sectionTitleStyle, marginBottom: "1rem" }}>
           <BookOpen size={16} /> {labels.courseHeader} (
@@ -526,15 +546,15 @@ export default function EventsTab({ isMobile, currentLang }) {
                             </button>
 
                             <button
-                              onClick={() => {
-                                if (window.confirm(labels.deleteConfirm))
-                                  deleteDoc(doc(db, "events", ev.id)).then(
-                                    fetchEvents,
-                                  );
-                              }}
+                              onClick={(e) => handleCancelEvent(e, ev)} // <--- UPDATED
                               style={styles.cancelCourseBtn}
+                              disabled={isCancellingId === ev.id}
                             >
-                              {labels.cancelCourse}
+                              {isCancellingId === ev.id ? (
+                                <Loader2 size={14} className="spinner" />
+                              ) : (
+                                labels.cancelCourse
+                              )}
                             </button>
                           </div>
                         </div>
@@ -637,14 +657,15 @@ export default function EventsTab({ isMobile, currentLang }) {
                     <span style={{ fontWeight: "800" }}>{ev.bookedCount}</span>
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (window.confirm(labels.deleteConfirm))
-                        deleteDoc(doc(db, "events", ev.id)).then(fetchEvents);
-                    }}
+                    onClick={(e) => handleCancelEvent(e, ev)} // <--- UPDATED
                     style={styles.cancelCourseBtn}
+                    disabled={isCancellingId === ev.id}
                   >
-                    {labels.cancelCourse}
+                    {isCancellingId === ev.id ? (
+                      <Loader2 size={14} className="spinner" />
+                    ) : (
+                      labels.cancelCourse
+                    )}
                   </button>
                 </div>
               </div>
@@ -763,6 +784,10 @@ const styles = {
     cursor: "pointer",
     textTransform: "uppercase",
     letterSpacing: "0.03rem",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: "120px",
   },
   participantPanel: {
     backgroundColor: "rgba(78, 95, 40, 0.05)",
