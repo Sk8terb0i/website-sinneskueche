@@ -45,7 +45,7 @@ const getGoogleCalLink = (title, dateStr) => {
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent("Atelier Sinnesküche: " + title)}&dates=${start}/${end}`;
 };
 
-// --- RESTORED EMAIL HELPERS ---
+// --- EMAIL HELPERS WITH COURSE NAMES ---
 
 const sendUserPackEmail = (
   transaction,
@@ -60,8 +60,8 @@ const sendUserPackEmail = (
   const mailRef = db.collection("mail").doc();
   const subject =
     lang === "de"
-      ? "Dein Session-Pack - Atelier Sinnesküche"
-      : "Your Session Pack - Atelier Sinnesküche";
+      ? `Dein ${courseKey} Session-Pack`
+      : `Your ${courseKey} Session Pack`;
 
   transaction.set(mailRef, {
     to: email,
@@ -70,14 +70,49 @@ const sendUserPackEmail = (
       html: `
         <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
           <h2 style="color: #4e5f28;">${lang === "de" ? "Kauf erfolgreich!" : "Purchase Successful!"}</h2>
-          <p style="font-size: 16px;">${lang === "de" ? `Hallo ${name || "Kunde"},` : `Hi ${name || "Customer"},`}</p>
-          <p style="font-size: 16px;">${lang === "de" ? `Vielen Dank für den Kauf einer ${packSize}er Karte für <strong>${courseKey}</strong>.` : `Thank you for purchasing a ${packSize}-Session Pack for <strong>${courseKey}</strong>.`}</p>
+          <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
+          <p>${lang === "de" ? `Vielen Dank für den Kauf einer ${packSize}er Karte für <strong>${courseKey}</strong>.` : `Thank you for purchasing a ${packSize}-Session Pack for <strong>${courseKey}</strong>.`}</p>
           <div style="background-color: rgba(78, 95, 40, 0.1); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #4e5f28;">
-            <p style="margin: 0; font-size: 32px; font-weight: bold; color: #4e5f28;">+${netIncrease}</p>
+            <p style="margin: 0; font-size: 32px; font-weight: bold; color: #4e5f28;">+${netIncrease} Credits</p>
           </div>
-          <p style="font-size: 16px;">${lang === "de" ? "Herzliche Grüße,<br/>Atelier Sinnesküche" : "Warm regards,<br/>Atelier Sinnesküche"}</p>
-        </div>
-      `,
+          <p>${lang === "de" ? "Dein Guthaben wurde deinem Profil hinzugefügt." : "Your credits have been added to your profile."}</p>
+          <p style="font-size: 16px;">Herzliche Grüße,<br/>Atelier Sinnesküche</p>
+        </div>`,
+    },
+  });
+};
+
+const sendGuestPackCodeEmail = (
+  transaction,
+  email,
+  name,
+  courseKey,
+  packSize,
+  netIncrease,
+  newCode,
+  lang,
+) => {
+  if (!email) return;
+  const mailRef = db.collection("mail").doc();
+  const subject =
+    lang === "de" ? `Dein Code für ${courseKey}` : `Your Code for ${courseKey}`;
+
+  transaction.set(mailRef, {
+    to: email,
+    message: {
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
+          <h2 style="color: #4e5f28;">${lang === "de" ? "Vielen Dank für deinen Einkauf!" : "Thank you for your purchase!"}</h2>
+          <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
+          <p>${lang === "de" ? `Hier ist dein Code für die ${packSize}er Karte (<strong>${courseKey}</strong>):` : `Here is your code for the ${packSize}-Session Pack (<strong>${courseKey}</strong>):`}</p>
+          <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">
+            <p style="margin: 0 0 10px 0; font-size: 14px;">${lang === "de" ? "Dein Einlösungscode:" : "Your Redemption Code:"}</p>
+            <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">${newCode}</p>
+          </div>
+          <p>${lang === "de" ? `Du hast noch <strong>${netIncrease} Guthaben</strong> übrig.` : `You have <strong>${netIncrease} credits</strong> remaining.`}</p>
+          <p style="font-size: 16px;">Herzliche Grüße,<br/>Atelier Sinnesküche</p>
+        </div>`,
     },
   });
 };
@@ -86,9 +121,7 @@ const sendBookingEmail = (transaction, email, name, courseKey, dates, lang) => {
   if (!email || dates.length === 0) return;
   const mailRef = db.collection("mail").doc();
   const subject =
-    lang === "de"
-      ? "Buchungsbestätigung - Atelier Sinnesküche"
-      : "Booking Confirmation - Atelier Sinnesküche";
+    lang === "de" ? `Bestätigung: ${courseKey}` : `Confirmation: ${courseKey}`;
   const calText =
     lang === "de" ? "📅 Zum Kalender hinzufügen" : "📅 Add to Calendar";
 
@@ -111,19 +144,59 @@ const sendBookingEmail = (transaction, email, name, courseKey, dates, lang) => {
       html: `
         <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
           <h2 style="color: #4e5f28;">${lang === "de" ? "Buchung bestätigt!" : "Booking Confirmed!"}</h2>
-          <p>${lang === "de" ? `Hallo ${name || "Gast"},` : `Hi ${name || "Guest"},`}</p>
+          <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
+          <p>${lang === "de" ? `Deine Plätze für <strong>${courseKey}</strong> sind reserviert:` : `Your spots for <strong>${courseKey}</strong> are all set:`}</p>
           <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">
             <ul style="margin: 0; padding: 0;">${datesHtml}</ul>
           </div>
-          <p>${lang === "de" ? "Herzliche Grüße,<br/>Atelier Sinnesküche" : "Warm regards,<br/>Atelier Sinnesküche"}</p>
-        </div>
-      `,
+          <p style="font-size: 16px;">Herzliche Grüße,<br/>Atelier Sinnesküche</p>
+        </div>`,
     },
   });
 };
 
+const sendCancellationEmail = (
+  transaction,
+  email,
+  name,
+  courseKey,
+  date,
+  lang,
+  code = null,
+) => {
+  if (!email) return;
+  const mailRef = db.collection("mail").doc();
+  const subject =
+    lang === "de"
+      ? `Termin abgesagt: ${courseKey}`
+      : `Session Cancelled: ${courseKey}`;
+  const formattedDate = formatDate(date);
+
+  let htmlContent = `
+    <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
+      <h2 style="color: #ff4d4d;">${lang === "de" ? "Termin wurde abgesagt" : "Session Cancelled"}</h2>
+      <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
+      <p>${lang === "de" ? `Leider müssen wir den Termin für <strong>${courseKey}</strong> am <strong>${formattedDate}</strong> absagen.` : `Unfortunately, we have to cancel the session for <strong>${courseKey}</strong> on <strong>${formattedDate}</strong>.`}</p>`;
+
+  if (code) {
+    htmlContent += `
+      <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">
+        <p>${lang === "de" ? "Nutze diesen Ersatz-Code für eine neue Buchung:" : "Use this replacement code for a new booking:"}</p>
+        <p style="font-size: 32px; font-weight: bold; color: #9960a8;">${code}</p>
+      </div>`;
+  } else {
+    htmlContent += `<p>${lang === "de" ? "Ein Termin wurde deinem Profil automatisch gutgeschrieben (+1)." : "One session credit has been automatically added back to your profile."}</p>`;
+  }
+
+  htmlContent += `<p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`;
+  transaction.set(mailRef, {
+    to: email,
+    message: { subject: subject, html: htmlContent },
+  });
+};
+
 // ============================================================================
-// 1. CREATE CHECKOUT SESSION
+// 1. STRIPE CHECKOUT
 // ============================================================================
 exports.createStripeCheckout = onCall(
   { cors: true, secrets: ["STRIPE_SECRET_KEY"] },
@@ -159,8 +232,8 @@ exports.createStripeCheckout = onCall(
               product_data: {
                 name:
                   mode === "pack"
-                    ? `${packSize}-Session Pack`
-                    : "Individual Sessions",
+                    ? `${packSize}-Session Pack: ${getCleanCourseKey(coursePath)}`
+                    : `Sessions: ${getCleanCourseKey(coursePath)}`,
               },
               unit_amount:
                 mode === "pack"
@@ -241,7 +314,6 @@ exports.handleStripeWebhook = onRequest(
               finalName = userSnap.data().firstName || guestName;
           }
 
-          // Handle Credits for Pack Purchases
           if (mode === "pack") {
             const netIncrease = parseInt(packSize) - parsedDates.length;
             if (userId !== "GUEST_USER") {
@@ -274,11 +346,20 @@ exports.handleStripeWebhook = onRequest(
                 buyerName: guestName,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
-              // (You could also trigger a guest-specific pack code email here)
+              // FIXED: Now triggering the email for guest pack codes
+              sendGuestPackCodeEmail(
+                transaction,
+                email,
+                guestName,
+                courseKey,
+                packSize,
+                netIncrease,
+                newCode,
+                lang,
+              );
             }
           }
 
-          // Handle Bookings
           parsedDates.forEach((d) => {
             transaction.set(db.collection("bookings").doc(), {
               userId,
@@ -292,7 +373,6 @@ exports.handleStripeWebhook = onRequest(
             });
           });
 
-          // Trigger Booking Confirmation
           if (parsedDates.length > 0) {
             sendBookingEmail(
               transaction,
@@ -303,21 +383,22 @@ exports.handleStripeWebhook = onRequest(
               lang,
             );
           }
-
           transaction.set(paymentCheckRef, {
             processedAt: admin.firestore.FieldValue.serverTimestamp(),
             userId,
           });
         });
       } catch (e) {
-        console.error("Webhook Transaction Error", e);
+        console.error("Webhook Error", e);
       }
     }
     res.json({ received: true });
   },
 );
 
-// (Remaining bookWithCredits, redeemPackCode, cancelBooking, adminCancelEvent functions stay same but ensure they call sendBookingEmail)
+// ============================================================================
+// 3. BOOK WITH CREDITS
+// ============================================================================
 exports.bookWithCredits = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const { coursePath, selectedDates, currentLang } = request.data;
@@ -356,6 +437,9 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
   });
 });
 
+// ============================================================================
+// 4. REDEEM PACK CODE
+// ============================================================================
 exports.redeemPackCode = onCall({ cors: true }, async (request) => {
   const { coursePath, selectedDates, packCode, guestInfo, currentLang } =
     request.data;
@@ -398,6 +482,9 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
   });
 });
 
+// ============================================================================
+// 5. CANCEL BOOKING (USER SIDE)
+// ============================================================================
 exports.cancelBooking = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const { bookingId } = request.data;
@@ -415,28 +502,73 @@ exports.cancelBooking = onCall({ cors: true }, async (request) => {
   });
 });
 
+// ============================================================================
+// 6. ADMIN CANCEL EVENT
+// ============================================================================
 exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
   if (!request.auth)
     throw new HttpsError("unauthenticated", "Must be logged in.");
-  const { eventId } = request.data;
+  const { eventId, currentLang } = request.data;
+  const lang = currentLang || "en";
+
+  const eventRef = db.collection("events").doc(eventId);
+  const eventSnap = await eventRef.get();
+  if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found");
+
+  const eventData = eventSnap.data();
+  const courseKey = getCleanCourseKey(eventData.link || "");
+  const eventDate = eventData.date;
+
   const bookingsSnap = await db
     .collection("bookings")
     .where("eventId", "==", eventId)
     .get();
-  const batch = db.batch();
-  bookingsSnap.docs.forEach((doc) => {
-    const data = doc.data();
-    if (data.userId !== "GUEST_USER") {
-      const courseKey = getCleanCourseKey(data.coursePath);
-      batch.set(
-        db.collection("users").doc(data.userId),
-        { credits: { [courseKey]: admin.firestore.FieldValue.increment(1) } },
-        { merge: true },
-      );
+
+  return await db.runTransaction(async (transaction) => {
+    for (const bDoc of bookingsSnap.docs) {
+      const bData = bDoc.data();
+      if (bData.userId === "GUEST_USER") {
+        const newCode = generatePackCode();
+        transaction.set(db.collection("pack_codes").doc(newCode), {
+          code: newCode,
+          courseKey,
+          remainingCredits: 1,
+          buyerEmail: bData.guestEmail,
+          buyerName: bData.guestName,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        // FIXED: Now triggering cancellation email for guests with new code
+        sendCancellationEmail(
+          transaction,
+          bData.guestEmail,
+          bData.guestName,
+          courseKey,
+          eventDate,
+          lang,
+          newCode,
+        );
+      } else {
+        const userRef = db.collection("users").doc(bData.userId);
+        const userSnap = await transaction.get(userRef);
+        transaction.set(
+          userRef,
+          { credits: { [courseKey]: admin.firestore.FieldValue.increment(1) } },
+          { merge: true },
+        );
+        // FIXED: Now triggering cancellation email for registered users
+        if (userSnap.exists)
+          sendCancellationEmail(
+            transaction,
+            userSnap.data().email,
+            userSnap.data().firstName,
+            courseKey,
+            eventDate,
+            lang,
+          );
+      }
+      transaction.delete(bDoc.ref);
     }
-    batch.delete(doc.ref);
+    transaction.delete(eventRef);
+    return { success: true };
   });
-  batch.delete(db.collection("events").doc(eventId));
-  await batch.commit();
-  return { success: true };
 });
