@@ -5,9 +5,7 @@ const {
 } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
-const stripe = require("stripe")(
-  "sk_test_51T56CkRrxXqwePSlKMOY9SYIkKC54aGlygB25R9xZ8NP1j7uQZ15aLf89SLTUc0uptjAGRfObfDqzym5cNsUZCrC004IrGlMUp",
-);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 if (!admin.apps.length) {
   admin.initializeApp();
