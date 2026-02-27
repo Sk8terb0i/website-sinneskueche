@@ -596,3 +596,60 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
     return { success: true };
   });
 });
+
+// --- NEW FUNCTION: Notify Admin of Rental Request ---
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+
+exports.onRentRequestCreate = onDocumentCreated(
+  "rent_requests/{requestId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const requestData = snap.data();
+
+    try {
+      // 1. Fetch the Admin Email from your settings collection
+      const settingsSnap = await admin
+        .firestore()
+        .collection("settings")
+        .doc("admin_config")
+        .get();
+      const adminEmail = settingsSnap.exists
+        ? settingsSnap.data().adminEmail
+        : null;
+
+      if (!adminEmail) {
+        console.log("No admin email configured in settings/admin_config");
+        return;
+      }
+
+      // 2. Create the email document in the 'mail' collection
+      await admin
+        .firestore()
+        .collection("mail")
+        .add({
+          to: adminEmail,
+          message: {
+            subject: `New Rental Request: ${requestData.name}`,
+            html: `
+          <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; padding: 20px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px;">
+            <h2 style="color: #4e5f28;">New Atelier Rental Request</h2>
+            <p><strong>From:</strong> ${requestData.name}</p>
+            <p><strong>Requested Date:</strong> ${requestData.date}</p>
+            <p><strong>Email:</strong> ${requestData.email}</p>
+            <p><strong>Phone:</strong> ${requestData.phone || "Not provided"}</p>
+            <p><strong>Message:</strong><br/>${requestData.message || "No message provided"}</p>
+            <hr style="border: 0; border-top: 1px solid #caaff3; margin: 20px 0;"/>
+            <p style="font-size: 12px; opacity: 0.7;">You can manage this request in your Admin Dashboard.</p>
+          </div>
+        `,
+          },
+        });
+      console.log(
+        `Notification sent to ${adminEmail} for request ${event.params.requestId}`,
+      );
+    } catch (error) {
+      console.error("Error sending rental notification:", error);
+    }
+  },
+);
