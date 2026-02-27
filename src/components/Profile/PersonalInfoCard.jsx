@@ -48,11 +48,9 @@ export default function PersonalInfoCard({
     return link?.replace("/", "").replace(/-/g, " ") || "course";
   };
 
-  // NEW: Logic to map the credit title back to the Firestore ID
   const handleTopUp = async (courseTitleKey) => {
     let targetDocId = null;
 
-    // 1. Find the raw ID (e.g. "pottery") by looking up the title in planets
     for (const planet of planets) {
       const found = planet.courses?.find(
         (c) => c.text.en === courseTitleKey || c.text.de === courseTitleKey,
@@ -63,7 +61,6 @@ export default function PersonalInfoCard({
       }
     }
 
-    // 2. Find the pricing in packCourses using the Document ID
     const coursePricing = packCourses.find((c) => c.id === targetDocId);
 
     if (!coursePricing) {
@@ -82,10 +79,18 @@ export default function PersonalInfoCard({
     }
 
     setIsToppingUp(courseTitleKey);
-    const functions = getFunctions();
-    const createCheckout = httpsCallable(functions, "createStripeCheckout");
 
     try {
+      const functions = getFunctions();
+      const createCheckout = httpsCallable(functions, "createStripeCheckout");
+
+      // NEW: Robust URL helper for GitHub Pages and Custom Domains
+      const getBaseUrl = () => {
+        const origin = window.location.origin;
+        const path = window.location.pathname;
+        return `${origin}${path}${path.endsWith("/") ? "" : "/"}`;
+      };
+
       const result = await createCheckout({
         mode: "pack",
         packPrice: parseFloat(coursePricing.priceFull),
@@ -93,7 +98,8 @@ export default function PersonalInfoCard({
         coursePath: `/${targetDocId}`,
         selectedDates: [],
         currentLang: currentLang,
-        successUrl: `${window.location.origin}/#/success?session_id={CHECKOUT_SESSION_ID}`,
+        // UPDATED: Now uses the helper to include repo subfolders
+        successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: window.location.href,
       });
 
@@ -176,23 +182,42 @@ export default function PersonalInfoCard({
 
       {isEditing ? (
         <div style={styles.editForm}>
-          {["firstName", "lastName", "email", "phone"].map((field) => (
-            <div key={field}>
-              <label style={styles.label}>{t[field]}</label>
-              <input
-                type={field === "email" ? "email" : "text"}
-                value={eval(
-                  `edit${field.charAt(0).toUpperCase() + field.slice(1)}`,
-                )}
-                onChange={(e) =>
-                  eval(
-                    `setEdit${field.charAt(0).toUpperCase() + field.slice(1)}`,
-                  )(e.target.value)
-                }
-                style={styles.input}
-              />
-            </div>
-          ))}
+          <div>
+            <label style={styles.label}>{t.firstName}</label>
+            <input
+              type="text"
+              value={editFirstName}
+              onChange={(e) => setEditFirstName(e.target.value)}
+              style={styles.input}
+            />
+          </div>
+          <div>
+            <label style={styles.label}>{t.lastName}</label>
+            <input
+              type="text"
+              value={editLastName}
+              onChange={(e) => setEditLastName(e.target.value)}
+              style={styles.input}
+            />
+          </div>
+          <div>
+            <label style={styles.label}>{t.email}</label>
+            <input
+              type="email"
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              style={styles.input}
+            />
+          </div>
+          <div>
+            <label style={styles.label}>{t.phone}</label>
+            <input
+              type="tel"
+              value={editPhone}
+              onChange={(e) => setEditPhone(e.target.value)}
+              style={styles.input}
+            />
+          </div>
         </div>
       ) : (
         <>

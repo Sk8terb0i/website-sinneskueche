@@ -60,17 +60,15 @@ export default function PriceDisplay({ coursePath, currentLang }) {
     let isMounted = true;
 
     const fetchData = async () => {
-      setLoading(true); // Ensure loading is true when coursePath changes
+      setLoading(true);
       const docId = coursePath.replace(/\//g, "");
 
       try {
-        // Fetch Pricing
         const priceSnap = await getDoc(doc(db, "course_settings", docId));
         if (priceSnap.exists() && isMounted) {
           setPricing(priceSnap.data());
         }
 
-        // Fetch Events
         const eventSnap = await getDocs(
           query(collection(db, "events"), orderBy("date", "asc")),
         );
@@ -80,7 +78,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
 
         if (isMounted) setAvailableDates(filteredEvents);
 
-        // Fetch Booking Counts
         const globalBSnap = await getDocs(
           query(
             collection(db, "bookings"),
@@ -93,7 +90,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         });
         if (isMounted) setEventBookingCounts(counts);
 
-        // Fetch User's Own Bookings
         if (currentUser) {
           const userBSnap = await getDocs(
             query(
@@ -105,7 +101,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
             setUserBookedIds(userBSnap.docs.map((d) => d.data().eventId));
         }
 
-        // Set Initial Month View
         if (filteredEvents.length > 0 && isMounted) {
           const nextAvailable =
             filteredEvents.find((ev) => true) || filteredEvents[0];
@@ -115,7 +110,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
       } catch (err) {
         console.error("Fetch Error:", err);
       } finally {
-        if (isMounted) setLoading(false); // STOP SPINNER REGARDLESS OF ERROR
+        if (isMounted) setLoading(false);
       }
     };
 
@@ -176,6 +171,14 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         );
       } else {
         const createCheckout = httpsCallable(functions, "createStripeCheckout");
+
+        // Helper handles subfolder for GitHub Pages or root for Custom Domain
+        const getBaseUrl = () => {
+          const origin = window.location.origin;
+          const path = window.location.pathname;
+          return `${origin}${path}${path.endsWith("/") ? "" : "/"}`;
+        };
+
         const result = await createCheckout({
           mode,
           packPrice: parseFloat(pricing.priceFull),
@@ -185,7 +188,8 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
           guestInfo: !currentUser ? guestInfo : null,
           currentLang,
-          successUrl: `${window.location.origin}/#/success?session_id={CHECKOUT_SESSION_ID}`,
+          // FIX: Called the helper function here to ensure subfolders are included
+          successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: window.location.href,
         });
         if (result.data?.url) window.location.assign(result.data.url);
@@ -239,7 +243,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         </div>
       )}
 
-      {/* FIXED ARROW: Right for collapsed, Down for expanded */}
       <div
         onClick={() => isMobile && setIsMobileExpanded(!isMobileExpanded)}
         style={{

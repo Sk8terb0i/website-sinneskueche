@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { Calendar, Loader2, Clock, X, Check, Info } from "lucide-react";
-import { planets } from "../../data/planets"; // Import your course data
+import { planets } from "../../data/planets";
 
 export default function BookingsCard({ userId, currentLang, t }) {
   const navigate = useNavigate();
@@ -19,13 +19,20 @@ export default function BookingsCard({ userId, currentLang, t }) {
   const [dataLoading, setDataLoading] = useState(true);
   const [confirmingId, setConfirmingId] = useState(null);
 
-  // Helper to get course title from planets.js based on the link (e.g., "/pottery")
+  /**
+   * Helper to find the localized course title based on the path.
+   * Checks for both exact matches (e.g., "/pottery") and normalized matches ("pottery").
+   */
   const getCourseTitle = (link) => {
+    if (!link) return "Course";
+    const normalizedLink = link.startsWith("/") ? link : `/${link}`;
+
     for (const planet of planets) {
-      const course = planet.courses?.find((c) => c.link === link);
+      const course = planet.courses?.find((c) => c.link === normalizedLink);
       if (course) return course.text[currentLang];
     }
-    return link?.replace("/", "") || "Course";
+    // Fallback: cleaning up the link for display
+    return link.replace("/", "").replace(/-/g, " ");
   };
 
   useEffect(() => {
@@ -48,7 +55,9 @@ export default function BookingsCard({ userId, currentLang, t }) {
               if (eventSnap.exists()) eventData = eventSnap.data();
             }
 
+            // Determine path: prefer event specific link, fallback to booking link
             const coursePath = eventData.link || bookingData.coursePath;
+
             return {
               id: bookingDoc.id,
               ...bookingData,
@@ -59,6 +68,7 @@ export default function BookingsCard({ userId, currentLang, t }) {
           }),
         );
 
+        // Sort chronologically
         bookingsWithEventData.sort(
           (a, b) => new Date(a.date) - new Date(b.date),
         );
@@ -73,11 +83,12 @@ export default function BookingsCard({ userId, currentLang, t }) {
     if (userId) fetchUserBookings();
   }, [userId, currentLang]);
 
-  // Group bookings by courseTitle
+  // Group bookings by courseTitle for better visual organization
   const groupedBookings = useMemo(() => {
     return bookings.reduce((acc, booking) => {
-      if (!acc[booking.courseTitle]) acc[booking.courseTitle] = [];
-      acc[booking.courseTitle].push(booking);
+      const title = booking.courseTitle;
+      if (!acc[title]) acc[title] = [];
+      acc[title].push(booking);
       return acc;
     }, {});
   }, [bookings]);
@@ -90,6 +101,7 @@ export default function BookingsCard({ userId, currentLang, t }) {
       setDataLoading(true);
       await cancelBooking({ bookingId });
       setConfirmingId(null);
+      // Reload to refresh both Bookings and PersonalInfo (credits)
       window.location.reload();
     } catch (err) {
       alert(err.message);
@@ -224,7 +236,7 @@ const styles = {
     padding: "2.5rem",
     borderRadius: "24px",
     border: "1px solid rgba(28, 7, 0, 0.05)",
-    boxShadow: "0 10px 30px rgba(28, 7, 0, 0.02)",
+    boxSizing: "border-box",
     flex: 2,
     minWidth: "320px",
   },
