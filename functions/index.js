@@ -186,7 +186,10 @@ exports.createStripeCheckout = onCall({ cors: true }, async (request) => {
     coursePath,
     guestInfo,
     currentLang,
+    successUrl, // NEW: Passed from frontend
+    cancelUrl, // NEW: Passed from frontend
   } = request.data;
+
   const userId = request.auth ? request.auth.uid : "GUEST_USER";
   const userEmail = request.auth ? request.auth.token.email : guestInfo?.email;
 
@@ -216,9 +219,9 @@ exports.createStripeCheckout = onCall({ cors: true }, async (request) => {
         },
       ],
       mode: "payment",
-      success_url:
-        "http://localhost:5173/#/success?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "http://localhost:5173/#/cancel",
+      // CHANGED: Using dynamic URLs from the request
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         userId: userId,
         guestName: guestInfo

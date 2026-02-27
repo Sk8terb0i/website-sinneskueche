@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { auth, db } from "../../firebase";
 import { updateEmail } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
-// Import planets for course title lookup
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { planets } from "../../data/planets";
 import {
   User,
@@ -13,16 +13,19 @@ import {
   X,
   Loader2,
   Ticket,
+  PlusCircle,
 } from "lucide-react";
 
 export default function PersonalInfoCard({
   currentUser,
   userData,
   currentLang,
+  packCourses,
   t,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isToppingUp, setIsToppingUp] = useState(null);
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -37,13 +40,68 @@ export default function PersonalInfoCard({
     }
   }, [userData, isEditing]);
 
-  // Helper function to find the course title based on the link
   const getCourseTitle = (link) => {
     for (const planet of planets) {
       const course = planet.courses?.find((c) => c.link === link);
       if (course) return course.text[currentLang];
     }
     return link?.replace("/", "").replace(/-/g, " ") || "course";
+  };
+
+  // NEW: Logic to map the credit title back to the Firestore ID
+  const handleTopUp = async (courseTitleKey) => {
+    let targetDocId = null;
+
+    // 1. Find the raw ID (e.g. "pottery") by looking up the title in planets
+    for (const planet of planets) {
+      const found = planet.courses?.find(
+        (c) => c.text.en === courseTitleKey || c.text.de === courseTitleKey,
+      );
+      if (found) {
+        targetDocId = found.link.replace(/\//g, "");
+        break;
+      }
+    }
+
+    // 2. Find the pricing in packCourses using the Document ID
+    const coursePricing = packCourses.find((c) => c.id === targetDocId);
+
+    if (!coursePricing) {
+      console.error(
+        "Top-up failed. Key:",
+        courseTitleKey,
+        "Doc ID:",
+        targetDocId,
+      );
+      alert(
+        currentLang === "en"
+          ? "Pricing info not found for this course."
+          : "Preisinformationen für diesen Kurs nicht gefunden.",
+      );
+      return;
+    }
+
+    setIsToppingUp(courseTitleKey);
+    const functions = getFunctions();
+    const createCheckout = httpsCallable(functions, "createStripeCheckout");
+
+    try {
+      const result = await createCheckout({
+        mode: "pack",
+        packPrice: parseFloat(coursePricing.priceFull),
+        packSize: parseInt(coursePricing.packSize),
+        coursePath: `/${targetDocId}`,
+        selectedDates: [],
+        currentLang: currentLang,
+        successUrl: `${window.location.origin}/#/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: window.location.href,
+      });
+
+      if (result.data?.url) window.location.assign(result.data.url);
+    } catch (err) {
+      console.error("Top up error:", err);
+      setIsToppingUp(null);
+    }
   };
 
   const handleUpdateProfile = async () => {
@@ -57,7 +115,7 @@ export default function PersonalInfoCard({
             alert(
               currentLang === "en"
                 ? "For security, please log out and log back in to change your email."
-                : "Aus Sicherheitsgründen logge dich bitte aus und wieder ein, um deine E-Mail zu ändern.",
+                : "Aus Sicherheitsgründen logge dich bitte aus und wieder ein.",
             );
             setIsUpdating(false);
             return;
@@ -65,18 +123,15 @@ export default function PersonalInfoCard({
           throw authError;
         }
       }
-
-      const userRef = doc(db, "users", currentUser.uid);
-      await updateDoc(userRef, {
+      await updateDoc(doc(db, "users", currentUser.uid), {
         firstName: editFirstName,
         lastName: editLastName,
         email: editEmail,
         phone: editPhone,
       });
-
       setIsEditing(false);
     } catch (err) {
-      alert("Error updating profile: " + err.message);
+      alert("Error: " + err.message);
     } finally {
       setIsUpdating(false);
     }
@@ -102,7 +157,6 @@ export default function PersonalInfoCard({
               onClick={handleUpdateProfile}
               disabled={isUpdating}
               style={{ ...styles.iconBtn, color: "#4e5f28" }}
-              title={t.save}
             >
               {isUpdating ? (
                 <Loader2 size={18} className="spinner" />
@@ -113,7 +167,6 @@ export default function PersonalInfoCard({
             <button
               onClick={() => setIsEditing(false)}
               style={{ ...styles.iconBtn, color: "#ff4d4d" }}
-              title={t.cancel}
             >
               <X size={18} />
             </button>
@@ -123,42 +176,23 @@ export default function PersonalInfoCard({
 
       {isEditing ? (
         <div style={styles.editForm}>
-          <div>
-            <label style={styles.label}>{t.firstName}</label>
-            <input
-              type="text"
-              value={editFirstName}
-              onChange={(e) => setEditFirstName(e.target.value)}
-              style={styles.input}
-            />
-          </div>
-          <div>
-            <label style={styles.label}>{t.lastName}</label>
-            <input
-              type="text"
-              value={editLastName}
-              onChange={(e) => setEditLastName(e.target.value)}
-              style={styles.input}
-            />
-          </div>
-          <div>
-            <label style={styles.label}>{t.email}</label>
-            <input
-              type="email"
-              value={editEmail}
-              onChange={(e) => setEditEmail(e.target.value)}
-              style={styles.input}
-            />
-          </div>
-          <div>
-            <label style={styles.label}>{t.phone}</label>
-            <input
-              type="tel"
-              value={editPhone}
-              onChange={(e) => setEditPhone(e.target.value)}
-              style={styles.input}
-            />
-          </div>
+          {["firstName", "lastName", "email", "phone"].map((field) => (
+            <div key={field}>
+              <label style={styles.label}>{t[field]}</label>
+              <input
+                type={field === "email" ? "email" : "text"}
+                value={eval(
+                  `edit${field.charAt(0).toUpperCase() + field.slice(1)}`,
+                )}
+                onChange={(e) =>
+                  eval(
+                    `setEdit${field.charAt(0).toUpperCase() + field.slice(1)}`,
+                  )(e.target.value)
+                }
+                style={styles.input}
+              />
+            </div>
+          ))}
         </div>
       ) : (
         <>
@@ -179,40 +213,48 @@ export default function PersonalInfoCard({
           <div style={styles.creditsBox}>
             {userData.credits && Object.keys(userData.credits).length > 0 ? (
               Object.entries(userData.credits).map(
-                ([course, amount], index) => (
+                ([courseKey, amount], index) => (
                   <div
-                    key={course}
+                    key={courseKey}
                     style={{
+                      ...styles.creditEntry,
                       marginBottom:
                         index !== Object.keys(userData.credits).length - 1
                           ? "2rem"
                           : 0,
                     }}
                   >
-                    <div style={styles.creditsHeader}>
-                      <Ticket size={20} color="#9960a8" />
-                      <span style={styles.creditsTitle}>
-                        {getCourseTitle(course)} {t.credits}
-                      </span>
+                    <div style={{ flex: 1 }}>
+                      <div style={styles.creditsHeader}>
+                        <Ticket size={20} color="#9960a8" />
+                        <span style={styles.creditsTitle}>{courseKey}</span>
+                      </div>
+                      <div style={styles.creditsBalanceRow}>
+                        <span style={styles.creditsNumber}>{amount}</span>
+                        <span style={styles.creditsLabel}>{t.remaining}</span>
+                      </div>
                     </div>
-
-                    <div style={styles.creditsBalanceRow}>
-                      <span style={styles.creditsNumber}>{amount}</span>
-                      <span style={styles.creditsLabel}>{t.remaining}</span>
-                    </div>
+                    <button
+                      onClick={() => handleTopUp(courseKey)}
+                      disabled={isToppingUp !== null}
+                      style={styles.topUpBtn}
+                    >
+                      {isToppingUp === courseKey ? (
+                        <Loader2
+                          size={24}
+                          className="spinner"
+                          color="#4e5f28"
+                        />
+                      ) : (
+                        <PlusCircle size={24} color="#4e5f28" />
+                      )}
+                    </button>
                   </div>
                 ),
               )
             ) : (
-              <div>
-                <div style={styles.creditsHeader}>
-                  <Ticket size={20} color="#9960a8" />
-                  <span style={styles.creditsTitle}>{t.credits}</span>
-                </div>
-                <div style={styles.creditsBalanceRow}>
-                  <span style={styles.creditsNumber}>0</span>
-                  <span style={styles.creditsLabel}>{t.remaining}</span>
-                </div>
+              <div style={styles.creditsBalanceRow}>
+                <span style={styles.creditsLabel}>{t.noCourses}</span>
               </div>
             )}
           </div>
@@ -228,7 +270,6 @@ const styles = {
     padding: "2.5rem",
     borderRadius: "24px",
     border: "1px solid rgba(28, 7, 0, 0.05)",
-    boxShadow: "0 10px 30px rgba(28, 7, 0, 0.02)",
     flex: 1,
     minWidth: "320px",
   },
@@ -269,6 +310,12 @@ const styles = {
     borderRadius: "16px",
     border: "1px solid #caaff3",
   },
+  creditEntry: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "1rem",
+  },
   creditsHeader: {
     display: "flex",
     alignItems: "center",
@@ -295,24 +342,29 @@ const styles = {
     opacity: 0.7,
     fontWeight: "600",
   },
+  topUpBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: "4px",
+    display: "flex",
+    alignItems: "center",
+  },
   iconBtn: {
     background: "none",
     border: "none",
     cursor: "pointer",
     color: "#1c070030",
-    transition: "color 0.2s",
     padding: "8px",
   },
   editForm: { display: "flex", flexDirection: "column", gap: "1.2rem" },
   label: {
     fontSize: "0.6rem",
-    fontFamily: "Satoshi",
     fontWeight: "bold",
     textTransform: "uppercase",
     opacity: 0.4,
     marginBottom: "6px",
     display: "block",
-    letterSpacing: "0.05rem",
   },
   input: {
     width: "100%",
@@ -320,10 +372,6 @@ const styles = {
     borderRadius: "12px",
     border: "1px solid rgba(28, 7, 0, 0.1)",
     backgroundColor: "rgba(255, 252, 227, 0.4)",
-    fontFamily: "Satoshi",
-    fontSize: "1rem",
-    boxSizing: "border-box",
-    outline: "none",
     color: "#1c0700",
   },
 };

@@ -185,6 +185,8 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
           guestInfo: !currentUser ? guestInfo : null,
           currentLang,
+          successUrl: `${window.location.origin}/#/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: window.location.href,
         });
         if (result.data?.url) window.location.assign(result.data.url);
       }

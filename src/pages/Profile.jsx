@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
 import { signOut } from "firebase/auth";
 import { useAuth } from "../contexts/AuthContext";
+import { collection, getDocs, query, where } from "firebase/firestore";
 
 import Header from "../components/Header/Header";
 import PersonalInfoCard from "../components/Profile/PersonalInfoCard";
 import BookingsCard from "../components/Profile/BookingsCard";
+import BuyPackCard from "../components/Profile/BuyPackCard";
 
 import { LogOut, Loader2 } from "lucide-react";
 
@@ -14,13 +16,28 @@ export default function Profile({ currentLang, setCurrentLang }) {
   const { currentUser, userData, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [packCourses, setPackCourses] = useState([]);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!currentUser || userData?.role === "admin") {
-      navigate("/");
-    }
+    if (!currentUser || userData?.role === "admin") navigate("/");
   }, [currentUser, userData, authLoading, navigate]);
+
+  useEffect(() => {
+    const fetchPackSettings = async () => {
+      try {
+        const q = query(
+          collection(db, "course_settings"),
+          where("hasPack", "==", true),
+        );
+        const snap = await getDocs(q);
+        setPackCourses(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Error fetching pack settings:", err);
+      }
+    };
+    if (currentUser) fetchPackSettings();
+  }, [currentUser]);
 
   if (authLoading || (!currentUser && !userData)) {
     return (
@@ -29,11 +46,6 @@ export default function Profile({ currentLang, setCurrentLang }) {
       </div>
     );
   }
-
-  const handleLogout = async () => {
-    await signOut(auth);
-    navigate("/");
-  };
 
   const t = {
     en: {
@@ -47,10 +59,13 @@ export default function Profile({ currentLang, setCurrentLang }) {
       email: "email address",
       phone: "phone",
       myCourses: "my booked dates",
-      noCourses: "you haven't booked any dates yet.",
-      browseCourses: "browse courses",
-      credits: "Credits",
+      noCourses: "no bookings yet.",
+      credits: "credits",
       remaining: "sessions remaining",
+      buyPack: "buy session pack",
+      selectCourse: "select a course",
+      buyNow: "buy pack",
+      topUp: "top up credits",
     },
     de: {
       title: "mein profil",
@@ -62,11 +77,14 @@ export default function Profile({ currentLang, setCurrentLang }) {
       lastName: "nachname",
       email: "e-mail adresse",
       phone: "telefon",
-      myCourses: "meine gebuchten termine",
-      noCourses: "du hast noch keine termine gebucht.",
-      browseCourses: "kurse durchstöbern",
-      credits: "Guthaben",
+      myCourses: "geplante termine",
+      noCourses: "keine buchungen.",
+      credits: "guthaben",
       remaining: "termine übrig",
+      buyPack: "session-karte kaufen",
+      selectCourse: "kurs auswählen",
+      buyNow: "karte kaufen",
+      topUp: "guthaben aufladen",
     },
   }[currentLang];
 
@@ -78,28 +96,33 @@ export default function Profile({ currentLang, setCurrentLang }) {
         isMenuOpen={isMenuOpen}
         onMenuToggle={setIsMenuOpen}
       />
-
       <main style={styles.main}>
         <div style={styles.headerRow}>
           <h1 style={styles.title}>{t.title}</h1>
-          <button onClick={handleLogout} style={styles.logoutBtn}>
+          <button onClick={() => signOut(auth)} style={styles.logoutBtn}>
             <LogOut size={16} /> {t.logout}
           </button>
         </div>
-
         <div style={styles.grid}>
-          {/* We pass the translation object 't' down to the components so we don't have to redefine it */}
           <PersonalInfoCard
             currentUser={currentUser}
             userData={userData}
             currentLang={currentLang}
+            packCourses={packCourses}
             t={t}
           />
-          <BookingsCard
-            userId={currentUser.uid}
-            currentLang={currentLang}
-            t={t}
-          />
+          <div style={styles.sideColumn}>
+            <BuyPackCard
+              packCourses={packCourses}
+              currentLang={currentLang}
+              t={t}
+            />
+            <BookingsCard
+              userId={currentUser.uid}
+              currentLang={currentLang}
+              t={t}
+            />
+          </div>
         </div>
       </main>
     </div>
@@ -120,7 +143,7 @@ const styles = {
     paddingBottom: "5rem",
   },
   main: {
-    maxWidth: "1000px",
+    maxWidth: "1200px",
     margin: "0 auto",
     padding: "140px 20px 20px 20px",
   },
@@ -152,12 +175,17 @@ const styles = {
     fontSize: "0.85rem",
     fontWeight: "bold",
     color: "#1c0700",
-    transition: "all 0.2s",
   },
   grid: {
     display: "flex",
     gap: "2rem",
     flexWrap: "wrap",
     alignItems: "flex-start",
+  },
+  sideColumn: {
+    flex: "1 1 500px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "2rem",
   },
 };
