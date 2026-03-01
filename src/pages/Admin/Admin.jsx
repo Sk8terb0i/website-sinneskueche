@@ -17,8 +17,10 @@ import {
   Ticket,
   CreditCard,
   Users,
+  FileText, // NEW ICON
 } from "lucide-react";
 
+// Components & Styles
 import Header from "../../components/Header/Header";
 import EventsTab from "./EventsTab";
 import PricingTab from "./PricingTab";
@@ -26,6 +28,7 @@ import RentalTab from "./RentalTab";
 import PromotionsTab from "./PromotionsTab";
 import PackCodesTab from "./PackCodesTab";
 import ProfilesTab from "./ProfilesTab";
+import TermsTab from "./TermsTab"; // NEW IMPORT
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -55,17 +58,22 @@ export default function Admin({ currentLang, setCurrentLang }) {
     window.addEventListener("resize", handleResize);
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        const data = userDoc.data();
-        if (
-          userDoc.exists() &&
-          (data.role === "admin" || data.role === "course_admin")
-        ) {
-          setUser(currentUser);
-          setAdminData(data);
-        } else {
+        try {
+          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+          const data = userDoc.data();
+          if (
+            userDoc.exists() &&
+            (data.role === "admin" || data.role === "course_admin")
+          ) {
+            setUser(currentUser);
+            setAdminData(data);
+          } else {
+            setUser(null);
+            setAdminData(null);
+          }
+        } catch (error) {
+          console.error("Admin check error:", error);
           setUser(null);
-          setAdminData(null);
         }
       } else {
         setUser(null);
@@ -306,6 +314,21 @@ export default function Admin({ currentLang, setCurrentLang }) {
           >
             <Ticket size={16} /> Promotions
           </button>
+
+          {/* Terms & Conditions: Visible for ALL admins */}
+          <button
+            onClick={() => setActiveTab("terms")}
+            style={{
+              ...tabButtonStyle(activeTab === "terms"),
+              backgroundColor:
+                activeTab === "terms" ? "#caaff3" : "transparent",
+              borderRadius: "100px",
+              color: "#1c0700",
+            }}
+          >
+            <FileText size={16} /> Terms
+          </button>
+
           {isFullAdmin && (
             <>
               <button
@@ -360,6 +383,13 @@ export default function Admin({ currentLang, setCurrentLang }) {
           <PromotionsTab
             isMobile={isMobile}
             currentLang={currentLang}
+            userRole={adminData.role}
+            allowedCourses={adminData.allowedCourses || []}
+          />
+        )}
+        {activeTab === "terms" && (
+          <TermsTab
+            isMobile={isMobile}
             userRole={adminData.role}
             allowedCourses={adminData.allowedCourses || []}
           />

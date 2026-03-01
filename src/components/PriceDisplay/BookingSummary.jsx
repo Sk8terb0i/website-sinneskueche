@@ -8,6 +8,9 @@ import {
   CheckCircle,
   XCircle,
   Check,
+  FileText,
+  X,
+  AlertCircle, // Added for the error feedback
 } from "lucide-react";
 import {
   signInWithEmailAndPassword,
@@ -16,6 +19,7 @@ import {
 import {
   doc,
   setDoc,
+  getDoc,
   collection,
   query,
   where,
@@ -62,6 +66,38 @@ export default function BookingSummary({
 
   const [selectedPackIndex, setSelectedPackIndex] = useState(0);
 
+  // --- Terms and Conditions State ---
+  const [courseTerms, setCourseTerms] = useState(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [showTermsPopup, setShowTermsPopup] = useState(false);
+  const [shakeTerms, setShakeTerms] = useState(false); // NEW: Controls the shake animation
+
+  useEffect(() => {
+    const fetchTerms = async () => {
+      const sanitizedId = coursePath.replace(/\//g, "");
+      try {
+        const docRef = doc(db, "course_terms", sanitizedId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setCourseTerms(docSnap.data());
+        }
+      } catch (err) {
+        console.error("Error fetching terms:", err);
+      }
+    };
+    if (coursePath) fetchTerms();
+  }, [coursePath]);
+
+  // --- NEW: Validation Helper ---
+  const validateAndProceed = (actionFn) => {
+    if (courseTerms && !agreedToTerms) {
+      setShakeTerms(true);
+      setTimeout(() => setShakeTerms(false), 500); // Reset animation
+      return;
+    }
+    actionFn();
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
     const parts = dateStr.split("-");
@@ -86,13 +122,10 @@ export default function BookingSummary({
   );
   const hasEnoughCredits = availableCredits >= totalTicketsSelected;
 
-  // --- LOGIC UPDATE: Take existing credits into account ---
-  // 1. How many credits do we still need after using existing ones?
   const neededCreditsAfterExisting = currentUser
     ? Math.max(0, totalTicketsSelected - availableCredits)
     : totalTicketsSelected;
 
-  // 2. How many sessions are still not covered after adding the new pack?
   const extraSessionsCount = Math.max(
     0,
     neededCreditsAfterExisting - currentPack.size,
@@ -207,6 +240,187 @@ export default function BookingSummary({
     }
   };
 
+  const renderTermsAgreement = () => {
+    if (!courseTerms) return null;
+    const termsText = currentLang === "de" ? courseTerms.de : courseTerms.en;
+    if (!termsText) return null;
+
+    return (
+      <div
+        className={shakeTerms ? "shake-animation" : ""}
+        style={{
+          marginTop: "1.2rem",
+          padding: "12px",
+          backgroundColor: shakeTerms
+            ? "rgba(255, 77, 77, 0.1)"
+            : "rgba(153, 96, 168, 0.05)",
+          borderRadius: "12px",
+          border: shakeTerms ? "2px solid #ff4d4d" : "1px solid transparent",
+          transition: "all 0.3s ease",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            cursor: "pointer",
+          }}
+          onClick={() => setAgreedToTerms(!agreedToTerms)}
+        >
+          <div
+            style={{
+              width: "20px",
+              height: "20px",
+              borderRadius: "6px",
+              border: `2px solid ${agreedToTerms ? "#9960a8" : shakeTerms ? "#ff4d4d" : "#caaff3"}`,
+              backgroundColor: agreedToTerms
+                ? "#9960a8"
+                : "rgba(255, 252, 227, 0.8)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+              flexShrink: 0,
+            }}
+          >
+            {agreedToTerms && (
+              <Check size={16} color="#fffce3" strokeWidth={4} />
+            )}
+          </div>
+
+          <span
+            style={{
+              fontSize: "0.85rem",
+              fontWeight: "600",
+              color: "#1c0700",
+              userSelect: "none",
+            }}
+          >
+            {currentLang === "de" ? "Ich akzeptiere die " : "I accept the "}
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowTermsPopup(true);
+              }}
+              style={{
+                color: "#9960a8",
+                textDecoration: "underline",
+                cursor: "help",
+              }}
+            >
+              {currentLang === "de" ? "AGB" : "terms & conditions"}
+            </span>
+          </span>
+        </div>
+
+        {shakeTerms && (
+          <p
+            style={{
+              margin: "8px 0 0 32px",
+              fontSize: "0.7rem",
+              color: "#ff4d4d",
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+            }}
+          >
+            <AlertCircle size={12} />{" "}
+            {currentLang === "de"
+              ? "Bitte stimme den AGB zu."
+              : "Please agree to the T&Cs."}
+          </p>
+        )}
+
+        {/* Modal Overlay */}
+        {showTermsPopup && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              backgroundColor: "rgba(28, 7, 0, 0.6)",
+              zIndex: 10000,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: "20px",
+            }}
+            onClick={() => setShowTermsPopup(false)}
+          >
+            <div
+              style={{
+                backgroundColor: "#fffce3",
+                maxWidth: "600px",
+                width: "100%",
+                maxHeight: "80vh",
+                borderRadius: "24px",
+                padding: "2rem",
+                position: "relative",
+                boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+                display: "flex",
+                flexDirection: "column",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowTermsPopup(false)}
+                style={{
+                  position: "absolute",
+                  top: "20px",
+                  right: "20px",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  opacity: 0.5,
+                }}
+              >
+                <X size={24} />
+              </button>
+              <h2
+                style={{
+                  fontFamily: "Harmond-SemiBoldCondensed",
+                  fontSize: "1.8rem",
+                  marginBottom: "1.5rem",
+                  marginTop: 0,
+                }}
+              >
+                {currentLang === "de"
+                  ? "Teilnahmebedingungen"
+                  : "Terms & Conditions"}
+              </h2>
+              <div
+                className="custom-scrollbar"
+                style={{
+                  overflowY: "auto",
+                  fontSize: "0.9rem",
+                  lineHeight: "1.6",
+                  whiteSpace: "pre-line",
+                  color: "#1c0700",
+                }}
+              >
+                {termsText}
+              </div>
+              <button
+                onClick={() => setShowTermsPopup(false)}
+                style={{
+                  ...S.primaryBtnStyle(isMobile),
+                  marginTop: "2rem",
+                  width: "100%",
+                }}
+              >
+                {currentLang === "de" ? "Schliessen" : "Close"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderSelectionSummary = () => (
     <div
       style={{
@@ -257,10 +471,6 @@ export default function BookingSummary({
               }),
             );
           };
-          const removeDate = () => {
-            setSelectedDates((prev) => prev.filter((item) => item.id !== d.id));
-          };
-
           return (
             <div
               key={d.id}
@@ -335,7 +545,11 @@ export default function BookingSummary({
                   </button>
                 </div>
                 <button
-                  onClick={removeDate}
+                  onClick={() =>
+                    setSelectedDates((prev) =>
+                      prev.filter((item) => item.id !== d.id),
+                    )
+                  }
                   style={{
                     border: "none",
                     background: "none",
@@ -361,11 +575,9 @@ export default function BookingSummary({
           {packOptions.map((pack, idx) => {
             const isSelected = selectedPackIndex === idx;
             const savings = calculateSavings(pack);
-            // Updated comparison logic for individual pack highlights
-            const isExceededForThisPack = currentUser
+            const isExceeded = currentUser
               ? totalTicketsSelected > availableCredits + pack.size
               : totalTicketsSelected > pack.size;
-
             return (
               <div
                 key={idx}
@@ -445,7 +657,7 @@ export default function BookingSummary({
                     {formatPrice(pack.price)} CHF
                   </p>
                 </div>
-                {isSelected && isExceededForThisPack && (
+                {isSelected && isExceeded && (
                   <div
                     style={{
                       marginTop: "10px",
@@ -458,8 +670,8 @@ export default function BookingSummary({
                   >
                     <p style={{ margin: 0, fontWeight: "700" }}>
                       {currentLang === "en"
-                        ? `+ ${extraSessionsCount} extra sessions @ single price`
-                        : `+ ${extraSessionsCount} zusätzliche Termine zum Einzelpreis`}
+                        ? `+ ${totalTicketsSelected - (currentUser ? availableCredits + pack.size : pack.size)} extra sessions @ single price`
+                        : `+ ${totalTicketsSelected - (currentUser ? availableCredits + pack.size : pack.size)} zusätzliche Termine zum Einzelpreis`}
                     </p>
                   </div>
                 )}
@@ -503,8 +715,11 @@ export default function BookingSummary({
               fontSize: "0.9rem",
             }}
           />
+          {renderTermsAgreement()}
           <button
-            onClick={() => onPayment("redeem", packCode)}
+            onClick={() =>
+              validateAndProceed(() => onPayment("redeem", packCode))
+            }
             style={S.primaryBtnStyle(isMobile)}
             disabled={!packCode || !guestInfo.email}
           >
@@ -534,16 +749,19 @@ export default function BookingSummary({
             marginTop: "10px",
           }}
         >
+          {renderTermsAgreement()}
           <button
             onClick={() =>
-              onPayment(
-                "pack",
-                promoAppliesToPack ? activePromo?.code : null,
-                currentPack.size,
-                finalPackPrice,
+              validateAndProceed(() =>
+                onPayment(
+                  "pack",
+                  promoAppliesToPack ? activePromo?.code : null,
+                  currentPack.size,
+                  finalPackPrice,
+                ),
               )
             }
-            style={S.primaryBtnStyle(isMobile)}
+            style={{ ...S.primaryBtnStyle(isMobile), marginTop: "10px" }}
             disabled={
               !currentUser && (!guestInfo.firstName || !guestInfo.email)
             }
@@ -570,31 +788,6 @@ export default function BookingSummary({
                 : "Hast du einen Code? Hier einlösen."}
             </button>
           )}
-          <p
-            style={{
-              fontSize: "0.7rem",
-              opacity: 0.6,
-              marginTop: "5px",
-              fontStyle: "italic",
-              lineHeight: "1.4",
-              textAlign: "center",
-            }}
-          >
-            {totalTicketsSelected >
-            (currentUser
-              ? availableCredits + currentPack.size
-              : currentPack.size)
-              ? currentLang === "en"
-                ? "Selection exceeds available credits and pack size. Extras added at single price."
-                : "Auswahl überschreitet Guthaben und Kartengröße. Extras zum Einzelpreis berechnet."
-              : currentUser
-                ? currentLang === "en"
-                  ? `The ${totalTicketsSelected === 0 ? "full" : "remaining"} ${availableCredits + currentPack.size - totalTicketsSelected} credits will be saved to your profile.`
-                  : `Die ${totalTicketsSelected === 0 ? "vollen" : "restlichen"} ${availableCredits + currentPack.size - totalTicketsSelected} Guthaben werden deinem Profil gutgeschrieben.`
-                : currentLang === "en"
-                  ? `You will receive a code for the ${totalTicketsSelected === 0 ? "full" : "remaining"} ${currentPack.size - totalTicketsSelected} credits via email.`
-                  : `Du erhältst einen Code für die ${totalTicketsSelected === 0 ? "vollen" : "restlichen"} ${currentPack.size - totalTicketsSelected} Guthaben per E-Mail.`}
-          </p>
         </div>
       )}
     </div>
@@ -616,14 +809,20 @@ export default function BookingSummary({
             {formatPrice(totalPrice)} CHF
           </div>
         )}
+        {!pricing?.hasPack && renderTermsAgreement()}
         <button
           onClick={() =>
-            onPayment(
-              "individual",
-              promoAppliesToSingle ? activePromo?.code : null,
+            validateAndProceed(() =>
+              onPayment(
+                "individual",
+                promoAppliesToSingle ? activePromo?.code : null,
+              ),
             )
           }
-          style={S.secondaryBtnStyle(isMobile)}
+          style={{
+            ...S.secondaryBtnStyle(isMobile),
+            marginTop: !pricing?.hasPack ? "10px" : 0,
+          }}
           disabled={!currentUser && (!guestInfo.firstName || !guestInfo.email)}
         >
           {currentLang === "en"
@@ -753,40 +952,6 @@ export default function BookingSummary({
                 </button>
               )}
             </div>
-            {activePromo && (
-              <p
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#4e5f28",
-                  marginTop: "4px",
-                  fontWeight: "bold",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-              >
-                <CheckCircle size={14} />{" "}
-                {currentLang === "en"
-                  ? `Code applied: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% OFF" : " FREE"}`
-                  : `Code angewendet: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% RABATT" : " GRATIS"}`}
-              </p>
-            )}
-            {promoStatus.error && (
-              <p
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#1c0700",
-                  opacity: 0.7,
-                  marginTop: "4px",
-                  fontWeight: "bold",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-              >
-                <XCircle size={14} /> {promoStatus.error}
-              </p>
-            )}
           </div>
         )}
       </div>
@@ -797,6 +962,20 @@ export default function BookingSummary({
 
   return (
     <div style={S.bookingCardStyle(isMobile, true)}>
+      {/* CSS For Shake Animation */}
+      <style>{`
+        @keyframes shake {
+          0% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          50% { transform: translateX(5px); }
+          75% { transform: translateX(-5px); }
+          100% { transform: translateX(0); }
+        }
+        .shake-animation {
+          animation: shake 0.4s ease-in-out;
+        }
+      `}</style>
+
       <div
         style={{
           minWidth: isMobile ? "100%" : "380px",
@@ -821,7 +1000,7 @@ export default function BookingSummary({
               : "kursoptionen"}
         </h3>
 
-        {!currentUser && (
+        {!currentUser ? (
           <div style={{ marginBottom: "1.5rem" }}>
             <button
               onClick={() => setIsAuthExpanded(!isAuthExpanded)}
@@ -847,7 +1026,6 @@ export default function BookingSummary({
                 ? "Login or Register"
                 : "Einloggen oder Registrieren"}
             </button>
-
             {isAuthExpanded && (
               <div
                 style={{
@@ -911,17 +1089,6 @@ export default function BookingSummary({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
-                  {authError && (
-                    <p
-                      style={{
-                        fontSize: "0.7rem",
-                        color: "#1c0700",
-                        opacity: 0.7,
-                      }}
-                    >
-                      {authError}
-                    </p>
-                  )}
                   <button
                     type="submit"
                     disabled={authLoading}
@@ -942,29 +1109,8 @@ export default function BookingSummary({
                     )}
                   </button>
                 </form>
-                <button
-                  onClick={() => setIsRegistering(!isRegistering)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#9960a8",
-                    fontSize: "0.75rem",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                    marginTop: "12px",
-                  }}
-                >
-                  {isRegistering
-                    ? currentLang === "en"
-                      ? "Already have an account?"
-                      : "Bereits ein Konto?"
-                    : currentLang === "en"
-                      ? "Need an account?"
-                      : "Noch kein Konto?"}
-                </button>
               </div>
             )}
-
             {!isAuthExpanded && (
               <div
                 style={{
@@ -1027,9 +1173,7 @@ export default function BookingSummary({
             )}
             {renderPurchaseOptions()}
           </div>
-        )}
-
-        {currentUser && (
+        ) : (
           <>
             <div
               style={{
@@ -1053,34 +1197,19 @@ export default function BookingSummary({
               </span>
             </div>
             {hasSelection && renderSelectionSummary()}
-            {hasSelection && (
-              <div
-                style={{
-                  ...S.selectionInfoStyle(isMobile),
-                  marginBottom: "1.5rem",
-                }}
-              >
-                <span style={S.labelStyle(isMobile)}>
-                  {totalTicketsSelected}{" "}
-                  {currentLang === "en"
-                    ? totalTicketsSelected === 1
-                      ? "Session"
-                      : "Sessions"
-                    : "Termine"}
-                </span>
-                <span style={S.totalPriceStyle(isMobile)}>
-                  {formatPrice(totalPrice)} CHF
-                </span>
-              </div>
-            )}
             <div
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
               {hasEnoughCredits && hasSelection ? (
                 <>
+                  {renderTermsAgreement()}
                   <button
-                    onClick={onBookCredits}
-                    style={{ ...S.creditBtnStyle(isMobile), padding: "14px" }}
+                    onClick={() => validateAndProceed(onBookCredits)}
+                    style={{
+                      ...S.creditBtnStyle(isMobile),
+                      padding: "14px",
+                      marginTop: "10px",
+                    }}
                   >
                     {currentLang === "en"
                       ? `Book with ${totalTicketsSelected} Credits`
