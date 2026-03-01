@@ -117,7 +117,6 @@ export default function PerformingWords({ currentLang, setCurrentLang }) {
           config={config}
           icons={icons}
         />
-
         <p className="welcome-text" style={styles.welcomeText}>
           {content[currentLang].welcome}
         </p>

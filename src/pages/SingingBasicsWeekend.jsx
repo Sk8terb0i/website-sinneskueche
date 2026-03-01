@@ -117,7 +117,6 @@ export default function SingingBasicsWeekend({ currentLang, setCurrentLang }) {
           config={config}
           icons={icons}
         />
-
         <p className="welcome-text" style={styles.welcomeText}>
           {content[currentLang].welcome}
         </p>

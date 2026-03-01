@@ -518,7 +518,6 @@ export default function Singing({ currentLang, setCurrentLang }) {
 
       <main style={styles.main} className="main-content">
         <CourseTitle title={current.title} config={config} icons={icons} />
-
         <p style={styles.welcomeText} className="welcome-text">
           {current.welcome}
         </p>
@@ -552,7 +551,6 @@ export default function Singing({ currentLang, setCurrentLang }) {
         </div>
 
         <div className="content-grid" style={styles.contentGrid}>
-          {/* Section remaining identical... */}
           <section>
             <img
               src="https://s3.instrumentor.ch/p/o/32519/luca-koch_pb5ec2.jpg"
