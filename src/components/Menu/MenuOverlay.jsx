@@ -28,34 +28,49 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
 
   const isMobile = window.innerWidth < 768;
 
+  // Reset the accordion states whenever the menu is opened
+  useEffect(() => {
+    if (isOpen) {
+      setIsCoursesOpen(true);
+      setIsStudioOpen(true);
+      setIsCalendarOpen(true);
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        // 1. Fetch Course Settings (Visibility and Capacity)
-        const settingsSnap = await getDocs(collection(db, "course_settings"));
-        const visibilityMap = {};
-        const capacityMap = {}; // NEW: Store capacity limits
+      let visibilityMap = {};
+      let settingsMap = {}; // Stores the entire course setting doc
+      let bookingCounts = {};
 
+      // 1. Fetch Course Settings (Isolated try/catch)
+      try {
+        const settingsSnap = await getDocs(collection(db, "course_settings"));
         settingsSnap.docs.forEach((doc) => {
           const data = doc.data();
           visibilityMap[doc.id] = data.isVisible !== false;
-          // Only store capacity if hasCapacity is true
-          if (data.hasCapacity) {
-            capacityMap[doc.id] = parseInt(data.capacity || 99, 10);
-          }
+          settingsMap[doc.id] = data; // Save full settings for exact PriceDisplay logic
         });
         setCourseVisibility(visibilityMap);
+      } catch (error) {
+        console.warn("Could not fetch course settings:", error);
+      }
 
-        // 2. Fetch Booking Counts
-        const countsSnap = await getDocs(
-          collection(db, "event_booking_counts"),
-        );
-        const bookingCounts = {};
+      // 2. Fetch Booking Counts (Exact matching to PriceDisplay)
+      try {
+        const countsSnap = await getDocs(collection(db, "bookings"));
         countsSnap.docs.forEach((doc) => {
-          bookingCounts[doc.id] = doc.data().count || 0;
+          const eventId = doc.data().eventId;
+          if (eventId) {
+            bookingCounts[eventId] = (bookingCounts[eventId] || 0) + 1;
+          }
         });
+      } catch (error) {
+        console.warn("Could not fetch bookings:", error);
+      }
 
-        // 3. Fetch Events
+      // 3. Fetch Events
+      try {
         const eventsCollection = collection(db, "events");
         const q = query(eventsCollection, orderBy("date", "asc"));
         const snapshot = await getDocs(q);
@@ -75,22 +90,21 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           .map((doc) => ({ id: doc.id, ...doc.data() }))
           .filter((item) => new Date(item.date) >= now);
 
-        // --- NEW: Filter out full courses ---
-        const availableItems = futureItems.filter((item) => {
-          // Skip capacity check for general events (or handle them if they have a link)
-          if (item.type === "event" && !item.link) return true;
+        // --- FILTER EXACTLY LIKE PRICE DISPLAY ---
+        const availableItems = futureItems.filter((event) => {
+          // If no link, it's a general event without capacity constraints
+          if (!event.link) return true;
 
-          const courseId = (item.link || "").replace(/\//g, "");
-          const limit = capacityMap[courseId];
-          const currentCount = bookingCounts[item.id] || 0;
+          const courseId = event.link.replace(/\//g, "");
+          const pricing = settingsMap[courseId];
 
-          // If there is a limit, only include if count is less than limit
-          if (limit !== undefined) {
-            return currentCount < limit;
-          }
+          // Replicated exact logic from PriceDisplay.jsx:
+          const isFull =
+            pricing?.hasCapacity &&
+            (bookingCounts[event.id] || 0) >= parseInt(pricing.capacity || 99);
 
-          // No limit set, it's available
-          return true;
+          // If it's full, filter it out!
+          return !isFull;
         });
 
         // Separate remaining items
@@ -125,7 +139,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
 
         setUpcomingEvents(combined);
       } catch (error) {
-        console.error("Error fetching menu data:", error);
+        console.error("Error fetching menu events:", error);
       }
     };
 
