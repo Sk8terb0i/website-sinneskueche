@@ -21,6 +21,7 @@ import GetInk from "./pages/GetInk";
 // New Auth & Profile imports
 import Profile from "./pages/Profile";
 import Success from "./components/Confirm/Success";
+import RegisterGuest from "./components/Profile/RegisterGuest"; // ADDED IMPORT
 
 import PageTransition from "./components/PageTransition";
 import { defaultLang, languages } from "./i18n";
@@ -202,10 +203,10 @@ export default function App() {
           />
 
           <Route
-            path="/profile"
+            path="/success"
             element={
               <PageTransition>
-                <Profile
+                <Success
                   currentLang={currentLang}
                   setCurrentLang={setCurrentLang}
                 />
@@ -213,12 +214,12 @@ export default function App() {
             }
           />
 
-          {/* Add the Success route right here */}
+          {/* NEW: Route for guest registration from email link */}
           <Route
-            path="/success"
+            path="/register-guest"
             element={
               <PageTransition>
-                <Success
+                <RegisterGuest
                   currentLang={currentLang}
                   setCurrentLang={setCurrentLang}
                 />
@@ -231,7 +232,6 @@ export default function App() {
             element={
               <Suspense fallback={<div style={loadingContainerStyle} />}>
                 <PageTransition>
-                  {/* Pass the props here! */}
                   <Admin
                     currentLang={currentLang}
                     setCurrentLang={setCurrentLang}

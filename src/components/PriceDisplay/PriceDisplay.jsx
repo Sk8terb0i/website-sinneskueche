@@ -170,7 +170,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
       const expandedDates = [];
       selectedDates.forEach((d) => {
         for (let i = 0; i < d.count; i++) {
-          expandedDates.push({ id: d.id, date: d.date });
+          expandedDates.push({ id: d.id, date: d.date, time: d.time });
         }
       });
 
@@ -246,7 +246,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
       const expandedDates = [];
       selectedDates.forEach((d) => {
         for (let i = 0; i < d.count; i++) {
-          expandedDates.push({ id: d.id, date: d.date });
+          expandedDates.push({ id: d.id, date: d.date, time: d.time });
         }
       });
 

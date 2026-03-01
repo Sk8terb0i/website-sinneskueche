@@ -45,7 +45,25 @@ const getGoogleCalLink = (title, dateStr) => {
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent("Atelier Sinnesküche: " + title)}&dates=${start}/${end}`;
 };
 
-// --- EMAIL HELPERS (FIXED BILINGUAL LOGIC) ---
+// --- REGISTRATION LINK HELPER ---
+const getRegistrationCTA = (lang, email, origin) => {
+  if (!origin || !email) return "";
+  const regUrl = `${origin}/#/register-guest?email=${encodeURIComponent(email)}`;
+  const text =
+    lang === "de"
+      ? "Möchtest du deine Buchungen und Guthaben an einem Ort verwalten? Erstelle jetzt ein Profil und verknüpfe diesen Kauf automatisch."
+      : "Want to manage your bookings and credits in one place? Create a profile now and automatically link this purchase.";
+  const btnText = lang === "de" ? "Profil erstellen" : "Create Profile";
+
+  return `
+    <div style="margin-top: 30px; padding: 20px; border: 1px dashed #caaff3; background-color: rgba(202, 175, 243, 0.05); border-radius: 12px; text-align: center;">
+      <p style="font-size: 14px; margin-bottom: 15px; color: #1c0700;">${text}</p>
+      <a href="${regUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold; font-size: 14px;">${btnText}</a>
+    </div>
+  `;
+};
+
+// --- EMAIL HELPERS ---
 
 const sendUserPackEmail = (
   transaction,
@@ -71,13 +89,12 @@ const sendUserPackEmail = (
       html: `
         <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
           <h2 style="color: #4e5f28;">${lang === "de" ? "Kauf erfolgreich!" : "Purchase Successful!"}</h2>
-          <p style="font-size: 16px;">${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
-          <p style="font-size: 16px;">${lang === "de" ? `Vielen Dank für den Kauf einer ${packSize}er Karte für <strong>${courseKey}</strong>.` : `Thank you for purchasing a ${packSize}-Session Pack for <strong>${courseKey}</strong>.`}</p>
+          <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
+          <p>${lang === "de" ? `Vielen Dank für den Kauf einer ${packSize}er Karte für <strong>${courseKey}</strong>.` : `Thank you for purchasing a ${packSize}-Session Pack for <strong>${courseKey}</strong>.`}</p>
           <div style="background-color: rgba(78, 95, 40, 0.1); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #4e5f28;">
-            <p style="margin: 0; font-size: 14px; opacity: 0.8;">${lang === "de" ? "Gutschrift:" : "Credits added:"}</p>
             <p style="margin: 0; font-size: 32px; font-weight: bold; color: #4e5f28;">+${netIncrease} Credits</p>
           </div>
-          <p style="font-size: 16px;">${lang === "de" ? "Dein Guthaben wurde deinem Profil hinzugefügt." : "Your credits have been added to your profile."}</p>
+          <p>${lang === "de" ? "Dein Guthaben wurde deinem Profil hinzugefügt." : "Your credits have been added to your profile."}</p>
           <br/><p>${signOff}<br/>Atelier Sinnesküche</p>
         </div>`,
     },
@@ -93,6 +110,7 @@ const sendGuestPackCodeEmail = (
   netIncrease,
   newCode,
   lang,
+  origin,
 ) => {
   if (!email) return;
   const mailRef = db.collection("mail").doc();
@@ -107,19 +125,29 @@ const sendGuestPackCodeEmail = (
       html: `
         <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
           <h2 style="color: #4e5f28;">${lang === "de" ? "Vielen Dank für deinen Einkauf!" : "Thank you for your purchase!"}</h2>
-          <p style="font-size: 16px;">${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
-          <p style="font-size: 16px;">${lang === "de" ? `Hier ist dein Code für die ${packSize}er Karte (<strong>${courseKey}</strong>):` : `Here is your code for the ${packSize}-Session Pack (<strong>${courseKey}</strong>):`}</p>
+          <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
+          <p>${lang === "de" ? `Hier ist dein Code für die ${packSize}er Karte (<strong>${courseKey}</strong>):` : `Here is your code for the ${packSize}-Session Pack (<strong>${courseKey}</strong>):`}</p>
           <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">
             <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">${newCode}</p>
           </div>
-          <p style="font-size: 16px;">${lang === "de" ? `Du hast noch <strong>${netIncrease} Guthaben</strong> übrig.` : `You have <strong>${netIncrease} credits</strong> remaining.`}</p>
+          <p>${lang === "de" ? `Du hast noch <strong>${netIncrease} Guthaben</strong> übrig.` : `You have <strong>${netIncrease} credits</strong> remaining.`}</p>
+          ${getRegistrationCTA(lang, email, origin)}
           <br/><p>${signOff}<br/>Atelier Sinnesküche</p>
         </div>`,
     },
   });
 };
 
-const sendBookingEmail = (transaction, email, name, courseKey, dates, lang) => {
+const sendBookingEmail = (
+  transaction,
+  email,
+  name,
+  courseKey,
+  dates,
+  lang,
+  isGuest,
+  origin,
+) => {
   if (!email || dates.length === 0) return;
   const mailRef = db.collection("mail").doc();
   const subject =
@@ -127,12 +155,6 @@ const sendBookingEmail = (transaction, email, name, courseKey, dates, lang) => {
   const calText =
     lang === "de" ? "📅 Zum Kalender hinzufügen" : "📅 Add to Calendar";
   const signOff = lang === "de" ? "Herzliche Grüße," : "Warm regards,";
-
-  // NEW: Ticket Info and Address Text
-  const ticketInfo =
-    lang === "de"
-      ? "Diese E-Mail ist dein Ticket. Bitte zeige sie beim Einlass vor."
-      : "This email is your ticket. Please present it upon arrival.";
   const addressHeader = lang === "de" ? "Standort:" : "Location:";
   const mapsText =
     lang === "de" ? "Auf Google Maps ansehen" : "View on Google Maps";
@@ -140,13 +162,11 @@ const sendBookingEmail = (transaction, email, name, courseKey, dates, lang) => {
   const datesHtml = dates
     .map((d) => {
       const fDate = formatDate(d.date);
-      // NEW: Added course time from date object
       const fTime = d.time ? ` | ${d.time}` : "";
-      const calLink = getGoogleCalLink(courseKey, d.date);
       return `
       <li style="margin-bottom: 12px; list-style: none; font-size: 15px;">
         <span style="display: inline-block; font-weight: bold;">${fDate}${fTime}</span> 
-        <a href="${calLink}" target="_blank" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff; margin-left: 10px; vertical-align: middle;">${calText}</a>
+        <a href="${getGoogleCalLink(courseKey, d.date)}" target="_blank" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff; margin-left: 10px; vertical-align: middle;">${calText}</a>
       </li>`;
     })
     .join("");
@@ -158,20 +178,20 @@ const sendBookingEmail = (transaction, email, name, courseKey, dates, lang) => {
       html: `
         <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
           <h2 style="color: #4e5f28;">${lang === "de" ? "Buchung bestätigt!" : "Booking Confirmed!"}</h2>
-          <p style="font-weight: bold; color: #9960a8;">${ticketInfo}</p>
+          <p style="font-weight: bold; color: #9960a8;">${lang === "de" ? "Diese E-Mail ist dein Ticket." : "This email is your ticket."}</p>
           <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
           <p>${lang === "de" ? `Deine Plätze für <strong>${courseKey}</strong> sind reserviert:` : `Your spots for <strong>${courseKey}</strong> are all set:`}</p>
-          
           <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">
             <ul style="margin: 0; padding: 0;">${datesHtml}</ul>
           </div>
-
+          
           <div style="margin-top: 25px; padding: 15px; border-top: 1px solid rgba(28, 7, 0, 0.1);">
             <p style="margin: 0; font-weight: bold; font-size: 14px;">${addressHeader}</p>
             <p style="margin: 5px 0; font-size: 16px;">Sägestrasse 11, 8952 Schlieren</p>
-            <a href="https://www.google.com/maps/search/?api=1&query=Sägestrasse+11+8952+Schlieren" target="_blank" style="color: #9960a8; font-size: 14px; text-decoration: underline;">${mapsText}</a>
+            <a href="https://maps.google.com/?q=Sägestrasse+11,8952+Schlieren" target="_blank" style="color: #9960a8; font-size: 14px; text-decoration: underline;">${mapsText}</a>
           </div>
-          
+
+          ${isGuest ? getRegistrationCTA(lang, email, origin) : ""}
           <br/><p>${signOff}<br/>Atelier Sinnesküche</p>
         </div>`,
     },
@@ -186,6 +206,7 @@ const sendCancellationEmail = (
   date,
   lang,
   code = null,
+  origin,
 ) => {
   if (!email) return;
   const mailRef = db.collection("mail").doc();
@@ -193,21 +214,21 @@ const sendCancellationEmail = (
     lang === "de"
       ? `Termin abgesagt: ${courseKey}`
       : `Session Cancelled: ${courseKey}`;
-  const formattedDate = formatDate(date);
   const signOff = lang === "de" ? "Herzliche Grüße," : "Warm regards,";
 
   let htmlContent = `
     <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
       <h2 style="color: #ff4d4d;">${lang === "de" ? "Termin wurde abgesagt" : "Session Cancelled"}</h2>
       <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
-      <p>${lang === "de" ? `Leider müssen wir den Termin für <strong>${courseKey}</strong> am <strong>${formattedDate}</strong> absagen.` : `Unfortunately, we have to cancel the session for <strong>${courseKey}</strong> on <strong>${formattedDate}</strong>.`}</p>`;
+      <p>${lang === "de" ? `Leider müssen wir den Termin für <strong>${courseKey}</strong> am <strong>${formatDate(date)}</strong> absagen.` : `Unfortunately, we have to cancel the session for <strong>${courseKey}</strong> on <strong>${formatDate(date)}</strong>.`}</p>`;
 
   if (code) {
     htmlContent += `
       <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">
         <p>${lang === "de" ? "Nutze diesen Ersatz-Code für eine neue Buchung:" : "Use this replacement code for a new booking:"}</p>
         <p style="font-size: 32px; font-weight: bold; color: #9960a8;">${code}</p>
-      </div>`;
+      </div>
+      ${getRegistrationCTA(lang, email, origin)}`;
   } else {
     htmlContent += `<p>${lang === "de" ? "Ein Guthaben wurde deinem Profil automatisch gutgeschrieben (+1)." : "One session credit has been automatically added back to your profile (+1)."}</p>`;
   }
@@ -215,7 +236,7 @@ const sendCancellationEmail = (
   htmlContent += `<br/><p>${signOff}<br/>Atelier Sinnesküche</p></div>`;
   transaction.set(mailRef, {
     to: email,
-    message: { subject: subject, html: htmlContent },
+    message: { subject, html: htmlContent },
   });
 };
 
@@ -241,6 +262,10 @@ exports.createStripeCheckout = onCall(
     const userEmail = request.auth
       ? request.auth.token.email
       : guestInfo?.email;
+
+    // CAPTURE ORIGIN FOR REGISTRATION LINK
+    const origin =
+      request.rawRequest.headers.origin || "https://sinneskueche.ch";
 
     if (!request.auth && !guestInfo)
       throw new HttpsError("unauthenticated", "Login required.");
@@ -280,6 +305,7 @@ exports.createStripeCheckout = onCall(
           coursePath: coursePath || "unknown",
           selectedDates: JSON.stringify(selectedDates),
           currentLang: currentLang || "en",
+          origin: origin,
         },
       });
       return { url: session.url };
@@ -323,14 +349,16 @@ exports.handleStripeWebhook = onRequest(
             selectedDates,
             coursePath,
             currentLang,
+            origin,
           } = session.metadata;
           const parsedDates = JSON.parse(selectedDates);
           const courseKey = getCleanCourseKey(coursePath);
           const lang = currentLang || "en";
           const email = session.customer_details.email;
+          const isGuest = userId === "GUEST_USER";
 
           let finalName = guestName;
-          if (userId !== "GUEST_USER") {
+          if (!isGuest) {
             const userSnap = await transaction.get(
               db.collection("users").doc(userId),
             );
@@ -343,7 +371,7 @@ exports.handleStripeWebhook = onRequest(
               0,
               parseInt(packSize) - parsedDates.length,
             );
-            if (userId !== "GUEST_USER") {
+            if (!isGuest) {
               transaction.set(
                 db.collection("users").doc(userId),
                 {
@@ -354,8 +382,6 @@ exports.handleStripeWebhook = onRequest(
                 },
                 { merge: true },
               );
-
-              // --- NEW: LOG PACK PURCHASE TO HISTORY ---
               transaction.set(db.collection("credit_history").doc(), {
                 userId,
                 amount: parseInt(packSize),
@@ -363,8 +389,6 @@ exports.handleStripeWebhook = onRequest(
                 courseKey,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
-
-              // Log booking if they selected dates during checkout
               if (parsedDates.length > 0) {
                 transaction.set(db.collection("credit_history").doc(), {
                   userId,
@@ -374,7 +398,6 @@ exports.handleStripeWebhook = onRequest(
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
               }
-
               sendUserPackEmail(
                 transaction,
                 email,
@@ -403,6 +426,7 @@ exports.handleStripeWebhook = onRequest(
                 netIncrease,
                 newCode,
                 lang,
+                origin,
               );
             }
           }
@@ -410,8 +434,8 @@ exports.handleStripeWebhook = onRequest(
           parsedDates.forEach((d) => {
             transaction.set(db.collection("bookings").doc(), {
               userId,
-              guestName: userId === "GUEST_USER" ? guestName : null,
-              guestEmail: userId === "GUEST_USER" ? email : null,
+              guestName: isGuest ? guestName : null,
+              guestEmail: isGuest ? email : null,
               eventId: d.id,
               date: d.date,
               coursePath,
@@ -428,6 +452,8 @@ exports.handleStripeWebhook = onRequest(
               courseKey,
               parsedDates,
               lang,
+              isGuest,
+              origin,
             );
           }
           transaction.set(paymentCheckRef, {
@@ -461,8 +487,6 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
         -selectedDates.length,
       ),
     });
-
-    // --- NEW: LOG BOOKING TO HISTORY ---
     transaction.set(db.collection("credit_history").doc(), {
       userId: request.auth.uid,
       amount: -selectedDates.length,
@@ -470,7 +494,6 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
       courseKey,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-
     selectedDates.forEach((d) => {
       transaction.set(db.collection("bookings").doc(), {
         userId: request.auth.uid,
@@ -489,6 +512,8 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
       courseKey,
       selectedDates,
       currentLang || "en",
+      false,
+      null,
     );
     return { success: true };
   });
@@ -502,6 +527,7 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
     request.data;
   const courseKey = getCleanCourseKey(coursePath);
   const codeRef = db.collection("pack_codes").doc(packCode);
+  const origin = request.rawRequest.headers.origin || "https://sinneskueche.ch";
 
   return db.runTransaction(async (transaction) => {
     const codeSnap = await transaction.get(codeRef);
@@ -531,6 +557,8 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
       courseKey,
       selectedDates,
       currentLang || "en",
+      true,
+      origin,
     );
     return {
       success: true,
@@ -540,7 +568,7 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
 });
 
 // ============================================================================
-// 5. CANCEL BOOKING (USER SIDE)
+// 5. CANCEL BOOKING
 // ============================================================================
 exports.cancelBooking = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
@@ -551,12 +579,9 @@ exports.cancelBooking = onCall({ cors: true }, async (request) => {
     if (!bSnap.exists || bSnap.data().userId !== request.auth.uid)
       throw new HttpsError("permission-denied", "Unauthorized.");
     const courseKey = getCleanCourseKey(bSnap.data().coursePath);
-
     transaction.update(db.collection("users").doc(request.auth.uid), {
       [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
     });
-
-    // --- NEW: LOG REFUND TO HISTORY ---
     transaction.set(db.collection("credit_history").doc(), {
       userId: request.auth.uid,
       amount: 1,
@@ -564,20 +589,20 @@ exports.cancelBooking = onCall({ cors: true }, async (request) => {
       courseKey,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-
     transaction.delete(bRef);
     return { success: true };
   });
 });
 
 // ============================================================================
-// 6. ADMIN CANCEL EVENT (FIXED FOR ALL USERS)
+// 6. ADMIN CANCEL EVENT
 // ============================================================================
 exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
   if (!request.auth)
     throw new HttpsError("unauthenticated", "Must be logged in.");
   const { eventId, currentLang } = request.data;
   const lang = currentLang || "en";
+  const origin = request.rawRequest.headers.origin || "https://sinneskueche.ch";
 
   const eventRef = db.collection("events").doc(eventId);
   const eventSnap = await eventRef.get();
@@ -604,7 +629,6 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
 
     for (const bDoc of bookingsSnap.docs) {
       const bData = bDoc.data();
-
       if (bData.userId === "GUEST_USER") {
         const newCode = generatePackCode();
         transaction.set(db.collection("pack_codes").doc(newCode), {
@@ -623,18 +647,16 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
           eventDate,
           lang,
           newCode,
+          origin,
         );
       } else {
         const userSnap = userSnapshots[bData.userId];
         const userRef = db.collection("users").doc(bData.userId);
-
         transaction.set(
           userRef,
           { credits: { [courseKey]: admin.firestore.FieldValue.increment(1) } },
           { merge: true },
         );
-
-        // --- NEW: LOG ADMIN REFUND TO HISTORY ---
         transaction.set(db.collection("credit_history").doc(), {
           userId: bData.userId,
           amount: 1,
@@ -649,7 +671,6 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
         const userName = userSnap?.exists
           ? userSnap.data().firstName
           : "Customer";
-
         if (userEmail) {
           sendCancellationEmail(
             transaction,
@@ -658,6 +679,7 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
             courseKey,
             eventDate,
             lang,
+            null,
             null,
           );
         }
@@ -669,7 +691,7 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
   });
 });
 
-// --- NEW FUNCTION: Notify Admin of Rental Request ---
+// --- RENTAL REQUEST NOTIFICATION ---
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 
 exports.onRentRequestCreate = onDocumentCreated(
@@ -688,11 +710,7 @@ exports.onRentRequestCreate = onDocumentCreated(
       const adminEmail = settingsSnap.exists
         ? settingsSnap.data().adminEmail
         : null;
-
-      if (!adminEmail) {
-        console.log("No admin email configured in settings/admin_config");
-        return;
-      }
+      if (!adminEmail) return;
 
       await admin
         .firestore()
@@ -711,13 +729,9 @@ exports.onRentRequestCreate = onDocumentCreated(
             <p><strong>Message:</strong><br/>${requestData.message || "No message provided"}</p>
             <hr style="border: 0; border-top: 1px solid #caaff3; margin: 20px 0;"/>
             <p style="font-size: 12px; opacity: 0.7;">You can manage this request in your Admin Dashboard.</p>
-          </div>
-        `,
+          </div>`,
           },
         });
-      console.log(
-        `Notification sent to ${adminEmail} for request ${event.params.requestId}`,
-      );
     } catch (error) {
       console.error("Error sending rental notification:", error);
     }
