@@ -31,13 +31,31 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // 1. Fetch Course Settings (Visibility and Capacity)
         const settingsSnap = await getDocs(collection(db, "course_settings"));
         const visibilityMap = {};
+        const capacityMap = {}; // NEW: Store capacity limits
+
         settingsSnap.docs.forEach((doc) => {
-          visibilityMap[doc.id] = doc.data().isVisible !== false;
+          const data = doc.data();
+          visibilityMap[doc.id] = data.isVisible !== false;
+          // Only store capacity if hasCapacity is true
+          if (data.hasCapacity) {
+            capacityMap[doc.id] = parseInt(data.capacity || 99, 10);
+          }
         });
         setCourseVisibility(visibilityMap);
 
+        // 2. Fetch Booking Counts
+        const countsSnap = await getDocs(
+          collection(db, "event_booking_counts"),
+        );
+        const bookingCounts = {};
+        countsSnap.docs.forEach((doc) => {
+          bookingCounts[doc.id] = doc.data().count || 0;
+        });
+
+        // 3. Fetch Events
         const eventsCollection = collection(db, "events");
         const q = query(eventsCollection, orderBy("date", "asc"));
         const snapshot = await getDocs(q);
@@ -52,12 +70,34 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         );
         endOfSixMonths.setHours(23, 59, 59, 999);
 
+        // Filter out past events
         const futureItems = snapshot.docs
           .map((doc) => ({ id: doc.id, ...doc.data() }))
           .filter((item) => new Date(item.date) >= now);
 
-        const rawEvents = futureItems.filter((item) => item.type === "event");
-        const rawCourses = futureItems.filter(
+        // --- NEW: Filter out full courses ---
+        const availableItems = futureItems.filter((item) => {
+          // Skip capacity check for general events (or handle them if they have a link)
+          if (item.type === "event" && !item.link) return true;
+
+          const courseId = (item.link || "").replace(/\//g, "");
+          const limit = capacityMap[courseId];
+          const currentCount = bookingCounts[item.id] || 0;
+
+          // If there is a limit, only include if count is less than limit
+          if (limit !== undefined) {
+            return currentCount < limit;
+          }
+
+          // No limit set, it's available
+          return true;
+        });
+
+        // Separate remaining items
+        const rawEvents = availableItems.filter(
+          (item) => item.type === "event",
+        );
+        const rawCourses = availableItems.filter(
           (item) => item.type === "course" || !item.type,
         );
 
@@ -176,13 +216,11 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
     [currentLang],
   );
 
-  // CHANGED: Logic to handle Fallbacks per sense in the list
   const displayItems = useMemo(() => {
     let results = [];
     const seenLinks = new Set();
     const potentialFallbacks = [];
 
-    // 1. First, try to find ANY visible courses across all selected senses
     activeSenses.forEach((senseId) => {
       const visibleForSense = menuData.courses.filter((course) => {
         const courseId = course.link.replace(/\//g, "");
@@ -200,7 +238,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           }
         });
       } else {
-        // Collect potential fallbacks in case the final list is empty
         const planetData = planets.find((p) => p.id === senseId);
         if (planetData?.fallback) {
           potentialFallbacks.push(planetData.fallback);
@@ -208,10 +245,8 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
       }
     });
 
-    // 2. If we found courses, return only them (No fallbacks!)
     if (results.length > 0) return results;
 
-    // 3. If everything is empty, randomly pick ONE fallback from the selected senses
     if (potentialFallbacks.length > 0) {
       const randomIndex = Math.floor(Math.random() * potentialFallbacks.length);
       return [potentialFallbacks[randomIndex]];
@@ -534,7 +569,6 @@ function MenuLink({ item, lang, onNavigate, isMobile }) {
   const [isActive, setIsActive] = useState(false);
   const iconSrc = item.icon?.[lang] || item.icon?.base;
 
-  // NEW: Check for fallback styling and disable click
   const isFallback = item.isItalic;
 
   return (

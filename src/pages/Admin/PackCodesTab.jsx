@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../../firebase";
-import {
-  collection,
-  query,
-  orderBy,
-  getDocs,
-  deleteDoc,
-  doc,
-} from "firebase/firestore";
+import { collection, query, getDocs, deleteDoc, doc } from "firebase/firestore";
 import {
   Ticket,
   Trash2,
@@ -18,6 +11,7 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
+  ShieldCheck, // Added to visually distinguish profile credits
 } from "lucide-react";
 import {
   sectionTitleStyle,
@@ -31,16 +25,12 @@ export default function PackCodesTab({ isMobile }) {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Track which user groups are expanded
   const [expandedGroups, setExpandedGroups] = useState({});
-
-  // Track column count for JS-driven Masonry layout
   const [columnCount, setColumnCount] = useState(1);
 
   useEffect(() => {
     fetchPackCodes();
 
-    // Determine how many columns to show based on screen width
     const updateColumns = () => {
       if (window.innerWidth < 800) setColumnCount(1);
       else if (window.innerWidth < 1200) setColumnCount(2);
@@ -55,27 +45,83 @@ export default function PackCodesTab({ isMobile }) {
   const fetchPackCodes = async () => {
     setIsLoading(true);
     try {
-      const q = query(
-        collection(db, "pack_codes"),
-        orderBy("createdAt", "desc"),
-      );
-      const snap = await getDocs(q);
-      setPackCodes(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      // 1. FETCH GUEST PACK CODES
+      const codesQuery = query(collection(db, "pack_codes"));
+      const codesSnap = await getDocs(codesQuery);
+
+      let allCredits = codesSnap.docs.map((doc) => ({
+        id: doc.id,
+        isProfileCredit: false,
+        ...doc.data(),
+      }));
+
+      // 2. FETCH REGISTERED USER CREDITS
+      const usersQuery = query(collection(db, "users"));
+      const usersSnap = await getDocs(usersQuery);
+
+      usersSnap.docs.forEach((doc) => {
+        const userData = doc.data();
+
+        // If the user has a credits object, map each course balance as a "pack code"
+        if (userData.credits && typeof userData.credits === "object") {
+          Object.entries(userData.credits).forEach(([courseKey, count]) => {
+            if (count > 0) {
+              // Only show active balances
+              const fullName =
+                [userData.firstName, userData.lastName]
+                  .filter(Boolean)
+                  .join(" ") || "Registered User";
+
+              allCredits.push({
+                id: `user_${doc.id}_${courseKey}`,
+                userId: doc.id,
+                isProfileCredit: true,
+                code: "PROFILE BALANCE", // Display text instead of a code
+                buyerEmail: userData.email || "",
+                buyerName: fullName,
+                courseKey: courseKey,
+                remainingCredits: count,
+                createdAt: userData.createdAt || new Date().toISOString(),
+              });
+            }
+          });
+        }
+      });
+
+      // 3. SORT EVERYTHING TOGETHER
+      allCredits.sort((a, b) => {
+        const timeA = a.createdAt?.seconds
+          ? a.createdAt.seconds * 1000
+          : new Date(a.createdAt).getTime() || 0;
+        const timeB = b.createdAt?.seconds
+          ? b.createdAt.seconds * 1000
+          : new Date(b.createdAt).getTime() || 0;
+        return timeB - timeA;
+      });
+
+      setPackCodes(allCredits);
     } catch (error) {
-      console.error("Error fetching pack codes:", error);
+      console.error("Error fetching credits:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (codeObj) => {
+    if (codeObj.isProfileCredit) {
+      alert(
+        "This balance is attached to a registered user profile. To modify it, please go to the 'Profiles' tab and edit the user directly.",
+      );
+      return;
+    }
+
     if (
       window.confirm(
-        "Are you sure you want to delete this pack code? Any remaining credits will be lost forever.",
+        "Are you sure you want to delete this guest pack code? Any remaining credits will be lost forever.",
       )
     ) {
       try {
-        await deleteDoc(doc(db, "pack_codes", id));
+        await deleteDoc(doc(db, "pack_codes", codeObj.id));
         fetchPackCodes();
       } catch (error) {
         alert("Error deleting code: " + error.message);
@@ -85,7 +131,17 @@ export default function PackCodesTab({ isMobile }) {
 
   const formatDate = (timestamp) => {
     if (!timestamp) return "Unknown";
-    return new Date(timestamp.seconds * 1000).toLocaleDateString();
+    try {
+      if (timestamp.seconds) {
+        return new Date(timestamp.seconds * 1000).toLocaleDateString();
+      }
+      if (timestamp.toDate) {
+        return timestamp.toDate().toLocaleDateString();
+      }
+      return new Date(timestamp).toLocaleDateString();
+    } catch (e) {
+      return "Invalid Date";
+    }
   };
 
   const toggleGroup = (groupKey) => {
@@ -95,13 +151,21 @@ export default function PackCodesTab({ isMobile }) {
     }));
   };
 
-  // 1. Filter the raw list first
+  // Filter combined list
   const filteredCodes = packCodes.filter((code) => {
-    const searchLower = searchTerm.toLowerCase();
-    const codeString = (code.code || "").toLowerCase();
-    const emailString = (code.buyerEmail || "").toLowerCase();
-    const nameString = (code.buyerName || "").toLowerCase();
-    const courseString = (code.courseKey || "").toLowerCase();
+    const searchLower = searchTerm.toLowerCase().trim();
+    if (!searchLower) return true;
+
+    const codeString = String(code.code || "").toLowerCase();
+    const emailString = String(
+      code.buyerEmail || code.email || code.userEmail || "",
+    ).toLowerCase();
+    const nameString = String(
+      code.buyerName || code.name || code.userName || "",
+    ).toLowerCase();
+    const courseString = String(
+      code.courseKey || code.coursePath || "",
+    ).toLowerCase();
 
     return (
       codeString.includes(searchLower) ||
@@ -111,34 +175,49 @@ export default function PackCodesTab({ isMobile }) {
     );
   });
 
-  // 2. Group the filtered list by BOTH user email AND name
+  // Group by User -> Course
   const groupedCodes = filteredCodes.reduce((acc, code) => {
-    const emailKey = (code.buyerEmail || "no-email").toLowerCase();
-    const nameKey = (code.buyerName || "no-name").toLowerCase();
+    const rawEmail =
+      code.buyerEmail || code.email || code.userEmail || "no-email";
+    const rawName = code.buyerName || code.name || code.userName || "Guest";
 
-    // Composite key combining both email and name
-    const groupKey = `${emailKey}_${nameKey}`;
+    const emailKey = String(rawEmail).toLowerCase().trim();
+    const nameKey = String(rawName).toLowerCase().trim();
+    const userKey = `${emailKey}_${nameKey}`;
 
-    if (!acc[groupKey]) {
-      acc[groupKey] = {
-        groupKey: groupKey,
-        email: code.buyerEmail,
-        name: code.buyerName,
+    const rawCourse =
+      code.courseKey || code.coursePath || code.course || "General";
+    const courseKey = String(rawCourse).replace(/\//g, "").trim() || "General";
+
+    if (!acc[userKey]) {
+      acc[userKey] = {
+        userKey: userKey,
+        email: rawEmail !== "no-email" ? rawEmail : "No email provided",
+        name: rawName,
+        totalCreditsAllCourses: 0,
+        courses: {},
+      };
+    }
+
+    if (!acc[userKey].courses[courseKey]) {
+      acc[userKey].courses[courseKey] = {
+        courseName: courseKey,
         totalCredits: 0,
         codes: [],
       };
     }
 
-    acc[groupKey].codes.push(code);
-    acc[groupKey].totalCredits += code.remainingCredits || 0;
+    acc[userKey].courses[courseKey].codes.push(code);
+    acc[userKey].courses[courseKey].totalCredits += Number(
+      code.remainingCredits || 0,
+    );
+    acc[userKey].totalCreditsAllCourses += Number(code.remainingCredits || 0);
 
     return acc;
   }, {});
 
-  // Convert the grouped object back into an array
   const groupedArray = Object.values(groupedCodes);
 
-  // 3. Split the array into columns for the Masonry effect
   const columns = Array.from({ length: columnCount }, () => []);
   groupedArray.forEach((group, index) => {
     columns[index % columnCount].push(group);
@@ -208,7 +287,7 @@ export default function PackCodesTab({ isMobile }) {
       </div>
 
       {isLoading ? (
-        <p style={{ opacity: 0.5 }}>Loading codes...</p>
+        <p style={{ opacity: 0.5 }}>Loading credits...</p>
       ) : groupedArray.length === 0 ? (
         <div
           style={{
@@ -220,7 +299,7 @@ export default function PackCodesTab({ isMobile }) {
         >
           {searchTerm
             ? "No codes match your search."
-            : "No active pack codes found."}
+            : "No active pack credits found."}
         </div>
       ) : (
         <div
@@ -242,14 +321,12 @@ export default function PackCodesTab({ isMobile }) {
               }}
             >
               {colGroups.map((userGroup) => {
-                const isExpanded = expandedGroups[userGroup.groupKey];
-                const displayedCodes = isExpanded
-                  ? userGroup.codes
-                  : userGroup.codes.slice(0, 1);
+                const courseKeys = Object.keys(userGroup.courses);
+                const hasMultipleCourses = courseKeys.length > 1;
 
                 return (
                   <div
-                    key={userGroup.groupKey}
+                    key={userGroup.userKey}
                     style={{
                       ...cardStyle,
                       display: "flex",
@@ -295,7 +372,7 @@ export default function PackCodesTab({ isMobile }) {
                               textOverflow: "ellipsis",
                             }}
                           >
-                            {userGroup.name || "Guest User"}
+                            {userGroup.name}
                           </span>
                         </div>
                         <div
@@ -318,7 +395,7 @@ export default function PackCodesTab({ isMobile }) {
                               textOverflow: "ellipsis",
                             }}
                           >
-                            {userGroup.email || "No email provided"}
+                            {userGroup.email}
                           </span>
                         </div>
                       </div>
@@ -334,142 +411,197 @@ export default function PackCodesTab({ isMobile }) {
                           alignItems: "center",
                           gap: "4px",
                           fontSize: "0.85rem",
-                          flexShrink: 0, // Prevents total badge from squishing
+                          flexShrink: 0,
                         }}
                       >
-                        <CreditCard size={14} /> {userGroup.totalCredits} Total
+                        <CreditCard size={14} />{" "}
+                        {userGroup.totalCreditsAllCourses} Total
                       </div>
                     </div>
 
-                    {/* INDIVIDUAL CODES FOR THIS USER */}
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "8px",
-                      }}
-                    >
-                      {displayedCodes.map((code) => (
+                    {/* RENDER EACH COURSE FOR THIS USER */}
+                    {courseKeys.map((cKey) => {
+                      const courseData = userGroup.courses[cKey];
+                      const groupKey = `${userGroup.userKey}_${cKey}`;
+                      const isExpanded = expandedGroups[groupKey];
+                      const displayedCodes = isExpanded
+                        ? courseData.codes
+                        : courseData.codes.slice(0, 1);
+
+                      return (
                         <div
-                          key={code.id}
+                          key={groupKey}
                           style={{
-                            backgroundColor: "rgba(28,7,0,0.03)",
-                            padding: "10px",
-                            borderRadius: "8px",
                             display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: "10px", // Ensures space between left and right sides
+                            flexDirection: "column",
+                            gap: "8px",
+                            marginTop: "4px",
                           }}
                         >
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            {" "}
-                            {/* Allows left side to shrink appropriately */}
-                            <div
-                              style={{
-                                fontWeight: "900",
-                                letterSpacing: "1px",
-                                color: "#1c0700",
-                                wordBreak: "break-all", // Ensures very long codes wrap cleanly
-                              }}
-                            >
-                              {code.code}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "0.7rem",
-                                color: "#9960a8",
-                                fontWeight: "bold",
-                                textTransform: "uppercase",
-                                marginTop: "2px",
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                              }}
-                            >
-                              {code.courseKey}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "0.65rem",
-                                opacity: 0.5,
-                                marginTop: "2px",
-                              }}
-                            >
-                              Created: {formatDate(code.createdAt)}
-                            </div>
-                          </div>
-
                           <div
                             style={{
                               display: "flex",
+                              justifyContent: "space-between",
                               alignItems: "center",
-                              gap: "10px",
-                              flexShrink: 0, // IMPORTANT: Prevents this entire right block from squishing
                             }}
                           >
                             <span
                               style={{
+                                fontSize: "0.8rem",
                                 fontWeight: "bold",
-                                fontSize: "0.85rem",
-                                color: "#4e5f28",
-                                whiteSpace: "nowrap", // IMPORTANT: Prevents the text from wrapping
+                                textTransform: "uppercase",
+                                color: "#9960a8",
+                                letterSpacing: "1px",
                               }}
                             >
-                              {code.remainingCredits} left
+                              {courseData.courseName}
                             </span>
-                            <button
-                              onClick={() => handleDelete(code.id)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "#ff4d4d",
-                                cursor: "pointer",
-                                padding: "4px",
-                                display: "flex",
-                                alignItems: "center",
-                              }}
-                              title="Delete Code"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            {hasMultipleCourses && (
+                              <span
+                                style={{
+                                  fontSize: "0.75rem",
+                                  opacity: 0.6,
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                {courseData.totalCredits} Credits
+                              </span>
+                            )}
                           </div>
-                        </div>
-                      ))}
 
-                      {/* EXPAND/COLLAPSE BUTTON */}
-                      {userGroup.codes.length > 1 && (
-                        <button
-                          onClick={() => toggleGroup(userGroup.groupKey)}
-                          style={{
-                            background: "rgba(153, 96, 168, 0.1)",
-                            border: "none",
-                            color: "#9960a8",
-                            padding: "8px",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                            display: "flex",
-                            justifyContent: "center",
-                            alignItems: "center",
-                            gap: "6px",
-                            fontWeight: "bold",
-                            fontSize: "0.8rem",
-                            marginTop: "4px",
-                          }}
-                        >
-                          {isExpanded ? (
-                            <>
-                              <ChevronUp size={16} /> Collapse
-                            </>
-                          ) : (
-                            <>
-                              <ChevronDown size={16} /> Show{" "}
-                              {userGroup.codes.length - 1} More
-                            </>
+                          {displayedCodes.map((code) => (
+                            <div
+                              key={code.id}
+                              style={{
+                                backgroundColor: code.isProfileCredit
+                                  ? "rgba(78, 95, 40, 0.05)"
+                                  : "rgba(28,7,0,0.03)",
+                                border: code.isProfileCredit
+                                  ? "1px solid rgba(78, 95, 40, 0.2)"
+                                  : "1px solid transparent",
+                                padding: "10px",
+                                borderRadius: "8px",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                gap: "10px",
+                              }}
+                            >
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    fontWeight: "900",
+                                    letterSpacing: "1px",
+                                    color: code.isProfileCredit
+                                      ? "#4e5f28"
+                                      : "#1c0700",
+                                    wordBreak: "break-all",
+                                  }}
+                                >
+                                  {code.isProfileCredit && (
+                                    <ShieldCheck size={14} />
+                                  )}
+                                  {code.code}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    opacity: 0.5,
+                                    marginTop: "2px",
+                                  }}
+                                >
+                                  {code.isProfileCredit
+                                    ? "Profile Created:"
+                                    : "Code Created:"}{" "}
+                                  {formatDate(code.createdAt)}
+                                </div>
+                              </div>
+
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "10px",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontWeight: "bold",
+                                    fontSize: "0.85rem",
+                                    color: "#4e5f28",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {code.remainingCredits} left
+                                </span>
+
+                                {/* Do not allow standard deletion of profile accounts from this tab */}
+                                <button
+                                  onClick={() => handleDelete(code)}
+                                  style={{
+                                    background: "none",
+                                    border: "none",
+                                    color: code.isProfileCredit
+                                      ? "#1c070040"
+                                      : "#ff4d4d",
+                                    cursor: code.isProfileCredit
+                                      ? "not-allowed"
+                                      : "pointer",
+                                    padding: "4px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                  title={
+                                    code.isProfileCredit
+                                      ? "Edit profile credits in Profiles tab"
+                                      : "Delete Code"
+                                  }
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+
+                          {courseData.codes.length > 1 && (
+                            <button
+                              onClick={() => toggleGroup(groupKey)}
+                              style={{
+                                background: "rgba(153, 96, 168, 0.1)",
+                                border: "none",
+                                color: "#9960a8",
+                                padding: "8px",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                                display: "flex",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                gap: "6px",
+                                fontWeight: "bold",
+                                fontSize: "0.8rem",
+                                marginTop: "2px",
+                                marginBottom: "8px",
+                              }}
+                            >
+                              {isExpanded ? (
+                                <>
+                                  <ChevronUp size={16} /> Collapse
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown size={16} /> Show{" "}
+                                  {courseData.codes.length - 1} More
+                                </>
+                              )}
+                            </button>
                           )}
-                        </button>
-                      )}
-                    </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
