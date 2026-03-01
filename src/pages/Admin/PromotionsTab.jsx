@@ -11,7 +11,15 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { planets } from "../../data/planets";
-import { Ticket, Trash2, Clock, Hash, Percent, Star } from "lucide-react";
+import {
+  Ticket,
+  Trash2,
+  Clock,
+  Hash,
+  Percent,
+  Star,
+  ShoppingBag,
+} from "lucide-react";
 import {
   formCardStyle,
   sectionTitleStyle,
@@ -27,6 +35,8 @@ export default function PromotionsTab({ isMobile, currentLang }) {
   const [promoCodes, setPromoCodes] = useState([]);
   const [code, setCode] = useState("");
   const [coursePath, setCoursePath] = useState("");
+  // NEW: State to determine what the code applies to
+  const [applyTo, setApplyTo] = useState("both"); // "both", "pack", or "single"
   const [discountType, setDiscountType] = useState("free"); // "free" or "percent"
   const [discountValue, setDiscountValue] = useState(100);
   const [limitType, setLimitType] = useState("uses"); // "uses" or "date"
@@ -60,6 +70,7 @@ export default function PromotionsTab({ isMobile, currentLang }) {
       await addDoc(collection(db, "promo_codes"), {
         code: code.toUpperCase().trim(),
         coursePath,
+        applyTo, // NEW: Save application preference to Firestore
         discountType,
         discountValue: discountType === "free" ? 100 : parseInt(discountValue),
         limitType,
@@ -120,6 +131,43 @@ export default function PromotionsTab({ isMobile, currentLang }) {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* NEW: Applies To Toggle */}
+            <div>
+              <label style={labelStyle}>Valid For</label>
+              <div style={toggleContainerStyle}>
+                <div
+                  onClick={() => setApplyTo("both")}
+                  style={{
+                    ...toggleOptionStyle,
+                    backgroundColor:
+                      applyTo === "both" ? "#caaff3" : "transparent",
+                  }}
+                >
+                  Both
+                </div>
+                <div
+                  onClick={() => setApplyTo("pack")}
+                  style={{
+                    ...toggleOptionStyle,
+                    backgroundColor:
+                      applyTo === "pack" ? "#caaff3" : "transparent",
+                  }}
+                >
+                  Pack Only
+                </div>
+                <div
+                  onClick={() => setApplyTo("single")}
+                  style={{
+                    ...toggleOptionStyle,
+                    backgroundColor:
+                      applyTo === "single" ? "#caaff3" : "transparent",
+                  }}
+                >
+                  Single Only
+                </div>
+              </div>
             </div>
 
             <div>
@@ -246,8 +294,34 @@ export default function PromotionsTab({ isMobile, currentLang }) {
                 >
                   {pc.code}
                 </div>
-                <div style={{ fontSize: "0.8rem", opacity: 0.6 }}>
-                  {pc.coursePath}
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    opacity: 0.6,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginTop: "2px",
+                  }}
+                >
+                  <span>{pc.coursePath}</span>
+                  {/* NEW: Show what the code applies to in the list */}
+                  <span
+                    style={{
+                      backgroundColor: "rgba(28,7,0,0.05)",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      fontSize: "0.7rem",
+                      textTransform: "uppercase",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {pc.applyTo === "pack"
+                      ? "Pack Only"
+                      : pc.applyTo === "single"
+                        ? "Single Only"
+                        : "Both"}
+                  </span>
                 </div>
                 <div
                   style={{

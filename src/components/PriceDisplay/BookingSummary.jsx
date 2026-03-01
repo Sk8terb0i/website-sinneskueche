@@ -5,12 +5,21 @@ import {
   ChevronRight,
   Loader2,
   Calendar,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
 } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
 import { auth, db } from "../../firebase";
 import * as S from "./PriceDisplayStyles";
 
@@ -25,17 +34,24 @@ export default function BookingSummary({
   currentLang,
   isMobile,
   onBookCredits,
-  onPayment, // Expected to handle ("pack"), ("individual"), or ("redeem", packCode)
+  onPayment, // Expected to handle ("pack", promoCode), ("individual", promoCode), or ("redeem", packCode)
+  coursePath, // Optional: if missing, validation falls back to window URL
 }) {
   const [isAuthExpanded, setIsAuthExpanded] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
 
-  // New States for Guest Pack Redemption & Logged-in Stripe toggle
+  // States for Guest Pack Redemption & Logged-in Stripe toggle
   const [isRedeemingCode, setIsRedeemingCode] = useState(false);
   const [packCode, setPackCode] = useState("");
   const [showStripeAlternative, setShowStripeAlternative] = useState(false);
+
+  // States for Promo / Discount Codes
+  const [isPromoExpanded, setIsPromoExpanded] = useState(false);
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [activePromo, setActivePromo] = useState(null);
+  const [promoStatus, setPromoStatus] = useState({ loading: false, error: "" });
 
   // Form States for Inline Auth
   const [email, setEmail] = useState("");
@@ -55,6 +71,37 @@ export default function BookingSummary({
     singlePriceTotal > 0
       ? Math.round(((singlePriceTotal - packPrice) / singlePriceTotal) * 100)
       : 0;
+
+  // NEW: Determine what the active promo code applies to (fallback to "both" for old codes)
+  const promoApplyTo = activePromo?.applyTo || "both";
+  const promoAppliesToPack =
+    activePromo && (promoApplyTo === "both" || promoApplyTo === "pack");
+  const promoAppliesToSingle =
+    activePromo && (promoApplyTo === "both" || promoApplyTo === "single");
+
+  // Calculate discounted prices based on where the promo applies
+  let finalTotalPrice = parseFloat(totalPrice || 0);
+  let finalPackPrice = parseFloat(pricing?.priceFull || 0);
+
+  if (activePromo) {
+    if (activePromo.discountType === "percent") {
+      const multiplier = (100 - activePromo.discountValue) / 100;
+      if (promoAppliesToSingle)
+        finalTotalPrice = Math.max(0, finalTotalPrice * multiplier);
+      if (promoAppliesToPack)
+        finalPackPrice = Math.max(0, finalPackPrice * multiplier);
+    } else if (activePromo.discountType === "free") {
+      if (promoAppliesToSingle) finalTotalPrice = 0;
+      if (promoAppliesToPack) finalPackPrice = 0;
+    }
+  }
+
+  // Format to remove .00 if whole number
+  const formatPrice = (val) => {
+    const num = Number(val);
+    if (isNaN(num)) return "0";
+    return Number.isInteger(num) ? num.toString() : num.toFixed(2);
+  };
 
   const handleInlineAuth = async (e) => {
     e.preventDefault();
@@ -86,7 +133,81 @@ export default function BookingSummary({
     }
   };
 
-  // UPDATED: Refined Pack Option layout for mobile
+  const handleApplyPromo = async () => {
+    if (!promoCodeInput.trim()) return;
+
+    setPromoStatus({ loading: true, error: "" });
+    setActivePromo(null);
+
+    try {
+      const q = query(
+        collection(db, "promo_codes"),
+        where("code", "==", promoCodeInput.trim().toUpperCase()),
+      );
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        setPromoStatus({
+          loading: false,
+          error: currentLang === "en" ? "Invalid code." : "Ungültiger Code.",
+        });
+        return;
+      }
+
+      const promoData = snap.docs[0].data();
+
+      // Robust Validation: Check if the promo applies to the active URL or passed coursePath
+      const promoPath = (promoData.coursePath || "").replace(/\//g, "");
+      const activePath = (
+        coursePath ||
+        window.location.hash ||
+        window.location.pathname ||
+        ""
+      ).replace(/\//g, "");
+
+      if (promoPath && promoPath !== "all" && !activePath.includes(promoPath)) {
+        setPromoStatus({
+          loading: false,
+          error:
+            currentLang === "en"
+              ? "Code not valid for this course."
+              : "Code gilt nicht für diesen Kurs.",
+        });
+        return;
+      }
+
+      if (
+        promoData.limitType === "uses" &&
+        promoData.timesUsed >= promoData.maxUses
+      ) {
+        setPromoStatus({
+          loading: false,
+          error:
+            currentLang === "en"
+              ? "Code limit reached."
+              : "Code-Limit erreicht.",
+        });
+        return;
+      }
+      if (
+        promoData.limitType === "date" &&
+        new Date(promoData.expiryDate) < new Date()
+      ) {
+        setPromoStatus({
+          loading: false,
+          error: currentLang === "en" ? "Code expired." : "Code abgelaufen.",
+        });
+        return;
+      }
+
+      setActivePromo(promoData);
+      setPromoStatus({ loading: false, error: "" });
+    } catch (err) {
+      console.error(err);
+      setPromoStatus({ loading: false, error: "Error verifying code." });
+    }
+  };
+
   const renderPackOption = () => (
     <div
       style={{
@@ -99,9 +220,6 @@ export default function BookingSummary({
         gap: "1.2rem",
       }}
     >
-      {/* NEW: Header section is now wrapped in a conditional. 
-        It only displays if we are NOT in redemption mode.
-      */}
       {!isRedeemingCode && (
         <div
           style={{
@@ -116,7 +234,8 @@ export default function BookingSummary({
             <p
               style={{
                 fontWeight: "800",
-                margin: 0,
+                marginTop: 0,
+                marginBottom: 0,
                 fontSize: "1.1rem",
                 lineHeight: 1.2,
               }}
@@ -141,31 +260,54 @@ export default function BookingSummary({
                 : `${savingsPercent}% ERSPARNIS`}
             </span>
           </div>
-          <p
+
+          <div
             style={{
-              fontWeight: "700",
-              margin: 0,
-              color: "#4e5f28",
-              fontSize: isMobile ? "1.4rem" : "1.1rem",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: isMobile ? "flex-start" : "flex-end",
             }}
           >
-            {pricing.priceFull} CHF
-          </p>
+            {promoAppliesToPack && (
+              <span
+                style={{
+                  fontSize: "0.85rem",
+                  textDecoration: "line-through",
+                  color: "#1c0700",
+                  opacity: 0.5,
+                }}
+              >
+                {formatPrice(pricing.priceFull)} CHF
+              </span>
+            )}
+            <p
+              style={{
+                fontWeight: "700",
+                marginTop: 0,
+                marginBottom: 0,
+                color: "#4e5f28",
+                fontSize: isMobile ? "1.4rem" : "1.1rem",
+              }}
+            >
+              {formatPrice(finalPackPrice)} CHF
+            </p>
+          </div>
         </div>
       )}
 
       {!currentUser && isRedeemingCode ? (
-        // REDEEM CODE VIEW FOR GUESTS
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {/* Optional: Add a simple title so the card isn't too empty at the top */}
           <h4
             style={{
-              margin: "0 0 5px 0",
+              marginTop: 0,
+              marginBottom: "5px",
               fontFamily: "Harmond-SemiBoldCondensed",
               fontSize: "1.2rem",
             }}
           >
-            {currentLang === "en" ? "redeem code" : "code einlösen"}
+            {currentLang === "en"
+              ? "redeem session-pack"
+              : "session-pack einlösen"}
           </h4>
           <input
             type="text"
@@ -173,7 +315,7 @@ export default function BookingSummary({
               currentLang === "en" ? "Enter pack code" : "Code eingeben"
             }
             value={packCode}
-            onChange={(e) => setPackCode(e.target.value)}
+            onChange={(e) => setPackCode(e.target.value.toUpperCase())}
             style={{
               ...S.guestInputStyle,
               padding: "12px 14px",
@@ -203,16 +345,23 @@ export default function BookingSummary({
           </button>
         </div>
       ) : (
-        // BUY PACK VIEW
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <button
-            onClick={() => onPayment("pack")}
+            onClick={() =>
+              onPayment("pack", promoAppliesToPack ? activePromo?.code : null)
+            }
             style={S.primaryBtnStyle(isMobile)}
             disabled={
               !currentUser && (!guestInfo.firstName || !guestInfo.email)
             }
           >
-            {currentLang === "en" ? "Buy Pack & Book" : "Karte kaufen & buchen"}
+            {currentLang === "en"
+              ? hasSelection
+                ? "Buy & Book"
+                : "Buy"
+              : hasSelection
+                ? "Kaufen & Buchen"
+                : "Kaufen"}
           </button>
 
           {!currentUser && (
@@ -234,12 +383,53 @@ export default function BookingSummary({
             </button>
           )}
 
+          {!currentUser && (
+            <div
+              style={{
+                color: "#4e5f28",
+                fontSize: "0.75rem",
+                lineHeight: "1.5",
+                marginTop: "0.5rem",
+                backgroundColor: "rgba(78, 95, 40, 0.05)",
+                padding: "10px",
+                borderRadius: "8px",
+              }}
+            >
+              {currentLang === "en" ? (
+                <>
+                  <strong>Guest:</strong> Get a pack code via email to use
+                  later.
+                  <br />
+                  <strong>Member:</strong> Save credits to your profile for easy
+                  booking.
+                  <br />
+                  <br />
+                  <em>Note:</em> You can select dates now (deducted from pack),
+                  or buy without dates to use later.
+                </>
+              ) : (
+                <>
+                  <strong>Gast:</strong> Erhalte einen Code per E-Mail für
+                  später.
+                  <br />
+                  <strong>Mitglied:</strong> Speichere Guthaben im Profil für
+                  einfache Zahlungen.
+                  <br />
+                  <br />
+                  <em>Hinweis:</em> Termine können sofort gewählt (werden
+                  abgezogen) oder für später aufbewahrt werden.
+                </>
+              )}
+            </div>
+          )}
+
           {currentUser && hasSelection && (
             <p
               style={{
                 fontSize: "0.7rem",
                 opacity: 0.6,
-                margin: 0,
+                marginTop: 0,
+                marginBottom: 0,
                 fontStyle: "italic",
                 textAlign: "left",
                 lineHeight: "1.3",
@@ -257,16 +447,206 @@ export default function BookingSummary({
 
   const renderIndividualOption = () =>
     hasSelection && (
-      <button
-        onClick={() => onPayment("individual")}
-        style={S.secondaryBtnStyle(isMobile)}
-        disabled={!currentUser && (!guestInfo.firstName || !guestInfo.email)}
-      >
-        {currentLang === "en"
-          ? `Pay ${totalPrice} CHF`
-          : `${totalPrice} CHF zahlen`}
-      </button>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        {promoAppliesToSingle && (
+          <div
+            style={{
+              fontSize: "0.85rem",
+              textDecoration: "line-through",
+              color: "#1c0700",
+              opacity: 0.5,
+              textAlign: "center",
+            }}
+          >
+            {formatPrice(totalPrice)} CHF
+          </div>
+        )}
+        <button
+          onClick={() =>
+            onPayment(
+              "individual",
+              promoAppliesToSingle ? activePromo?.code : null,
+            )
+          }
+          style={S.secondaryBtnStyle(isMobile)}
+          disabled={!currentUser && (!guestInfo.firstName || !guestInfo.email)}
+        >
+          {currentLang === "en"
+            ? `Pay ${formatPrice(finalTotalPrice)} CHF`
+            : `${formatPrice(finalTotalPrice)} CHF zahlen`}
+        </button>
+      </div>
     );
+
+  const renderPurchaseOptions = () => (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "1rem",
+        marginTop: "0.5rem",
+      }}
+    >
+      {/* PROMO CODE INTERFACE */}
+      <div
+        style={{
+          backgroundColor: "rgba(202, 175, 243, 0.1)",
+          padding: "12px",
+          borderRadius: "12px",
+          border: "1px dashed rgba(202, 175, 243, 0.4)",
+        }}
+      >
+        {!isPromoExpanded && !activePromo ? (
+          <button
+            onClick={() => setIsPromoExpanded(true)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#9960a8",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              padding: 0,
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <Ticket size={16} />
+            {currentLang === "en"
+              ? "Add Promo / Discount Code"
+              : "Aktions- / Rabattcode hinzufügen"}
+          </button>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: "bold",
+                  color: "#9960a8",
+                  textTransform: "uppercase",
+                }}
+              >
+                {currentLang === "en" ? "Discount Code" : "Rabattcode"}
+              </label>
+              <button
+                onClick={() => {
+                  setIsPromoExpanded(false);
+                  setPromoCodeInput("");
+                  setActivePromo(null);
+                  setPromoStatus({ loading: false, error: "" });
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#ff4d4d",
+                  fontSize: "0.7rem",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
+              >
+                {currentLang === "en" ? "Remove" : "Entfernen"}
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <input
+                type="text"
+                placeholder="e.g. SUMMER24"
+                value={promoCodeInput}
+                onChange={(e) =>
+                  setPromoCodeInput(e.target.value.toUpperCase())
+                }
+                disabled={activePromo}
+                style={{
+                  ...S.guestInputStyle,
+                  padding: "10px 12px",
+                  flex: 1,
+                  backgroundColor: activePromo
+                    ? "rgba(78, 95, 40, 0.05)"
+                    : "rgba(255, 252, 227, 0.4)",
+                }}
+              />
+              {!activePromo && (
+                <button
+                  onClick={handleApplyPromo}
+                  disabled={promoStatus.loading || !promoCodeInput}
+                  style={{
+                    padding: "0 15px",
+                    backgroundColor: "#9960a8",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "12px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }}
+                >
+                  {promoStatus.loading ? (
+                    <Loader2 size={16} className="spinner" />
+                  ) : currentLang === "en" ? (
+                    "Apply"
+                  ) : (
+                    "Anwenden"
+                  )}
+                </button>
+              )}
+            </div>
+
+            {activePromo && (
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#4e5f28",
+                  marginTop: "4px",
+                  marginBottom: 0,
+                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <CheckCircle size={14} />
+                {currentLang === "en"
+                  ? `Code applied: ${activePromo.discountValue}${
+                      activePromo.discountType === "percent" ? "% OFF" : " FREE"
+                    }`
+                  : `Code angewendet: ${activePromo.discountValue}${
+                      activePromo.discountType === "percent"
+                        ? "% RABATT"
+                        : " GRATIS"
+                    }`}
+              </p>
+            )}
+            {promoStatus.error && (
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#ff4d4d",
+                  marginTop: "4px",
+                  marginBottom: 0,
+                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <XCircle size={14} /> {promoStatus.error}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {pricing?.hasPack && renderPackOption()}
+      {renderIndividualOption()}
+    </div>
+  );
 
   return (
     <div style={S.bookingCardStyle(isMobile, true)}>
@@ -283,6 +663,7 @@ export default function BookingSummary({
             fontFamily: "Harmond-SemiBoldCondensed",
             fontSize: isMobile ? "1.8rem" : "2rem",
             marginBottom: "1.5rem",
+            marginTop: 0,
             textAlign: "left",
           }}
         >
@@ -396,7 +777,8 @@ export default function BookingSummary({
                       style={{
                         fontSize: "0.7rem",
                         color: "#ff4d4d",
-                        margin: 0,
+                        marginTop: 0,
+                        marginBottom: 0,
                       }}
                     >
                       {authError}
@@ -445,80 +827,68 @@ export default function BookingSummary({
               </div>
             )}
 
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-                marginBottom: "1.5rem",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "0.75rem",
-                  fontWeight: "900",
-                  letterSpacing: "1px",
-                  opacity: 0.6,
-                }}
-              >
-                {currentLang === "en" ? "GUEST DETAILS" : "GAST-DETAILS"}
-              </span>
+            {!isAuthExpanded && (
               <div
                 style={{
                   display: "flex",
-                  flexDirection: isMobile ? "column" : "row",
-                  gap: "10px",
+                  flexDirection: "column",
+                  gap: "12px",
+                  marginBottom: "1.5rem",
                 }}
               >
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    fontWeight: "900",
+                    letterSpacing: "1px",
+                    opacity: 0.6,
+                  }}
+                >
+                  {currentLang === "en" ? "GUEST DETAILS" : "GAST-DETAILS"}
+                </span>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: isMobile ? "column" : "row",
+                    gap: "10px",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder={
+                      currentLang === "en" ? "First Name" : "Vorname"
+                    }
+                    style={{ ...S.guestInputStyle, flex: 1 }}
+                    value={guestInfo.firstName}
+                    onChange={(e) =>
+                      setGuestInfo({ ...guestInfo, firstName: e.target.value })
+                    }
+                  />
+                  <input
+                    type="text"
+                    placeholder={
+                      currentLang === "en" ? "Last Name" : "Nachname"
+                    }
+                    style={{ ...S.guestInputStyle, flex: 1 }}
+                    value={guestInfo.lastName}
+                    onChange={(e) =>
+                      setGuestInfo({ ...guestInfo, lastName: e.target.value })
+                    }
+                  />
+                </div>
                 <input
-                  type="text"
-                  placeholder={currentLang === "en" ? "First Name" : "Vorname"}
-                  style={{ ...S.guestInputStyle, flex: 1 }}
-                  value={guestInfo.firstName}
+                  type="email"
+                  placeholder="Email"
+                  style={S.guestInputStyle}
+                  value={guestInfo.email}
                   onChange={(e) =>
-                    setGuestInfo({ ...guestInfo, firstName: e.target.value })
-                  }
-                />
-                <input
-                  type="text"
-                  placeholder={currentLang === "en" ? "Last Name" : "Nachname"}
-                  style={{ ...S.guestInputStyle, flex: 1 }}
-                  value={guestInfo.lastName}
-                  onChange={(e) =>
-                    setGuestInfo({ ...guestInfo, lastName: e.target.value })
+                    setGuestInfo({ ...guestInfo, email: e.target.value })
                   }
                 />
               </div>
-              <input
-                type="email"
-                placeholder="Email"
-                style={S.guestInputStyle}
-                value={guestInfo.email}
-                onChange={(e) =>
-                  setGuestInfo({ ...guestInfo, email: e.target.value })
-                }
-              />
-            </div>
+            )}
 
-            <div
-              style={{
-                color: "#4e5f28",
-                fontSize: "0.75rem",
-                lineHeight: "1.5",
-                marginBottom: "1.5rem",
-              }}
-            >
-              {currentLang === "en"
-                ? "Buy without registering to receive a pack code via email. Sign up to save credits for easy payment and to see or cancel all your booked courses."
-                : "Kaufe ohne Registrierung, um einen Code per E-Mail zu erhalten. Melde dich an, um Guthaben für einfache Zahlungen zu speichern und deine gebuchten Kurse einzusehen oder abzusagen."}
-            </div>
-
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              {pricing?.hasPack && renderPackOption()}
-              {renderIndividualOption()}
-            </div>
+            {renderPurchaseOptions()}
           </div>
         )}
 
@@ -562,7 +932,7 @@ export default function BookingSummary({
                     : "Termine"}
                 </span>
                 <span style={S.totalPriceStyle(isMobile)}>
-                  {totalPrice} CHF
+                  {formatPrice(totalPrice)} CHF
                 </span>
               </div>
             )}
@@ -601,25 +971,10 @@ export default function BookingSummary({
                       : "Oder mit Karte zahlen"}
                   </button>
 
-                  {showStripeAlternative && (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "1rem",
-                        marginTop: "0.5rem",
-                      }}
-                    >
-                      {pricing?.hasPack && renderPackOption()}
-                      {renderIndividualOption()}
-                    </div>
-                  )}
+                  {showStripeAlternative && renderPurchaseOptions()}
                 </>
               ) : (
-                <>
-                  {pricing?.hasPack && renderPackOption()}
-                  {renderIndividualOption()}
-                </>
+                renderPurchaseOptions()
               )}
             </div>
           </>
