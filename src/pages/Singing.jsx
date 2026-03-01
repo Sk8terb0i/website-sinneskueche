@@ -1,21 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
+import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
 import {
   Music,
   Layers,
   Languages,
   User,
-  Monitor,
-  MapPin,
-  Wallet,
   BookOpen,
   GraduationCap,
   Star,
   Heart,
-  Send,
-  Calendar,
-  ExternalLink,
 } from "lucide-react";
 
 const planetImages = import.meta.glob("../assets/planets/*.png", {
@@ -28,6 +23,8 @@ export default function Singing({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [isIdle, setIsIdle] = useState(false);
+  const [isBookingVisible, setIsBookingVisible] = useState(false);
+  const bookingRef = useRef(null);
 
   const config = {
     desktop: {
@@ -38,9 +35,24 @@ export default function Singing({ currentLang, setCurrentLang }) {
     mobile: {
       topIcon: { top: "-15px", left: "-10px" },
       bottomIcon: { top: "45px", left: "calc(100% - 40px)" },
-      titleSize: "3.5rem",
+      titleSize: "3.2rem",
     },
   };
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsBookingVisible(entry.isIntersecting);
+      },
+      { threshold: 0.33 },
+    );
+
+    if (bookingRef.current) {
+      observer.observe(bookingRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -58,42 +70,41 @@ export default function Singing({ currentLang, setCurrentLang }) {
       clearTimeout(timeout);
       timeout = setTimeout(() => setIsIdle(true), 7000);
     };
-    const resetEvents = [
+    const handleActivity = () => startTimer();
+    const events = [
       "mousedown",
       "mousemove",
       "keypress",
       "touchstart",
       "scroll",
     ];
-    const handleActivity = () => startTimer();
-    resetEvents.forEach((event) =>
-      window.addEventListener(event, handleActivity),
-    );
+    events.forEach((e) => window.addEventListener(e, handleActivity));
     startTimer();
     return () => {
       clearTimeout(timeout);
-      resetEvents.forEach((event) =>
-        window.removeEventListener(event, handleActivity),
-      );
+      events.forEach((e) => window.removeEventListener(e, handleActivity));
     };
   }, []);
 
+  const scrollToBooking = () => {
+    if (bookingRef.current) {
+      const offset = window.innerWidth <= 768 ? 80 : 120;
+      const elementPosition =
+        bookingRef.current.getBoundingClientRect().top + window.pageYOffset;
+      window.scrollTo({ top: elementPosition - offset, behavior: "smooth" });
+    }
+  };
+
   const content = {
     en: {
-      title: "Singing and Songwriting",
+      title: "singing and songwriting",
       welcome:
-        "Find your unique sound through a blend of technical precision and creative freedom",
-      priceTitle: "Price",
-      priceAmount: "990",
-      pricePerLesson: "99.— / lesson",
-      priceInfo: "Package of 10 lessons (45 min each)",
-      locationTitle: "Location",
-      locationDetail: "Sägestrasse 11, 8952 Schlieren",
-      locationSub: "View on Google Maps",
+        "Find your unique sound through technical precision and creative freedom",
+      ctaFloating: "register now",
       teachingTitle: "What I teach you",
       teachingList: [
         "Exploring new vocal expressions",
-        "Extended vocal techniques (Overtone, Throat singing, Beatbox)",
+        "Extended techniques (Overtone, Throat singing, Beatbox)",
         "Healthy vocal technique",
         "Developing an artistic vision",
         "Studio preparation",
@@ -101,92 +112,68 @@ export default function Singing({ currentLang, setCurrentLang }) {
       ],
       educationTitle: "Education",
       educationList: [
-        "Lucerne University of Applied Sciences and Arts, Bachelor in Jazz Vocals (Susanne Abbuehl, Lauren Newton, Sarah Büechi)",
-        "Lucerne University of Applied Sciences and Arts, Master in Music & Art Performance (Gerry Hemingway, Kristin Berardi, Magda Mayas)",
+        "Lucerne University of Applied Sciences and Arts, Bachelor in Jazz Vocals",
+        "Lucerne University of Applied Sciences and Arts, Master in Music & Art Performance",
       ],
       projectsTitle: "Projects",
-      projectsDetail:
-        "Paper Crane, Brassmaster Flash, Pistache, VanKoch, High D",
+      projectsList: [
+        { name: "Paper Crane", url: "https://papercrane.ch/band/" },
+        {
+          name: "Brassmaster Flash",
+          url: "https://linktr.ee/brassmasterflash",
+        },
+        { name: "Pistache", url: "https://www.instagram.com/pistache.mp3/" },
+        { name: "VanKoch", url: "https://www.instagram.com/vankoch_musik/" },
+        { name: "High D", url: "https://www.instagram.com/highd_duo/" },
+      ],
       repertoireTitle: "Favorite Repertoire",
       repertoireDetail:
         "Radiohead, David Bowie, Björk, Queen, Cole Porter, George Gershwin, Anthony Braxton",
-      ctaFloating: "register now",
-      ctaRegisterTitle: "start your journey",
-      ctaRegisterButton: "register now",
-      ctaSub: "for a non-binding trial lesson",
-      ctaContact: "Ask Luca a question",
       details: [
-        {
-          icon: <Music size={20} />,
-          text: "Pop, Jazz, Free Improv & Contemporary",
-        },
-        { icon: <Layers size={20} />, text: "Beginners, Advanced & Master" },
-        { icon: <Languages size={20} />, text: "German, English & French" },
-        { icon: <User size={20} />, text: "Ages 18+" },
-        {
-          icon: <Monitor size={20} />,
-          text: "Remote lessons",
-          link: "https://www.instrumentor.ch/de/fernunterricht",
-          isSpecial: true,
-        },
+        { icon: <Music size={18} />, text: "Pop, Jazz & Contemporary" },
+        { icon: <Layers size={18} />, text: "All skill levels" },
+        { icon: <Languages size={18} />, text: "DE / EN / FR" },
+        { icon: <User size={18} />, text: "Ages 18+" },
       ],
     },
     de: {
-      title: "Gesang und Songwriting",
+      title: "gesang und songwriting",
       welcome:
-        "Finde deinen eigenen Klang durch eine Mischung aus technischer Präzision und kreativer Freiheit",
-      priceTitle: "Preis",
-      priceAmount: "990",
-      pricePerLesson: "99.— / Lektion",
-      priceInfo: "10er-Abo à 45 Minuten",
-      locationTitle: "Standort",
-      locationDetail: "Sägestrasse 11, 8952 Schlieren",
-      locationSub: "Auf Google Maps ansehen",
+        "Finde deinen eigenen Klang durch technische Präzision und kreative Freiheit",
+      ctaFloating: "jetzt anmelden",
       teachingTitle: "Das bringe ich dir bei",
       teachingList: [
         "Neue stimmliche Ausdrucksmittel suchen",
-        "Extended Gesangstechniken wie Oberton- und Kehlkopfgesang oder Beatbox",
+        "Extended Gesangstechniken (Oberton, Kehlkopfgesang, Beatbox)",
         "Gesunde Stimmtechnik",
-        "eine künstlerische Vision entwickeln",
+        "Eine künstlerische Vision entwickeln",
         "Studiovorbereitung",
         "Song- und Lyricswriting",
       ],
       educationTitle: "Ausbildung",
       educationList: [
-        "Hochschule Luzern, Bachelor in Jazz Gesang bei Susanne Abbuehl, Lauren Newton, Sarah Büechi",
-        "Hochschule Luzern, Master in Music & Art Performance bei Gerry Hemingway, Kristin Berardi, Magda Mayas",
+        "Hochschule Luzern, Bachelor in Jazz Gesang",
+        "Hochschule Luzern, Master in Music & Art Performance",
       ],
       projectsTitle: "Projekte",
-      projectsDetail:
-        "Paper Crane, Brassmaster Flash, Pistache, VanKoch, High D",
+      projectsList: [
+        { name: "Paper Crane", url: "https://papercrane.ch/band/" },
+        {
+          name: "Brassmaster Flash",
+          url: "https://linktr.ee/brassmasterflash",
+        },
+        { name: "Pistache", url: "https://www.instagram.com/pistache.mp3/" },
+        { name: "VanKoch", url: "https://www.instagram.com/vankoch_musik/" },
+        { name: "High D", url: "https://www.instagram.com/highd_duo/" },
+      ],
       repertoireTitle: "Lieblings-Repertoire",
       repertoireDetail:
         "Radiohead, David Bowie, Björk, Queen, Cole Porter, George Gershwin und Anthony Braxton",
-      ctaFloating: "jetzt anmelden",
-      ctaRegisterTitle: "dein weg zur musik",
-      ctaRegisterButton: "jetzt anmelden",
-      ctaSub: "für unverbindliche Probelektion",
-      ctaContact: "Eine Frage an Luca Koch stellen",
       details: [
-        {
-          icon: <Music size={20} />,
-          text: "Pop, Jazz, Improvisation & Zeitgenössisch",
-        },
-        {
-          icon: <Layers size={20} />,
-          text: "Anfänger, Fortgeschrittene & Master",
-        },
-        {
-          icon: <Languages size={20} />,
-          text: "Deutsch, Englisch & Französisch",
-        },
-        { icon: <User size={20} />, text: "Ab 18 Jahren" },
-        {
-          icon: <Monitor size={20} />,
-          text: "Fernunterricht",
-          link: "https://www.instrumentor.ch/de/fernunterricht",
-          isSpecial: true,
-        },
+        { icon: <Music size={18} />, text: "Pop, Jazz & Zeitgenössisch" },
+        { icon: <Layers size={18} />, text: "Alle Level willkommen" },
+        { icon: <Languages size={18} />, text: "DE / EN / FR" },
+        { icon: <User size={18} />, text: "Ab 18 Jahren" },
       ],
     },
   };
@@ -195,28 +182,16 @@ export default function Singing({ currentLang, setCurrentLang }) {
   const planetShortcutImg = getImage("sing.png");
   const current = content[currentLang];
 
-  const scrollToRegister = (e) => {
-    e.preventDefault();
-    const isMobile = window.innerWidth <= 768;
-    const targetId = isMobile ? "register-mobile" : "register-desktop";
-    const element = document.getElementById(targetId);
-    if (element) {
-      const elementPosition =
-        element.getBoundingClientRect().top + window.pageYOffset;
-      const offset = isMobile ? 280 : 120;
-      window.scrollTo({ top: elementPosition - offset, behavior: "smooth" });
-    }
-  };
-
   const styles = {
     main: {
       maxWidth: "1100px",
       margin: "0 auto",
-      padding: "160px 20px 0px 20px",
+      padding: "160px 20px 80px 20px",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
       textAlign: "center",
+      position: "relative",
     },
     welcomeText: {
       fontSize: "0.9rem",
@@ -230,43 +205,37 @@ export default function Singing({ currentLang, setCurrentLang }) {
     },
     infoGrid: {
       display: "flex",
-      flexWrap: "wrap",
       justifyContent: "center",
       gap: "12px",
       marginTop: "20px",
-      width: "100%",
+      flexWrap: "wrap",
       marginBottom: "60px",
-      maxWidth: "1000px",
     },
-    infoItem: (isSpecial) => ({
+    infoItem: {
       display: "flex",
       alignItems: "center",
       gap: "10px",
       padding: "10px 24px",
-      background: isSpecial ? "#9a60a83a" : "#caaff31e",
+      background: "#caaff31e",
       borderRadius: "100px",
       color: "#1c0700",
-      whiteSpace: "nowrap",
-      textDecoration: "none",
-      transition: "all 0.2s ease",
-      width: "fit-content",
-    }),
-    infoLabel: { fontSize: "0.9rem", lineHeight: "1.4", fontWeight: "500" },
+    },
+    infoLabel: { fontSize: "0.85rem", fontWeight: "500" },
     contentGrid: {
       display: "grid",
       gridTemplateColumns: "0.8fr 1.2fr",
       gap: "60px",
       width: "100%",
       textAlign: "left",
-      marginTop: "40px",
+      marginTop: "60px",
+      marginBottom: "40px",
+      alignItems: "center",
     },
     lucaImage: {
       width: "100%",
-      maxHeight: "450px",
+      height: "auto", // Removed cropping
       borderRadius: "15px",
-      objectFit: "cover",
-      objectPosition: "center 0%",
-      marginBottom: "30px",
+      display: "block",
     },
     sectionTitle: {
       display: "flex",
@@ -276,72 +245,43 @@ export default function Singing({ currentLang, setCurrentLang }) {
       fontWeight: "600",
       color: "#1c0700",
       marginBottom: "15px",
-      borderBottom: "1px solid #caaff34e",
+      borderBottom: "1px solid rgba(202, 175, 243, 0.3)",
       paddingBottom: "5px",
     },
     bodyText: {
       fontSize: "0.95rem",
       color: "#1c0700",
       lineHeight: "1.6",
-      marginBottom: "25px",
+      opacity: 0.8,
     },
-    priceCard: {
-      background: "#caaff312",
-      borderRadius: "18px",
-      padding: "20px",
-      marginBottom: "30px",
+    ulStyle: {
+      listStyle: "none",
+      padding: 0,
+      margin: "0 0 30px 0",
       display: "flex",
       flexDirection: "column",
-      gap: "4px",
+      gap: "10px",
     },
-    priceTag: {
+    liStyle: {
       display: "flex",
-      alignItems: "baseline",
-      gap: "4px",
-      color: "#4e5f28",
-      fontWeight: "700",
-    },
-    priceAmount: { fontSize: "1.8rem", lineHeight: "1" },
-    priceCurrency: { fontSize: "0.9rem" },
-    priceSubText: { fontSize: "0.8rem", opacity: 0.7, fontWeight: "500" },
-    locationCard: {
-      background: "#caaff312",
-      borderRadius: "18px",
-      padding: "20px",
-      display: "flex",
-      flexDirection: "column",
-      gap: "4px",
-      textDecoration: "none",
-      transition: "background 0.2s ease",
-      cursor: "pointer",
-      color: "inherit",
-    },
-    locationAddress: {
+      alignItems: "flex-start",
+      gap: "10px",
       fontSize: "0.95rem",
-      fontWeight: "600",
       color: "#1c0700",
-      display: "flex",
-      alignItems: "center",
-      gap: "6px",
+      opacity: 0.8,
+      lineHeight: "1.4",
     },
-    locationSub: {
-      fontSize: "0.8rem",
-      opacity: 0.6,
-      textDecoration: "underline",
-      textDecorationColor: "#caaff3",
-    },
-    ctaBox: {
-      padding: "30px",
-      background: "#caaff324",
-      borderRadius: "20px",
-      width: "100%",
+    tagContainer: {
       display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: "12px",
-      height: "185px",
-      marginTop: "50px",
+      flexWrap: "wrap",
+      gap: "8px",
+      marginBottom: "30px",
+    },
+    tagStyle: {
+      padding: "6px 12px",
+      borderRadius: "6px",
+      fontSize: "0.85rem",
+      fontWeight: "500",
     },
     floatingPlanetWrapper: {
       position: "fixed",
@@ -361,13 +301,6 @@ export default function Singing({ currentLang, setCurrentLang }) {
       transition:
         "opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.6s ease",
     },
-    planetCenter: {
-      width: "45px",
-      height: "45px",
-      objectFit: "contain",
-      position: "absolute",
-      zIndex: 2,
-    },
     svgText: {
       position: "absolute",
       top: 0,
@@ -378,67 +311,6 @@ export default function Singing({ currentLang, setCurrentLang }) {
       zIndex: 1,
     },
   };
-
-  const RegisterBox = ({ className, id }) => (
-    <div id={id} style={styles.ctaBox} className={className}>
-      <div style={{ textAlign: "center" }}>
-        <h2
-          style={{
-            fontSize: "1.6rem",
-            margin: 0,
-            color: "#1c0700",
-            lineHeight: "1.1",
-          }}
-        >
-          {current.ctaRegisterTitle}
-        </h2>
-        <p style={{ opacity: 0.6, fontSize: "0.85rem", margin: "6px 0 0 0" }}>
-          {current.ctaSub}
-        </p>
-      </div>
-      <a
-        href="https://www.instrumentor.ch/de/luca-koch/anmelden"
-        target="_blank"
-        rel="noreferrer"
-        className="cta-main-btn"
-        style={{
-          background: "#4e5f28",
-          color: "white",
-          padding: "12px 40px",
-          borderRadius: "100px",
-          textDecoration: "none",
-          fontWeight: "600",
-          fontSize: "0.95rem",
-          display: "flex",
-          alignItems: "center",
-          marginTop: "5px",
-          transition: "all 0.2s ease",
-        }}
-      >
-        <Calendar size={18} style={{ marginRight: "8px" }} />
-        {current.ctaRegisterButton}
-      </a>
-      <a
-        href="https://www.instrumentor.ch/de/luca-koch/frage-stellen"
-        target="_blank"
-        rel="noreferrer"
-        className="cta-contact-link"
-        style={{
-          color: "#1c0700",
-          fontSize: "0.8rem",
-          opacity: 0.5,
-          marginTop: "4px",
-          display: "flex",
-          alignItems: "center",
-          gap: "5px",
-          textDecoration: "none",
-          transition: "opacity 0.2s ease",
-        }}
-      >
-        <Send size={12} /> {current.ctaContact}
-      </a>
-    </div>
-  );
 
   return (
     <div className="course-container">
@@ -454,34 +326,43 @@ export default function Singing({ currentLang, setCurrentLang }) {
           @keyframes float-pulse { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
           @keyframes rotate-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-          .register-box-mobile { display: none !important; }
-
           @media (max-width: 768px) {
-            .main-content { padding-top: 120px !important; }
-            .welcome-text { margin-bottom: 40px !important; width: 70vw; }
-            .info-grid { flex-direction: column !important; align-items: center !important; gap: 15px !important; }
-            .info-item:nth-child(odd) { transform: translateX(-15px); }
-            .info-item:nth-child(even) { transform: translateX(15px); }
-            .content-grid { grid-template-columns: 1fr !important; }
-            .register-box-desktop { display: none !important; }
-            .register-box-mobile { display: flex !important; margin: 40px 0 !important; height: auto !important; padding: 40px 20px !important; width: 100% !important; box-sizing: border-box !important; }
-            .luca-image { display: none !important; }
+            .main-content { padding-top: 100px !important; }
+            .course-title-wrapper { order: -1; margin-bottom: 10px; }
+            .welcome-text { width: 80vw !important; margin-bottom: 25px !important; }
+            .info-grid { flex-direction: column !important; align-items: center !important; margin-bottom: 30px !important; }
+            .content-grid { grid-template-columns: 1fr !important; gap: 40px !important; margin-bottom: 20px !important; }
+            .luca-image { margin-bottom: 20px !important; }
+          }
+
+          .floating-shortcut:hover .planet-center { transform: scale(1.1); transition: transform 0.3s ease; }
+
+          /* Interactive Project Tags */
+          .project-tag {
+            background-color: rgba(28, 7, 0, 0.05);
+            color: #1c0700;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            display: inline-block;
           }
           
-          .info-item-link:hover { opacity: 0.9; transform: translateY(-2px); }
-          .location-card:hover { background: #caaff324 !important; }
-          .floating-shortcut:hover .planet-center { transform: scale(1.1); transition: transform 0.3s ease; }
-          .cta-main-btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
-          .cta-contact-link:hover { opacity: 1 !important; }
-        `}</style>
+          .project-tag:hover, .project-tag:active {
+            background-color: #caaff3;
+            color: #fffce3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(202, 175, 243, 0.3);
+          }
+      `}</style>
 
       <button
-        onClick={scrollToRegister}
+        onClick={scrollToBooking}
         style={{
           ...styles.floatingPlanetWrapper,
-          opacity: isVisible || isIdle ? 1 : 0,
-          visibility: isVisible || isIdle ? "visible" : "hidden",
-          pointerEvents: isVisible || isIdle ? "auto" : "none",
+          opacity: !isBookingVisible && (isVisible || isIdle) ? 1 : 0,
+          visibility:
+            !isBookingVisible && (isVisible || isIdle) ? "visible" : "hidden",
+          pointerEvents:
+            !isBookingVisible && (isVisible || isIdle) ? "auto" : "none",
         }}
         className="floating-shortcut"
       >
@@ -511,45 +392,36 @@ export default function Singing({ currentLang, setCurrentLang }) {
         <img
           src={planetShortcutImg}
           alt="planet"
-          style={styles.planetCenter}
+          style={{
+            width: "45px",
+            height: "45px",
+            objectFit: "contain",
+            position: "absolute",
+            zIndex: 2,
+          }}
           className="planet-center"
         />
       </button>
 
       <main style={styles.main} className="main-content">
-        <CourseTitle title={current.title} config={config} icons={icons} />
-        <p style={styles.welcomeText} className="welcome-text">
+        <div className="course-title-wrapper">
+          <CourseTitle title={current.title} config={config} icons={icons} />
+        </div>
+
+        <p className="welcome-text" style={styles.welcomeText}>
           {current.welcome}
         </p>
 
         <div className="info-grid" style={styles.infoGrid}>
-          {current.details.map((item, index) => {
-            const isLink = !!item.link;
-            const Component = isLink ? "a" : "div";
-            return (
-              <Component
-                key={index}
-                className={`info-item ${isLink ? "info-item-link" : ""}`}
-                style={styles.infoItem(item.isSpecial)}
-                {...(isLink
-                  ? {
-                      href: item.link,
-                      target: "_blank",
-                      rel: "noopener noreferrer",
-                    }
-                  : {})}
-              >
-                <div
-                  style={{ display: "flex", opacity: item.isSpecial ? 1 : 0.7 }}
-                >
-                  {item.icon}
-                </div>
-                <span style={styles.infoLabel}>{item.text}</span>
-              </Component>
-            );
-          })}
+          {current.details.map((item, index) => (
+            <div key={index} style={styles.infoItem}>
+              <div style={{ display: "flex", opacity: 0.7 }}>{item.icon}</div>
+              <span style={styles.infoLabel}>{item.text}</span>
+            </div>
+          ))}
         </div>
 
+        {/* Content Row: Image Left, All Bio Text Right */}
         <div className="content-grid" style={styles.contentGrid}>
           <section>
             <img
@@ -558,81 +430,89 @@ export default function Singing({ currentLang, setCurrentLang }) {
               style={styles.lucaImage}
               className="luca-image"
             />
-            <h3 style={styles.sectionTitle}>
-              <Wallet size={18} /> {current.priceTitle}
-            </h3>
-            <div style={styles.priceCard}>
-              <div style={styles.priceTag}>
-                <span style={styles.priceCurrency}>CHF</span>
-                <span style={styles.priceAmount}>{current.priceAmount}</span>
-                <span
-                  style={{
-                    fontSize: "0.9rem",
-                    color: "#1c0700",
-                    opacity: 0.5,
-                    fontWeight: "normal",
-                  }}
-                >
-                  / {current.pricePerLesson}
-                </span>
-              </div>
-              <div style={styles.priceSubText}>{current.priceInfo}</div>
-            </div>
-            <h3 style={styles.sectionTitle}>
-              <MapPin size={18} /> {current.locationTitle}
-            </h3>
-            <a
-              href="https://maps.google.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={styles.locationCard}
-              className="location-card"
-            >
-              <div style={styles.locationAddress}>
-                {current.locationDetail}{" "}
-                <ExternalLink size={14} style={{ opacity: 0.4 }} />
-              </div>
-              <div style={styles.locationSub}>{current.locationSub}</div>
-            </a>
           </section>
 
           <section>
             <h3 style={styles.sectionTitle}>
               <BookOpen size={18} /> {current.teachingTitle}
             </h3>
-            <p style={styles.bodyText}>{current.teachingList.join(", ")}</p>
+            <ul style={styles.ulStyle}>
+              {current.teachingList.map((item, i) => (
+                <li key={i} style={styles.liStyle}>
+                  <div
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "50%",
+                      backgroundColor: "#caaff3",
+                      marginTop: "8px",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+
             <h3 style={styles.sectionTitle}>
               <GraduationCap size={18} /> {current.educationTitle}
             </h3>
-            {current.educationList.map((edu, i) => (
-              <p
-                key={i}
-                style={{
-                  ...styles.bodyText,
-                  fontSize: "0.95rem",
-                  marginBottom: "10px",
-                }}
-              >
-                {edu}
-              </p>
-            ))}
+            <ul style={styles.ulStyle}>
+              {current.educationList.map((edu, i) => (
+                <li key={i} style={styles.liStyle}>
+                  <div
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "50%",
+                      backgroundColor: "#caaff3",
+                      marginTop: "8px",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span>{edu}</span>
+                </li>
+              ))}
+            </ul>
+
             <h3 style={styles.sectionTitle}>
               <Star size={18} /> {current.projectsTitle}
             </h3>
-            <p style={styles.bodyText}>{current.projectsDetail}</p>
+            <div style={styles.tagContainer}>
+              {current.projectsList.map((project, i) => (
+                <a
+                  key={i}
+                  href={project.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="project-tag"
+                  style={styles.tagStyle}
+                >
+                  {project.name}
+                </a>
+              ))}
+            </div>
+
             <h3 style={styles.sectionTitle}>
               <Heart size={18} /> {current.repertoireTitle}
             </h3>
-            <p style={{ ...styles.bodyText, marginBottom: "0" }}>
+            <p
+              style={{
+                ...styles.bodyText,
+                marginBottom: "0",
+                fontStyle: "italic",
+                opacity: 0.6,
+              }}
+            >
               {current.repertoireDetail}
             </p>
-            <RegisterBox
-              id="register-desktop"
-              className="register-box-desktop"
-            />
           </section>
         </div>
-        <RegisterBox id="register-mobile" className="register-box-mobile" />
+
+        {/* Calendar / Booking section */}
+        <div ref={bookingRef} style={{ width: "100%", marginTop: "40px" }}>
+          <PriceDisplay coursePath="/singing" currentLang={currentLang} />
+        </div>
       </main>
     </div>
   );

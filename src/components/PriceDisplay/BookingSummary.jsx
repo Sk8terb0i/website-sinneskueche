@@ -70,7 +70,7 @@ export default function BookingSummary({
   const [courseTerms, setCourseTerms] = useState(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showTermsPopup, setShowTermsPopup] = useState(false);
-  const [shakeTerms, setShakeTerms] = useState(false); // NEW: Controls the shake animation
+  const [shakeTerms, setShakeTerms] = useState(false);
 
   useEffect(() => {
     const fetchTerms = async () => {
@@ -88,11 +88,10 @@ export default function BookingSummary({
     if (coursePath) fetchTerms();
   }, [coursePath]);
 
-  // --- NEW: Validation Helper ---
   const validateAndProceed = (actionFn) => {
     if (courseTerms && !agreedToTerms) {
       setShakeTerms(true);
-      setTimeout(() => setShakeTerms(false), 500); // Reset animation
+      setTimeout(() => setShakeTerms(false), 500);
       return;
     }
     actionFn();
@@ -459,6 +458,8 @@ export default function BookingSummary({
           const booked = eventBookingCounts[d.id] || 0;
           const cap = parseInt(pricing?.capacity || 99);
           const canAddMore = !pricing?.hasCapacity || booked + d.count < cap;
+          const isSingleCapacity = cap === 1;
+
           const updateCount = (delta) => {
             setSelectedDates((prev) =>
               prev.map((item) => {
@@ -495,55 +496,57 @@ export default function BookingSummary({
               <div
                 style={{ display: "flex", alignItems: "center", gap: "12px" }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    backgroundColor: "rgba(202, 175, 243, 0.1)",
-                    borderRadius: "8px",
-                    padding: "4px",
-                  }}
-                >
-                  <button
-                    onClick={() => updateCount(-1)}
+                {!isSingleCapacity && (
+                  <div
                     style={{
-                      border: "none",
-                      background: "none",
-                      cursor: "pointer",
-                      fontWeight: "900",
-                      color: "#9960a8",
-                      padding: "0 6px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      backgroundColor: "rgba(202, 175, 243, 0.1)",
+                      borderRadius: "8px",
+                      padding: "4px",
                     }}
                   >
-                    -
-                  </button>
-                  <span
-                    style={{
-                      fontWeight: "900",
-                      fontSize: "0.9rem",
-                      minWidth: "15px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {d.count}
-                  </span>
-                  <button
-                    onClick={() => updateCount(1)}
-                    disabled={!canAddMore}
-                    style={{
-                      border: "none",
-                      background: "none",
-                      cursor: "pointer",
-                      fontWeight: "900",
-                      color: "#9960a8",
-                      padding: "0 6px",
-                      opacity: canAddMore ? 1 : 0.3,
-                    }}
-                  >
-                    +
-                  </button>
-                </div>
+                    <button
+                      onClick={() => updateCount(-1)}
+                      style={{
+                        border: "none",
+                        background: "none",
+                        cursor: "pointer",
+                        fontWeight: "900",
+                        color: "#9960a8",
+                        padding: "0 6px",
+                      }}
+                    >
+                      -
+                    </button>
+                    <span
+                      style={{
+                        fontWeight: "900",
+                        fontSize: "0.9rem",
+                        minWidth: "15px",
+                        textAlign: "center",
+                      }}
+                    >
+                      {d.count}
+                    </span>
+                    <button
+                      onClick={() => updateCount(1)}
+                      disabled={!canAddMore}
+                      style={{
+                        border: "none",
+                        background: "none",
+                        cursor: "pointer",
+                        fontWeight: "900",
+                        color: "#9960a8",
+                        padding: "0 6px",
+                        opacity: canAddMore ? 1 : 0.3,
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
                 <button
                   onClick={() =>
                     setSelectedDates((prev) =>
@@ -630,21 +633,23 @@ export default function BookingSummary({
                         {currentLang === "en" ? "Sessions Pack" : "er Karte"}
                       </p>
                     </div>
-                    <span
-                      style={{
-                        fontSize: "0.6rem",
-                        color: "#9960a8",
-                        backgroundColor: "rgba(153, 96, 168, 0.1)",
-                        padding: "2px 6px",
-                        borderRadius: "4px",
-                        fontWeight: "900",
-                        width: "fit-content",
-                      }}
-                    >
-                      {currentLang === "en"
-                        ? `SAVE ${savings}%`
-                        : `${savings}% ERSPARNIS`}
-                    </span>
+                    {savings >= 1 && (
+                      <span
+                        style={{
+                          fontSize: "0.6rem",
+                          color: "#9960a8",
+                          backgroundColor: "rgba(153, 96, 168, 0.1)",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          fontWeight: "900",
+                          width: "fit-content",
+                        }}
+                      >
+                        {currentLang === "en"
+                          ? `SAVE ${savings}%`
+                          : `${savings}% ERSPARNIS`}
+                      </span>
+                    )}
                   </div>
                   <p
                     style={{
@@ -788,6 +793,33 @@ export default function BookingSummary({
                 : "Hast du einen Code? Hier einlösen."}
             </button>
           )}
+
+          {/* Missing info text restored here! */}
+          <p
+            style={{
+              fontSize: "0.7rem",
+              opacity: 0.6,
+              marginTop: "5px",
+              fontStyle: "italic",
+              lineHeight: "1.4",
+              textAlign: "center",
+            }}
+          >
+            {totalTicketsSelected >
+            (currentUser
+              ? availableCredits + currentPack.size
+              : currentPack.size)
+              ? currentLang === "en"
+                ? "Selection exceeds available credits and pack size. Extras added at single price."
+                : "Auswahl überschreitet Guthaben und Kartengröße. Extras zum Einzelpreis berechnet."
+              : currentUser
+                ? currentLang === "en"
+                  ? `The ${totalTicketsSelected === 0 ? "full" : "remaining"} ${availableCredits + currentPack.size - totalTicketsSelected} credits will be saved to your profile.`
+                  : `Die ${totalTicketsSelected === 0 ? "vollen" : "restlichen"} ${availableCredits + currentPack.size - totalTicketsSelected} Guthaben werden deinem Profil gutgeschrieben.`
+                : currentLang === "en"
+                  ? `You will receive a code for the ${totalTicketsSelected === 0 ? "full" : "remaining"} ${currentPack.size - totalTicketsSelected} credits via email.`
+                  : `Du erhältst einen Code für die ${totalTicketsSelected === 0 ? "vollen" : "restlichen"} ${currentPack.size - totalTicketsSelected} Guthaben per E-Mail.`}
+          </p>
         </div>
       )}
     </div>
@@ -952,6 +984,40 @@ export default function BookingSummary({
                 </button>
               )}
             </div>
+            {activePromo && (
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#4e5f28",
+                  marginTop: "4px",
+                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <CheckCircle size={14} />{" "}
+                {currentLang === "en"
+                  ? `Code applied: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% OFF" : " FREE"}`
+                  : `Code angewendet: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% RABATT" : " GRATIS"}`}
+              </p>
+            )}
+            {promoStatus.error && (
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#1c0700",
+                  opacity: 0.7,
+                  marginTop: "4px",
+                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <XCircle size={14} /> {promoStatus.error}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -1089,6 +1155,17 @@ export default function BookingSummary({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
+                  {authError && (
+                    <p
+                      style={{
+                        fontSize: "0.7rem",
+                        color: "#1c0700",
+                        opacity: 0.7,
+                      }}
+                    >
+                      {authError}
+                    </p>
+                  )}
                   <button
                     type="submit"
                     disabled={authLoading}
@@ -1109,6 +1186,26 @@ export default function BookingSummary({
                     )}
                   </button>
                 </form>
+                <button
+                  onClick={() => setIsRegistering(!isRegistering)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#9960a8",
+                    fontSize: "0.75rem",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    marginTop: "12px",
+                  }}
+                >
+                  {isRegistering
+                    ? currentLang === "en"
+                      ? "Already have an account?"
+                      : "Bereits ein Konto?"
+                    : currentLang === "en"
+                      ? "Need an account?"
+                      : "Noch kein Konto?"}
+                </button>
               </div>
             )}
             {!isAuthExpanded && (
