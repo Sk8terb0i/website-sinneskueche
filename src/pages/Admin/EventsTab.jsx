@@ -6,13 +6,13 @@ import {
   query,
   where,
   getDocs,
-  deleteDoc, // Kept for filtering old events
+  deleteDoc,
   doc,
   getDoc,
   orderBy,
   setDoc,
 } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions"; // <--- ADDED
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { planets } from "../../data/planets";
 import {
   XCircle,
@@ -26,7 +26,7 @@ import {
   Mail,
   Edit2,
   Clock,
-  Loader2, // <--- ADDED
+  Loader2,
 } from "lucide-react";
 import {
   formCardStyle,
@@ -51,7 +51,10 @@ export default function EventsTab({ isMobile, currentLang }) {
   const [link, setLink] = useState("");
   const [externalLink, setExternalLink] = useState("");
   const [editingId, setEditingId] = useState(null);
-  const [isCancellingId, setIsCancellingId] = useState(null); // <--- ADDED loading state
+  const [isCancellingId, setIsCancellingId] = useState(null);
+
+  // NEW: Tab state for switching between Courses and Individual Events
+  const [activeSubTab, setActiveSubTab] = useState("courses");
 
   const [expandedGroups, setExpandedGroups] = useState({});
   const [showParticipantsFor, setShowParticipantsFor] = useState(null);
@@ -77,7 +80,7 @@ export default function EventsTab({ isMobile, currentLang }) {
       noEvents: "No events scheduled.",
       cancelCourse: "CANCEL COURSE",
       deleteConfirm:
-        "Are you sure? This will refund all participants and delete the event.", // <--- UPDATED
+        "Are you sure? This will refund all participants and delete the event.",
       participants: "Participants",
       noParticipants: "No bookings yet.",
     },
@@ -100,7 +103,7 @@ export default function EventsTab({ isMobile, currentLang }) {
       noEvents: "Keine Events geplant.",
       cancelCourse: "KURS ABSAGEN",
       deleteConfirm:
-        "Bist du sicher? Alle Teilnehmer erhalten eine Rückerstattung und der Termin wird gelöscht.", // <--- UPDATED
+        "Bist du sicher? Alle Teilnehmer erhalten eine Rückerstattung und der Termin wird gelöscht.",
       participants: "Teilnehmer",
       noParticipants: "Noch keine Buchungen.",
     },
@@ -289,7 +292,6 @@ export default function EventsTab({ isMobile, currentLang }) {
     }));
   };
 
-  // --- NEW: Handle Admin Cancellation via Cloud Function ---
   const handleCancelEvent = async (e, ev) => {
     e.stopPropagation();
     if (!window.confirm(labels.deleteConfirm)) return;
@@ -474,241 +476,273 @@ export default function EventsTab({ isMobile, currentLang }) {
       </section>
 
       <section style={{ flex: 1 }}>
-        <h3 style={{ ...sectionTitleStyle, marginBottom: "1rem" }}>
-          <BookOpen size={16} /> {labels.courseHeader} (
-          {scheduledCourses.length})
-        </h3>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "1rem",
-            marginBottom: "3rem",
-          }}
-        >
-          {Object.values(groupedCourses).map((group) => {
-            const isExpanded = expandedGroups[group.link];
-            return (
-              <div key={group.link} style={styles.courseGroupWrapper}>
-                <div
-                  onClick={() => toggleGroup(group.link)}
-                  style={styles.groupHeader}
-                >
-                  <div style={styles.groupTitleText}>
-                    {isExpanded ? (
-                      <ChevronDown size={14} />
-                    ) : (
-                      <ChevronRight size={14} />
-                    )}
-                    {group.title} ({group.dates.length})
+        {/* NEW: SUB-TAB NAVIGATION */}
+        <div style={styles.tabNav}>
+          <button
+            onClick={() => setActiveSubTab("courses")}
+            style={styles.subTabBtn(activeSubTab === "courses")}
+          >
+            <BookOpen size={16} /> {labels.courseHeader} (
+            {scheduledCourses.length})
+          </button>
+          <button
+            onClick={() => setActiveSubTab("events")}
+            style={styles.subTabBtn(activeSubTab === "events")}
+          >
+            <Star size={16} /> {labels.eventHeader} ({scheduledEvents.length})
+          </button>
+        </div>
+
+        {/* 1. COURSES VIEW */}
+        {activeSubTab === "courses" && (
+          <div style={styles.tabContent}>
+            {Object.values(groupedCourses).map((group) => {
+              const isExpanded = expandedGroups[group.link];
+              const hasManyDates = group.dates.length > 3;
+
+              return (
+                <div key={group.link} style={styles.courseGroupWrapper}>
+                  <div
+                    onClick={() => toggleGroup(group.link)}
+                    style={styles.groupHeader}
+                  >
+                    <div style={styles.groupTitleText}>
+                      {isExpanded ? (
+                        <ChevronDown size={14} />
+                      ) : (
+                        <ChevronRight size={14} />
+                      )}
+                      {group.title} ({group.dates.length})
+                    </div>
                   </div>
-                </div>
 
-                {isExpanded && (
-                  <div style={styles.expandedContent}>
-                    {group.dates.map((ev) => (
-                      <div key={ev.id} style={styles.eventItemWrapper}>
-                        <div
-                          style={{
-                            ...cardStyle,
-                            padding: "0.8rem 1.2rem",
-                            backgroundColor: "#fdf8e1",
-                          }}
-                        >
-                          <button
-                            onClick={() => startEdit(ev)}
-                            style={styles.editBtnIcon}
+                  {isExpanded && (
+                    <div
+                      style={{
+                        ...styles.expandedContent,
+                        maxHeight: hasManyDates ? "280px" : "auto",
+                        overflowY: hasManyDates ? "auto" : "visible",
+                        paddingRight: hasManyDates ? "8px" : "0",
+                      }}
+                      className="custom-scrollbar"
+                    >
+                      {group.dates.map((ev) => (
+                        <div key={ev.id} style={styles.eventItemWrapper}>
+                          <div
+                            style={{
+                              ...cardStyle,
+                              padding: "0.8rem 1.2rem",
+                              backgroundColor: "#fdf8e1",
+                            }}
                           >
-                            <Edit2 size={16} />
-                          </button>
-
-                          <div style={styles.eventMainInfo}>
-                            <span style={styles.dateLabel}>{ev.date}</span>
-                            {ev.time && (
-                              <span style={styles.timeLabel}>
-                                <Clock size={12} /> {ev.time}
-                              </span>
-                            )}
-                          </div>
-
-                          <div style={styles.actionRow}>
                             <button
-                              onClick={() => handleShowParticipants(ev)}
-                              style={{
-                                ...styles.participantBadge,
-                                opacity: ev.bookedCount > 0 ? 1 : 0.3,
-                              }}
+                              onClick={() => startEdit(ev)}
+                              style={styles.editBtnIcon}
                             >
-                              <Users size={16} color="#4e5f28" />
-                              <span style={{ fontWeight: "800" }}>
-                                {ev.bookedCount}
-                              </span>
+                              <Edit2 size={16} />
                             </button>
 
-                            <button
-                              onClick={(e) => handleCancelEvent(e, ev)} // <--- UPDATED
-                              style={styles.cancelCourseBtn}
-                              disabled={isCancellingId === ev.id}
-                            >
-                              {isCancellingId === ev.id ? (
-                                <Loader2 size={14} className="spinner" />
-                              ) : (
-                                labels.cancelCourse
+                            <div style={styles.eventMainInfo}>
+                              <span style={styles.dateLabel}>{ev.date}</span>
+                              {ev.time && (
+                                <span style={styles.timeLabel}>
+                                  <Clock size={12} /> {ev.time}
+                                </span>
                               )}
-                            </button>
-                          </div>
-                        </div>
+                            </div>
 
-                        {showParticipantsFor === ev.id &&
-                          participantCache[ev.id] && (
-                            <div style={styles.participantPanel}>
-                              <h5
+                            <div style={styles.actionRow}>
+                              <button
+                                onClick={() => handleShowParticipants(ev)}
                                 style={{
-                                  fontSize: "0.6rem",
-                                  marginBottom: "8px",
-                                  opacity: 0.5,
+                                  ...styles.participantBadge,
+                                  opacity: ev.bookedCount > 0 ? 1 : 0.3,
                                 }}
                               >
-                                {labels.participants}
-                              </h5>
-                              {participantCache[ev.id].map((u, i) => (
-                                <div key={i} style={styles.userRow}>
-                                  <User size={12} />
-                                  <strong
-                                    style={{
-                                      color: u.isGuest ? "#9960a8" : "inherit",
-                                    }}
-                                  >
-                                    {u.firstName} {u.lastName}
-                                  </strong>
-                                  <span style={styles.contactText}>
-                                    <Mail size={10} /> {u.email}
-                                  </span>
-                                  {u.phone && (
-                                    <span style={styles.contactText}>
-                                      <Phone size={10} /> {u.phone}
-                                    </span>
-                                  )}
-                                </div>
-                              ))}
+                                <Users size={16} color="#4e5f28" />
+                                <span style={{ fontWeight: "800" }}>
+                                  {ev.bookedCount}
+                                </span>
+                              </button>
+
+                              <button
+                                onClick={(e) => handleCancelEvent(e, ev)}
+                                style={styles.cancelCourseBtn}
+                                disabled={isCancellingId === ev.id}
+                              >
+                                {isCancellingId === ev.id ? (
+                                  <Loader2 size={14} className="spinner" />
+                                ) : (
+                                  labels.cancelCourse
+                                )}
+                              </button>
                             </div>
-                          )}
+                          </div>
+
+                          {showParticipantsFor === ev.id &&
+                            participantCache[ev.id] && (
+                              <div style={styles.participantPanel}>
+                                {participantCache[ev.id].map((u, i) => (
+                                  <div key={i} style={styles.userRow}>
+                                    <User size={12} />
+                                    <strong
+                                      style={{
+                                        color: u.isGuest
+                                          ? "#9960a8"
+                                          : "inherit",
+                                      }}
+                                    >
+                                      {u.firstName} {u.lastName}
+                                    </strong>
+                                    <span style={styles.contactText}>
+                                      <Mail size={10} /> {u.email}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {scheduledCourses.length === 0 && (
+              <p style={{ opacity: 0.4, fontSize: "0.8rem" }}>
+                {labels.noCourses}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* 2. INDIVIDUAL EVENTS VIEW */}
+        {activeSubTab === "events" && (
+          <div style={styles.tabContent}>
+            {scheduledEvents.map((ev) => (
+              <div key={ev.id} style={styles.eventItemWrapper}>
+                <div
+                  onClick={() => startEdit(ev)}
+                  style={{ ...cardStyle, backgroundColor: "#fdf8e1" }}
+                >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startEdit(ev);
+                    }}
+                    style={styles.editBtnIcon}
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: "0.7rem",
+                        color: "#caaff3",
+                        fontWeight: "800",
+                      }}
+                    >
+                      {ev.date} {ev.time && `• ${ev.time}`}
+                    </div>
+                    <span style={{ fontWeight: "600" }}>
+                      {ev.title[currentLang || "en"]}
+                    </span>
+                  </div>
+                  <div style={styles.actionRow}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleShowParticipants(ev);
+                      }}
+                      style={{
+                        ...styles.participantBadge,
+                        opacity: ev.bookedCount > 0 ? 1 : 0.3,
+                      }}
+                    >
+                      <Users size={18} color="#4e5f28" />
+                      <span style={{ fontWeight: "800" }}>
+                        {ev.bookedCount}
+                      </span>
+                    </button>
+                    <button
+                      onClick={(e) => handleCancelEvent(e, ev)}
+                      style={styles.cancelCourseBtn}
+                      disabled={isCancellingId === ev.id}
+                    >
+                      {isCancellingId === ev.id ? (
+                        <Loader2 size={14} className="spinner" />
+                      ) : (
+                        labels.cancelCourse
+                      )}
+                    </button>
+                  </div>
+                </div>
+                {showParticipantsFor === ev.id && participantCache[ev.id] && (
+                  <div style={styles.participantPanel}>
+                    {participantCache[ev.id].map((u, i) => (
+                      <div key={i} style={styles.userRow}>
+                        <User size={12} />
+                        <strong
+                          style={{ color: u.isGuest ? "#9960a8" : "inherit" }}
+                        >
+                          {u.firstName} {u.lastName}
+                        </strong>
+                        <span style={styles.contactText}>
+                          <Mail size={10} /> {u.email}
+                        </span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            );
-          })}
-          {scheduledCourses.length === 0 && (
-            <p style={{ opacity: 0.4, fontSize: "0.8rem" }}>
-              {labels.noCourses}
-            </p>
-          )}
-        </div>
-
-        <h3 style={{ ...sectionTitleStyle, marginBottom: "1rem" }}>
-          <Star size={16} /> {labels.eventHeader} ({scheduledEvents.length})
-        </h3>
-        <div
-          style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}
-        >
-          {scheduledEvents.map((ev) => (
-            <div key={ev.id} style={styles.eventItemWrapper}>
-              <div
-                onClick={() => startEdit(ev)}
-                style={{ ...cardStyle, backgroundColor: "#fdf8e1" }}
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    startEdit(ev);
-                  }}
-                  style={styles.editBtnIcon}
-                >
-                  <Edit2 size={16} />
-                </button>
-                <div style={{ flex: 1 }}>
-                  <div
-                    style={{
-                      fontSize: "0.7rem",
-                      color: "#caaff3",
-                      fontWeight: "800",
-                    }}
-                  >
-                    {ev.date} {ev.time && `• ${ev.time}`}
-                  </div>
-                  <span style={{ fontWeight: "600" }}>
-                    {ev.title[currentLang || "en"]}
-                  </span>
-                </div>
-                <div style={styles.actionRow}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleShowParticipants(ev);
-                    }}
-                    style={{
-                      ...styles.participantBadge,
-                      opacity: ev.bookedCount > 0 ? 1 : 0.3,
-                    }}
-                  >
-                    <Users size={18} color="#4e5f28" />
-                    <span style={{ fontWeight: "800" }}>{ev.bookedCount}</span>
-                  </button>
-                  <button
-                    onClick={(e) => handleCancelEvent(e, ev)} // <--- UPDATED
-                    style={styles.cancelCourseBtn}
-                    disabled={isCancellingId === ev.id}
-                  >
-                    {isCancellingId === ev.id ? (
-                      <Loader2 size={14} className="spinner" />
-                    ) : (
-                      labels.cancelCourse
-                    )}
-                  </button>
-                </div>
-              </div>
-              {showParticipantsFor === ev.id && participantCache[ev.id] && (
-                <div style={styles.participantPanel}>
-                  {participantCache[ev.id].map((u, i) => (
-                    <div key={i} style={styles.userRow}>
-                      <User size={12} />
-                      <strong
-                        style={{ color: u.isGuest ? "#9960a8" : "inherit" }}
-                      >
-                        {u.firstName} {u.lastName}
-                      </strong>
-                      <span style={styles.contactText}>
-                        <Mail size={10} /> {u.email}
-                      </span>
-                      {u.phone && (
-                        <span style={styles.contactText}>
-                          <Phone size={10} /> {u.phone}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-          {scheduledEvents.length === 0 && (
-            <p style={{ opacity: 0.4, fontSize: "0.8rem" }}>
-              {labels.noEvents}
-            </p>
-          )}
-        </div>
+            ))}
+            {scheduledEvents.length === 0 && (
+              <p style={{ opacity: 0.4, fontSize: "0.8rem" }}>
+                {labels.noEvents}
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(28, 7, 0, 0.05); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #caaff3; border-radius: 10px; }
       `}</style>
     </div>
   );
 }
 
 const styles = {
+  tabNav: {
+    display: "flex",
+    gap: "10px",
+    marginBottom: "1.5rem",
+    borderBottom: "1px solid rgba(28, 7, 0, 0.05)",
+    paddingBottom: "10px",
+  },
+  subTabBtn: (isActive) => ({
+    background: isActive ? "#caaff3" : "transparent",
+    border: isActive ? "none" : "1px solid rgba(202, 175, 243, 0.3)",
+    padding: "8px 16px",
+    borderRadius: "100px",
+    cursor: "pointer",
+    fontSize: "0.75rem",
+    fontWeight: "800",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    color: "#1c0700",
+    transition: "all 0.2s ease",
+  }),
+  tabContent: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "1rem",
+    animation: "fadeIn 0.3s ease-out",
+  },
   courseGroupWrapper: {
     borderLeft: "3px solid #caaff3",
     backgroundColor: "rgba(28, 7, 0, 0.02)",
@@ -794,6 +828,7 @@ const styles = {
     padding: "10px 15px",
     borderRadius: "12px",
     border: "1px solid rgba(78, 95, 40, 0.1)",
+    marginTop: "5px",
   },
   userRow: {
     display: "flex",

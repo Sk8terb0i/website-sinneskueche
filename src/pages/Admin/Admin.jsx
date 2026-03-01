@@ -15,7 +15,8 @@ import {
   Tag,
   LayoutGrid,
   Ticket,
-  CreditCard, // NEW ICON FOR PACKS
+  CreditCard,
+  Users,
 } from "lucide-react";
 
 // Components & Styles
@@ -24,7 +25,8 @@ import EventsTab from "./EventsTab";
 import PricingTab from "./PricingTab";
 import RentalTab from "./RentalTab";
 import PromotionsTab from "./PromotionsTab";
-import PackCodesTab from "./PackCodesTab"; // NEW IMPORT
+import PackCodesTab from "./PackCodesTab";
+import ProfilesTab from "./ProfilesTab";
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -243,7 +245,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
         </button>
       </header>
 
-      {/* --- REFINED TAB NAVIGATION --- */}
       <div
         style={{
           width: "100%",
@@ -262,6 +263,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
             minWidth: isMobile ? "max-content" : "auto",
           }}
         >
+          {/* 1. Daily Core Business */}
           <button
             onClick={() => setActiveTab("events")}
             style={{
@@ -274,20 +276,21 @@ export default function Admin({ currentLang, setCurrentLang }) {
           >
             <CalendarIcon size={16} /> Events
           </button>
+
+          {/* 2. People & Credits */}
           <button
-            onClick={() => setActiveTab("course-management")}
+            onClick={() => setActiveTab("profiles")}
             style={{
-              ...tabButtonStyle(activeTab === "course-management"),
+              ...tabButtonStyle(activeTab === "profiles"),
               backgroundColor:
-                activeTab === "course-management" ? "#caaff3" : "transparent",
+                activeTab === "profiles" ? "#caaff3" : "transparent",
               borderRadius: "100px",
               color: "#1c0700",
             }}
           >
-            <Tag size={16} /> Course Management
+            <Users size={16} /> Profiles
           </button>
 
-          {/* NEW: Pack Codes Tab */}
           <button
             onClick={() => setActiveTab("pack-codes")}
             style={{
@@ -301,6 +304,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
             <CreditCard size={16} /> Pack Codes
           </button>
 
+          {/* 3. Marketing & Sales */}
           <button
             onClick={() => setActiveTab("promotions")}
             style={{
@@ -313,6 +317,21 @@ export default function Admin({ currentLang, setCurrentLang }) {
           >
             <Ticket size={16} /> Promotions
           </button>
+
+          {/* 4. Settings & Infrastructure */}
+          <button
+            onClick={() => setActiveTab("course-management")}
+            style={{
+              ...tabButtonStyle(activeTab === "course-management"),
+              backgroundColor:
+                activeTab === "course-management" ? "#caaff3" : "transparent",
+              borderRadius: "100px",
+              color: "#1c0700",
+            }}
+          >
+            <Tag size={16} /> Course Management
+          </button>
+
           <button
             onClick={() => setActiveTab("rental")}
             style={{
@@ -332,15 +351,15 @@ export default function Admin({ currentLang, setCurrentLang }) {
         {activeTab === "events" && (
           <EventsTab isMobile={isMobile} currentLang={currentLang} />
         )}
-        {activeTab === "course-management" && (
-          <PricingTab isMobile={isMobile} />
-        )}
-        {/* NEW: Render PackCodesTab */}
+        {activeTab === "profiles" && <ProfilesTab isMobile={isMobile} />}
         {activeTab === "pack-codes" && <PackCodesTab isMobile={isMobile} />}
-        {activeTab === "rental" && <RentalTab isMobile={isMobile} />}
         {activeTab === "promotions" && (
           <PromotionsTab isMobile={isMobile} currentLang={currentLang} />
         )}
+        {activeTab === "course-management" && (
+          <PricingTab isMobile={isMobile} />
+        )}
+        {activeTab === "rental" && <RentalTab isMobile={isMobile} />}
       </div>
 
       <style>{`
@@ -348,7 +367,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        /* Hide scrollbar for Chrome, Safari and Opera */
         div::-webkit-scrollbar { display: none; }
       `}</style>
     </div>
