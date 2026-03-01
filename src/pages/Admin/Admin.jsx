@@ -17,7 +17,8 @@ import {
   Ticket,
   CreditCard,
   Users,
-  FileText, // NEW ICON
+  FileText,
+  Bell, // NEW ICON
 } from "lucide-react";
 
 // Components & Styles
@@ -28,7 +29,8 @@ import RentalTab from "./RentalTab";
 import PromotionsTab from "./PromotionsTab";
 import PackCodesTab from "./PackCodesTab";
 import ProfilesTab from "./ProfilesTab";
-import TermsTab from "./TermsTab"; // NEW IMPORT
+import TermsTab from "./TermsTab";
+import RemindersTab from "./RemindersTab"; // NEW IMPORT
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -315,6 +317,20 @@ export default function Admin({ currentLang, setCurrentLang }) {
             <Ticket size={16} /> Promotions
           </button>
 
+          {/* NEW REMINDERS TAB */}
+          <button
+            onClick={() => setActiveTab("reminders")}
+            style={{
+              ...tabButtonStyle(activeTab === "reminders"),
+              backgroundColor:
+                activeTab === "reminders" ? "#caaff3" : "transparent",
+              borderRadius: "100px",
+              color: "#1c0700",
+            }}
+          >
+            <Bell size={16} /> Reminders
+          </button>
+
           {/* Terms & Conditions: Visible for ALL admins */}
           <button
             onClick={() => setActiveTab("terms")}
@@ -383,6 +399,13 @@ export default function Admin({ currentLang, setCurrentLang }) {
           <PromotionsTab
             isMobile={isMobile}
             currentLang={currentLang}
+            userRole={adminData.role}
+            allowedCourses={adminData.allowedCourses || []}
+          />
+        )}
+        {activeTab === "reminders" && (
+          <RemindersTab
+            isMobile={isMobile}
             userRole={adminData.role}
             allowedCourses={adminData.allowedCourses || []}
           />

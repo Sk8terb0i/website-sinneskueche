@@ -3,6 +3,8 @@ const {
   onRequest,
   HttpsError,
 } = require("firebase-functions/v2/https");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 
 const stripe = require("stripe")(
@@ -13,6 +15,8 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 const db = admin.firestore();
+
+// --- CONFIGURATION & MAPPINGS ---
 
 const courseMapping = {
   "/pottery": "pottery tuesdays",
@@ -45,7 +49,8 @@ const getGoogleCalLink = (title, dateStr) => {
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent("Atelier Sinnesküche: " + title)}&dates=${start}/${end}`;
 };
 
-// --- REGISTRATION LINK HELPER ---
+// --- EMAIL HTML COMPONENTS ---
+
 const getRegistrationCTA = (lang, email, origin) => {
   if (!origin || !email) return "";
   const regUrl = `${origin}/#/register-guest?email=${encodeURIComponent(email)}`;
@@ -63,7 +68,7 @@ const getRegistrationCTA = (lang, email, origin) => {
   `;
 };
 
-// --- EMAIL HELPERS ---
+// --- EMAIL SENDING HELPERS ---
 
 const sendUserPackEmail = (
   transaction,
@@ -80,8 +85,6 @@ const sendUserPackEmail = (
     lang === "de"
       ? `Dein Session-Pack: ${courseKey}`
       : `Your Session Pack: ${courseKey}`;
-  const signOff = lang === "de" ? "Herzliche Grüße," : "Warm regards,";
-
   transaction.set(mailRef, {
     to: email,
     message: {
@@ -95,7 +98,7 @@ const sendUserPackEmail = (
             <p style="margin: 0; font-size: 32px; font-weight: bold; color: #4e5f28;">+${netIncrease} Credits</p>
           </div>
           <p>${lang === "de" ? "Dein Guthaben wurde deinem Profil hinzugefügt." : "Your credits have been added to your profile."}</p>
-          <br/><p>${signOff}<br/>Atelier Sinnesküche</p>
+          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
         </div>`,
     },
   });
@@ -116,8 +119,6 @@ const sendGuestPackCodeEmail = (
   const mailRef = db.collection("mail").doc();
   const subject =
     lang === "de" ? `Dein Code für ${courseKey}` : `Your Code for ${courseKey}`;
-  const signOff = lang === "de" ? "Herzliche Grüße," : "Warm regards,";
-
   transaction.set(mailRef, {
     to: email,
     message: {
@@ -132,7 +133,7 @@ const sendGuestPackCodeEmail = (
           </div>
           <p>${lang === "de" ? `Du hast noch <strong>${netIncrease} Guthaben</strong> übrig.` : `You have <strong>${netIncrease} credits</strong> remaining.`}</p>
           ${getRegistrationCTA(lang, email, origin)}
-          <br/><p>${signOff}<br/>Atelier Sinnesküche</p>
+          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
         </div>`,
     },
   });
@@ -152,13 +153,6 @@ const sendBookingEmail = (
   const mailRef = db.collection("mail").doc();
   const subject =
     lang === "de" ? `Bestätigung: ${courseKey}` : `Confirmation: ${courseKey}`;
-  const calText =
-    lang === "de" ? "📅 Zum Kalender hinzufügen" : "📅 Add to Calendar";
-  const signOff = lang === "de" ? "Herzliche Grüße," : "Warm regards,";
-  const addressHeader = lang === "de" ? "Standort:" : "Location:";
-  const mapsText =
-    lang === "de" ? "Auf Google Maps ansehen" : "View on Google Maps";
-
   const datesHtml = dates
     .map((d) => {
       const fDate = formatDate(d.date);
@@ -166,7 +160,7 @@ const sendBookingEmail = (
       return `
       <li style="margin-bottom: 12px; list-style: none; font-size: 15px;">
         <span style="display: inline-block; font-weight: bold;">${fDate}${fTime}</span> 
-        <a href="${getGoogleCalLink(courseKey, d.date)}" target="_blank" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff; margin-left: 10px; vertical-align: middle;">${calText}</a>
+        <a href="${getGoogleCalLink(courseKey, d.date)}" target="_blank" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff; margin-left: 10px; vertical-align: middle;">${lang === "de" ? "📅 Zum Kalender" : "📅 Add to Calendar"}</a>
       </li>`;
     })
     .join("");
@@ -180,19 +174,12 @@ const sendBookingEmail = (
           <h2 style="color: #4e5f28;">${lang === "de" ? "Buchung bestätigt!" : "Booking Confirmed!"}</h2>
           <p style="font-weight: bold; color: #9960a8;">${lang === "de" ? "Diese E-Mail ist dein Ticket." : "This email is your ticket."}</p>
           <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
-          <p>${lang === "de" ? `Deine Plätze für <strong>${courseKey}</strong> sind reserviert:` : `Your spots for <strong>${courseKey}</strong> are all set:`}</p>
           <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">
             <ul style="margin: 0; padding: 0;">${datesHtml}</ul>
           </div>
-          
-          <div style="margin-top: 25px; padding: 15px; border-top: 1px solid rgba(28, 7, 0, 0.1);">
-            <p style="margin: 0; font-weight: bold; font-size: 14px;">${addressHeader}</p>
-            <p style="margin: 5px 0; font-size: 16px;">Sägestrasse 11, 8952 Schlieren</p>
-            <a href="https://maps.google.com/?q=Sägestrasse+11,8952+Schlieren" target="_blank" style="color: #9960a8; font-size: 14px; text-decoration: underline;">${mapsText}</a>
-          </div>
-
+          <p><strong>Standort:</strong> Sägestrasse 11, 8952 Schlieren</p>
           ${isGuest ? getRegistrationCTA(lang, email, origin) : ""}
-          <br/><p>${signOff}<br/>Atelier Sinnesküche</p>
+          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
         </div>`,
     },
   });
@@ -214,26 +201,15 @@ const sendCancellationEmail = (
     lang === "de"
       ? `Termin abgesagt: ${courseKey}`
       : `Session Cancelled: ${courseKey}`;
-  const signOff = lang === "de" ? "Herzliche Grüße," : "Warm regards,";
-
   let htmlContent = `
     <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
       <h2 style="color: #ff4d4d;">${lang === "de" ? "Termin wurde abgesagt" : "Session Cancelled"}</h2>
       <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
-      <p>${lang === "de" ? `Leider müssen wir den Termin für <strong>${courseKey}</strong> am <strong>${formatDate(date)}</strong> absagen.` : `Unfortunately, we have to cancel the session for <strong>${courseKey}</strong> on <strong>${formatDate(date)}</strong>.`}</p>`;
-
+      <p>${lang === "de" ? `Der Termin für <strong>${courseKey}</strong> am <strong>${formatDate(date)}</strong> wurde abgesagt.` : `The session for <strong>${courseKey}</strong> on <strong>${formatDate(date)}</strong> has been cancelled.`}</p>`;
   if (code) {
-    htmlContent += `
-      <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">
-        <p>${lang === "de" ? "Nutze diesen Ersatz-Code für eine neue Buchung:" : "Use this replacement code for a new booking:"}</p>
-        <p style="font-size: 32px; font-weight: bold; color: #9960a8;">${code}</p>
-      </div>
-      ${getRegistrationCTA(lang, email, origin)}`;
-  } else {
-    htmlContent += `<p>${lang === "de" ? "Ein Guthaben wurde deinem Profil automatisch gutgeschrieben (+1)." : "One session credit has been automatically added back to your profile (+1)."}</p>`;
+    htmlContent += `<div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;"><p>${code}</p></div>`;
   }
-
-  htmlContent += `<br/><p>${signOff}<br/>Atelier Sinnesküche</p></div>`;
+  htmlContent += `<br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`;
   transaction.set(mailRef, {
     to: email,
     message: { subject, html: htmlContent },
@@ -262,8 +238,6 @@ exports.createStripeCheckout = onCall(
     const userEmail = request.auth
       ? request.auth.token.email
       : guestInfo?.email;
-
-    // CAPTURE ORIGIN FOR REGISTRATION LINK
     const origin =
       request.rawRequest.headers.origin || "https://sinneskueche.ch";
 
@@ -305,7 +279,7 @@ exports.createStripeCheckout = onCall(
           coursePath: coursePath || "unknown",
           selectedDates: JSON.stringify(selectedDates),
           currentLang: currentLang || "en",
-          origin: origin,
+          origin,
         },
       });
       return { url: session.url };
@@ -382,22 +356,6 @@ exports.handleStripeWebhook = onRequest(
                 },
                 { merge: true },
               );
-              transaction.set(db.collection("credit_history").doc(), {
-                userId,
-                amount: parseInt(packSize),
-                type: "purchase",
-                courseKey,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-              });
-              if (parsedDates.length > 0) {
-                transaction.set(db.collection("credit_history").doc(), {
-                  userId,
-                  amount: -parsedDates.length,
-                  type: "booking",
-                  courseKey,
-                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                });
-              }
               sendUserPackEmail(
                 transaction,
                 email,
@@ -440,6 +398,7 @@ exports.handleStripeWebhook = onRequest(
               date: d.date,
               coursePath,
               status: "confirmed",
+              lang,
               timestamp: admin.firestore.FieldValue.serverTimestamp(),
             });
           });
@@ -487,13 +446,6 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
         -selectedDates.length,
       ),
     });
-    transaction.set(db.collection("credit_history").doc(), {
-      userId: request.auth.uid,
-      amount: -selectedDates.length,
-      type: "booking",
-      courseKey,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
     selectedDates.forEach((d) => {
       transaction.set(db.collection("bookings").doc(), {
         userId: request.auth.uid,
@@ -501,6 +453,7 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
         date: d.date,
         coursePath,
         status: "confirmed",
+        lang: currentLang || "en",
         type: "credit_redemption",
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -520,25 +473,143 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
 });
 
 // ============================================================================
-// 4. REDEEM PACK CODE
+// 4. AUTOMATED COURSE REMINDERS (Daily at 08:00)
+// ============================================================================
+exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
+  const today = new Date();
+  const remindersSnap = await db.collection("course_reminders").get();
+  if (remindersSnap.empty) return;
+
+  const reminderConfigs = {};
+  remindersSnap.forEach((doc) => {
+    reminderConfigs[doc.id] = doc.data();
+  });
+
+  for (const courseId in reminderConfigs) {
+    const config = reminderConfigs[courseId];
+    const daysBefore = config.daysBefore || 3;
+    const targetDate = new Date();
+    targetDate.setDate(today.getDate() + daysBefore);
+    const targetDateStr = targetDate.toISOString().split("T")[0];
+
+    const bookingsSnap = await db
+      .collection("bookings")
+      .where("coursePath", "in", [`/${courseId}`, courseId])
+      .where("date", "==", targetDateStr)
+      .where("status", "==", "confirmed")
+      .get();
+
+    for (const bDoc of bookingsSnap.docs) {
+      const booking = bDoc.data();
+      if (booking.reminderSent) continue;
+
+      let email = booking.guestEmail;
+      let name = booking.guestName || "Customer";
+      let isFirstTimer = false;
+
+      if (booking.userId !== "GUEST_USER") {
+        const uSnap = await db.collection("users").doc(booking.userId).get();
+        if (uSnap.exists) {
+          email = uSnap.data().email;
+          name = uSnap.data().firstName || name;
+          const prevBookings = await db
+            .collection("bookings")
+            .where("userId", "==", booking.userId)
+            .where("coursePath", "==", booking.coursePath)
+            .limit(2)
+            .get();
+          isFirstTimer = prevBookings.size <= 1;
+        }
+      } else {
+        isFirstTimer = true; // Guest is default First-Timer
+      }
+
+      const lang = booking.lang || "en";
+      const template = config[lang] || config["en"];
+
+      let courseTime = "";
+      const evSnap = await db.collection("events").doc(booking.eventId).get();
+      if (evSnap.exists) courseTime = evSnap.data().time || "";
+
+      const replacements = {
+        "{userName}": name,
+        "{courseName}": getCleanCourseKey(booking.coursePath),
+        "{courseDate}": formatDate(booking.date),
+        "{courseTime}": courseTime,
+      };
+      let subject = template.subject;
+      let body = template.text;
+      Object.keys(replacements).forEach((k) => {
+        subject = subject.split(k).join(replacements[k]);
+        body = body.split(k).join(replacements[k]);
+      });
+
+      if (isFirstTimer && template.firstTimerText)
+        body += "\n\n" + template.firstTimerText;
+
+      await db.collection("mail").add({
+        to: email,
+        message: {
+          subject,
+          html: `<div style="font-family: Arial; background: #fffce3; padding: 30px; color: #1c0700; border-radius: 12px; border: 1px solid #caaff3;"><div style="white-space: pre-wrap;">${body}</div></div>`,
+        },
+      });
+      await bDoc.ref.update({ reminderSent: true });
+    }
+  }
+});
+
+// ============================================================================
+// 5. RENTAL REQUEST TRIGGER
+// ============================================================================
+exports.onRentRequestCreate = onDocumentCreated(
+  "rent_requests/{requestId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    const settingsSnap = await db
+      .collection("settings")
+      .doc("admin_config")
+      .get();
+    const adminEmail = settingsSnap.exists
+      ? settingsSnap.data().adminEmail
+      : null;
+    if (!adminEmail) return;
+
+    await db.collection("mail").add({
+      to: adminEmail,
+      message: {
+        subject: `New Rental Request: ${data.name}`,
+        html: `<div style="font-family: Arial; padding: 20px; background: #fffce3; border: 1px solid #caaff3; border-radius: 12px;">
+        <h2>New Rental Request</h2>
+        <p><strong>From:</strong> ${data.name}</p>
+        <p><strong>Date:</strong> ${data.date}</p>
+        <p><strong>Message:</strong><br/>${data.message}</p>
+      </div>`,
+      },
+    });
+  },
+);
+
+// ============================================================================
+// 6. ADMIN & USER ACTIONS (Cancel, Redeem, etc.)
 // ============================================================================
 exports.redeemPackCode = onCall({ cors: true }, async (request) => {
   const { coursePath, selectedDates, packCode, guestInfo, currentLang } =
     request.data;
   const courseKey = getCleanCourseKey(coursePath);
   const codeRef = db.collection("pack_codes").doc(packCode);
-  const origin = request.rawRequest.headers.origin || "https://sinneskueche.ch";
-
-  return db.runTransaction(async (transaction) => {
-    const codeSnap = await transaction.get(codeRef);
-    if (!codeSnap.exists) throw new HttpsError("not-found", "Invalid code.");
-    transaction.update(codeRef, {
+  return db.runTransaction(async (t) => {
+    const snap = await t.get(codeRef);
+    if (!snap.exists) throw new HttpsError("not-found", "Invalid code.");
+    t.update(codeRef, {
       remainingCredits: admin.firestore.FieldValue.increment(
         -selectedDates.length,
       ),
     });
     selectedDates.forEach((d) => {
-      transaction.set(db.collection("bookings").doc(), {
+      t.set(db.collection("bookings").doc(), {
         userId: "GUEST_USER",
         guestName: `${guestInfo.firstName} ${guestInfo.lastName}`,
         guestEmail: guestInfo.email,
@@ -546,87 +617,59 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
         date: d.date,
         coursePath,
         status: "confirmed",
-        type: "code_redemption",
+        lang: currentLang || "en",
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
     sendBookingEmail(
-      transaction,
+      t,
       guestInfo.email,
       guestInfo.firstName,
       courseKey,
       selectedDates,
       currentLang || "en",
       true,
-      origin,
+      "https://sinneskueche.ch",
     );
-    return {
-      success: true,
-      remainingCredits: codeSnap.data().remainingCredits - selectedDates.length,
-    };
-  });
-});
-
-// ============================================================================
-// 5. CANCEL BOOKING
-// ============================================================================
-exports.cancelBooking = onCall({ cors: true }, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-  const { bookingId } = request.data;
-  const bRef = db.collection("bookings").doc(bookingId);
-  return db.runTransaction(async (transaction) => {
-    const bSnap = await transaction.get(bRef);
-    if (!bSnap.exists || bSnap.data().userId !== request.auth.uid)
-      throw new HttpsError("permission-denied", "Unauthorized.");
-    const courseKey = getCleanCourseKey(bSnap.data().coursePath);
-    transaction.update(db.collection("users").doc(request.auth.uid), {
-      [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
-    });
-    transaction.set(db.collection("credit_history").doc(), {
-      userId: request.auth.uid,
-      amount: 1,
-      type: "refund",
-      courseKey,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    transaction.delete(bRef);
     return { success: true };
   });
 });
 
-// ============================================================================
-// 6. ADMIN CANCEL EVENT
-// ============================================================================
+exports.cancelBooking = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const { bookingId } = request.data;
+  const bRef = db.collection("bookings").doc(bookingId);
+  return db.runTransaction(async (t) => {
+    const snap = await t.get(bRef);
+    if (!snap.exists || snap.data().userId !== request.auth.uid)
+      throw new HttpsError("permission-denied", "Unauthorized.");
+    const courseKey = getCleanCourseKey(snap.data().coursePath);
+    t.update(db.collection("users").doc(request.auth.uid), {
+      [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
+    });
+    t.delete(bRef);
+    return { success: true };
+  });
+});
+
+// 7. ADMIN CANCEL EVENT (Refunds everyone)
 exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
   if (!request.auth)
     throw new HttpsError("unauthenticated", "Must be logged in.");
   const { eventId, currentLang } = request.data;
   const lang = currentLang || "en";
-  const origin = request.rawRequest.headers.origin || "https://sinneskueche.ch";
-
   const eventRef = db.collection("events").doc(eventId);
   const eventSnap = await eventRef.get();
   if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found");
 
   const eventData = eventSnap.data();
   const courseKey = getCleanCourseKey(eventData.link || "");
-  const eventDate = eventData.date;
-
   const bookingsSnap = await db
     .collection("bookings")
     .where("eventId", "==", eventId)
     .get();
 
   return await db.runTransaction(async (transaction) => {
-    const userSnapshots = {};
-    for (const bDoc of bookingsSnap.docs) {
-      const bData = bDoc.data();
-      if (bData.userId !== "GUEST_USER") {
-        const userRef = db.collection("users").doc(bData.userId);
-        userSnapshots[bData.userId] = await transaction.get(userRef);
-      }
-    }
-
     for (const bDoc of bookingsSnap.docs) {
       const bData = bDoc.data();
       if (bData.userId === "GUEST_USER") {
@@ -644,45 +687,26 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
           bData.guestEmail,
           bData.guestName,
           courseKey,
-          eventDate,
+          eventData.date,
           lang,
           newCode,
-          origin,
+          null,
         );
       } else {
-        const userSnap = userSnapshots[bData.userId];
         const userRef = db.collection("users").doc(bData.userId);
-        transaction.set(
-          userRef,
-          { credits: { [courseKey]: admin.firestore.FieldValue.increment(1) } },
-          { merge: true },
-        );
-        transaction.set(db.collection("credit_history").doc(), {
-          userId: bData.userId,
-          amount: 1,
-          type: "refund",
-          courseKey,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        transaction.update(userRef, {
+          [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
         });
-
-        const userEmail = userSnap?.exists
-          ? userSnap.data().email
-          : bData.guestEmail;
-        const userName = userSnap?.exists
-          ? userSnap.data().firstName
-          : "Customer";
-        if (userEmail) {
-          sendCancellationEmail(
-            transaction,
-            userEmail,
-            userName,
-            courseKey,
-            eventDate,
-            lang,
-            null,
-            null,
-          );
-        }
+        sendCancellationEmail(
+          transaction,
+          bData.guestEmail || "Customer",
+          "Customer",
+          courseKey,
+          eventData.date,
+          lang,
+          null,
+          null,
+        );
       }
       transaction.delete(bDoc.ref);
     }
@@ -690,50 +714,3 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
     return { success: true };
   });
 });
-
-// --- RENTAL REQUEST NOTIFICATION ---
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-
-exports.onRentRequestCreate = onDocumentCreated(
-  "rent_requests/{requestId}",
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const requestData = snap.data();
-
-    try {
-      const settingsSnap = await admin
-        .firestore()
-        .collection("settings")
-        .doc("admin_config")
-        .get();
-      const adminEmail = settingsSnap.exists
-        ? settingsSnap.data().adminEmail
-        : null;
-      if (!adminEmail) return;
-
-      await admin
-        .firestore()
-        .collection("mail")
-        .add({
-          to: adminEmail,
-          message: {
-            subject: `New Rental Request: ${requestData.name}`,
-            html: `
-          <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; padding: 20px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px;">
-            <h2 style="color: #4e5f28;">New Atelier Rental Request</h2>
-            <p><strong>From:</strong> ${requestData.name}</p>
-            <p><strong>Requested Date:</strong> ${requestData.date}</p>
-            <p><strong>Email:</strong> ${requestData.email}</p>
-            <p><strong>Phone:</strong> ${requestData.phone || "Not provided"}</p>
-            <p><strong>Message:</strong><br/>${requestData.message || "No message provided"}</p>
-            <hr style="border: 0; border-top: 1px solid #caaff3; margin: 20px 0;"/>
-            <p style="font-size: 12px; opacity: 0.7;">You can manage this request in your Admin Dashboard.</p>
-          </div>`,
-          },
-        });
-    } catch (error) {
-      console.error("Error sending rental notification:", error);
-    }
-  },
-);
