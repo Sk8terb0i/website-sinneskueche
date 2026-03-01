@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Ticket,
   ChevronDown,
@@ -7,6 +7,7 @@ import {
   Calendar,
   CheckCircle,
   XCircle,
+  Check,
 } from "lucide-react";
 import {
   signInWithEmailAndPassword,
@@ -25,6 +26,8 @@ import * as S from "./PriceDisplayStyles";
 
 export default function BookingSummary({
   selectedDates,
+  setSelectedDates,
+  eventBookingCounts,
   totalPrice,
   availableCredits,
   pricing,
@@ -34,54 +37,84 @@ export default function BookingSummary({
   currentLang,
   isMobile,
   onBookCredits,
-  onPayment, // Expected to handle ("pack", promoCode), ("individual", promoCode), or ("redeem", packCode)
-  coursePath, // Optional: if missing, validation falls back to window URL
+  onPayment,
+  coursePath,
 }) {
   const [isAuthExpanded, setIsAuthExpanded] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
 
-  // States for Guest Pack Redemption & Logged-in Stripe toggle
   const [isRedeemingCode, setIsRedeemingCode] = useState(false);
   const [packCode, setPackCode] = useState("");
   const [showStripeAlternative, setShowStripeAlternative] = useState(false);
 
-  // States for Promo / Discount Codes
   const [isPromoExpanded, setIsPromoExpanded] = useState(false);
   const [promoCodeInput, setPromoCodeInput] = useState("");
   const [activePromo, setActivePromo] = useState(null);
   const [promoStatus, setPromoStatus] = useState({ loading: false, error: "" });
 
-  // Form States for Inline Auth
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
 
+  const [selectedPackIndex, setSelectedPackIndex] = useState(0);
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-");
+    return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : dateStr;
+  };
+
+  const packOptions =
+    pricing?.packs?.length > 0
+      ? pricing.packs.map((p) => ({
+          size: Number(p.size || 0),
+          price: Number(p.price || 0),
+        }))
+      : pricing?.packSize
+        ? [{ size: Number(pricing.packSize), price: Number(pricing.priceFull) }]
+        : [];
+
+  const currentPack = packOptions[selectedPackIndex] || { size: 0, price: 0 };
   const hasSelection = selectedDates.length > 0;
-  const hasEnoughCredits = availableCredits >= selectedDates.length;
+  const totalTicketsSelected = selectedDates.reduce(
+    (sum, d) => sum + (d.count || 1),
+    0,
+  );
+  const hasEnoughCredits = availableCredits >= totalTicketsSelected;
 
-  // Calculate savings percentage
-  const singlePriceTotal =
-    parseFloat(pricing?.priceSingle || 0) * parseInt(pricing?.packSize || 1);
-  const packPrice = parseFloat(pricing?.priceFull || 0);
-  const savingsPercent =
-    singlePriceTotal > 0
-      ? Math.round(((singlePriceTotal - packPrice) / singlePriceTotal) * 100)
-      : 0;
+  // --- LOGIC UPDATE: Take existing credits into account ---
+  // 1. How many credits do we still need after using existing ones?
+  const neededCreditsAfterExisting = currentUser
+    ? Math.max(0, totalTicketsSelected - availableCredits)
+    : totalTicketsSelected;
 
-  // NEW: Determine what the active promo code applies to (fallback to "both" for old codes)
+  // 2. How many sessions are still not covered after adding the new pack?
+  const extraSessionsCount = Math.max(
+    0,
+    neededCreditsAfterExisting - currentPack.size,
+  );
+  const extraSessionsCost =
+    extraSessionsCount * parseFloat(pricing?.priceSingle || 0);
+
+  const calculateSavings = (pack) => {
+    const singlePrice = Number(pricing?.priceSingle || 0);
+    const normalPrice = singlePrice * pack.size;
+    if (normalPrice <= 0 || pack.price >= normalPrice) return 0;
+    return Math.round(((normalPrice - pack.price) / normalPrice) * 100);
+  };
+
   const promoApplyTo = activePromo?.applyTo || "both";
   const promoAppliesToPack =
     activePromo && (promoApplyTo === "both" || promoApplyTo === "pack");
   const promoAppliesToSingle =
     activePromo && (promoApplyTo === "both" || promoApplyTo === "single");
 
-  // Calculate discounted prices based on where the promo applies
   let finalTotalPrice = parseFloat(totalPrice || 0);
-  let finalPackPrice = parseFloat(pricing?.priceFull || 0);
+  let finalPackPrice = parseFloat(currentPack?.price || 0) + extraSessionsCost;
 
   if (activePromo) {
     if (activePromo.discountType === "percent") {
@@ -96,7 +129,6 @@ export default function BookingSummary({
     }
   }
 
-  // Format to remove .00 if whole number
   const formatPrice = (val) => {
     const num = Number(val);
     if (isNaN(num)) return "0";
@@ -107,7 +139,6 @@ export default function BookingSummary({
     e.preventDefault();
     setAuthError("");
     setAuthLoading(true);
-
     try {
       if (isRegistering) {
         const userCred = await createUserWithEmailAndPassword(
@@ -135,17 +166,14 @@ export default function BookingSummary({
 
   const handleApplyPromo = async () => {
     if (!promoCodeInput.trim()) return;
-
     setPromoStatus({ loading: true, error: "" });
     setActivePromo(null);
-
     try {
       const q = query(
         collection(db, "promo_codes"),
         where("code", "==", promoCodeInput.trim().toUpperCase()),
       );
       const snap = await getDocs(q);
-
       if (snap.empty) {
         setPromoStatus({
           loading: false,
@@ -153,19 +181,16 @@ export default function BookingSummary({
         });
         return;
       }
-
       const promoData = snap.docs[0].data();
-
-      // Robust Validation: Check if the promo applies to the active URL or passed coursePath
-      const promoPath = (promoData.coursePath || "").replace(/\//g, "");
-      const activePath = (
-        coursePath ||
-        window.location.hash ||
-        window.location.pathname ||
-        ""
-      ).replace(/\//g, "");
-
-      if (promoPath && promoPath !== "all" && !activePath.includes(promoPath)) {
+      const activePath = (coursePath || window.location.hash || "").replace(
+        /\//g,
+        "",
+      );
+      if (
+        promoData.coursePath &&
+        promoData.coursePath !== "all" &&
+        !activePath.includes(promoData.coursePath.replace(/\//g, ""))
+      ) {
         setPromoStatus({
           loading: false,
           error:
@@ -175,128 +200,284 @@ export default function BookingSummary({
         });
         return;
       }
-
-      if (
-        promoData.limitType === "uses" &&
-        promoData.timesUsed >= promoData.maxUses
-      ) {
-        setPromoStatus({
-          loading: false,
-          error:
-            currentLang === "en"
-              ? "Code limit reached."
-              : "Code-Limit erreicht.",
-        });
-        return;
-      }
-      if (
-        promoData.limitType === "date" &&
-        new Date(promoData.expiryDate) < new Date()
-      ) {
-        setPromoStatus({
-          loading: false,
-          error: currentLang === "en" ? "Code expired." : "Code abgelaufen.",
-        });
-        return;
-      }
-
       setActivePromo(promoData);
       setPromoStatus({ loading: false, error: "" });
     } catch (err) {
-      console.error(err);
       setPromoStatus({ loading: false, error: "Error verifying code." });
     }
   };
 
-  const renderPackOption = () => (
+  const renderSelectionSummary = () => (
     <div
       style={{
-        backgroundColor: "rgba(202, 175, 243, 0.15)",
-        borderRadius: "20px",
-        padding: isMobile ? "1.2rem" : "1.8rem",
-        border: "1px solid #caaff3",
-        display: "flex",
-        flexDirection: "column",
-        gap: "1.2rem",
+        marginBottom: "1.5rem",
+        borderBottom: "1px solid rgba(28, 7, 0, 0.1)",
+        paddingBottom: "1rem",
       }}
     >
-      {!isRedeemingCode && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: isMobile ? "column" : "row",
-            justifyContent: "space-between",
-            alignItems: isMobile ? "flex-start" : "baseline",
-            gap: isMobile ? "8px" : "0",
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <p
-              style={{
-                fontWeight: "800",
-                marginTop: 0,
-                marginBottom: 0,
-                fontSize: "1.1rem",
-                lineHeight: 1.2,
-              }}
-            >
-              {currentLang === "en"
-                ? `${pricing.packSize}-Session Pack`
-                : `${pricing.packSize}er Karte`}
-            </p>
-            <span
-              style={{
-                fontSize: "0.6rem",
-                color: "#9960a8",
-                backgroundColor: "rgba(153, 96, 168, 0.1)",
-                padding: "2px 8px",
-                borderRadius: "4px",
-                fontWeight: "900",
-                width: "fit-content",
-              }}
-            >
-              {currentLang === "en"
-                ? `SAVE ${savingsPercent}%`
-                : `${savingsPercent}% ERSPARNIS`}
-            </span>
-          </div>
+      <h4
+        style={{
+          fontSize: "0.8rem",
+          textTransform: "uppercase",
+          letterSpacing: "1px",
+          opacity: 0.6,
+          marginBottom: "1rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        <Calendar size={14} />{" "}
+        {currentLang === "en" ? "Your Selection" : "Deine Auswahl"}
+      </h4>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+          maxHeight: "210px",
+          overflowY: "auto",
+          paddingRight: "5px",
+        }}
+        className="custom-scrollbar"
+      >
+        {selectedDates.map((d) => {
+          const booked = eventBookingCounts[d.id] || 0;
+          const cap = parseInt(pricing?.capacity || 99);
+          const canAddMore = !pricing?.hasCapacity || booked + d.count < cap;
+          const updateCount = (delta) => {
+            setSelectedDates((prev) =>
+              prev.map((item) => {
+                if (item.id === d.id) {
+                  const newCount = Math.max(1, item.count + delta);
+                  if (delta > 0 && !canAddMore) return item;
+                  return { ...item, count: newCount };
+                }
+                return item;
+              }),
+            );
+          };
+          const removeDate = () => {
+            setSelectedDates((prev) => prev.filter((item) => item.id !== d.id));
+          };
 
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: isMobile ? "flex-start" : "flex-end",
-            }}
-          >
-            {promoAppliesToPack && (
-              <span
+          return (
+            <div
+              key={d.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                backgroundColor: "#fdf8e1",
+                padding: "10px 14px",
+                borderRadius: "12px",
+                border: "1px solid rgba(28, 7, 0, 0.05)",
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span style={{ fontWeight: "800", fontSize: "0.9rem" }}>
+                  {formatDate(d.date)}
+                </span>
+                <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
+                  {d.time || ""}
+                </span>
+              </div>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "12px" }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    backgroundColor: "rgba(202, 175, 243, 0.1)",
+                    borderRadius: "8px",
+                    padding: "4px",
+                  }}
+                >
+                  <button
+                    onClick={() => updateCount(-1)}
+                    style={{
+                      border: "none",
+                      background: "none",
+                      cursor: "pointer",
+                      fontWeight: "900",
+                      color: "#9960a8",
+                      padding: "0 6px",
+                    }}
+                  >
+                    -
+                  </button>
+                  <span
+                    style={{
+                      fontWeight: "900",
+                      fontSize: "0.9rem",
+                      minWidth: "15px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {d.count}
+                  </span>
+                  <button
+                    onClick={() => updateCount(1)}
+                    disabled={!canAddMore}
+                    style={{
+                      border: "none",
+                      background: "none",
+                      cursor: "pointer",
+                      fontWeight: "900",
+                      color: "#9960a8",
+                      padding: "0 6px",
+                      opacity: canAddMore ? 1 : 0.3,
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+                <button
+                  onClick={removeDate}
+                  style={{
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    color: "#1c0700",
+                    opacity: 0.4,
+                  }}
+                >
+                  <XCircle size={18} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderPackOption = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      {!isRedeemingCode && (
+        <>
+          {packOptions.map((pack, idx) => {
+            const isSelected = selectedPackIndex === idx;
+            const savings = calculateSavings(pack);
+            // Updated comparison logic for individual pack highlights
+            const isExceededForThisPack = currentUser
+              ? totalTicketsSelected > availableCredits + pack.size
+              : totalTicketsSelected > pack.size;
+
+            return (
+              <div
+                key={idx}
+                onClick={() => setSelectedPackIndex(idx)}
                 style={{
-                  fontSize: "0.85rem",
-                  textDecoration: "line-through",
-                  color: "#1c0700",
-                  opacity: 0.5,
+                  backgroundColor: isSelected
+                    ? "rgba(202, 175, 243, 0.25)"
+                    : "rgba(202, 175, 243, 0.05)",
+                  borderRadius: "16px",
+                  padding: "1.2rem",
+                  border: isSelected
+                    ? "2px solid #9960a8"
+                    : "1px solid rgba(202, 175, 243, 0.3)",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
                 }}
               >
-                {formatPrice(pricing.priceFull)} CHF
-              </span>
-            )}
-            <p
-              style={{
-                fontWeight: "700",
-                marginTop: 0,
-                marginBottom: 0,
-                color: "#4e5f28",
-                fontSize: isMobile ? "1.4rem" : "1.1rem",
-              }}
-            >
-              {formatPrice(finalPackPrice)} CHF
-            </p>
-          </div>
-        </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      {isSelected && (
+                        <Check size={16} color="#9960a8" strokeWidth={3} />
+                      )}
+                      <p
+                        style={{
+                          fontWeight: "800",
+                          margin: 0,
+                          fontSize: "1rem",
+                        }}
+                      >
+                        {pack.size}{" "}
+                        {currentLang === "en" ? "Sessions Pack" : "er Karte"}
+                      </p>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "0.6rem",
+                        color: "#9960a8",
+                        backgroundColor: "rgba(153, 96, 168, 0.1)",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        fontWeight: "900",
+                        width: "fit-content",
+                      }}
+                    >
+                      {currentLang === "en"
+                        ? `SAVE ${savings}%`
+                        : `${savings}% ERSPARNIS`}
+                    </span>
+                  </div>
+                  <p
+                    style={{
+                      fontWeight: "700",
+                      margin: 0,
+                      color: "#4e5f28",
+                      fontSize: "1.1rem",
+                    }}
+                  >
+                    {formatPrice(pack.price)} CHF
+                  </p>
+                </div>
+                {isSelected && isExceededForThisPack && (
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      padding: "8px",
+                      backgroundColor: "rgba(28, 7, 0, 0.05)",
+                      borderRadius: "8px",
+                      fontSize: "0.7rem",
+                      color: "#1c0700",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontWeight: "700" }}>
+                      {currentLang === "en"
+                        ? `+ ${extraSessionsCount} extra sessions @ single price`
+                        : `+ ${extraSessionsCount} zusätzliche Termine zum Einzelpreis`}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </>
       )}
 
       {!currentUser && isRedeemingCode ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            marginTop: "10px",
+          }}
+        >
           <h4
             style={{
               marginTop: 0,
@@ -345,10 +526,22 @@ export default function BookingSummary({
           </button>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            marginTop: "10px",
+          }}
+        >
           <button
             onClick={() =>
-              onPayment("pack", promoAppliesToPack ? activePromo?.code : null)
+              onPayment(
+                "pack",
+                promoAppliesToPack ? activePromo?.code : null,
+                currentPack.size,
+                finalPackPrice,
+              )
             }
             style={S.primaryBtnStyle(isMobile)}
             disabled={
@@ -356,14 +549,9 @@ export default function BookingSummary({
             }
           >
             {currentLang === "en"
-              ? hasSelection
-                ? "Buy & Book"
-                : "Buy"
-              : hasSelection
-                ? "Kaufen & Buchen"
-                : "Kaufen"}
+              ? `${hasSelection ? "Buy & Book" : "Buy"} (${formatPrice(finalPackPrice)} CHF)`
+              : `${hasSelection ? "Kaufen & Buchen" : "Kaufen"} (${formatPrice(finalPackPrice)} CHF)`}
           </button>
-
           {!currentUser && (
             <button
               onClick={() => setIsRedeemingCode(true)}
@@ -382,64 +570,31 @@ export default function BookingSummary({
                 : "Hast du einen Code? Hier einlösen."}
             </button>
           )}
-
-          {!currentUser && (
-            <div
-              style={{
-                color: "#4e5f28",
-                fontSize: "0.75rem",
-                lineHeight: "1.5",
-                marginTop: "0.5rem",
-                backgroundColor: "rgba(78, 95, 40, 0.05)",
-                padding: "10px",
-                borderRadius: "8px",
-              }}
-            >
-              {currentLang === "en" ? (
-                <>
-                  <strong>Guest:</strong> Get a pack code via email to use
-                  later.
-                  <br />
-                  <strong>Member:</strong> Save credits to your profile for easy
-                  booking.
-                  <br />
-                  <br />
-                  <em>Note:</em> You can select dates now (deducted from pack),
-                  or buy without dates to use later.
-                </>
-              ) : (
-                <>
-                  <strong>Gast:</strong> Erhalte einen Code per E-Mail für
-                  später.
-                  <br />
-                  <strong>Mitglied:</strong> Speichere Guthaben im Profil für
-                  einfache Zahlungen.
-                  <br />
-                  <br />
-                  <em>Hinweis:</em> Termine können sofort gewählt (werden
-                  abgezogen) oder für später aufbewahrt werden.
-                </>
-              )}
-            </div>
-          )}
-
-          {currentUser && hasSelection && (
-            <p
-              style={{
-                fontSize: "0.7rem",
-                opacity: 0.6,
-                marginTop: 0,
-                marginBottom: 0,
-                fontStyle: "italic",
-                textAlign: "left",
-                lineHeight: "1.3",
-              }}
-            >
-              {currentLang === "en"
-                ? `The remaining ${pricing.packSize - selectedDates.length} credits will be saved to your profile.`
-                : `Die restlichen ${pricing.packSize - selectedDates.length} Guthaben werden deinem Profil gutgeschrieben.`}
-            </p>
-          )}
+          <p
+            style={{
+              fontSize: "0.7rem",
+              opacity: 0.6,
+              marginTop: "5px",
+              fontStyle: "italic",
+              lineHeight: "1.4",
+              textAlign: "center",
+            }}
+          >
+            {totalTicketsSelected >
+            (currentUser
+              ? availableCredits + currentPack.size
+              : currentPack.size)
+              ? currentLang === "en"
+                ? "Selection exceeds available credits and pack size. Extras added at single price."
+                : "Auswahl überschreitet Guthaben und Kartengröße. Extras zum Einzelpreis berechnet."
+              : currentUser
+                ? currentLang === "en"
+                  ? `The ${totalTicketsSelected === 0 ? "full" : "remaining"} ${availableCredits + currentPack.size - totalTicketsSelected} credits will be saved to your profile.`
+                  : `Die ${totalTicketsSelected === 0 ? "vollen" : "restlichen"} ${availableCredits + currentPack.size - totalTicketsSelected} Guthaben werden deinem Profil gutgeschrieben.`
+                : currentLang === "en"
+                  ? `You will receive a code for the ${totalTicketsSelected === 0 ? "full" : "remaining"} ${currentPack.size - totalTicketsSelected} credits via email.`
+                  : `Du erhältst einen Code für die ${totalTicketsSelected === 0 ? "vollen" : "restlichen"} ${currentPack.size - totalTicketsSelected} Guthaben per E-Mail.`}
+          </p>
         </div>
       )}
     </div>
@@ -487,7 +642,7 @@ export default function BookingSummary({
         marginTop: "0.5rem",
       }}
     >
-      {/* PROMO CODE INTERFACE */}
+      {!currentUser && renderSelectionSummary()}
       <div
         style={{
           backgroundColor: "rgba(202, 175, 243, 0.1)",
@@ -512,7 +667,7 @@ export default function BookingSummary({
               gap: "6px",
             }}
           >
-            <Ticket size={16} />
+            <Ticket size={16} />{" "}
             {currentLang === "en"
               ? "Add Promo / Discount Code"
               : "Aktions- / Rabattcode hinzufügen"}
@@ -546,7 +701,8 @@ export default function BookingSummary({
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#ff4d4d",
+                  color: "#1c0700",
+                  opacity: 0.5,
                   fontSize: "0.7rem",
                   cursor: "pointer",
                   textDecoration: "underline",
@@ -580,7 +736,7 @@ export default function BookingSummary({
                   style={{
                     padding: "0 15px",
                     backgroundColor: "#9960a8",
-                    color: "#fff",
+                    color: "#fdf8e1",
                     border: "none",
                     borderRadius: "12px",
                     fontWeight: "bold",
@@ -597,39 +753,31 @@ export default function BookingSummary({
                 </button>
               )}
             </div>
-
             {activePromo && (
               <p
                 style={{
                   fontSize: "0.75rem",
                   color: "#4e5f28",
                   marginTop: "4px",
-                  marginBottom: 0,
                   fontWeight: "bold",
                   display: "flex",
                   alignItems: "center",
                   gap: "4px",
                 }}
               >
-                <CheckCircle size={14} />
+                <CheckCircle size={14} />{" "}
                 {currentLang === "en"
-                  ? `Code applied: ${activePromo.discountValue}${
-                      activePromo.discountType === "percent" ? "% OFF" : " FREE"
-                    }`
-                  : `Code angewendet: ${activePromo.discountValue}${
-                      activePromo.discountType === "percent"
-                        ? "% RABATT"
-                        : " GRATIS"
-                    }`}
+                  ? `Code applied: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% OFF" : " FREE"}`
+                  : `Code angewendet: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% RABATT" : " GRATIS"}`}
               </p>
             )}
             {promoStatus.error && (
               <p
                 style={{
                   fontSize: "0.75rem",
-                  color: "#ff4d4d",
+                  color: "#1c0700",
+                  opacity: 0.7,
                   marginTop: "4px",
-                  marginBottom: 0,
                   fontWeight: "bold",
                   display: "flex",
                   alignItems: "center",
@@ -642,7 +790,6 @@ export default function BookingSummary({
           </div>
         )}
       </div>
-
       {pricing?.hasPack && renderPackOption()}
       {renderIndividualOption()}
     </div>
@@ -654,7 +801,6 @@ export default function BookingSummary({
         style={{
           minWidth: isMobile ? "100%" : "380px",
           opacity: 1,
-          transition: "opacity 0.4s ease",
           textAlign: "left",
         }}
       >
@@ -664,7 +810,6 @@ export default function BookingSummary({
             fontSize: isMobile ? "1.8rem" : "2rem",
             marginBottom: "1.5rem",
             marginTop: 0,
-            textAlign: "left",
           }}
         >
           {hasSelection
@@ -734,10 +879,7 @@ export default function BookingSummary({
                           currentLang === "en" ? "First Name" : "Vorname"
                         }
                         required
-                        style={{
-                          ...S.guestInputStyle,
-                          flex: 1,
-                        }}
+                        style={{ ...S.guestInputStyle, flex: 1 }}
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                       />
@@ -747,10 +889,7 @@ export default function BookingSummary({
                           currentLang === "en" ? "Last Name" : "Nachname"
                         }
                         required
-                        style={{
-                          ...S.guestInputStyle,
-                          flex: 1,
-                        }}
+                        style={{ ...S.guestInputStyle, flex: 1 }}
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                       />
@@ -776,9 +915,8 @@ export default function BookingSummary({
                     <p
                       style={{
                         fontSize: "0.7rem",
-                        color: "#ff4d4d",
-                        marginTop: 0,
-                        marginBottom: 0,
+                        color: "#1c0700",
+                        opacity: 0.7,
                       }}
                     >
                       {authError}
@@ -844,7 +982,7 @@ export default function BookingSummary({
                     opacity: 0.6,
                   }}
                 >
-                  {currentLang === "en" ? "GUEST DETAILS" : "GAST-DETAILS"}
+                  {currentLang === "en" ? "Guest details" : "Gast-Details"}
                 </span>
                 <div
                   style={{
@@ -887,7 +1025,6 @@ export default function BookingSummary({
                 />
               </div>
             )}
-
             {renderPurchaseOptions()}
           </div>
         )}
@@ -915,7 +1052,7 @@ export default function BookingSummary({
                 <strong>{availableCredits}</strong>
               </span>
             </div>
-
+            {hasSelection && renderSelectionSummary()}
             {hasSelection && (
               <div
                 style={{
@@ -924,9 +1061,9 @@ export default function BookingSummary({
                 }}
               >
                 <span style={S.labelStyle(isMobile)}>
-                  {selectedDates.length}{" "}
+                  {totalTicketsSelected}{" "}
                   {currentLang === "en"
-                    ? selectedDates.length === 1
+                    ? totalTicketsSelected === 1
                       ? "Session"
                       : "Sessions"
                     : "Termine"}
@@ -936,7 +1073,6 @@ export default function BookingSummary({
                 </span>
               </div>
             )}
-
             <div
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
@@ -947,10 +1083,9 @@ export default function BookingSummary({
                     style={{ ...S.creditBtnStyle(isMobile), padding: "14px" }}
                   >
                     {currentLang === "en"
-                      ? `Book with ${selectedDates.length} Credits`
-                      : `Mit ${selectedDates.length} Guthaben buchen`}
+                      ? `Book with ${totalTicketsSelected} Credits`
+                      : `Mit ${totalTicketsSelected} Guthaben buchen`}
                   </button>
-
                   <button
                     onClick={() =>
                       setShowStripeAlternative(!showStripeAlternative)
@@ -970,7 +1105,6 @@ export default function BookingSummary({
                       ? "Or pay with card"
                       : "Oder mit Karte zahlen"}
                   </button>
-
                   {showStripeAlternative && renderPurchaseOptions()}
                 </>
               ) : (

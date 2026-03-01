@@ -10,7 +10,8 @@ import {
   Eye,
   EyeOff,
   CreditCard,
-  Layers,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import {
   sectionTitleStyle,
@@ -65,15 +66,43 @@ export default function PricingTab({ isMobile }) {
     }));
   };
 
+  // --- UPDATED PACK HANDLER: Sets "5" as default value ---
+  const addPackOption = (courseId) => {
+    const currentPacks = priceData[courseId]?.packs || [];
+    handlePriceChange(courseId, "packs", [
+      ...currentPacks,
+      { size: "5", price: "" }, // FIX: Default size set to 5 so it saves correctly
+    ]);
+  };
+
+  const updatePackOption = (courseId, index, field, value) => {
+    const updatedPacks = [...(priceData[courseId]?.packs || [])];
+    updatedPacks[index][field] = value;
+    handlePriceChange(courseId, "packs", updatedPacks);
+  };
+
+  const removePackOption = (courseId, index) => {
+    const updatedPacks = (priceData[courseId]?.packs || []).filter(
+      (_, i) => i !== index,
+    );
+    handlePriceChange(courseId, "packs", updatedPacks);
+  };
+
   const savePrice = async (courseId, courseName) => {
     setSavingPriceId(courseId);
     const isPerHour = priceData[courseId]?.isPerHour ?? false;
 
     try {
+      // Logic to ensure the packs array is clean before saving
+      const validPacks = (priceData[courseId]?.packs || []).filter(
+        (p) => p.size !== "" && p.price !== "",
+      );
+
       const dataToSave = {
         priceSingle: priceData[courseId]?.priceSingle || "",
-        priceFull: priceData[courseId]?.priceFull || "",
-        packSize: priceData[courseId]?.packSize || "10",
+        priceFull: validPacks[0]?.price || "",
+        packSize: validPacks[0]?.size || "10",
+        packs: validPacks, // Save only packs that have both size and price
         duration: isPerHour ? priceData[courseId]?.duration || "" : "",
         hasPack: priceData[courseId]?.hasPack ?? false,
         isPerHour: isPerHour,
@@ -86,6 +115,8 @@ export default function PricingTab({ isMobile }) {
       await setDoc(doc(db, "course_settings", courseId), dataToSave, {
         merge: true,
       });
+      // Refresh local state with clean data
+      await fetchPrices();
     } catch (error) {
       alert("Error saving: " + error.message);
     } finally {
@@ -105,14 +136,13 @@ export default function PricingTab({ isMobile }) {
         {availableCourses.map((c) => {
           const courseId = c.link.replace(/\//g, "");
           const currentSingle = priceData[courseId]?.priceSingle || "";
-          const currentFull = priceData[courseId]?.priceFull || "";
-          const currentPackSize = priceData[courseId]?.packSize || "10";
           const currentDuration = priceData[courseId]?.duration || "";
           const hasCapacity = priceData[courseId]?.hasCapacity ?? false;
           const currentCapacity = priceData[courseId]?.capacity || "";
           const hasPack = priceData[courseId]?.hasPack ?? false;
           const isPerHour = priceData[courseId]?.isPerHour ?? false;
           const isVisible = priceData[courseId]?.isVisible ?? true;
+          const packOptions = priceData[courseId]?.packs || [];
 
           const isSaving = savingPriceId === courseId;
 
@@ -129,7 +159,7 @@ export default function PricingTab({ isMobile }) {
                 backgroundColor: isVisible ? "#fdf8e1" : "#f5f5f5",
               }}
             >
-              {/* --- SECTION 1: IDENTITY & VISIBILITY --- */}
+              {/* SECTION 1: IDENTITY & VISIBILITY */}
               <div
                 style={{
                   display: "flex",
@@ -187,7 +217,7 @@ export default function PricingTab({ isMobile }) {
                 </div>
               </div>
 
-              {/* --- SECTION 2: BASE PRICING --- */}
+              {/* SECTION 2: PRICING TYPE & SINGLE PRICE */}
               <div
                 style={{
                   display: "flex",
@@ -245,7 +275,6 @@ export default function PricingTab({ isMobile }) {
                     </div>
                   </div>
                 </div>
-
                 <div style={{ flex: 1, display: "flex", gap: "10px" }}>
                   <div style={{ flex: 2 }}>
                     <label style={{ ...labelStyle, fontSize: "0.75rem" }}>
@@ -286,165 +315,209 @@ export default function PricingTab({ isMobile }) {
                 </div>
               </div>
 
-              {/* --- SECTION 3: PACKS & CAPACITY (SIDE BY SIDE ON DESKTOP) --- */}
+              {/* SECTION 3: MULTIPLE PACKS */}
               <div
                 style={{
-                  display: "flex",
-                  flexDirection: isMobile ? "column" : "row",
-                  gap: "1rem",
+                  backgroundColor: hasPack
+                    ? "rgba(202, 175, 243, 0.05)"
+                    : "transparent",
+                  padding: "16px",
+                  borderRadius: "16px",
+                  border: "1px solid rgba(28,7,0,0.05)",
                 }}
               >
-                {/* Pack Box */}
-                <div
+                <label
                   style={{
-                    flex: 1,
-                    backgroundColor: hasPack
-                      ? "rgba(202, 175, 243, 0.1)"
-                      : "transparent",
-                    padding: "12px",
-                    borderRadius: "12px",
-                    border: hasPack
-                      ? "1px solid #caaff3"
-                      : "1px solid rgba(28,7,0,0.05)",
+                    ...labelStyle,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    cursor: "pointer",
+                    marginBottom: hasPack ? "1rem" : 0,
                   }}
                 >
-                  <label
-                    style={{
-                      ...labelStyle,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      cursor: "pointer",
-                      marginBottom: hasPack ? "12px" : 0,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={hasPack}
-                      onChange={(e) =>
-                        handlePriceChange(courseId, "hasPack", e.target.checked)
-                      }
-                    />
-                    Enable Session Packs
-                  </label>
-                  {hasPack && (
-                    <div style={{ display: "flex", gap: "10px" }}>
-                      <div style={{ flex: 1 }}>
-                        <label
-                          style={{ fontSize: "0.65rem", fontWeight: "bold" }}
-                        >
-                          Size
-                        </label>
-                        <input
-                          type="number"
-                          style={{ ...inputStyle, padding: "8px" }}
-                          value={currentPackSize}
-                          onChange={(e) =>
-                            handlePriceChange(
-                              courseId,
-                              "packSize",
-                              e.target.value,
-                            )
-                          }
-                        />
-                      </div>
-                      <div style={{ flex: 2 }}>
-                        <label
-                          style={{ fontSize: "0.65rem", fontWeight: "bold" }}
-                        >
-                          Pack Price
-                        </label>
-                        <input
-                          style={{ ...inputStyle, padding: "8px" }}
-                          value={currentFull}
-                          onChange={(e) =>
-                            handlePriceChange(
-                              courseId,
-                              "priceFull",
-                              e.target.value,
-                            )
-                          }
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  <input
+                    type="checkbox"
+                    checked={hasPack}
+                    onChange={(e) =>
+                      handlePriceChange(courseId, "hasPack", e.target.checked)
+                    }
+                  />
+                  Enable Session Packs
+                </label>
 
-                {/* Capacity Box */}
-                <div
-                  style={{
-                    flex: 1,
-                    backgroundColor: hasCapacity
-                      ? "rgba(78, 95, 40, 0.05)"
-                      : "transparent",
-                    padding: "12px",
-                    borderRadius: "12px",
-                    border: hasCapacity
-                      ? "1px solid #4e5f28"
-                      : "1px solid rgba(28,7,0,0.05)",
-                  }}
-                >
-                  <label
+                {hasPack && (
+                  <div
                     style={{
-                      ...labelStyle,
                       display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      cursor: "pointer",
-                      color: hasCapacity ? "#4e5f28" : "inherit",
-                      marginBottom: hasCapacity ? "12px" : 0,
+                      flexDirection: "column",
+                      gap: "12px",
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={hasCapacity}
-                      onChange={(e) =>
-                        handlePriceChange(
-                          courseId,
-                          "hasCapacity",
-                          e.target.checked,
-                        )
-                      }
-                    />
-                    Limit Max Students
-                  </label>
-                  {hasCapacity && (
-                    <div>
-                      <label
-                        style={{ fontSize: "0.65rem", fontWeight: "bold" }}
+                    {packOptions.map((pack, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex",
+                          gap: "10px",
+                          alignItems: "flex-end",
+                        }}
                       >
-                        Students Per Session
-                      </label>
-                      <div style={{ position: "relative" }}>
-                        <input
-                          type="number"
-                          style={{ ...inputStyle, padding: "8px 8px 8px 32px" }}
-                          value={currentCapacity}
-                          onChange={(e) =>
-                            handlePriceChange(
-                              courseId,
-                              "capacity",
-                              e.target.value,
-                            )
-                          }
-                        />
-                        <Users
-                          size={14}
+                        <div style={{ flex: 1 }}>
+                          <label
+                            style={{
+                              fontSize: "0.6rem",
+                              fontWeight: "bold",
+                              textTransform: "uppercase",
+                              opacity: 0.5,
+                            }}
+                          >
+                            Size
+                          </label>
+                          <input
+                            type="number"
+                            style={{
+                              ...inputStyle,
+                              padding: "8px",
+                              marginBottom: 0,
+                            }}
+                            value={pack.size}
+                            onChange={(e) =>
+                              updatePackOption(
+                                courseId,
+                                idx,
+                                "size",
+                                e.target.value,
+                              )
+                            }
+                          />
+                        </div>
+                        <div style={{ flex: 2 }}>
+                          <label
+                            style={{
+                              fontSize: "0.6rem",
+                              fontWeight: "bold",
+                              textTransform: "uppercase",
+                              opacity: 0.5,
+                            }}
+                          >
+                            Price (CHF)
+                          </label>
+                          <input
+                            placeholder="200"
+                            style={{
+                              ...inputStyle,
+                              padding: "8px",
+                              marginBottom: 0,
+                            }}
+                            value={pack.price}
+                            onChange={(e) =>
+                              updatePackOption(
+                                courseId,
+                                idx,
+                                "price",
+                                e.target.value,
+                              )
+                            }
+                          />
+                        </div>
+                        <button
+                          onClick={() => removePackOption(courseId, idx)}
                           style={{
-                            position: "absolute",
-                            left: "10px",
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            opacity: 0.4,
+                            background: "none",
+                            border: "none",
+                            color: "#ff4d4d",
+                            padding: "10px",
+                            cursor: "pointer",
                           }}
-                        />
+                        >
+                          <Trash2 size={18} />
+                        </button>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    ))}
+                    <button
+                      onClick={() => addPackOption(courseId)}
+                      style={{
+                        ...btnStyle,
+                        width: "fit-content",
+                        padding: "8px 16px",
+                        backgroundColor: "white",
+                        color: "#1c0700",
+                        border: "1px dashed #caaff3",
+                        fontSize: "0.8rem",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <Plus size={14} /> Add Pack Option
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* --- SAVE BUTTON --- */}
+              {/* CAPACITY SECTION */}
+              <div
+                style={{
+                  backgroundColor: hasCapacity
+                    ? "rgba(78, 95, 40, 0.05)"
+                    : "transparent",
+                  padding: "12px",
+                  borderRadius: "12px",
+                  border: hasCapacity
+                    ? "1px solid #4e5f28"
+                    : "1px solid rgba(28,7,0,0.05)",
+                }}
+              >
+                <label
+                  style={{
+                    ...labelStyle,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    cursor: "pointer",
+                    color: hasCapacity ? "#4e5f28" : "inherit",
+                    marginBottom: hasCapacity ? "12px" : 0,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={hasCapacity}
+                    onChange={(e) =>
+                      handlePriceChange(
+                        courseId,
+                        "hasCapacity",
+                        e.target.checked,
+                      )
+                    }
+                  />
+                  Limit Max Students
+                </label>
+                {hasCapacity && (
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="number"
+                      style={{ ...inputStyle, padding: "8px 8px 8px 32px" }}
+                      value={currentCapacity}
+                      onChange={(e) =>
+                        handlePriceChange(courseId, "capacity", e.target.value)
+                      }
+                    />
+                    <Users
+                      size={14}
+                      style={{
+                        position: "absolute",
+                        left: "10px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        opacity: 0.4,
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* SAVE BUTTON */}
               <button
                 onClick={() => savePrice(courseId, c.text.en)}
                 disabled={isSaving}

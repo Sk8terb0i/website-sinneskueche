@@ -47,6 +47,7 @@ export const monthLabelStyle = (isMobile) => ({
   fontFamily: "Harmond-SemiBoldCondensed",
   fontSize: isMobile ? "1.1rem" : "1.5rem",
   margin: 0,
+  textTransform: "lowercase",
 });
 export const calendarGridStyle = (isMobile) => ({
   display: "grid",

@@ -1,4 +1,4 @@
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Mail, Ticket } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import Header from "../Header/Header";
 import { useState } from "react";
@@ -8,14 +8,13 @@ export default function Success({ currentLang, setCurrentLang }) {
   const { currentUser } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
-  const sessionId = searchParams.get("session_id");
 
-  // Grab the redemption data from the URL
+  const sessionId = searchParams.get("session_id");
   const redeemedCode = searchParams.get("code");
   const remainingParam = searchParams.get("remaining");
 
-  // BULLETPROOF PARSING:
-  // Turns the URL text into a real number, and protects against "undefined" or "null"
+  // Determine if a pack was part of this transaction based on the presence of redemption data
+  // or logic passed back from Stripe (handled by your webhook)
   const remainingCredits =
     remainingParam &&
     remainingParam !== "undefined" &&
@@ -26,10 +25,12 @@ export default function Success({ currentLang, setCurrentLang }) {
   const content = {
     en: {
       title: "booking successful",
-      message: "Thank you for your booking! Your transaction was successful.",
-      creditsNote: currentUser
-        ? "If you purchased a pack, your credits have been added to your profile and your selected dates are confirmed."
-        : "Your selected dates are confirmed. You will receive a confirmation email shortly.",
+      message: "Thank you! Your transaction was successful.",
+      confirmation:
+        "Your selected dates are confirmed. You will receive a confirmation email shortly.",
+      memberPack: "Your credits have been added to your profile balance.",
+      guestPack:
+        "Since you purchased a session pack, we have sent a unique booking code to your email for future use.",
       redeemNote:
         remainingCredits > 0
           ? `You have ${remainingCredits} ${remainingCredits === 1 ? "session" : "sessions"} left on your code: ${redeemedCode}`
@@ -39,11 +40,12 @@ export default function Success({ currentLang, setCurrentLang }) {
     },
     de: {
       title: "buchung erfolgreich",
-      message:
-        "Vielen Dank für deine Buchung! Die Transaktion war erfolgreich.",
-      creditsNote: currentUser
-        ? "Wenn du eine Karte gekauft hast, wurde das Guthaben deinem Profil hinzugefügt und deine gewählten Termine sind bestätigt."
-        : "Deine gewählten Termine sind bestätigt. Du erhältst in Kürze eine Bestätigungs-E-Mail.",
+      message: "Vielen Dank! Die Transaktion war erfolgreich.",
+      confirmation:
+        "Deine gewählten Termine sind bestätigt. Du erhältst in Kürze eine Bestätigungs-E-Mail.",
+      memberPack: "Dein Guthaben wurde deinem Profil gutgeschrieben.",
+      guestPack:
+        "Da du eine Karte gekauft hast, haben wir dir einen Buchungscode per E-Mail gesendet.",
       redeemNote:
         remainingCredits > 0
           ? `Du hast noch ${remainingCredits} ${remainingCredits === 1 ? "Termin" : "Termine"} auf deinem Code übrig: ${redeemedCode}`
@@ -52,6 +54,8 @@ export default function Success({ currentLang, setCurrentLang }) {
       home: "Zurück zur Startseite",
     },
   };
+
+  const t = content[currentLang];
 
   return (
     <div
@@ -72,24 +76,46 @@ export default function Success({ currentLang, setCurrentLang }) {
           style={{ marginBottom: "2rem" }}
         />
 
-        <h1 style={styles.title}>{content[currentLang].title}</h1>
+        <h1 style={styles.title}>{t.title}</h1>
+        <p style={styles.message}>{t.message}</p>
+        <p style={styles.confirmation}>{t.confirmation}</p>
 
-        <p style={styles.message}>{content[currentLang].message}</p>
-
-        {/* If it was a code redemption and we successfully parsed the number, show the purple box! */}
-        {redeemedCode && remainingCredits !== null ? (
-          <div style={styles.codeBox}>
-            <p style={styles.codeText}>{content[currentLang].redeemNote}</p>
+        {/* SCENARIO 1: REDEEMED AN EXISTING CODE */}
+        {redeemedCode && remainingCredits !== null && (
+          <div style={styles.infoBox}>
+            <Ticket size={20} color="#9960a8" />
+            <p style={styles.infoText}>{t.redeemNote}</p>
           </div>
-        ) : (
-          <p style={styles.creditsNote}>{content[currentLang].creditsNote}</p>
+        )}
+
+        {/* SCENARIO 2: BOUGHT A PACK AS A GUEST (Non-redemption checkout) */}
+        {!currentUser && !redeemedCode && sessionId && (
+          <div
+            style={{
+              ...styles.infoBox,
+              backgroundColor: "rgba(78, 95, 40, 0.1)",
+              borderColor: "rgba(78, 95, 40, 0.2)",
+            }}
+          >
+            <Mail size={20} color="#4e5f28" />
+            <p style={{ ...styles.infoText, color: "#4e5f28" }}>
+              {t.guestPack}
+            </p>
+          </div>
+        )}
+
+        {/* SCENARIO 3: BOUGHT A PACK AS A LOGGED-IN USER */}
+        {currentUser && !redeemedCode && sessionId && (
+          <div style={styles.infoBox}>
+            <Ticket size={20} color="#9960a8" />
+            <p style={styles.infoText}>{t.memberPack}</p>
+          </div>
         )}
 
         <div style={styles.buttonContainer}>
-          {/* Only show "Go to Profile" if a user is logged in */}
           {currentUser && (
             <Link to="/profile" style={styles.primaryBtn}>
-              {content[currentLang].button}
+              {t.button}
             </Link>
           )}
 
@@ -97,7 +123,7 @@ export default function Success({ currentLang, setCurrentLang }) {
             to="/"
             style={currentUser ? styles.secondaryBtn : styles.primaryBtn}
           >
-            {content[currentLang].home}
+            {t.home}
           </Link>
         </div>
 
@@ -133,28 +159,33 @@ const styles = {
   message: {
     fontSize: "1.1rem",
     color: "#1c0700",
-    marginBottom: "1rem",
-    fontWeight: "500",
+    marginBottom: "0.5rem",
+    fontWeight: "700",
   },
-  creditsNote: {
-    fontSize: "0.9rem",
+  confirmation: {
+    fontSize: "0.95rem",
     color: "#1c0700",
     opacity: 0.7,
     marginBottom: "2.5rem",
     lineHeight: "1.5",
   },
-  codeBox: {
-    backgroundColor: "rgba(202, 175, 243, 0.2)",
-    padding: "15px 25px",
-    borderRadius: "12px",
+  infoBox: {
+    backgroundColor: "rgba(202, 175, 243, 0.15)",
+    padding: "18px 25px",
+    borderRadius: "16px",
     border: "1px solid #caaff3",
     marginBottom: "2.5rem",
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    textAlign: "left",
   },
-  codeText: {
+  infoText: {
     color: "#9960a8",
     fontWeight: "700",
     margin: 0,
-    fontSize: "1.05rem",
+    fontSize: "0.95rem",
+    lineHeight: "1.4",
   },
   buttonContainer: {
     display: "flex",
@@ -163,16 +194,17 @@ const styles = {
     justifyContent: "center",
   },
   primaryBtn: {
-    padding: "1rem 2rem",
+    padding: "1rem 2.5rem",
     backgroundColor: "#9960a8",
-    color: "#ffffff",
+    color: "#fdf8e1", // Off-white/Cream
     borderRadius: "100px",
     textDecoration: "none",
     fontWeight: "700",
     fontFamily: "Satoshi",
+    transition: "transform 0.2s ease",
   },
   secondaryBtn: {
-    padding: "1rem 2rem",
+    padding: "1rem 2.5rem",
     backgroundColor: "transparent",
     color: "#1c0700",
     border: "1px solid rgba(28, 7, 0, 0.2)",

@@ -8,8 +8,8 @@ import {
   orderBy,
   query,
   where,
-  addDoc, // NEW
-  serverTimestamp, // NEW
+  addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "../../firebase";
@@ -50,6 +50,14 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const courseKey = getCreditKey(coursePath);
   const availableCredits = userData?.credits?.[courseKey] || 0;
 
+  // Helpers for multi-ticket calculations
+  const totalTickets = selectedDates.reduce(
+    (sum, d) => sum + (d.count || 1),
+    0,
+  );
+  const currentTotalPrice =
+    totalTickets * parseFloat(pricing?.priceSingle || 0);
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
     window.addEventListener("resize", handleResize);
@@ -58,16 +66,12 @@ export default function PriceDisplay({ coursePath, currentLang }) {
 
   useEffect(() => {
     let isMounted = true;
-
     const fetchData = async () => {
       setLoading(true);
       const docId = coursePath.replace(/\//g, "");
-
       try {
         const priceSnap = await getDoc(doc(db, "course_settings", docId));
-        if (priceSnap.exists() && isMounted) {
-          setPricing(priceSnap.data());
-        }
+        if (priceSnap.exists() && isMounted) setPricing(priceSnap.data());
 
         const eventSnap = await getDocs(
           query(collection(db, "events"), orderBy("date", "asc")),
@@ -102,8 +106,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         }
 
         if (filteredEvents.length > 0 && isMounted) {
-          const nextAvailable =
-            filteredEvents.find((ev) => true) || filteredEvents[0];
+          const nextAvailable = filteredEvents[0];
           const d = new Date(nextAvailable.date);
           setCurrentViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
         }
@@ -113,7 +116,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         if (isMounted) setLoading(false);
       }
     };
-
     fetchData();
     return () => {
       isMounted = false;
@@ -132,19 +134,28 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   }, [isMobileExpanded, isMobile]);
 
   const toggleDate = (event) => {
-    if (userBookedIds.includes(event.id)) return;
+    // UPDATED: Removed userBookedIds blocking logic
     const isFull =
       pricing?.hasCapacity &&
       (eventBookingCounts[event.id] || 0) >= parseInt(pricing.capacity);
     if (isFull) return;
-    setSelectedDates((prev) =>
-      prev.find((d) => d.id === event.id)
-        ? prev.filter((d) => d.id !== event.id)
-        : [...prev, event],
-    );
+
+    setSelectedDates((prev) => {
+      const existing = prev.find((d) => d.id === event.id);
+      if (existing) {
+        return prev.filter((d) => d.id !== event.id);
+      } else {
+        return [...prev, { ...event, count: 1 }];
+      }
+    });
   };
 
-  const handlePayment = async (mode, packCode = null) => {
+  const handlePayment = async (
+    mode,
+    packCode = null,
+    selectedPackSize = null,
+    selectedPackPrice = null,
+  ) => {
     if (!currentUser && (!guestInfo.email || !guestInfo.firstName)) {
       alert(
         currentLang === "en"
@@ -156,59 +167,66 @@ export default function PriceDisplay({ coursePath, currentLang }) {
     setIsProcessing(true);
     try {
       const functions = getFunctions();
+      const expandedDates = [];
+      selectedDates.forEach((d) => {
+        for (let i = 0; i < d.count; i++) {
+          expandedDates.push({ id: d.id, date: d.date });
+        }
+      });
+
       if (mode === "redeem") {
         const redeemPack = httpsCallable(functions, "redeemPackCode");
         const res = await redeemPack({
           coursePath,
-          selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
+          selectedDates: expandedDates,
           packCode,
           guestInfo: !currentUser ? guestInfo : null,
           currentLang,
         });
 
-        // --- NEW: LOG REDEMPTION HISTORY (if logged in) ---
         if (currentUser) {
           await addDoc(collection(db, "credit_history"), {
             userId: currentUser.uid,
-            amount: parseInt(pricing.packSize),
+            amount: parseInt(selectedPackSize || pricing.packSize),
             type: "purchase",
-            courseKey: courseKey,
+            courseKey,
             createdAt: serverTimestamp(),
           });
-
-          // Log the immediate booking deduction if they selected dates while redeeming
-          if (selectedDates.length > 0) {
+          if (totalTickets > 0) {
             await addDoc(collection(db, "credit_history"), {
               userId: currentUser.uid,
-              amount: -selectedDates.length,
+              amount: -totalTickets,
               type: "booking",
-              courseKey: courseKey,
+              courseKey,
               createdAt: serverTimestamp(),
             });
           }
         }
-
         navigate(
           `/success?code=${packCode}&remaining=${res.data.remainingCredits}`,
         );
       } else {
         const createCheckout = httpsCallable(functions, "createStripeCheckout");
-
         const getBaseUrl = () => {
           const origin = window.location.origin;
-          if (origin.includes("github.io")) {
-            return `${origin}/website-sinneskueche/`;
-          }
-          return `${origin}/`;
+          return origin.includes("github.io")
+            ? `${origin}/website-sinneskueche/`
+            : `${origin}/`;
         };
 
         const result = await createCheckout({
           mode,
-          packPrice: parseFloat(pricing.priceFull),
-          totalPrice: selectedDates.length * parseFloat(pricing.priceSingle),
-          packSize: parseInt(pricing.packSize),
+          packPrice:
+            mode === "pack"
+              ? parseFloat(selectedPackPrice)
+              : parseFloat(pricing.priceFull),
+          totalPrice: currentTotalPrice,
+          packSize:
+            mode === "pack"
+              ? parseInt(selectedPackSize)
+              : parseInt(pricing.packSize),
           coursePath,
-          selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
+          selectedDates: expandedDates,
           guestInfo: !currentUser ? guestInfo : null,
           currentLang,
           successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -225,22 +243,27 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const handleBookWithCredits = async () => {
     setIsProcessing(true);
     try {
+      const expandedDates = [];
+      selectedDates.forEach((d) => {
+        for (let i = 0; i < d.count; i++) {
+          expandedDates.push({ id: d.id, date: d.date });
+        }
+      });
+
       const bookCall = httpsCallable(getFunctions(), "bookWithCredits");
       await bookCall({
         coursePath,
-        selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
+        selectedDates: expandedDates,
         currentLang,
       });
 
-      // --- NEW: LOG CREDIT DEDUCTION HISTORY ---
       await addDoc(collection(db, "credit_history"), {
         userId: currentUser.uid,
-        amount: -selectedDates.length,
+        amount: -totalTickets,
         type: "booking",
-        courseKey: courseKey,
+        courseKey,
         createdAt: serverTimestamp(),
       });
-
       navigate("/success");
     } catch (err) {
       console.error(err);
@@ -287,10 +310,13 @@ export default function PriceDisplay({ coursePath, currentLang }) {
               ? "1px solid rgba(28,7,0,0.1)"
               : "none",
           paddingBottom: isMobile ? "1rem" : "0",
+          marginBottom: isMobile ? "0" : "2rem",
         }}
       >
         <h2 style={{ ...S.overarchingTitleStyle(isMobile), margin: 0 }}>
-          {currentLang === "en" ? "Available Dates" : "Verfügbare Termine"}
+          {currentLang === "en"
+            ? "Available Dates & Session Packs"
+            : "Verfügbare Termine & Kurspakete"}
         </h2>
         {isMobile &&
           (isMobileExpanded ? (
@@ -307,6 +333,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           gap: "2rem",
           marginTop: isMobile ? "2rem" : "0",
           animation: "fadeIn 0.5s ease-out",
+          alignItems: "flex-start",
         }}
       >
         <div style={S.calendarCardStyle(isMobile, !!pricing)}>
@@ -361,19 +388,13 @@ export default function PriceDisplay({ coursePath, currentLang }) {
               const isBooked = event && userBookedIds.includes(event.id);
               const isSelected =
                 event && selectedDates.find((d) => d.id === event.id);
-
               return (
                 <div
                   key={i}
-                  onClick={() =>
-                    event && !isBooked && !isFull && toggleDate(event)
-                  }
-                  style={S.dayStyle(
-                    event,
-                    isSelected,
-                    isMobile,
-                    isBooked || isFull,
-                  )}
+                  // UPDATED: Removed !isBooked condition
+                  onClick={() => event && !isFull && toggleDate(event)}
+                  // UPDATED: Removed isBooked from disabled style logic
+                  style={S.dayStyle(event, isSelected, isMobile, isFull)}
                 >
                   {i + 1}
                   {event && !isFull && (
@@ -387,9 +408,9 @@ export default function PriceDisplay({ coursePath, currentLang }) {
 
         <BookingSummary
           selectedDates={selectedDates}
-          totalPrice={
-            selectedDates.length * parseFloat(pricing?.priceSingle || 0)
-          }
+          setSelectedDates={setSelectedDates}
+          eventBookingCounts={eventBookingCounts}
+          totalPrice={currentTotalPrice}
           availableCredits={availableCredits}
           pricing={pricing}
           guestInfo={guestInfo}
@@ -399,6 +420,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           isMobile={isMobile}
           onBookCredits={handleBookWithCredits}
           onPayment={handlePayment}
+          coursePath={coursePath} // Ensure this is passed
         />
       </div>
     </div>

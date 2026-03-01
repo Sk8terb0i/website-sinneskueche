@@ -339,7 +339,10 @@ exports.handleStripeWebhook = onRequest(
           }
 
           if (mode === "pack") {
-            const netIncrease = parseInt(packSize) - parsedDates.length;
+            const netIncrease = Math.max(
+              0,
+              parseInt(packSize) - parsedDates.length,
+            );
             if (userId !== "GUEST_USER") {
               transaction.set(
                 db.collection("users").doc(userId),
