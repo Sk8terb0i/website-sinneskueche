@@ -320,7 +320,11 @@ export default function PersonalInfoCard({
               userId={currentUser.uid}
               courseKey={selectedHistoryCourse}
               currentLang={currentLang}
-              t={t}
+              t={{
+                ...t,
+                // THIS IS THE STEP 2 FIX: Shows pretty name (e.g. Pottery Tuesdays)
+                historyTitle: `${getCourseTitle(`/${selectedHistoryCourse}`)} ${t.credits}`,
+              }}
             />
             <button
               onClick={() => setSelectedHistoryCourse(null)}

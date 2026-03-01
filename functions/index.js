@@ -128,14 +128,25 @@ const sendBookingEmail = (transaction, email, name, courseKey, dates, lang) => {
     lang === "de" ? "📅 Zum Kalender hinzufügen" : "📅 Add to Calendar";
   const signOff = lang === "de" ? "Herzliche Grüße," : "Warm regards,";
 
+  // NEW: Ticket Info and Address Text
+  const ticketInfo =
+    lang === "de"
+      ? "Diese E-Mail ist dein Ticket. Bitte zeige sie beim Einlass vor."
+      : "This email is your ticket. Please present it upon arrival.";
+  const addressHeader = lang === "de" ? "Standort:" : "Location:";
+  const mapsText =
+    lang === "de" ? "Auf Google Maps ansehen" : "View on Google Maps";
+
   const datesHtml = dates
     .map((d) => {
       const fDate = formatDate(d.date);
+      // NEW: Added course time from date object
+      const fTime = d.time ? ` | ${d.time}` : "";
       const calLink = getGoogleCalLink(courseKey, d.date);
       return `
-      <li style="margin-bottom: 12px; list-style: none;">
-        <span style="display: inline-block; width: 90px; font-weight: bold;">${fDate}</span> 
-        <a href="${calLink}" target="_blank" style="font-size: 12px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 4px 8px; border-radius: 4px; background-color: #fff;">${calText}</a>
+      <li style="margin-bottom: 12px; list-style: none; font-size: 15px;">
+        <span style="display: inline-block; font-weight: bold;">${fDate}${fTime}</span> 
+        <a href="${calLink}" target="_blank" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff; margin-left: 10px; vertical-align: middle;">${calText}</a>
       </li>`;
     })
     .join("");
@@ -147,11 +158,20 @@ const sendBookingEmail = (transaction, email, name, courseKey, dates, lang) => {
       html: `
         <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
           <h2 style="color: #4e5f28;">${lang === "de" ? "Buchung bestätigt!" : "Booking Confirmed!"}</h2>
+          <p style="font-weight: bold; color: #9960a8;">${ticketInfo}</p>
           <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
           <p>${lang === "de" ? `Deine Plätze für <strong>${courseKey}</strong> sind reserviert:` : `Your spots for <strong>${courseKey}</strong> are all set:`}</p>
+          
           <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">
             <ul style="margin: 0; padding: 0;">${datesHtml}</ul>
           </div>
+
+          <div style="margin-top: 25px; padding: 15px; border-top: 1px solid rgba(28, 7, 0, 0.1);">
+            <p style="margin: 0; font-weight: bold; font-size: 14px;">${addressHeader}</p>
+            <p style="margin: 5px 0; font-size: 16px;">Sägestrasse 11, 8952 Schlieren</p>
+            <a href="https://www.google.com/maps/search/?api=1&query=Sägestrasse+11+8952+Schlieren" target="_blank" style="color: #9960a8; font-size: 14px; text-decoration: underline;">${mapsText}</a>
+          </div>
+          
           <br/><p>${signOff}<br/>Atelier Sinnesküche</p>
         </div>`,
     },
@@ -331,6 +351,27 @@ exports.handleStripeWebhook = onRequest(
                 },
                 { merge: true },
               );
+
+              // --- NEW: LOG PACK PURCHASE TO HISTORY ---
+              transaction.set(db.collection("credit_history").doc(), {
+                userId,
+                amount: parseInt(packSize),
+                type: "purchase",
+                courseKey,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+
+              // Log booking if they selected dates during checkout
+              if (parsedDates.length > 0) {
+                transaction.set(db.collection("credit_history").doc(), {
+                  userId,
+                  amount: -parsedDates.length,
+                  type: "booking",
+                  courseKey,
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+              }
+
               sendUserPackEmail(
                 transaction,
                 email,
@@ -417,6 +458,16 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
         -selectedDates.length,
       ),
     });
+
+    // --- NEW: LOG BOOKING TO HISTORY ---
+    transaction.set(db.collection("credit_history").doc(), {
+      userId: request.auth.uid,
+      amount: -selectedDates.length,
+      type: "booking",
+      courseKey,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
     selectedDates.forEach((d) => {
       transaction.set(db.collection("bookings").doc(), {
         userId: request.auth.uid,
@@ -497,9 +548,20 @@ exports.cancelBooking = onCall({ cors: true }, async (request) => {
     if (!bSnap.exists || bSnap.data().userId !== request.auth.uid)
       throw new HttpsError("permission-denied", "Unauthorized.");
     const courseKey = getCleanCourseKey(bSnap.data().coursePath);
+
     transaction.update(db.collection("users").doc(request.auth.uid), {
       [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
     });
+
+    // --- NEW: LOG REFUND TO HISTORY ---
+    transaction.set(db.collection("credit_history").doc(), {
+      userId: request.auth.uid,
+      amount: 1,
+      type: "refund",
+      courseKey,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
     transaction.delete(bRef);
     return { success: true };
   });
@@ -528,7 +590,6 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
     .get();
 
   return await db.runTransaction(async (transaction) => {
-    // 1. FIRST: COLLECT ALL NECESSARY DATA (READS)
     const userSnapshots = {};
     for (const bDoc of bookingsSnap.docs) {
       const bData = bDoc.data();
@@ -538,7 +599,6 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
       }
     }
 
-    // 2. SECOND: PERFORM ALL UPDATES AND SETS (WRITES)
     for (const bDoc of bookingsSnap.docs) {
       const bData = bDoc.data();
 
@@ -570,6 +630,15 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
           { credits: { [courseKey]: admin.firestore.FieldValue.increment(1) } },
           { merge: true },
         );
+
+        // --- NEW: LOG ADMIN REFUND TO HISTORY ---
+        transaction.set(db.collection("credit_history").doc(), {
+          userId: bData.userId,
+          amount: 1,
+          type: "refund",
+          courseKey,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
 
         const userEmail = userSnap?.exists
           ? userSnap.data().email
@@ -608,7 +677,6 @@ exports.onRentRequestCreate = onDocumentCreated(
     const requestData = snap.data();
 
     try {
-      // 1. Fetch the Admin Email from your settings collection
       const settingsSnap = await admin
         .firestore()
         .collection("settings")
@@ -623,7 +691,6 @@ exports.onRentRequestCreate = onDocumentCreated(
         return;
       }
 
-      // 2. Create the email document in the 'mail' collection
       await admin
         .firestore()
         .collection("mail")
