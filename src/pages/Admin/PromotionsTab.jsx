@@ -35,7 +35,7 @@ export default function PromotionsTab({ isMobile, currentLang }) {
   const [promoCodes, setPromoCodes] = useState([]);
   const [code, setCode] = useState("");
   const [coursePath, setCoursePath] = useState("");
-  // NEW: State to determine what the code applies to
+  // State to determine what the code applies to
   const [applyTo, setApplyTo] = useState("both"); // "both", "pack", or "single"
   const [discountType, setDiscountType] = useState("free"); // "free" or "percent"
   const [discountValue, setDiscountValue] = useState(100);
@@ -44,10 +44,16 @@ export default function PromotionsTab({ isMobile, currentLang }) {
   const [expiryDate, setExpiryDate] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const availableCourses = planets
-    .filter((p) => p.type === "courses")
-    .flatMap((p) => p.courses || [])
-    .filter((c) => c.link);
+  // Extract unique courses to prevent React 'key' warnings
+  const availableCourses = Array.from(
+    new Map(
+      planets
+        .filter((p) => p.type === "courses")
+        .flatMap((p) => p.courses || [])
+        .filter((c) => c.link)
+        .map((c) => [c.link, c]),
+    ).values(),
+  );
 
   useEffect(() => {
     fetchCodes();
@@ -70,7 +76,7 @@ export default function PromotionsTab({ isMobile, currentLang }) {
       await addDoc(collection(db, "promo_codes"), {
         code: code.toUpperCase().trim(),
         coursePath,
-        applyTo, // NEW: Save application preference to Firestore
+        applyTo,
         discountType,
         discountValue: discountType === "free" ? 100 : parseInt(discountValue),
         limitType,
@@ -133,7 +139,7 @@ export default function PromotionsTab({ isMobile, currentLang }) {
               </select>
             </div>
 
-            {/* NEW: Applies To Toggle */}
+            {/* Applies To Toggle */}
             <div>
               <label style={labelStyle}>Valid For</label>
               <div style={toggleContainerStyle}>
@@ -305,7 +311,6 @@ export default function PromotionsTab({ isMobile, currentLang }) {
                   }}
                 >
                   <span>{pc.coursePath}</span>
-                  {/* NEW: Show what the code applies to in the list */}
                   <span
                     style={{
                       backgroundColor: "rgba(28,7,0,0.05)",

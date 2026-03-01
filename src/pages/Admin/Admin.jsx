@@ -15,6 +15,7 @@ import {
   Tag,
   LayoutGrid,
   Ticket,
+  CreditCard, // NEW ICON FOR PACKS
 } from "lucide-react";
 
 // Components & Styles
@@ -23,6 +24,7 @@ import EventsTab from "./EventsTab";
 import PricingTab from "./PricingTab";
 import RentalTab from "./RentalTab";
 import PromotionsTab from "./PromotionsTab";
+import PackCodesTab from "./PackCodesTab"; // NEW IMPORT
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -256,7 +258,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
             backgroundColor: "rgba(28, 7, 0, 0.03)",
             borderRadius: "100px",
             padding: "4px",
-            display: "inline-flex", // Keeps the background pill wrapping the content
+            display: "inline-flex",
             minWidth: isMobile ? "max-content" : "auto",
           }}
         >
@@ -284,6 +286,21 @@ export default function Admin({ currentLang, setCurrentLang }) {
           >
             <Tag size={16} /> Course Management
           </button>
+
+          {/* NEW: Pack Codes Tab */}
+          <button
+            onClick={() => setActiveTab("pack-codes")}
+            style={{
+              ...tabButtonStyle(activeTab === "pack-codes"),
+              backgroundColor:
+                activeTab === "pack-codes" ? "#caaff3" : "transparent",
+              borderRadius: "100px",
+              color: "#1c0700",
+            }}
+          >
+            <CreditCard size={16} /> Pack Codes
+          </button>
+
           <button
             onClick={() => setActiveTab("promotions")}
             style={{
@@ -318,6 +335,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
         {activeTab === "course-management" && (
           <PricingTab isMobile={isMobile} />
         )}
+        {/* NEW: Render PackCodesTab */}
+        {activeTab === "pack-codes" && <PackCodesTab isMobile={isMobile} />}
         {activeTab === "rental" && <RentalTab isMobile={isMobile} />}
         {activeTab === "promotions" && (
           <PromotionsTab isMobile={isMobile} currentLang={currentLang} />
