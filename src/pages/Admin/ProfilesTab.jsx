@@ -5,21 +5,46 @@ import {
   getDocs,
   doc,
   updateDoc,
-  deleteDoc,
   query,
   where,
   orderBy,
   writeBatch,
 } from "firebase/firestore";
-import { Edit2, Trash2, Save, X, Search, Mail, Loader2 } from "lucide-react";
+import {
+  Edit2,
+  Trash2,
+  Save,
+  X,
+  Search,
+  Mail,
+  Loader2,
+  ShieldCheck,
+  User as UserIcon,
+} from "lucide-react";
+import { planets } from "../../data/planets";
 import * as S from "./AdminStyles";
 
-export default function ProfilesTab({ isMobile }) {
+export default function ProfilesTab({
+  isMobile,
+  currentUserRole,
+  allowedCourses = [],
+}) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
+
+  // Get list of all possible course paths from our data
+  const allPossibleCourses = Array.from(
+    new Map(
+      planets
+        .filter((p) => p.type === "courses")
+        .flatMap((p) => p.courses || [])
+        .filter((c) => c.link)
+        .map((course) => [course.link, course.text.en]),
+    ),
+  );
 
   useEffect(() => {
     fetchUsers();
@@ -50,12 +75,15 @@ export default function ProfilesTab({ isMobile }) {
   const handleSave = async () => {
     try {
       const userRef = doc(db, "users", editingId);
-      await updateDoc(userRef, {
+      const updateData = {
         role: editForm.role || "user",
-        credits: editForm.credits || {},
         firstName: editForm.firstName || "",
         lastName: editForm.lastName || "",
-      });
+        credits: editForm.credits || {},
+        allowedCourses:
+          editForm.role === "course_admin" ? editForm.allowedCourses || [] : [],
+      };
+      await updateDoc(userRef, updateData);
       setEditingId(null);
       fetchUsers();
     } catch (error) {
@@ -63,57 +91,23 @@ export default function ProfilesTab({ isMobile }) {
     }
   };
 
-  // UPDATED: Deletes user document AND all associated bookings
-  const handleDelete = async (userId) => {
-    const confirmMessage = isMobile
-      ? "Delete profile and all their bookings?"
-      : "Are you sure? This will delete the profile data and ALL associated bookings. The login account must still be removed manually in the Firebase Auth console.";
-
-    if (window.confirm(confirmMessage)) {
-      try {
-        const batch = writeBatch(db);
-
-        // 1. Find all bookings for this user
-        const bookingsQuery = query(
-          collection(db, "bookings"),
-          where("userId", "==", userId),
-        );
-        const bookingsSnap = await getDocs(bookingsQuery);
-
-        // 2. Add booking deletions to batch
-        bookingsSnap.forEach((bookingDoc) => {
-          batch.delete(bookingDoc.ref);
-        });
-
-        // 3. Add user profile deletion to batch
-        batch.delete(doc(db, "users", userId));
-
-        // 4. Commit the batch
-        await batch.commit();
-
-        fetchUsers();
-      } catch (error) {
-        alert("Delete failed: " + error.message);
-      }
-    }
+  const toggleCoursePermission = (path) => {
+    const current = editForm.allowedCourses || [];
+    const updated = current.includes(path)
+      ? current.filter((p) => p !== path)
+      : [...current, path];
+    setEditForm({ ...editForm, allowedCourses: updated });
   };
 
-  const updateCredit = (courseKey, val) => {
-    setEditForm({
-      ...editForm,
-      credits: {
-        ...editForm.credits,
-        [courseKey]: parseInt(val) || 0,
-      },
-    });
-  };
-
-  const filteredUsers = users.filter(
-    (u) =>
+  const filteredUsers = users.filter((u) => {
+    const matchesSearch =
       u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.lastName?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+      u.firstName?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // If current viewer is a course_admin, they can only see users who have bookings in THEIR courses
+    // For now, we show all users to course_admins so they can find their students.
+    return matchesSearch;
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
@@ -122,8 +116,6 @@ export default function ProfilesTab({ isMobile }) {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          flexWrap: "wrap",
-          gap: "1rem",
         }}
       >
         <div style={{ position: "relative", maxWidth: "400px", flex: 1 }}>
@@ -139,7 +131,7 @@ export default function ProfilesTab({ isMobile }) {
           />
           <input
             type="text"
-            placeholder="Search by name or email..."
+            placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -148,9 +140,6 @@ export default function ProfilesTab({ isMobile }) {
               backgroundColor: "#fdf8e1",
             }}
           />
-        </div>
-        <div style={{ fontSize: "0.8rem", opacity: 0.5, fontWeight: "700" }}>
-          TOTAL PROFILES: {users.length}
         </div>
       </div>
 
@@ -164,7 +153,7 @@ export default function ProfilesTab({ isMobile }) {
             display: "grid",
             gridTemplateColumns: isMobile
               ? "1fr"
-              : "repeat(auto-fill, minmax(350px, 1fr))",
+              : "repeat(auto-fill, minmax(380px, 1fr))",
             gap: "1.5rem",
           }}
         >
@@ -176,7 +165,6 @@ export default function ProfilesTab({ isMobile }) {
                 padding: "1.5rem",
                 borderRadius: "20px",
                 border: "1px solid rgba(28,7,0,0.05)",
-                position: "relative",
               }}
             >
               {editingId === u.id ? (
@@ -187,84 +175,66 @@ export default function ProfilesTab({ isMobile }) {
                     gap: "1rem",
                   }}
                 >
-                  <div style={{ display: "flex", gap: "10px" }}>
-                    <input
-                      style={S.inputStyle}
-                      value={editForm.firstName || ""}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, firstName: e.target.value })
-                      }
-                      placeholder="First Name"
-                    />
-                    <input
-                      style={S.inputStyle}
-                      value={editForm.lastName || ""}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, lastName: e.target.value })
-                      }
-                      placeholder="Last Name"
-                    />
-                  </div>
+                  <input
+                    style={S.inputStyle}
+                    value={editForm.firstName}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, firstName: e.target.value })
+                    }
+                    placeholder="First Name"
+                  />
 
                   <label style={S.labelStyle}>Role</label>
                   <select
                     style={S.inputStyle}
-                    value={editForm.role || "user"}
+                    value={editForm.role}
+                    disabled={currentUserRole !== "admin"} // Only Full Admins can change roles
                     onChange={(e) =>
                       setEditForm({ ...editForm, role: e.target.value })
                     }
                   >
                     <option value="user">User</option>
-                    <option value="admin">Admin</option>
+                    <option value="course_admin">Course Admin</option>
+                    <option value="admin">Full Admin</option>
                   </select>
 
-                  <label style={S.labelStyle}>Manually Edit Credits</label>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "8px",
-                      maxHeight: "150px",
-                      overflowY: "auto",
-                      padding: "10px",
-                      backgroundColor: "rgba(28,7,0,0.03)",
-                      borderRadius: "10px",
-                    }}
-                  >
-                    {Object.keys(editForm.credits || {}).length > 0 ? (
-                      Object.entries(editForm.credits).map(([key, val]) => (
-                        <div
-                          key={key}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
-                          <span
-                            style={{ fontSize: "0.7rem", fontWeight: "bold" }}
-                          >
-                            {key}:
-                          </span>
-                          <input
-                            type="number"
+                  {editForm.role === "course_admin" && (
+                    <div style={{ marginTop: "5px" }}>
+                      <label style={{ ...S.labelStyle, fontSize: "0.65rem" }}>
+                        PERMITTED COURSES
+                      </label>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "5px",
+                          marginTop: "8px",
+                        }}
+                      >
+                        {allPossibleCourses.map(([path, name]) => (
+                          <button
+                            key={path}
+                            type="button"
+                            onClick={() => toggleCoursePermission(path)}
                             style={{
-                              ...S.inputStyle,
-                              width: "60px",
-                              padding: "4px 8px",
-                              fontSize: "0.8rem",
+                              padding: "5px 12px",
+                              fontSize: "0.65rem",
+                              borderRadius: "100px",
+                              border: "1px solid #caaff3",
+                              fontWeight: "bold",
+                              backgroundColor:
+                                editForm.allowedCourses?.includes(path)
+                                  ? "#caaff3"
+                                  : "transparent",
+                              cursor: "pointer",
                             }}
-                            value={val}
-                            onChange={(e) => updateCredit(key, e.target.value)}
-                          />
-                        </div>
-                      ))
-                    ) : (
-                      <p style={{ fontSize: "0.7rem", opacity: 0.5 }}>
-                        No credits yet.
-                      </p>
-                    )}
-                  </div>
+                          >
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div
                     style={{ display: "flex", gap: "10px", marginTop: "1rem" }}
@@ -308,14 +278,7 @@ export default function ProfilesTab({ isMobile }) {
                         {u.firstName || "Unnamed"} {u.lastName || ""}
                       </h3>
                       <p
-                        style={{
-                          margin: 0,
-                          fontSize: "0.8rem",
-                          opacity: 0.6,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
+                        style={{ margin: 0, fontSize: "0.8rem", opacity: 0.6 }}
                       >
                         <Mail size={12} /> {u.email}
                       </p>
@@ -323,7 +286,12 @@ export default function ProfilesTab({ isMobile }) {
                     <div
                       style={{
                         backgroundColor:
-                          u.role === "admin" ? "#caaff3" : "rgba(28,7,0,0.05)",
+                          u.role === "admin"
+                            ? "#caaff3"
+                            : u.role === "course_admin"
+                              ? "#4e5f28"
+                              : "rgba(28,7,0,0.05)",
+                        color: u.role === "course_admin" ? "white" : "inherit",
                         padding: "4px 10px",
                         borderRadius: "100px",
                         fontSize: "0.6rem",
@@ -331,90 +299,55 @@ export default function ProfilesTab({ isMobile }) {
                         textTransform: "uppercase",
                       }}
                     >
-                      {u.role || "user"}
+                      {u.role}
                     </div>
                   </div>
-
-                  <div
-                    style={{
-                      borderTop: "1px solid rgba(28,7,0,0.05)",
-                      paddingTop: "1rem",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: "0 0 10px",
-                        fontSize: "0.75rem",
-                        fontWeight: "800",
-                        opacity: 0.5,
-                      }}
-                    >
-                      CREDITS BALANCE
-                    </p>
-                    <div
-                      style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}
-                    >
-                      {Object.entries(u.credits || {}).map(
-                        ([key, val]) =>
-                          val > 0 && (
-                            <div
-                              key={key}
+                  {u.role === "course_admin" &&
+                    u.allowedCourses?.length > 0 && (
+                      <div style={{ marginBottom: "10px" }}>
+                        <p
+                          style={{
+                            fontSize: "0.6rem",
+                            opacity: 0.5,
+                            marginBottom: "4px",
+                          }}
+                        >
+                          ACCESS TO:
+                        </p>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "4px",
+                          }}
+                        >
+                          {u.allowedCourses.map((p) => (
+                            <span
+                              key={p}
                               style={{
-                                backgroundColor: "rgba(202, 175, 243, 0.15)",
-                                padding: "4px 8px",
-                                borderRadius: "6px",
-                                fontSize: "0.7rem",
-                                color: "#9960a8",
-                                fontWeight: "bold",
+                                fontSize: "0.6rem",
+                                background: "rgba(28,7,0,0.05)",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
                               }}
                             >
-                              {key}: {val}
-                            </div>
-                          ),
-                      )}
-                      {(!u.credits ||
-                        Object.values(u.credits).every((v) => v === 0)) && (
-                        <span style={{ fontSize: "0.7rem", opacity: 0.4 }}>
-                          No active credits
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div
+                              {p}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  <button
+                    onClick={() => handleEdit(u)}
                     style={{
-                      display: "flex",
-                      gap: "10px",
-                      marginTop: "1.5rem",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      opacity: 0.4,
                     }}
                   >
-                    <button
-                      onClick={() => handleEdit(u)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "#1c0700",
-                        opacity: 0.4,
-                      }}
-                      title="Edit"
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(u.id)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "#1c0700",
-                        opacity: 0.4,
-                      }}
-                      title="Delete Profile & Bookings"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
+                    <Edit2 size={18} />
+                  </button>
                 </>
               )}
             </div>

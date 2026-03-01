@@ -40,7 +40,12 @@ import {
   cardStyle,
 } from "./AdminStyles";
 
-export default function EventsTab({ isMobile, currentLang }) {
+export default function EventsTab({
+  isMobile,
+  currentLang,
+  userRole,
+  allowedCourses = [],
+}) {
   const [events, setEvents] = useState([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -53,12 +58,14 @@ export default function EventsTab({ isMobile, currentLang }) {
   const [editingId, setEditingId] = useState(null);
   const [isCancellingId, setIsCancellingId] = useState(null);
 
-  // NEW: Tab state for switching between Courses and Individual Events
+  // Tab state for switching between Courses and Individual Events
   const [activeSubTab, setActiveSubTab] = useState("courses");
 
   const [expandedGroups, setExpandedGroups] = useState({});
   const [showParticipantsFor, setShowParticipantsFor] = useState(null);
   const [participantCache, setParticipantCache] = useState({});
+
+  const isFullAdmin = userRole === "admin";
 
   const labels = {
     en: {
@@ -111,6 +118,7 @@ export default function EventsTab({ isMobile, currentLang }) {
 
   const eventsCollection = collection(db, "events");
 
+  // Filter available courses for the ADD dropdown based on permissions
   const availableCourses = Array.from(
     new Map(
       planets
@@ -119,12 +127,12 @@ export default function EventsTab({ isMobile, currentLang }) {
         .filter((c) => c.link)
         .map((course) => [course.link, course]),
     ).values(),
-  );
+  ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
 
   useEffect(() => {
     fetchEvents();
     autoFillFirstCourse();
-  }, []);
+  }, [userRole, allowedCourses]);
 
   const fetchEvents = async () => {
     try {
@@ -158,7 +166,8 @@ export default function EventsTab({ isMobile, currentLang }) {
           deleteDoc(doc(db, "events", event.id));
           return false;
         }
-        return true;
+        // Permission check: only set if full admin or course matches allowed list
+        return isFullAdmin || allowedCourses.includes(event.link);
       });
       setEvents(validEvents);
     } catch (error) {
@@ -181,21 +190,13 @@ export default function EventsTab({ isMobile, currentLang }) {
               firstName: b.guestName || "Guest",
               lastName: "(Guest)",
               email: b.guestEmail || "Email not found",
-              phone: "",
               isGuest: true,
             };
           }
-
           const uSnap = await getDoc(doc(db, "users", b.userId));
-          if (uSnap.exists()) {
-            return uSnap.data();
-          }
-
-          return {
-            firstName: "Unknown",
-            lastName: "User",
-            email: "N/A",
-          };
+          return uSnap.exists()
+            ? uSnap.data()
+            : { firstName: "Unknown", lastName: "User", email: "N/A" };
         }),
       );
       setParticipantCache((prev) => ({ ...prev, [event.id]: userDetails }));
@@ -215,11 +216,11 @@ export default function EventsTab({ isMobile, currentLang }) {
     if (sel) {
       setTitleEn(sel.text.en);
       setTitleDe(sel.text.de);
-      if (sel.text.en.toLowerCase().includes("pottery tuesdays")) {
-        setTime("18:30 - 21:30");
-      } else {
-        setTime("");
-      }
+      setTime(
+        sel.text.en.toLowerCase().includes("pottery tuesdays")
+          ? "18:30 - 21:30"
+          : "",
+      );
     }
   };
 
@@ -235,12 +236,8 @@ export default function EventsTab({ isMobile, currentLang }) {
         link: finalLink,
         type: linkType,
       };
-
-      if (editingId) {
-        await setDoc(doc(db, "events", editingId), eventData);
-      } else {
-        await addDoc(eventsCollection, eventData);
-      }
+      if (editingId) await setDoc(doc(db, "events", editingId), eventData);
+      else await addDoc(eventsCollection, eventData);
       resetForm();
       fetchEvents();
     } catch (e) {
@@ -257,12 +254,10 @@ export default function EventsTab({ isMobile, currentLang }) {
     const type =
       event.type || (event.link?.startsWith("http") ? "event" : "course");
     setLinkType(type);
-
     if (type === "course") {
       const isStandard = availableCourses.some((c) => c.link === event.link);
       if (isStandard) {
         setLink(event.link);
-        setExternalLink("");
         setIsCustomCourseLink(false);
       } else {
         setExternalLink(event.link);
@@ -286,25 +281,19 @@ export default function EventsTab({ isMobile, currentLang }) {
   };
 
   const toggleGroup = (link) => {
-    setExpandedGroups((prev) => ({
-      ...prev,
-      [link]: !prev[link],
-    }));
+    setExpandedGroups((prev) => ({ ...prev, [link]: !prev[link] }));
   };
 
   const handleCancelEvent = async (e, ev) => {
     e.stopPropagation();
     if (!window.confirm(labels.deleteConfirm)) return;
-
     setIsCancellingId(ev.id);
     const functions = getFunctions();
     const adminCancelFn = httpsCallable(functions, "adminCancelEvent");
-
     try {
       await adminCancelFn({ eventId: ev.id, currentLang: currentLang || "en" });
       await fetchEvents();
     } catch (err) {
-      console.error(err);
       alert("Error cancelling event: " + err.message);
     } finally {
       setIsCancellingId(null);
@@ -316,13 +305,12 @@ export default function EventsTab({ isMobile, currentLang }) {
 
   const groupedCourses = scheduledCourses.reduce((acc, course) => {
     const key = course.link;
-    if (!acc[key]) {
+    if (!acc[key])
       acc[key] = {
         title: course.title[currentLang || "en"],
         link: course.link,
         dates: [],
       };
-    }
     acc[key].dates.push(course);
     return acc;
   }, {});
@@ -476,7 +464,6 @@ export default function EventsTab({ isMobile, currentLang }) {
       </section>
 
       <section style={{ flex: 1 }}>
-        {/* NEW: SUB-TAB NAVIGATION */}
         <div style={styles.tabNav}>
           <button
             onClick={() => setActiveSubTab("courses")}
@@ -493,13 +480,11 @@ export default function EventsTab({ isMobile, currentLang }) {
           </button>
         </div>
 
-        {/* 1. COURSES VIEW */}
         {activeSubTab === "courses" && (
           <div style={styles.tabContent}>
             {Object.values(groupedCourses).map((group) => {
               const isExpanded = expandedGroups[group.link];
               const hasManyDates = group.dates.length > 3;
-
               return (
                 <div key={group.link} style={styles.courseGroupWrapper}>
                   <div
@@ -515,16 +500,15 @@ export default function EventsTab({ isMobile, currentLang }) {
                       {group.title} ({group.dates.length})
                     </div>
                   </div>
-
                   {isExpanded && (
                     <div
+                      className="custom-scrollbar"
                       style={{
                         ...styles.expandedContent,
                         maxHeight: hasManyDates ? "280px" : "auto",
                         overflowY: hasManyDates ? "auto" : "visible",
                         paddingRight: hasManyDates ? "8px" : "0",
                       }}
-                      className="custom-scrollbar"
                     >
                       {group.dates.map((ev) => (
                         <div key={ev.id} style={styles.eventItemWrapper}>
@@ -541,7 +525,6 @@ export default function EventsTab({ isMobile, currentLang }) {
                             >
                               <Edit2 size={16} />
                             </button>
-
                             <div style={styles.eventMainInfo}>
                               <span style={styles.dateLabel}>{ev.date}</span>
                               {ev.time && (
@@ -550,7 +533,6 @@ export default function EventsTab({ isMobile, currentLang }) {
                                 </span>
                               )}
                             </div>
-
                             <div style={styles.actionRow}>
                               <button
                                 onClick={() => handleShowParticipants(ev)}
@@ -559,12 +541,11 @@ export default function EventsTab({ isMobile, currentLang }) {
                                   opacity: ev.bookedCount > 0 ? 1 : 0.3,
                                 }}
                               >
-                                <Users size={16} color="#4e5f28" />
+                                <Users size={16} color="#4e5f28" />{" "}
                                 <span style={{ fontWeight: "800" }}>
                                   {ev.bookedCount}
                                 </span>
                               </button>
-
                               <button
                                 onClick={(e) => handleCancelEvent(e, ev)}
                                 style={styles.cancelCourseBtn}
@@ -578,13 +559,12 @@ export default function EventsTab({ isMobile, currentLang }) {
                               </button>
                             </div>
                           </div>
-
                           {showParticipantsFor === ev.id &&
                             participantCache[ev.id] && (
                               <div style={styles.participantPanel}>
                                 {participantCache[ev.id].map((u, i) => (
                                   <div key={i} style={styles.userRow}>
-                                    <User size={12} />
+                                    <User size={12} />{" "}
                                     <strong
                                       style={{
                                         color: u.isGuest
@@ -616,7 +596,6 @@ export default function EventsTab({ isMobile, currentLang }) {
           </div>
         )}
 
-        {/* 2. INDIVIDUAL EVENTS VIEW */}
         {activeSubTab === "events" && (
           <div style={styles.tabContent}>
             {scheduledEvents.map((ev) => (
@@ -659,7 +638,7 @@ export default function EventsTab({ isMobile, currentLang }) {
                         opacity: ev.bookedCount > 0 ? 1 : 0.3,
                       }}
                     >
-                      <Users size={18} color="#4e5f28" />
+                      <Users size={18} color="#4e5f28" />{" "}
                       <span style={{ fontWeight: "800" }}>
                         {ev.bookedCount}
                       </span>
@@ -681,7 +660,7 @@ export default function EventsTab({ isMobile, currentLang }) {
                   <div style={styles.participantPanel}>
                     {participantCache[ev.id].map((u, i) => (
                       <div key={i} style={styles.userRow}>
-                        <User size={12} />
+                        <User size={12} />{" "}
                         <strong
                           style={{ color: u.isGuest ? "#9960a8" : "inherit" }}
                         >
@@ -710,6 +689,8 @@ export default function EventsTab({ isMobile, currentLang }) {
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(28, 7, 0, 0.05); border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #caaff3; border-radius: 10px; }
+        .spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );

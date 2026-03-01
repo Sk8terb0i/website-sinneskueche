@@ -23,12 +23,19 @@ import {
   toggleOptionStyle,
 } from "./AdminStyles";
 
-export default function PricingTab({ isMobile }) {
+// UPDATED: Added userRole and allowedCourses props
+export default function PricingTab({
+  isMobile,
+  userRole,
+  allowedCourses = [],
+}) {
   const [priceData, setPriceData] = useState({});
   const [savingPriceId, setSavingPriceId] = useState(null);
 
+  const isFullAdmin = userRole === "admin";
   const courseSettingsCollection = collection(db, "course_settings");
 
+  // Filter courses based on admin permissions
   const availableCourses = Array.from(
     new Map(
       planets
@@ -37,7 +44,7 @@ export default function PricingTab({ isMobile }) {
         .filter((c) => c.link)
         .map((course) => [course.link, course]),
     ).values(),
-  );
+  ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
 
   useEffect(() => {
     fetchPrices();
@@ -66,12 +73,11 @@ export default function PricingTab({ isMobile }) {
     }));
   };
 
-  // --- UPDATED PACK HANDLER: Sets "5" as default value ---
   const addPackOption = (courseId) => {
     const currentPacks = priceData[courseId]?.packs || [];
     handlePriceChange(courseId, "packs", [
       ...currentPacks,
-      { size: "5", price: "" }, // FIX: Default size set to 5 so it saves correctly
+      { size: "5", price: "" },
     ]);
   };
 
@@ -93,7 +99,6 @@ export default function PricingTab({ isMobile }) {
     const isPerHour = priceData[courseId]?.isPerHour ?? false;
 
     try {
-      // Logic to ensure the packs array is clean before saving
       const validPacks = (priceData[courseId]?.packs || []).filter(
         (p) => p.size !== "" && p.price !== "",
       );
@@ -102,7 +107,7 @@ export default function PricingTab({ isMobile }) {
         priceSingle: priceData[courseId]?.priceSingle || "",
         priceFull: validPacks[0]?.price || "",
         packSize: validPacks[0]?.size || "10",
-        packs: validPacks, // Save only packs that have both size and price
+        packs: validPacks,
         duration: isPerHour ? priceData[courseId]?.duration || "" : "",
         hasPack: priceData[courseId]?.hasPack ?? false,
         isPerHour: isPerHour,
@@ -115,7 +120,6 @@ export default function PricingTab({ isMobile }) {
       await setDoc(doc(db, "course_settings", courseId), dataToSave, {
         merge: true,
       });
-      // Refresh local state with clean data
       await fetchPrices();
     } catch (error) {
       alert("Error saving: " + error.message);
@@ -129,7 +133,7 @@ export default function PricingTab({ isMobile }) {
       style={{ maxWidth: "800px", margin: "0 auto", paddingBottom: "5rem" }}
     >
       <h3 style={sectionTitleStyle}>
-        <Tag size={18} /> Course Management
+        <Tag size={18} /> Course Management {!isFullAdmin && "(Restricted)"}
       </h3>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
@@ -159,7 +163,6 @@ export default function PricingTab({ isMobile }) {
                 backgroundColor: isVisible ? "#fdf8e1" : "#f5f5f5",
               }}
             >
-              {/* SECTION 1: IDENTITY & VISIBILITY */}
               <div
                 style={{
                   display: "flex",
@@ -217,7 +220,6 @@ export default function PricingTab({ isMobile }) {
                 </div>
               </div>
 
-              {/* SECTION 2: PRICING TYPE & SINGLE PRICE */}
               <div
                 style={{
                   display: "flex",
@@ -315,7 +317,6 @@ export default function PricingTab({ isMobile }) {
                 </div>
               </div>
 
-              {/* SECTION 3: MULTIPLE PACKS */}
               <div
                 style={{
                   backgroundColor: hasPack
@@ -456,7 +457,6 @@ export default function PricingTab({ isMobile }) {
                 )}
               </div>
 
-              {/* CAPACITY SECTION */}
               <div
                 style={{
                   backgroundColor: hasCapacity
@@ -517,7 +517,6 @@ export default function PricingTab({ isMobile }) {
                 )}
               </div>
 
-              {/* SAVE BUTTON */}
               <button
                 onClick={() => savePrice(courseId, c.text.en)}
                 disabled={isSaving}

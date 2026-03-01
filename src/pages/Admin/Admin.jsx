@@ -19,7 +19,6 @@ import {
   Users,
 } from "lucide-react";
 
-// Components & Styles
 import Header from "../../components/Header/Header";
 import EventsTab from "./EventsTab";
 import PricingTab from "./PricingTab";
@@ -42,7 +41,7 @@ import {
 
 export default function Admin({ currentLang, setCurrentLang }) {
   const [user, setUser] = useState(null);
-  const [isAdminRole, setIsAdminRole] = useState(false);
+  const [adminData, setAdminData] = useState(null);
   const [checkingRole, setCheckingRole] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,30 +53,26 @@ export default function Admin({ currentLang, setCurrentLang }) {
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 900);
     window.addEventListener("resize", handleResize);
-
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        try {
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-          if (userDoc.exists() && userDoc.data().role === "admin") {
-            setUser(currentUser);
-            setIsAdminRole(true);
-          } else {
-            setUser(null);
-            setIsAdminRole(false);
-          }
-        } catch (error) {
-          console.error("Admin check error:", error);
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        const data = userDoc.data();
+        if (
+          userDoc.exists() &&
+          (data.role === "admin" || data.role === "course_admin")
+        ) {
+          setUser(currentUser);
+          setAdminData(data);
+        } else {
           setUser(null);
-          setIsAdminRole(false);
+          setAdminData(null);
         }
       } else {
         setUser(null);
-        setIsAdminRole(false);
+        setAdminData(null);
       }
       setCheckingRole(false);
     });
-
     return () => {
       unsubscribe();
       window.removeEventListener("resize", handleResize);
@@ -96,15 +91,14 @@ export default function Admin({ currentLang, setCurrentLang }) {
     }
   };
 
-  if (checkingRole && !user) {
+  if (checkingRole && !user)
     return (
       <div style={{ ...loginWrapperStyle, backgroundColor: "#fffce3" }}>
         <Loader2 className="spinner" size={40} color="#caaff3" />
       </div>
     );
-  }
 
-  if (!user || !isAdminRole) {
+  if (!user || !adminData) {
     return (
       <div style={{ ...loginWrapperStyle, backgroundColor: "#fffce3" }}>
         <Header
@@ -138,7 +132,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
               Atelier Login
             </h1>
           </div>
-
           <label style={labelStyle}>Email</label>
           <input
             type="email"
@@ -152,7 +145,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
             }}
             required
           />
-
           <div
             style={{
               display: "flex",
@@ -189,6 +181,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
     );
   }
 
+  const isFullAdmin = adminData.role === "admin";
+
   return (
     <div
       style={{
@@ -207,7 +201,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
         isMenuOpen={isMenuOpen}
         onMenuToggle={setIsMenuOpen}
       />
-
       <header style={{ ...headerStyle(isMobile), marginBottom: "2rem" }}>
         <div style={{ flex: 1 }}>
           <h1
@@ -228,7 +221,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
               letterSpacing: "1px",
             }}
           >
-            Admin: {user.email}
+            {isFullAdmin ? "Full Admin" : "Course Admin"}: {user.email}
           </p>
         </div>
         <button
@@ -263,7 +256,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
             minWidth: isMobile ? "max-content" : "auto",
           }}
         >
-          {/* 1. Daily Core Business */}
           <button
             onClick={() => setActiveTab("events")}
             style={{
@@ -276,49 +268,20 @@ export default function Admin({ currentLang, setCurrentLang }) {
           >
             <CalendarIcon size={16} /> Events
           </button>
-
-          {/* 2. People & Credits */}
-          <button
-            onClick={() => setActiveTab("profiles")}
-            style={{
-              ...tabButtonStyle(activeTab === "profiles"),
-              backgroundColor:
-                activeTab === "profiles" ? "#caaff3" : "transparent",
-              borderRadius: "100px",
-              color: "#1c0700",
-            }}
-          >
-            <Users size={16} /> Profiles
-          </button>
-
-          <button
-            onClick={() => setActiveTab("pack-codes")}
-            style={{
-              ...tabButtonStyle(activeTab === "pack-codes"),
-              backgroundColor:
-                activeTab === "pack-codes" ? "#caaff3" : "transparent",
-              borderRadius: "100px",
-              color: "#1c0700",
-            }}
-          >
-            <CreditCard size={16} /> Pack Codes
-          </button>
-
-          {/* 3. Marketing & Sales */}
-          <button
-            onClick={() => setActiveTab("promotions")}
-            style={{
-              ...tabButtonStyle(activeTab === "promotions"),
-              backgroundColor:
-                activeTab === "promotions" ? "#caaff3" : "transparent",
-              borderRadius: "100px",
-              color: "#1c0700",
-            }}
-          >
-            <Ticket size={16} /> Promotions
-          </button>
-
-          {/* 4. Settings & Infrastructure */}
+          {isFullAdmin && (
+            <button
+              onClick={() => setActiveTab("profiles")}
+              style={{
+                ...tabButtonStyle(activeTab === "profiles"),
+                backgroundColor:
+                  activeTab === "profiles" ? "#caaff3" : "transparent",
+                borderRadius: "100px",
+                color: "#1c0700",
+              }}
+            >
+              <Users size={16} /> Profiles
+            </button>
+          )}
           <button
             onClick={() => setActiveTab("course-management")}
             style={{
@@ -331,43 +294,89 @@ export default function Admin({ currentLang, setCurrentLang }) {
           >
             <Tag size={16} /> Course Management
           </button>
-
           <button
-            onClick={() => setActiveTab("rental")}
+            onClick={() => setActiveTab("promotions")}
             style={{
-              ...tabButtonStyle(activeTab === "rental"),
+              ...tabButtonStyle(activeTab === "promotions"),
               backgroundColor:
-                activeTab === "rental" ? "#caaff3" : "transparent",
+                activeTab === "promotions" ? "#caaff3" : "transparent",
               borderRadius: "100px",
               color: "#1c0700",
             }}
           >
-            <LayoutGrid size={16} /> Rental
+            <Ticket size={16} /> Promotions
           </button>
+          {isFullAdmin && (
+            <>
+              <button
+                onClick={() => setActiveTab("pack-codes")}
+                style={{
+                  ...tabButtonStyle(activeTab === "pack-codes"),
+                  backgroundColor:
+                    activeTab === "pack-codes" ? "#caaff3" : "transparent",
+                  borderRadius: "100px",
+                  color: "#1c0700",
+                }}
+              >
+                <CreditCard size={16} /> Pack Codes
+              </button>
+              <button
+                onClick={() => setActiveTab("rental")}
+                style={{
+                  ...tabButtonStyle(activeTab === "rental"),
+                  backgroundColor:
+                    activeTab === "rental" ? "#caaff3" : "transparent",
+                  borderRadius: "100px",
+                  color: "#1c0700",
+                }}
+              >
+                <LayoutGrid size={16} /> Rental
+              </button>
+            </>
+          )}
         </nav>
       </div>
 
       <div style={{ animation: "fadeIn 0.4s ease-out" }}>
         {activeTab === "events" && (
-          <EventsTab isMobile={isMobile} currentLang={currentLang} />
+          <EventsTab
+            isMobile={isMobile}
+            currentLang={currentLang}
+            userRole={adminData.role}
+            allowedCourses={adminData.allowedCourses || []}
+          />
         )}
-        {activeTab === "profiles" && <ProfilesTab isMobile={isMobile} />}
-        {activeTab === "pack-codes" && <PackCodesTab isMobile={isMobile} />}
-        {activeTab === "promotions" && (
-          <PromotionsTab isMobile={isMobile} currentLang={currentLang} />
+        {activeTab === "profiles" && isFullAdmin && (
+          <ProfilesTab isMobile={isMobile} currentUserRole={adminData.role} />
         )}
         {activeTab === "course-management" && (
-          <PricingTab isMobile={isMobile} />
+          <PricingTab
+            isMobile={isMobile}
+            userRole={adminData.role}
+            allowedCourses={adminData.allowedCourses || []}
+          />
         )}
-        {activeTab === "rental" && <RentalTab isMobile={isMobile} />}
+        {activeTab === "promotions" && (
+          <PromotionsTab
+            isMobile={isMobile}
+            currentLang={currentLang}
+            userRole={adminData.role}
+            allowedCourses={adminData.allowedCourses || []}
+          />
+        )}
+        {isFullAdmin && (
+          <>
+            {activeTab === "pack-codes" && <PackCodesTab isMobile={isMobile} />}
+            {activeTab === "rental" && <RentalTab isMobile={isMobile} />}
+          </>
+        )}
       </div>
 
       <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         div::-webkit-scrollbar { display: none; }
+        .spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );

@@ -37,14 +37,9 @@ export default function Header({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Header.jsx - Add this useEffect inside the component
   useEffect(() => {
     const handleOpenAuth = () => setIsAuthOpen(true);
-
-    // Listen for the custom signal
     window.addEventListener("open-auth", handleOpenAuth);
-
-    // Cleanup listener on unmount
     return () => window.removeEventListener("open-auth", handleOpenAuth);
   }, []);
 
@@ -57,11 +52,15 @@ export default function Header({
     }
   };
 
+  // UPDATED: Logic to handle course_admin redirection
   const handleProfileClick = () => {
     if (loading) return;
     if (!currentUser) {
       setIsAuthOpen(true);
-    } else if (userData?.role === "admin") {
+    } else if (
+      userData?.role === "admin" ||
+      userData?.role === "course_admin"
+    ) {
       navigate("/admin-sinneskueche");
     } else {
       navigate("/profile");
@@ -101,7 +100,9 @@ export default function Header({
     : { width: 24, height: 20 };
   const hamburgerBarHeight = isPortrait ? 2.4 : 4;
 
-  const isAdmin = userData?.role === "admin";
+  // UPDATED: Check for either admin role to apply bold icon styling
+  const isAdmin =
+    userData?.role === "admin" || userData?.role === "course_admin";
 
   return (
     <>

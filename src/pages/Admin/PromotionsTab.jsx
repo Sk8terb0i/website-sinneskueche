@@ -11,15 +11,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { planets } from "../../data/planets";
-import {
-  Ticket,
-  Trash2,
-  Clock,
-  Hash,
-  Percent,
-  Star,
-  ShoppingBag,
-} from "lucide-react";
+import { Ticket, Trash2, Clock, Hash, Percent, Star } from "lucide-react";
 import {
   formCardStyle,
   sectionTitleStyle,
@@ -31,20 +23,26 @@ import {
   toggleOptionStyle,
 } from "./AdminStyles";
 
-export default function PromotionsTab({ isMobile, currentLang }) {
+export default function PromotionsTab({
+  isMobile,
+  currentLang,
+  userRole,
+  allowedCourses = [],
+}) {
   const [promoCodes, setPromoCodes] = useState([]);
   const [code, setCode] = useState("");
   const [coursePath, setCoursePath] = useState("");
-  // State to determine what the code applies to
-  const [applyTo, setApplyTo] = useState("both"); // "both", "pack", or "single"
-  const [discountType, setDiscountType] = useState("free"); // "free" or "percent"
+  const [applyTo, setApplyTo] = useState("both");
+  const [discountType, setDiscountType] = useState("free");
   const [discountValue, setDiscountValue] = useState(100);
-  const [limitType, setLimitType] = useState("uses"); // "uses" or "date"
+  const [limitType, setLimitType] = useState("uses");
   const [maxUses, setMaxUses] = useState(1);
   const [expiryDate, setExpiryDate] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Extract unique courses to prevent React 'key' warnings
+  const isFullAdmin = userRole === "admin";
+
+  // Filter available courses based on permissions
   const availableCourses = Array.from(
     new Map(
       planets
@@ -53,12 +51,12 @@ export default function PromotionsTab({ isMobile, currentLang }) {
         .filter((c) => c.link)
         .map((c) => [c.link, c]),
     ).values(),
-  );
+  ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
 
   useEffect(() => {
     fetchCodes();
     if (availableCourses.length > 0) setCoursePath(availableCourses[0].link);
-  }, []);
+  }, [userRole, allowedCourses]);
 
   const fetchCodes = async () => {
     const q = query(
@@ -66,7 +64,13 @@ export default function PromotionsTab({ isMobile, currentLang }) {
       orderBy("createdAt", "desc"),
     );
     const snap = await getDocs(q);
-    setPromoCodes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const allCodes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    // Filter visible codes: Course admins only see codes for their courses
+    const filteredCodes = allCodes.filter(
+      (pc) => isFullAdmin || allowedCourses.includes(pc.coursePath),
+    );
+    setPromoCodes(filteredCodes);
   };
 
   const handleSubmit = async (e) => {
@@ -84,6 +88,7 @@ export default function PromotionsTab({ isMobile, currentLang }) {
         expiryDate: limitType === "date" ? expiryDate : null,
         timesUsed: 0,
         createdAt: serverTimestamp(),
+        createdByRole: userRole, // Helpful for tracking
       });
       setCode("");
       fetchCodes();
@@ -96,14 +101,17 @@ export default function PromotionsTab({ isMobile, currentLang }) {
 
   const deleteCode = async (id) => {
     if (window.confirm("Delete this promo code?")) {
-      await deleteDoc(doc(db, "promo_codes", id));
-      fetchCodes();
+      try {
+        await deleteDoc(doc(db, "promo_codes", id));
+        fetchCodes();
+      } catch (err) {
+        alert("Error deleting code: " + err.message);
+      }
     }
   };
 
   return (
     <div style={{ display: isMobile ? "block" : "flex", gap: "2rem" }}>
-      {/* FORM SECTION */}
       <section style={{ width: isMobile ? "100%" : "400px" }}>
         <div style={formCardStyle}>
           <h3 style={sectionTitleStyle}>
@@ -139,40 +147,23 @@ export default function PromotionsTab({ isMobile, currentLang }) {
               </select>
             </div>
 
-            {/* Applies To Toggle */}
             <div>
               <label style={labelStyle}>Valid For</label>
               <div style={toggleContainerStyle}>
-                <div
-                  onClick={() => setApplyTo("both")}
-                  style={{
-                    ...toggleOptionStyle,
-                    backgroundColor:
-                      applyTo === "both" ? "#caaff3" : "transparent",
-                  }}
-                >
-                  Both
-                </div>
-                <div
-                  onClick={() => setApplyTo("pack")}
-                  style={{
-                    ...toggleOptionStyle,
-                    backgroundColor:
-                      applyTo === "pack" ? "#caaff3" : "transparent",
-                  }}
-                >
-                  Pack Only
-                </div>
-                <div
-                  onClick={() => setApplyTo("single")}
-                  style={{
-                    ...toggleOptionStyle,
-                    backgroundColor:
-                      applyTo === "single" ? "#caaff3" : "transparent",
-                  }}
-                >
-                  Single Only
-                </div>
+                {["both", "pack", "single"].map((type) => (
+                  <div
+                    key={type}
+                    onClick={() => setApplyTo(type)}
+                    style={{
+                      ...toggleOptionStyle,
+                      backgroundColor:
+                        applyTo === type ? "#caaff3" : "transparent",
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {type}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -273,10 +264,9 @@ export default function PromotionsTab({ isMobile, currentLang }) {
         </div>
       </section>
 
-      {/* LIST SECTION */}
       <section style={{ flex: 1 }}>
         <h3 style={{ ...sectionTitleStyle, marginBottom: "1rem" }}>
-          <Star size={18} /> Active Promotions
+          <Star size={18} /> Active Promotions {!isFullAdmin && "(My Courses)"}
         </h3>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {promoCodes.map((pc) => (
@@ -321,11 +311,7 @@ export default function PromotionsTab({ isMobile, currentLang }) {
                       fontWeight: "bold",
                     }}
                   >
-                    {pc.applyTo === "pack"
-                      ? "Pack Only"
-                      : pc.applyTo === "single"
-                        ? "Single Only"
-                        : "Both"}
+                    {pc.applyTo}
                   </span>
                 </div>
                 <div
