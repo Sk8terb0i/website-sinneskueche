@@ -112,12 +112,12 @@ export default function BookingsCard({ userId, currentLang, t }) {
   const labels = {
     en: {
       cancelBtn: "cancel course",
-      policyNote: "cancellations are possible up to 4 days before the start.",
+      policyNote: "cancellations are possible up to 5 days before the start.",
       confirm: "confirm cancellation? (+1 credit)",
     },
     de: {
       cancelBtn: "termin stornieren",
-      policyNote: "stornierungen sind bis zu 4 tage vor beginn möglich.",
+      policyNote: "stornierungen sind bis zu 5 tage vor beginn möglich.",
       confirm: "stornierung bestätigen? (+1 guthaben)",
     },
   }[currentLang];
@@ -154,7 +154,7 @@ export default function BookingsCard({ userId, currentLang, t }) {
                 const dateObj = new Date(booking.date);
                 const daysUntil =
                   (dateObj - new Date()) / (1000 * 60 * 60 * 24);
-                const canCancel = daysUntil >= 4;
+                const canCancel = daysUntil >= 5;
                 const isConfirming = confirmingId === booking.id;
 
                 return (

@@ -18,7 +18,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [packCourses, setPackCourses] = useState([]);
 
-  // --- NEW STATE FOR TABS AND RESPONSIVE DESIGN ---
+  // Tabs for mobile view
   const [activeTab, setActiveTab] = useState("bookings");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
@@ -27,14 +27,12 @@ export default function Profile({ currentLang, setCurrentLang }) {
     if (!currentUser || userData?.role === "admin") navigate("/");
   }, [currentUser, userData, authLoading, navigate]);
 
-  // --- HANDLE SCREEN RESIZING ---
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // --- SCROLL TO TOP ON TAB CHANGE ---
   useEffect(() => {
     if (isMobile) {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -87,6 +85,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
       tabBookings: "Bookings",
       tabProfile: "Info",
       tabPacks: "Packs",
+      historyTitle: "credit history",
     },
     de: {
       title: "mein profil",
@@ -109,6 +108,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
       tabBookings: "Termine",
       tabProfile: "Profil",
       tabPacks: "Karten",
+      historyTitle: "guthaben-verlauf",
     },
   }[currentLang];
 
@@ -138,22 +138,22 @@ export default function Profile({ currentLang, setCurrentLang }) {
               <Calendar size={16} /> {t.tabBookings}
             </button>
             <button
-              onClick={() => setActiveTab("info")}
-              style={styles.tabBtn(activeTab === "info")}
-            >
-              <User size={16} /> {t.tabProfile}
-            </button>
-            <button
               onClick={() => setActiveTab("packs")}
               style={styles.tabBtn(activeTab === "packs")}
             >
               <Ticket size={16} /> {t.tabPacks}
             </button>
+            <button
+              onClick={() => setActiveTab("info")}
+              style={styles.tabBtn(activeTab === "info")}
+            >
+              <User size={16} /> {t.tabProfile}
+            </button>
           </div>
         )}
 
         <div style={styles.grid}>
-          {/* PERSONAL INFO CARD */}
+          {/* PERSONAL INFO CARD (Includes the History Modal trigger) */}
           {(!isMobile || activeTab === "info") && (
             <PersonalInfoCard
               currentUser={currentUser}
@@ -252,7 +252,6 @@ const styles = {
     gap: "2rem",
     width: "100%",
   },
-  // --- STYLES FOR TABS ---
   tabNav: {
     display: "flex",
     background: "rgba(202, 175, 243, 0.1)",
@@ -261,13 +260,14 @@ const styles = {
     marginBottom: "2rem",
     gap: "6px",
     border: "1px solid rgba(202, 175, 243, 0.3)",
+    overflowX: "auto",
   },
   tabBtn: (isActive) => ({
     flex: 1,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "8px",
+    gap: "6px",
     padding: "12px 10px",
     border: "none",
     background: isActive ? "#caaff3" : "transparent",
@@ -280,5 +280,6 @@ const styles = {
     textTransform: "uppercase",
     letterSpacing: "0.03rem",
     transition: "all 0.2s ease",
+    whiteSpace: "nowrap",
   }),
 };

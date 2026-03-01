@@ -4,6 +4,7 @@ import { updateEmail } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { planets } from "../../data/planets";
+import CreditHistoryCard from "./CreditHistoryCard"; // IMPORTED NEW COMPONENT
 import {
   User,
   Mail,
@@ -14,6 +15,7 @@ import {
   Loader2,
   Ticket,
   PlusCircle,
+  Info, // IMPORTED ICON
 } from "lucide-react";
 
 export default function PersonalInfoCard({
@@ -30,6 +32,9 @@ export default function PersonalInfoCard({
   const [editLastName, setEditLastName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
+
+  // NEW: State to track which course history to show in the modal
+  const [selectedHistoryCourse, setSelectedHistoryCourse] = useState(null);
 
   useEffect(() => {
     if (userData) {
@@ -84,14 +89,11 @@ export default function PersonalInfoCard({
       const functions = getFunctions();
       const createCheckout = httpsCallable(functions, "createStripeCheckout");
 
-      // NEW: Robust URL helper for GitHub Pages and Custom Domains
       const getBaseUrl = () => {
         const origin = window.location.origin;
-        // Check if we are on github.io. If so, add the repo name.
         if (origin.includes("github.io")) {
           return `${origin}/website-sinneskueche/`;
         }
-        // For local development or a custom domain that points to the root
         return `${origin}/`;
       };
 
@@ -102,7 +104,6 @@ export default function PersonalInfoCard({
         coursePath: `/${targetDocId}`,
         selectedDates: [],
         currentLang: currentLang,
-        // UPDATED: Now uses the helper to include repo subfolders
         successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: window.location.href,
       });
@@ -263,21 +264,39 @@ export default function PersonalInfoCard({
                         <span style={styles.creditsLabel}>{t.remaining}</span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleTopUp(courseKey)}
-                      disabled={isToppingUp !== null}
-                      style={styles.topUpBtn}
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        alignItems: "center",
+                      }}
                     >
-                      {isToppingUp === courseKey ? (
-                        <Loader2
-                          size={24}
-                          className="spinner"
-                          color="#4e5f28"
-                        />
-                      ) : (
-                        <PlusCircle size={24} color="#4e5f28" />
-                      )}
-                    </button>
+                      {/* NEW: INFO BUTTON */}
+                      <button
+                        onClick={() => setSelectedHistoryCourse(courseKey)}
+                        style={styles.infoActionBtn}
+                        title="View History"
+                      >
+                        <Info size={18} />
+                      </button>
+
+                      <button
+                        onClick={() => handleTopUp(courseKey)}
+                        disabled={isToppingUp !== null}
+                        style={styles.topUpBtn}
+                      >
+                        {isToppingUp === courseKey ? (
+                          <Loader2
+                            size={24}
+                            className="spinner"
+                            color="#4e5f28"
+                          />
+                        ) : (
+                          <PlusCircle size={24} color="#4e5f28" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 ),
               )
@@ -289,6 +308,29 @@ export default function PersonalInfoCard({
           </div>
         </>
       )}
+
+      {/* NEW: MODAL OVERLAY FOR HISTORY */}
+      {selectedHistoryCourse && (
+        <div
+          style={styles.modalOverlay}
+          onClick={() => setSelectedHistoryCourse(null)}
+        >
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <CreditHistoryCard
+              userId={currentUser.uid}
+              courseKey={selectedHistoryCourse}
+              currentLang={currentLang}
+              t={t}
+            />
+            <button
+              onClick={() => setSelectedHistoryCourse(null)}
+              style={styles.closeBtn}
+            >
+              {currentLang === "en" ? "Close" : "Schliessen"}
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -296,22 +338,21 @@ export default function PersonalInfoCard({
 const styles = {
   card: {
     backgroundColor: "#fdf8e1",
-    // MODIFIED: Reduced padding for mobile
     padding: window.innerWidth < 768 ? "1.5rem" : "2.5rem",
     borderRadius: "24px",
     border: "1px solid rgba(28, 7, 0, 0.05)",
     flex: 1,
-    width: "100%", // Changed from minWidth to width
+    width: "100%",
     boxSizing: "border-box",
   },
   cardHeader: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center", // Changed from flex-start to center
+    alignItems: "center",
     marginBottom: "2rem",
   },
   avatarCircle: {
-    width: "60px", // Reduced from 80px
+    width: "60px",
     height: "60px",
     borderRadius: "50%",
     backgroundColor: "#caaff31e",
@@ -324,7 +365,7 @@ const styles = {
     fontSize: window.innerWidth < 768 ? "1.8rem" : "2.2rem",
     margin: "0 0 1.5rem 0",
     color: "#1c0700",
-    wordBreak: "break-word", // Prevents long names from breaking layout
+    wordBreak: "break-word",
   },
   infoRow: {
     display: "flex",
@@ -339,7 +380,7 @@ const styles = {
   },
   creditsBox: {
     marginTop: "2rem",
-    padding: "1.2rem", // Slightly reduced
+    padding: "1.2rem",
     backgroundColor: "rgba(202, 175, 243, 0.15)",
     borderRadius: "16px",
     border: "1px solid #caaff3",
@@ -349,7 +390,7 @@ const styles = {
     alignItems: "center",
     justifyContent: "space-between",
     gap: "1rem",
-    flexWrap: "nowrap", // Ensure icon and number stay together
+    flexWrap: "nowrap",
   },
   creditsHeader: {
     display: "flex",
@@ -367,7 +408,7 @@ const styles = {
   creditsNumber: {
     fontFamily: "Satoshi",
     fontWeight: "900",
-    fontSize: "2rem", // Reduced from 2.5rem
+    fontSize: "2rem",
     color: "#4e5f28",
   },
   creditsLabel: {
@@ -384,6 +425,18 @@ const styles = {
     padding: "8px",
     display: "flex",
     alignItems: "center",
+  },
+  infoActionBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    color: "#9960a8",
+    opacity: 0.6,
+    padding: "8px",
+    display: "flex",
+    alignItems: "center",
+    transition: "opacity 0.2s ease",
+    ":hover": { opacity: 1 },
   },
   iconBtn: {
     background: "none",
@@ -409,5 +462,43 @@ const styles = {
     backgroundColor: "rgba(255, 252, 227, 0.4)",
     color: "#1c0700",
     boxSizing: "border-box",
+  },
+  // NEW: MODAL STYLES
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(28, 7, 0, 0.4)",
+    backdropFilter: "blur(4px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2000,
+    padding: "20px",
+  },
+  modalContent: {
+    backgroundColor: "#fffce3",
+    borderRadius: "24px",
+    maxWidth: "500px",
+    width: "100%",
+    maxHeight: "80vh",
+    overflowY: "auto",
+    position: "relative",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.1)",
+    display: "flex",
+    flexDirection: "column",
+  },
+  closeBtn: {
+    margin: "0 2rem 2rem 2rem",
+    padding: "12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(28, 7, 0, 0.1)",
+    backgroundColor: "#fdf8e1",
+    cursor: "pointer",
+    fontFamily: "Satoshi",
+    fontWeight: "bold",
+    color: "#1c0700",
   },
 };

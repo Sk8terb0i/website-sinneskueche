@@ -8,6 +8,8 @@ import {
   orderBy,
   query,
   where,
+  addDoc, // NEW
+  serverTimestamp, // NEW
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "../../firebase";
@@ -48,14 +50,12 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const courseKey = getCreditKey(coursePath);
   const availableCredits = userData?.credits?.[courseKey] || 0;
 
-  // 1. Handle Resize
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // 2. Fetch Data with Error Handling & Loading Guard
   useEffect(() => {
     let isMounted = true;
 
@@ -120,7 +120,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
     };
   }, [coursePath, currentUser]);
 
-  // 3. Smooth scroll on expansion
   useEffect(() => {
     if (isMobile && isMobileExpanded && scrollRef.current) {
       setTimeout(() => {
@@ -166,20 +165,40 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           guestInfo: !currentUser ? guestInfo : null,
           currentLang,
         });
+
+        // --- NEW: LOG REDEMPTION HISTORY (if logged in) ---
+        if (currentUser) {
+          await addDoc(collection(db, "credit_history"), {
+            userId: currentUser.uid,
+            amount: parseInt(pricing.packSize),
+            type: "purchase",
+            courseKey: courseKey,
+            createdAt: serverTimestamp(),
+          });
+
+          // Log the immediate booking deduction if they selected dates while redeeming
+          if (selectedDates.length > 0) {
+            await addDoc(collection(db, "credit_history"), {
+              userId: currentUser.uid,
+              amount: -selectedDates.length,
+              type: "booking",
+              courseKey: courseKey,
+              createdAt: serverTimestamp(),
+            });
+          }
+        }
+
         navigate(
           `/success?code=${packCode}&remaining=${res.data.remainingCredits}`,
         );
       } else {
         const createCheckout = httpsCallable(functions, "createStripeCheckout");
 
-        // Helper handles subfolder for GitHub Pages or root for Custom Domain
         const getBaseUrl = () => {
           const origin = window.location.origin;
-          // Check if we are on github.io. If so, add the repo name.
           if (origin.includes("github.io")) {
             return `${origin}/website-sinneskueche/`;
           }
-          // For local development or a custom domain that points to the root
           return `${origin}/`;
         };
 
@@ -192,7 +211,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
           guestInfo: !currentUser ? guestInfo : null,
           currentLang,
-          // FIX: Called the helper function here to ensure subfolders are included
           successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: window.location.href,
         });
@@ -213,6 +231,16 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         selectedDates: selectedDates.map((d) => ({ id: d.id, date: d.date })),
         currentLang,
       });
+
+      // --- NEW: LOG CREDIT DEDUCTION HISTORY ---
+      await addDoc(collection(db, "credit_history"), {
+        userId: currentUser.uid,
+        amount: -selectedDates.length,
+        type: "booking",
+        courseKey: courseKey,
+        createdAt: serverTimestamp(),
+      });
+
       navigate("/success");
     } catch (err) {
       console.error(err);
