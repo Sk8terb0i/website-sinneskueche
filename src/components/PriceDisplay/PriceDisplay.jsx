@@ -189,7 +189,8 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         selectedDates: expandedDates,
         guestInfo: !currentUser ? guestInfo : null,
         currentLang,
-        successUrl: `${window.location.origin}/#/success?session_id={CHECKOUT_SESSION_ID}`,
+        // ADDED &mode=${mode} HERE
+        successUrl: `${window.location.origin}/#/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}`,
         cancelUrl: window.location.href,
       });
       if (res.data?.url) window.location.assign(res.data.url);

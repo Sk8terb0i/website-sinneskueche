@@ -1,4 +1,4 @@
-import { CheckCircle, Mail, Ticket } from "lucide-react";
+import { CheckCircle, Mail, Ticket, CreditCard } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import Header from "../Header/Header";
 import { useState } from "react";
@@ -9,12 +9,13 @@ export default function Success({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
 
+  // Get signals from URL
   const sessionId = searchParams.get("session_id");
   const redeemedCode = searchParams.get("code");
   const remainingParam = searchParams.get("remaining");
+  const mode = searchParams.get("mode"); // 'pack' or 'individual'
+  const type = searchParams.get("type"); // 'credit'
 
-  // Determine if a pack was part of this transaction based on the presence of redemption data
-  // or logic passed back from Stripe (handled by your webhook)
   const remainingCredits =
     remainingParam &&
     remainingParam !== "undefined" &&
@@ -31,6 +32,8 @@ export default function Success({ currentLang, setCurrentLang }) {
       memberPack: "Your credits have been added to your profile balance.",
       guestPack:
         "Since you purchased a session pack, we have sent a unique booking code to your email for future use.",
+      individualPaid: "Your session payment has been processed successfully.",
+      creditBooking: "One session has been deducted from your profile balance.",
       redeemNote:
         remainingCredits > 0
           ? `You have ${remainingCredits} ${remainingCredits === 1 ? "session" : "sessions"} left on your code: ${redeemedCode}`
@@ -46,6 +49,9 @@ export default function Success({ currentLang, setCurrentLang }) {
       memberPack: "Dein Guthaben wurde deinem Profil gutgeschrieben.",
       guestPack:
         "Da du eine Karte gekauft hast, haben wir dir einen Buchungscode per E-Mail gesendet.",
+      individualPaid:
+        "Deine Zahlung für den Einzeltermin wurde erfolgreich verarbeitet.",
+      creditBooking: "Der Termin wurde von deinem Profil-Guthaben abgezogen.",
       redeemNote:
         remainingCredits > 0
           ? `Du hast noch ${remainingCredits} ${remainingCredits === 1 ? "Termin" : "Termine"} auf deinem Code übrig: ${redeemedCode}`
@@ -80,7 +86,7 @@ export default function Success({ currentLang, setCurrentLang }) {
         <p style={styles.message}>{t.message}</p>
         <p style={styles.confirmation}>{t.confirmation}</p>
 
-        {/* SCENARIO 1: REDEEMED AN EXISTING CODE */}
+        {/* SCENARIO 1: REDEEMED A PACK CODE */}
         {redeemedCode && remainingCredits !== null && (
           <div style={styles.infoBox}>
             <Ticket size={20} color="#9960a8" />
@@ -88,8 +94,16 @@ export default function Success({ currentLang, setCurrentLang }) {
           </div>
         )}
 
-        {/* SCENARIO 2: BOUGHT A PACK AS A GUEST (Non-redemption checkout) */}
-        {!currentUser && !redeemedCode && sessionId && (
+        {/* SCENARIO 2: BOOKED WITH PROFILE CREDITS */}
+        {type === "credit" && (
+          <div style={styles.infoBox}>
+            <Ticket size={20} color="#9960a8" />
+            <p style={styles.infoText}>{t.creditBooking}</p>
+          </div>
+        )}
+
+        {/* SCENARIO 3: BOUGHT A PACK AS A GUEST */}
+        {!currentUser && mode === "pack" && sessionId && (
           <div
             style={{
               ...styles.infoBox,
@@ -104,11 +118,24 @@ export default function Success({ currentLang, setCurrentLang }) {
           </div>
         )}
 
-        {/* SCENARIO 3: BOUGHT A PACK AS A LOGGED-IN USER */}
-        {currentUser && !redeemedCode && sessionId && (
+        {/* SCENARIO 4: BOUGHT A PACK AS A MEMBER */}
+        {currentUser && mode === "pack" && sessionId && (
           <div style={styles.infoBox}>
             <Ticket size={20} color="#9960a8" />
             <p style={styles.infoText}>{t.memberPack}</p>
+          </div>
+        )}
+
+        {/* SCENARIO 5: PAID INDIVIDUAL SESSION (Member or Guest) */}
+        {mode === "individual" && sessionId && (
+          <div
+            style={{
+              ...styles.infoBox,
+              backgroundColor: "rgba(202, 175, 243, 0.05)",
+            }}
+          >
+            <CreditCard size={20} color="#9960a8" />
+            <p style={styles.infoText}>{t.individualPaid}</p>
           </div>
         )}
 
@@ -196,7 +223,7 @@ const styles = {
   primaryBtn: {
     padding: "1rem 2.5rem",
     backgroundColor: "#9960a8",
-    color: "#fdf8e1", // Off-white/Cream
+    color: "#fdf8e1",
     borderRadius: "100px",
     textDecoration: "none",
     fontWeight: "700",
