@@ -182,3 +182,12 @@ export const toggleOptionStyle = {
   fontWeight: "600",
   transition: "all 0.2s ease",
 };
+
+export const primaryBtnStyle = (isMobile) => ({
+  ...btnStyle,
+  backgroundColor: "#4e5f28", // Theme green
+  color: "#ffffff",
+  border: "none",
+  // Optional: add mobile-specific adjustments here if needed
+  padding: isMobile ? "0.8rem 1.2rem" : "1rem 2rem",
+});

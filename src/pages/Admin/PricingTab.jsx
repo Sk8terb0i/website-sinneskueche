@@ -33,14 +33,14 @@ export default function PricingTab({
   const [savingPriceId, setSavingPriceId] = useState(null);
   const [selectedCourse, setSelectedCourse] = useState("");
 
-  // State for the new special event inputs (EN & DE)
+  // State for new special event inputs
   const [newEventEn, setNewEventEn] = useState("");
   const [newEventDe, setNewEventDe] = useState("");
+  const [newEventCap, setNewEventCap] = useState("");
 
   const isFullAdmin = userRole === "admin";
   const courseSettingsCollection = collection(db, "course_settings");
 
-  // Filter courses based on admin permissions
   const availableCourses = Array.from(
     new Map(
       planets
@@ -51,7 +51,6 @@ export default function PricingTab({
     ).values(),
   ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
 
-  // Set initial selected course once availableCourses is loaded
   useEffect(() => {
     if (availableCourses.length > 0 && !selectedCourse) {
       setSelectedCourse(availableCourses[0].link.replace(/\//g, ""));
@@ -106,7 +105,7 @@ export default function PricingTab({
     handlePriceChange(courseId, "packs", updatedPacks);
   };
 
-  // --- New Handlers for Special Events ---
+  // --- Special Event Handlers ---
   const addSpecialEvent = (courseId) => {
     if (!newEventEn.trim() || !newEventDe.trim()) {
       alert("Please provide both English and German names.");
@@ -119,10 +118,12 @@ export default function PricingTab({
         id: Date.now().toString(),
         nameEn: newEventEn.trim(),
         nameDe: newEventDe.trim(),
+        capacity: newEventCap || null, // Save capacity if provided
       },
     ]);
     setNewEventEn("");
     setNewEventDe("");
+    setNewEventCap("");
   };
 
   const updateSpecialEvent = (courseId, eventId, field, value) => {
@@ -163,7 +164,7 @@ export default function PricingTab({
         capacity: priceData[courseId]?.capacity || "",
         isVisible: priceData[courseId]?.isVisible ?? true,
         courseName: courseName,
-        specialEvents: priceData[courseId]?.specialEvents || [], // Save the special events
+        specialEvents: priceData[courseId]?.specialEvents || [],
         updatedAt: new Date().toISOString(),
       };
       await setDoc(doc(db, "course_settings", courseId), dataToSave, {
@@ -190,7 +191,6 @@ export default function PricingTab({
       </h3>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-        {/* Dropdown Selector */}
         <div
           style={{
             backgroundColor: "#fdf8e1",
@@ -206,6 +206,7 @@ export default function PricingTab({
               setSelectedCourse(e.target.value);
               setNewEventEn("");
               setNewEventDe("");
+              setNewEventCap("");
             }}
             style={{
               ...inputStyle,
@@ -217,18 +218,17 @@ export default function PricingTab({
             {availableCourses.length === 0 && (
               <option>No courses assigned</option>
             )}
-            {availableCourses.map((c) => {
-              const cId = c.link.replace(/\//g, "");
-              return (
-                <option key={cId} value={cId}>
-                  {c.text.en}
-                </option>
-              );
-            })}
+            {availableCourses.map((c) => (
+              <option
+                key={c.link.replace(/\//g, "")}
+                value={c.link.replace(/\//g, "")}
+              >
+                {c.text.en}
+              </option>
+            ))}
           </select>
         </div>
 
-        {/* Active Course Settings Card */}
         {activeCourse && (
           <div
             key={selectedCourse}
@@ -248,6 +248,7 @@ export default function PricingTab({
                   : "#f5f5f5",
             }}
           >
+            {/* ... Existing Pricing & Capacity Sections ... */}
             <div
               style={{
                 display: "flex",
@@ -418,12 +419,10 @@ export default function PricingTab({
               </div>
             </div>
 
+            {/* Session Packs */}
             <div
               style={{
-                backgroundColor:
-                  (priceData[selectedCourse]?.hasPack ?? false)
-                    ? "rgba(202, 175, 243, 0.05)"
-                    : "transparent",
+                backgroundColor: "rgba(202, 175, 243, 0.05)",
                 padding: "16px",
                 borderRadius: "16px",
                 border: "1px solid rgba(28,7,0,0.05)",
@@ -453,7 +452,6 @@ export default function PricingTab({
                 />
                 Enable Session Packs
               </label>
-
               {(priceData[selectedCourse]?.hasPack ?? false) && (
                 <div
                   style={{
@@ -564,12 +562,10 @@ export default function PricingTab({
               )}
             </div>
 
+            {/* Course Capacity */}
             <div
               style={{
-                backgroundColor:
-                  (priceData[selectedCourse]?.hasCapacity ?? false)
-                    ? "rgba(78, 95, 40, 0.05)"
-                    : "transparent",
+                backgroundColor: "rgba(78, 95, 40, 0.05)",
                 padding: "12px",
                 borderRadius: "12px",
                 border:
@@ -636,7 +632,7 @@ export default function PricingTab({
               )}
             </div>
 
-            {/* --- NEW SPECIAL EVENTS SECTION --- */}
+            {/* --- SESSION ADD-ONS (Special Events) SECTION --- */}
             <div
               style={{
                 backgroundColor: "rgba(202, 175, 243, 0.05)",
@@ -655,19 +651,8 @@ export default function PricingTab({
                   opacity: 0.8,
                 }}
               >
-                <Star size={14} color="#9960a8" /> Associated Special Events
+                <Star size={14} color="#9960a8" /> Session Add-ons
               </label>
-              <p
-                style={{
-                  fontSize: "0.75rem",
-                  opacity: 0.6,
-                  marginTop: "-8px",
-                  marginBottom: "12px",
-                }}
-              >
-                Add named events (e.g. "Introduction Class") that belong to this
-                course.
-              </p>
 
               <div
                 style={{
@@ -676,7 +661,6 @@ export default function PricingTab({
                   gap: "10px",
                 }}
               >
-                {/* List of existing editable events */}
                 {(priceData[selectedCourse]?.specialEvents || []).map((ev) => (
                   <div
                     key={ev.id}
@@ -685,7 +669,7 @@ export default function PricingTab({
                       flexDirection: isMobile ? "column" : "row",
                       justifyContent: "space-between",
                       alignItems: isMobile ? "stretch" : "center",
-                      backgroundColor: "rgba(202, 175, 243, 0.08)", // Subtle theme purple instead of pure white
+                      backgroundColor: "rgba(202, 175, 243, 0.08)",
                       padding: "10px",
                       borderRadius: "12px",
                       border: "1px dashed rgba(202, 175, 243, 0.3)",
@@ -693,7 +677,7 @@ export default function PricingTab({
                     }}
                   >
                     <input
-                      value={ev.nameEn || ev.name || ""}
+                      value={ev.nameEn || ""}
                       onChange={(e) =>
                         updateSpecialEvent(
                           selectedCourse,
@@ -702,17 +686,17 @@ export default function PricingTab({
                           e.target.value,
                         )
                       }
-                      placeholder="Name (English)"
+                      placeholder="Name (EN)"
                       style={{
                         ...inputStyle,
                         padding: "8px 12px",
-                        flex: 1,
+                        flex: 2,
                         marginBottom: 0,
                         fontSize: "0.85rem",
                       }}
                     />
                     <input
-                      value={ev.nameDe || ev.name || ""}
+                      value={ev.nameDe || ""}
                       onChange={(e) =>
                         updateSpecialEvent(
                           selectedCourse,
@@ -721,15 +705,47 @@ export default function PricingTab({
                           e.target.value,
                         )
                       }
-                      placeholder="Name (Deutsch)"
+                      placeholder="Name (DE)"
                       style={{
                         ...inputStyle,
                         padding: "8px 12px",
-                        flex: 1,
+                        flex: 2,
                         marginBottom: 0,
                         fontSize: "0.85rem",
                       }}
                     />
+                    <div style={{ position: "relative", flex: 1 }}>
+                      <input
+                        type="number"
+                        value={ev.capacity || ""}
+                        onChange={(e) =>
+                          updateSpecialEvent(
+                            selectedCourse,
+                            ev.id,
+                            "capacity",
+                            e.target.value,
+                          )
+                        }
+                        placeholder="Cap"
+                        style={{
+                          ...inputStyle,
+                          padding: "8px 8px 8px 30px",
+                          marginBottom: 0,
+                          fontSize: "0.85rem",
+                        }}
+                        title="Capacity limit for this add-on"
+                      />
+                      <Users
+                        size={12}
+                        style={{
+                          position: "absolute",
+                          left: "10px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          opacity: 0.4,
+                        }}
+                      />
+                    </div>
                     <button
                       onClick={() => removeSpecialEvent(selectedCourse, ev.id)}
                       style={{
@@ -741,14 +757,13 @@ export default function PricingTab({
                         display: "flex",
                         justifyContent: "center",
                       }}
-                      title="Remove Event"
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
                 ))}
 
-                {/* Add new event row */}
+                {/* New Add-on Row */}
                 <div
                   style={{
                     display: "flex",
@@ -762,25 +777,49 @@ export default function PricingTab({
                   <input
                     value={newEventEn}
                     onChange={(e) => setNewEventEn(e.target.value)}
-                    placeholder="New Event (English)"
+                    placeholder="New Add-on (EN)"
                     style={{
                       ...inputStyle,
                       padding: "10px 12px",
-                      flex: 1,
+                      flex: 2,
                       marginBottom: 0,
                     }}
                   />
                   <input
                     value={newEventDe}
                     onChange={(e) => setNewEventDe(e.target.value)}
-                    placeholder="New Event (Deutsch)"
+                    placeholder="New Add-on (DE)"
                     style={{
                       ...inputStyle,
                       padding: "10px 12px",
-                      flex: 1,
+                      flex: 2,
                       marginBottom: 0,
                     }}
                   />
+                  <div style={{ position: "relative", flex: 1 }}>
+                    <input
+                      type="number"
+                      value={newEventCap}
+                      onChange={(e) => setNewEventCap(e.target.value)}
+                      placeholder="Cap"
+                      style={{
+                        ...inputStyle,
+                        padding: "10px 10px 10px 32px",
+                        marginBottom: 0,
+                      }}
+                      title="Capacity limit"
+                    />
+                    <Users
+                      size={14}
+                      style={{
+                        position: "absolute",
+                        left: "10px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        opacity: 0.4,
+                      }}
+                    />
+                  </div>
                   <button
                     onClick={() => addSpecialEvent(selectedCourse)}
                     style={{
@@ -794,7 +833,7 @@ export default function PricingTab({
                       gap: "6px",
                     }}
                   >
-                    <Plus size={16} /> {isMobile && "Add Event"}
+                    <Plus size={16} /> {isMobile && "Add Add-on"}
                   </button>
                 </div>
               </div>

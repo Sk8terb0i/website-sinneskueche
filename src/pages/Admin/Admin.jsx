@@ -19,6 +19,7 @@ import {
   Users,
   FileText,
   Bell,
+  CalendarClock, // Added icon for the new tab
 } from "lucide-react";
 
 // Components & Styles
@@ -31,6 +32,7 @@ import PackCodesTab from "./PackCodesTab";
 import ProfilesTab from "./ProfilesTab";
 import TermsTab from "./TermsTab";
 import RemindersTab from "./RemindersTab";
+import ScheduleTab from "./ScheduleTab"; // IMPORTED NEW TAB
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -266,7 +268,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
           paddingBottom: "10px",
           marginBottom: "2rem",
           display: "flex",
-          flexWrap: isMobile ? "nowrap" : "wrap", // FIX: Wraps on desktop to prevent cutoff
+          flexWrap: isMobile ? "nowrap" : "wrap",
           gap: "1.5rem",
         }}
         className="hide-scrollbar"
@@ -301,7 +303,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
           )}
         </div>
 
-        {/* GROUP 2: Course Mgmt, Reminders, Terms */}
+        {/* GROUP 2: Course Mgmt, Schedule, Reminders, Terms */}
         <div style={groupStyle}>
           <button
             onClick={() => setActiveTab("course-management")}
@@ -315,6 +317,20 @@ export default function Admin({ currentLang, setCurrentLang }) {
           >
             <Tag size={16} /> Course Management
           </button>
+
+          <button
+            onClick={() => setActiveTab("schedule")}
+            style={{
+              ...tabButtonStyle(activeTab === "schedule"),
+              backgroundColor:
+                activeTab === "schedule" ? "#caaff3" : "transparent",
+              borderRadius: "100px",
+              color: "#1c0700",
+            }}
+          >
+            <CalendarClock size={16} /> Work Schedule
+          </button>
+
           <button
             onClick={() => setActiveTab("reminders")}
             style={{
@@ -409,6 +425,16 @@ export default function Admin({ currentLang, setCurrentLang }) {
             allowedCourses={adminData.allowedCourses || []}
           />
         )}
+
+        {/* RENDER THE NEW SCHEDULE TAB */}
+        {activeTab === "schedule" && (
+          <ScheduleTab
+            isMobile={isMobile}
+            userRole={adminData.role}
+            allowedCourses={adminData.allowedCourses || []}
+          />
+        )}
+
         {activeTab === "promotions" && (
           <PromotionsTab
             isMobile={isMobile}
