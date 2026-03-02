@@ -159,10 +159,14 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
       );
       const functions = getFunctions();
       const bookCredits = httpsCallable(functions, "bookWithCredits");
+
+      const baseUrl = window.location.href.split("#")[0]; // DYNAMIC BASE URL
+
       await bookCredits({
         coursePath,
         selectedDates: expandedDates,
         currentLang,
+        baseUrl, // PASS TO BACKEND
       });
       navigate("/success?type=credit");
     } catch (err) {
@@ -171,7 +175,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     }
   };
 
-  const handlePayment = async (mode, code, size, price) => {
+  const handlePayment = async (mode, code, size, price, creditsToUse = 0) => {
     setIsProcessing(true);
     try {
       const expandedDates = selectedDates.flatMap((d) =>
@@ -185,17 +189,37 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           })),
       );
       const functions = getFunctions();
+      const baseUrl = window.location.href.split("#")[0]; // DYNAMIC BASE URL
+
+      // INTERCEPT REDEEM MODE AND ROUTE TO CORRECT BACKEND FUNCTION
+      if (mode === "redeem") {
+        const redeemPack = httpsCallable(functions, "redeemPackCode");
+        await redeemPack({
+          coursePath,
+          selectedDates: expandedDates,
+          packCode: code,
+          guestInfo: !currentUser ? guestInfo : null,
+          currentLang,
+          baseUrl, // PASS TO BACKEND
+        });
+        navigate(`/success?type=credit&mode=redeem&code=${code}`);
+        setIsProcessing(false);
+        return;
+      }
+
       const stripe = httpsCallable(functions, "createStripeCheckout");
       const res = await stripe({
         mode,
-        packPrice: price || 0,
-        totalPrice: selectedDates.length * (pricing?.priceSingle || 0),
+        packPrice: mode === "pack" ? price || 0 : 0,
+        totalPrice: mode !== "pack" ? price || 0 : 0, // MAPS CALCULATED CASH TOTAL FROM BOOKINGSUMMARY
         packSize: size || 0,
         coursePath,
         selectedDates: expandedDates,
         guestInfo: !currentUser ? guestInfo : null,
         currentLang,
-        successUrl: `${window.location.origin}/#/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}`,
+        creditsToUse,
+        baseUrl, // PASS TO BACKEND
+        successUrl: `${baseUrl}#/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}`,
         cancelUrl: window.location.href,
       });
       if (res.data?.url) window.location.assign(res.data.url);
@@ -396,6 +420,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           onBookCredits={handleBookWithCredits}
           onPayment={handlePayment}
           coursePath={coursePath}
+          userBookedIds={userBookedIds}
         />
       </div>
     </div>

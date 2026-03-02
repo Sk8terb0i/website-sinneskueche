@@ -265,13 +265,18 @@ exports.createStripeCheckout = onCall(
       currentLang,
       successUrl,
       cancelUrl,
+      creditsToUse,
+      baseUrl, // PASSED FROM FRONTEND
     } = request.data;
+
     const userId = request.auth ? request.auth.uid : "GUEST_USER";
     const userEmail = request.auth
       ? request.auth.token.email
       : guestInfo?.email;
+
+    // SAFELY USE FRONTEND BASEURL
     const origin =
-      request.rawRequest.headers.origin || "https://sinneskueche.ch";
+      baseUrl || request.rawRequest.headers.origin || "https://sinneskueche.ch";
 
     if (!request.auth && !guestInfo)
       throw new HttpsError("unauthenticated", "Login required.");
@@ -312,6 +317,7 @@ exports.createStripeCheckout = onCall(
           selectedDates: JSON.stringify(selectedDates),
           currentLang: currentLang || "en",
           origin,
+          creditsToUse: creditsToUse ? creditsToUse.toString() : "0",
         },
       });
       return { url: session.url };
@@ -358,12 +364,14 @@ exports.handleStripeWebhook = onRequest(
             coursePath,
             currentLang,
             origin,
+            creditsToUse,
           } = session.metadata;
           const parsedDates = JSON.parse(selectedDates);
           const courseKey = getCleanCourseKey(coursePath);
           const lang = currentLang || "en";
           const email = session.customer_details.email;
           const isGuest = userId === "GUEST_USER";
+          const parsedCreditsToUse = parseInt(creditsToUse || "0", 10);
 
           let finalName = guestName;
           if (!isGuest) {
@@ -372,6 +380,14 @@ exports.handleStripeWebhook = onRequest(
             );
             if (userSnap.exists)
               finalName = userSnap.data().firstName || guestName;
+          }
+
+          // DEDUCT MIXED CART CREDITS BEFORE ADDING PACK CREDITS
+          if (!isGuest && parsedCreditsToUse > 0) {
+            transaction.update(db.collection("users").doc(userId), {
+              [`credits.${courseKey}`]:
+                admin.firestore.FieldValue.increment(-parsedCreditsToUse),
+            });
           }
 
           if (mode === "pack") {
@@ -423,7 +439,6 @@ exports.handleStripeWebhook = onRequest(
             userId,
           });
 
-          // Prep data to trigger email outside transaction
           emailData = {
             email,
             finalName,
@@ -460,7 +475,9 @@ exports.handleStripeWebhook = onRequest(
 // ============================================================================
 exports.bookWithCredits = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-  const { coursePath, selectedDates, currentLang } = request.data;
+  const { coursePath, selectedDates, currentLang, baseUrl } = request.data;
+  const origin = baseUrl || "https://sinneskueche.ch";
+
   const courseKey = getCleanCourseKey(coursePath);
   const userRef = db.collection("users").doc(request.auth.uid);
   const email = request.auth.token.email;
@@ -500,15 +517,22 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
     selectedDates,
     currentLang || "en",
     false,
-    null,
+    origin, // Dynamic origin
   );
 
   return { success: true };
 });
 
 exports.redeemPackCode = onCall({ cors: true }, async (request) => {
-  const { coursePath, selectedDates, packCode, guestInfo, currentLang } =
-    request.data;
+  const {
+    coursePath,
+    selectedDates,
+    packCode,
+    guestInfo,
+    currentLang,
+    baseUrl,
+  } = request.data;
+  const origin = baseUrl || "https://sinneskueche.ch";
   const courseKey = getCleanCourseKey(coursePath);
   const codeRef = db.collection("pack_codes").doc(packCode);
 
@@ -545,7 +569,7 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
     selectedDates,
     currentLang || "en",
     true,
-    "https://sinneskueche.ch",
+    origin, // Dynamic origin
   );
 
   return { success: true };
@@ -571,8 +595,11 @@ exports.cancelBooking = onCall({ cors: true }, async (request) => {
 exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
   if (!request.auth)
     throw new HttpsError("unauthenticated", "Must be logged in.");
-  const { eventId, currentLang } = request.data;
+  const { eventId, currentLang, baseUrl } = request.data;
   const lang = currentLang || "en";
+  const origin =
+    baseUrl || request.rawRequest.headers.origin || "https://sinneskueche.ch";
+
   const eventRef = db.collection("events").doc(eventId);
   const eventSnap = await eventRef.get();
   if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found");
@@ -605,7 +632,7 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
           eventData.date,
           lang,
           newCode,
-          null,
+          origin,
         );
       } else {
         const userRef = db.collection("users").doc(bData.userId);
@@ -620,7 +647,7 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
           eventData.date,
           lang,
           null,
-          null,
+          origin,
         );
       }
       transaction.delete(bDoc.ref);
@@ -761,9 +788,10 @@ exports.onRentRequestCreate = onDocumentCreated(
 );
 
 exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
-  const { courseId, instructors } = request.data;
+  const { courseId, instructors, baseUrl } = request.data;
   const courseKey = getCleanCourseKey(courseId);
-  const origin = request.rawRequest.headers.origin || "https://sinneskueche.ch";
+  const origin =
+    baseUrl || request.rawRequest.headers.origin || "https://sinneskueche.ch";
 
   for (const uid of instructors) {
     const userSnap = await db.collection("users").doc(uid).get();

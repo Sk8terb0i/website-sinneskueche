@@ -46,6 +46,7 @@ export default function BookingSummary({
   onBookCredits,
   onPayment,
   coursePath,
+  userBookedIds = [], // NEW PROP EXTRACTED
 }) {
   const [isAuthExpanded, setIsAuthExpanded] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
@@ -158,9 +159,19 @@ export default function BookingSummary({
 
   selectedDates.forEach((d) => {
     const count = d.count || 1;
+    // Check if user already booked this specific event in the past
+    const alreadyBooked = userBookedIds?.includes(d.id);
+
     if (limitOnePerDay) {
-      eligibleForCredit += 1;
-      ineligibleForCredit += Math.max(0, count - 1);
+      if (alreadyBooked) {
+        // They already used their 1 allowed credit for this day previously
+        eligibleForCredit += 0;
+        ineligibleForCredit += count;
+      } else {
+        // They haven't booked yet, so 1 goes to credit, remainder goes to cash
+        eligibleForCredit += 1;
+        ineligibleForCredit += Math.max(0, count - 1);
+      }
     } else {
       eligibleForCredit += count;
     }
@@ -570,29 +581,6 @@ export default function BookingSummary({
             const cap = parseInt(pricing?.capacity || 99);
             const canAddMore = !pricing?.hasCapacity || booked + d.count < cap;
 
-            const isSingleCapacity = cap === 1;
-            const showCounter = !isSingleCapacity;
-
-            const updateCount = (delta) => {
-              setSelectedDates((prev) =>
-                prev.map((item) => {
-                  if (item.id === d.id) {
-                    const newCount = Math.max(1, item.count + delta);
-                    if (delta > 0 && !canAddMore) return item;
-                    return { ...item, count: newCount };
-                  }
-                  return item;
-                }),
-              );
-            };
-
-            const rawAddons = scheduleData?.specialAssignments?.[d.id];
-            const dayAddons = Array.isArray(rawAddons)
-              ? rawAddons
-              : rawAddons
-                ? [rawAddons]
-                : [];
-
             return (
               <div
                 key={d.id}
@@ -628,59 +616,78 @@ export default function BookingSummary({
                       gap: "12px",
                     }}
                   >
-                    {showCounter && (
-                      <div
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        backgroundColor: "rgba(202, 175, 243, 0.1)",
+                        borderRadius: "8px",
+                        padding: "4px",
+                      }}
+                    >
+                      <button
+                        onClick={() =>
+                          setSelectedDates((prev) =>
+                            prev.map((item) =>
+                              item.id === d.id
+                                ? {
+                                    ...item,
+                                    count: Math.max(1, item.count - 1),
+                                  }
+                                : item,
+                            ),
+                          )
+                        }
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          backgroundColor: "rgba(202, 175, 243, 0.1)",
-                          borderRadius: "8px",
-                          padding: "4px",
+                          border: "none",
+                          background: "none",
+                          cursor: "pointer",
+                          fontWeight: "900",
+                          color: "#9960a8",
+                          padding: "0 6px",
                         }}
                       >
-                        <button
-                          onClick={() => updateCount(-1)}
-                          style={{
-                            border: "none",
-                            background: "none",
-                            cursor: "pointer",
-                            fontWeight: "900",
-                            color: "#9960a8",
-                            padding: "0 6px",
-                          }}
-                        >
-                          {" "}
-                          -{" "}
-                        </button>
-                        <span
-                          style={{
-                            fontWeight: "900",
-                            fontSize: "0.9rem",
-                            minWidth: "15px",
-                            textAlign: "center",
-                          }}
-                        >
-                          {d.count}
-                        </span>
-                        <button
-                          onClick={() => updateCount(1)}
-                          disabled={!canAddMore}
-                          style={{
-                            border: "none",
-                            background: "none",
-                            cursor: "pointer",
-                            fontWeight: "900",
-                            color: "#9960a8",
-                            padding: "0 6px",
-                            opacity: canAddMore ? 1 : 0.3,
-                          }}
-                        >
-                          {" "}
-                          +{" "}
-                        </button>
-                      </div>
-                    )}
+                        {" "}
+                        -{" "}
+                      </button>
+                      <span
+                        style={{
+                          fontWeight: "900",
+                          fontSize: "0.9rem",
+                          minWidth: "15px",
+                          textAlign: "center",
+                        }}
+                      >
+                        {d.count}
+                      </span>
+                      <button
+                        onClick={() =>
+                          canAddMore &&
+                          setSelectedDates((prev) =>
+                            prev.map((item) =>
+                              item.id === d.id
+                                ? { ...item, count: item.count + 1 }
+                                : item,
+                            ),
+                          )
+                        }
+                        disabled={!canAddMore}
+                        style={{
+                          border: "none",
+                          background: "none",
+                          cursor: "pointer",
+                          fontWeight: "900",
+                          color: "#9960a8",
+                          padding: "0 6px",
+                          opacity: canAddMore ? 1 : 0.3,
+                        }}
+                      >
+                        {" "}
+                        +{" "}
+                      </button>
+                    </div>
+
                     <button
                       onClick={() =>
                         setSelectedDates((prev) =>
@@ -700,7 +707,7 @@ export default function BookingSummary({
                   </div>
                 </div>
 
-                {dayAddons.length > 0 && (
+                {scheduleData?.specialAssignments?.[d.id] && (
                   <div
                     style={{
                       borderTop: "1px dashed rgba(28,7,0,0.1)",
@@ -731,7 +738,10 @@ export default function BookingSummary({
                         gap: "6px",
                       }}
                     >
-                      {dayAddons.map((addonId) => {
+                      {(Array.isArray(scheduleData.specialAssignments[d.id])
+                        ? scheduleData.specialAssignments[d.id]
+                        : [scheduleData.specialAssignments[d.id]]
+                      ).map((addonId) => {
                         const addon = pricing?.specialEvents?.find(
                           (se) => se.id === addonId,
                         );
@@ -950,6 +960,7 @@ export default function BookingSummary({
                   promoAppliesToPack ? activePromo?.code : null,
                   currentPack.size,
                   finalPackPrice,
+                  usableCredits,
                 ),
               )
             }
@@ -1076,6 +1087,7 @@ export default function BookingSummary({
                     : null,
                 0,
                 finalTotalPrice,
+                usableCredits, // Pass the credits we intend to deduct to Firebase
               ),
             )
           }
