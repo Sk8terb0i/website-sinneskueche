@@ -11,6 +11,7 @@ import {
   FileText,
   X,
   AlertCircle,
+  Star,
 } from "lucide-react";
 import {
   signInWithEmailAndPassword,
@@ -35,6 +36,8 @@ export default function BookingSummary({
   totalPrice,
   availableCredits,
   pricing,
+  scheduleData,
+  addonBookingCounts,
   guestInfo,
   setGuestInfo,
   currentUser,
@@ -51,7 +54,6 @@ export default function BookingSummary({
 
   const [showStripeAlternative, setShowStripeAlternative] = useState(false);
 
-  // --- UNIFIED CODE STATE ---
   const [isCodeExpanded, setIsCodeExpanded] = useState(false);
   const [codeInput, setCodeInput] = useState("");
   const [activePromo, setActivePromo] = useState(null);
@@ -64,14 +66,28 @@ export default function BookingSummary({
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
 
-  // Null means NO pack is selected initially
   const [selectedPackIndex, setSelectedPackIndex] = useState(null);
 
-  // --- Terms and Conditions State ---
   const [courseTerms, setCourseTerms] = useState(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showTermsPopup, setShowTermsPopup] = useState(false);
   const [shakeTerms, setShakeTerms] = useState(false);
+
+  // Signifier colors for add-ons (matching PriceDisplay)
+  const addonColors = [
+    "#9960a8",
+    "#4e5f28",
+    "#f39c12",
+    "#e74c3c",
+    "#3498db",
+    "#1abc9c",
+  ];
+
+  const getAddonColor = (addonId) => {
+    if (!pricing?.specialEvents) return "#ccc";
+    const index = pricing.specialEvents.findIndex((se) => se.id === addonId);
+    return index !== -1 ? addonColors[index % addonColors.length] : "#ccc";
+  };
 
   useEffect(() => {
     const fetchTerms = async () => {
@@ -102,6 +118,21 @@ export default function BookingSummary({
     if (!dateStr) return "";
     const parts = dateStr.split("-");
     return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : dateStr;
+  };
+
+  const toggleAddon = (eventId, addonId) => {
+    setSelectedDates((prev) =>
+      prev.map((date) => {
+        if (date.id === eventId) {
+          const current = date.selectedAddons || [];
+          const updated = current.includes(addonId)
+            ? current.filter((id) => id !== addonId)
+            : [...current, addonId];
+          return { ...date, selectedAddons: updated };
+        }
+        return date;
+      }),
+    );
   };
 
   const packOptions =
@@ -380,22 +411,7 @@ export default function BookingSummary({
         )}
 
         {showTermsPopup && (
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              width: "100vw",
-              height: "100vh",
-              backgroundColor: "rgba(28, 7, 0, 0.6)",
-              zIndex: 10000,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: "20px",
-            }}
-            onClick={() => setShowTermsPopup(false)}
-          >
+          <div style={S.overlayStyle} onClick={() => setShowTermsPopup(false)}>
             <div
               style={{
                 backgroundColor: "#fffce3",
@@ -520,7 +536,7 @@ export default function BookingSummary({
             display: "flex",
             flexDirection: "column",
             gap: "10px",
-            maxHeight: "210px",
+            maxHeight: "350px",
             overflowY: "auto",
             paddingRight: "5px",
           }}
@@ -544,98 +560,238 @@ export default function BookingSummary({
                 }),
               );
             };
+
+            // FIX: Ensure dayAddons is always an array so .map() doesn't crash
+            const rawAddons = scheduleData?.specialAssignments?.[d.id];
+            const dayAddons = Array.isArray(rawAddons)
+              ? rawAddons
+              : rawAddons
+                ? [rawAddons]
+                : [];
+
             return (
               <div
                 key={d.id}
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
+                  flexDirection: "column",
                   backgroundColor: "#fdf8e1",
-                  padding: "10px 14px",
-                  borderRadius: "12px",
+                  padding: "12px",
+                  borderRadius: "16px",
                   border: "1px solid rgba(28, 7, 0, 0.05)",
+                  gap: "10px",
                 }}
               >
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  <span style={{ fontWeight: "800", fontSize: "0.9rem" }}>
-                    {formatDate(d.date)}
-                  </span>
-                  <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
-                    {d.time || ""}
-                  </span>
-                </div>
                 <div
-                  style={{ display: "flex", alignItems: "center", gap: "12px" }}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
                 >
-                  {!isSingleCapacity && (
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontWeight: "800", fontSize: "0.9rem" }}>
+                      {formatDate(d.date)}
+                    </span>
+                    <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
+                      {d.time || ""}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                    }}
+                  >
+                    {!isSingleCapacity && (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          backgroundColor: "rgba(202, 175, 243, 0.1)",
+                          borderRadius: "8px",
+                          padding: "4px",
+                        }}
+                      >
+                        <button
+                          onClick={() => updateCount(-1)}
+                          style={{
+                            border: "none",
+                            background: "none",
+                            cursor: "pointer",
+                            fontWeight: "900",
+                            color: "#9960a8",
+                            padding: "0 6px",
+                          }}
+                        >
+                          {" "}
+                          -{" "}
+                        </button>
+                        <span
+                          style={{
+                            fontWeight: "900",
+                            fontSize: "0.9rem",
+                            minWidth: "15px",
+                            textAlign: "center",
+                          }}
+                        >
+                          {d.count}
+                        </span>
+                        <button
+                          onClick={() => updateCount(1)}
+                          disabled={!canAddMore}
+                          style={{
+                            border: "none",
+                            background: "none",
+                            cursor: "pointer",
+                            fontWeight: "900",
+                            color: "#9960a8",
+                            padding: "0 6px",
+                            opacity: canAddMore ? 1 : 0.3,
+                          }}
+                        >
+                          {" "}
+                          +{" "}
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      onClick={() =>
+                        setSelectedDates((prev) =>
+                          prev.filter((item) => item.id !== d.id),
+                        )
+                      }
+                      style={{
+                        border: "none",
+                        background: "none",
+                        cursor: "pointer",
+                        color: "#1c0700",
+                        opacity: 0.4,
+                      }}
+                    >
+                      <XCircle size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Session Add-ons opt-in checkboxes */}
+                {dayAddons.length > 0 && (
+                  <div
+                    style={{
+                      borderTop: "1px dashed rgba(28,7,0,0.1)",
+                      paddingTop: "8px",
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: "0.65rem",
+                        fontWeight: "900",
+                        textTransform: "uppercase",
+                        opacity: 0.5,
+                        marginBottom: "8px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <Star size={10} fill="#9960a8" color="#9960a8" />
+                      {currentLang === "en"
+                        ? "Available Add-ons"
+                        : "Verfügbare Extras"}
+                    </p>
                     <div
                       style={{
                         display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        backgroundColor: "rgba(202, 175, 243, 0.1)",
-                        borderRadius: "8px",
-                        padding: "4px",
+                        flexDirection: "column",
+                        gap: "6px",
                       }}
                     >
-                      <button
-                        onClick={() => updateCount(-1)}
-                        style={{
-                          border: "none",
-                          background: "none",
-                          cursor: "pointer",
-                          fontWeight: "900",
-                          color: "#9960a8",
-                          padding: "0 6px",
-                        }}
-                      >
-                        -
-                      </button>
-                      <span
-                        style={{
-                          fontWeight: "900",
-                          fontSize: "0.9rem",
-                          minWidth: "15px",
-                          textAlign: "center",
-                        }}
-                      >
-                        {d.count}
-                      </span>
-                      <button
-                        onClick={() => updateCount(1)}
-                        disabled={!canAddMore}
-                        style={{
-                          border: "none",
-                          background: "none",
-                          cursor: "pointer",
-                          fontWeight: "900",
-                          color: "#9960a8",
-                          padding: "0 6px",
-                          opacity: canAddMore ? 1 : 0.3,
-                        }}
-                      >
-                        +
-                      </button>
+                      {dayAddons.map((addonId) => {
+                        const addon = pricing?.specialEvents?.find(
+                          (se) => se.id === addonId,
+                        );
+                        if (!addon) return null;
+
+                        const isSelected = d.selectedAddons?.includes(addonId);
+                        const booked =
+                          addonBookingCounts[`${d.id}_${addonId}`] || 0;
+                        const capLimit = parseInt(addon.capacity || 999);
+                        const isFull = booked >= capLimit;
+                        const addonColor = getAddonColor(addonId);
+
+                        return (
+                          <div
+                            key={addonId}
+                            onClick={() =>
+                              !isFull && toggleAddon(d.id, addonId)
+                            }
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                              padding: "8px 12px",
+                              borderRadius: "12px",
+                              cursor: isFull ? "not-allowed" : "pointer",
+                              backgroundColor: isSelected
+                                ? "rgba(78, 95, 40, 0.1)"
+                                : "rgba(28,7,0,0.03)",
+                              transition: "all 0.2s",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "18px",
+                                height: "18px",
+                                borderRadius: "6px",
+                                border: `2px solid ${isSelected ? addonColor : "#caaff3"}`,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: isSelected
+                                  ? addonColor
+                                  : "transparent",
+                              }}
+                            >
+                              {isSelected && (
+                                <Check
+                                  size={14}
+                                  color="white"
+                                  strokeWidth={4}
+                                />
+                              )}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div
+                                style={{
+                                  fontSize: "0.8rem",
+                                  fontWeight: "700",
+                                  color: isFull ? "#ccc" : "#1c0700",
+                                }}
+                              >
+                                {currentLang === "en"
+                                  ? addon.nameEn
+                                  : addon.nameDe}
+                              </div>
+                              {isFull && (
+                                <span
+                                  style={{
+                                    fontSize: "0.6rem",
+                                    color: "#ff4d4d",
+                                    fontWeight: "800",
+                                  }}
+                                >
+                                  {currentLang === "en" ? "FULL" : "AUSGEBUCHT"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
-                  <button
-                    onClick={() =>
-                      setSelectedDates((prev) =>
-                        prev.filter((item) => item.id !== d.id),
-                      )
-                    }
-                    style={{
-                      border: "none",
-                      background: "none",
-                      cursor: "pointer",
-                      color: "#1c0700",
-                      opacity: 0.4,
-                    }}
-                  >
-                    <XCircle size={18} />
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1404,7 +1560,6 @@ export default function BookingSummary({
               </span>
             </div>
 
-            {/* Added for logged in users to also see the empty state prompt */}
             {renderSelectionSummary()}
 
             <div

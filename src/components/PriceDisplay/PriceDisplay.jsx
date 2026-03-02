@@ -23,10 +23,12 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const { currentUser, userData } = useAuth();
   const navigate = useNavigate();
   const [pricing, setPricing] = useState(null);
+  const [scheduleData, setScheduleData] = useState(null);
   const [availableDates, setAvailableDates] = useState([]);
   const [selectedDates, setSelectedDates] = useState([]);
   const [userBookedIds, setUserBookedIds] = useState([]);
   const [eventBookingCounts, setEventBookingCounts] = useState({});
+  const [addonBookingCounts, setAddonBookingCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [guestInfo, setGuestInfo] = useState({
@@ -39,23 +41,20 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const scrollRef = useRef(null);
 
-  const getCreditKey = (link) => {
-    for (const planet of planets) {
-      const course = planet.courses?.find((c) => c.link === link);
-      if (course) return course.text[currentLang];
-    }
-    return link.replace(/\//g, "");
+  const addonColors = [
+    "#9960a8",
+    "#4e5f28",
+    "#f39c12",
+    "#e74c3c",
+    "#3498db",
+    "#1abc9c",
+  ];
+
+  const getAddonColor = (addonId) => {
+    if (!pricing?.specialEvents) return "#ccc";
+    const index = pricing.specialEvents.findIndex((se) => se.id === addonId);
+    return index !== -1 ? addonColors[index % addonColors.length] : "#ccc";
   };
-
-  const courseKey = getCreditKey(coursePath);
-  const availableCredits = userData?.credits?.[courseKey] || 0;
-
-  const totalTickets = selectedDates.reduce(
-    (sum, d) => sum + (d.count || 1),
-    0,
-  );
-  const currentTotalPrice =
-    totalTickets * parseFloat(pricing?.priceSingle || 0);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
@@ -72,13 +71,16 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         const priceSnap = await getDoc(doc(db, "course_settings", docId));
         if (priceSnap.exists() && isMounted) setPricing(priceSnap.data());
 
+        const scheduleSnap = await getDoc(doc(db, "schedules", docId));
+        if (scheduleSnap.exists() && isMounted)
+          setScheduleData(scheduleSnap.data());
+
         const eventSnap = await getDocs(
           query(collection(db, "events"), orderBy("date", "asc")),
         );
         const filteredEvents = eventSnap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
           .filter((ev) => ev.link === coursePath);
-
         if (isMounted) setAvailableDates(filteredEvents);
 
         const globalBSnap = await getDocs(
@@ -88,10 +90,21 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           ),
         );
         const counts = {};
+        const addonCounts = {};
         globalBSnap.docs.forEach((d) => {
-          counts[d.data().eventId] = (counts[d.data().eventId] || 0) + 1;
+          const bData = d.data();
+          counts[bData.eventId] = (counts[bData.eventId] || 0) + 1;
+          if (bData.selectedAddons && Array.isArray(bData.selectedAddons)) {
+            bData.selectedAddons.forEach((addonId) => {
+              const key = `${bData.eventId}_${addonId}`;
+              addonCounts[key] = (addonCounts[key] || 0) + 1;
+            });
+          }
         });
-        if (isMounted) setEventBookingCounts(counts);
+        if (isMounted) {
+          setEventBookingCounts(counts);
+          setAddonBookingCounts(addonCounts);
+        }
 
         if (currentUser) {
           const userBSnap = await getDocs(
@@ -110,7 +123,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           setCurrentViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
         }
       } catch (err) {
-        console.error("Fetch Error:", err);
+        console.error(err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -121,30 +134,16 @@ export default function PriceDisplay({ coursePath, currentLang }) {
     };
   }, [coursePath, currentUser]);
 
-  useEffect(() => {
-    if (isMobile && isMobileExpanded && scrollRef.current) {
-      setTimeout(() => {
-        scrollRef.current.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 200);
-    }
-  }, [isMobileExpanded, isMobile]);
-
   const toggleDate = (event) => {
     const isFull =
       pricing?.hasCapacity &&
       (eventBookingCounts[event.id] || 0) >= parseInt(pricing.capacity);
     if (isFull) return;
-
     setSelectedDates((prev) => {
       const existing = prev.find((d) => d.id === event.id);
-      if (existing) {
-        return prev.filter((d) => d.id !== event.id);
-      } else {
-        return [...prev, { ...event, count: 1 }];
-      }
+      return existing
+        ? prev.filter((d) => d.id !== event.id)
+        : [...prev, { ...event, count: 1, selectedAddons: [] }];
     });
   };
 
@@ -154,24 +153,20 @@ export default function PriceDisplay({ coursePath, currentLang }) {
     selectedPackSize = null,
     selectedPackPrice = null,
   ) => {
-    if (!currentUser && (!guestInfo.email || !guestInfo.firstName)) {
-      alert(
-        currentLang === "en"
-          ? "Name and email required."
-          : "Name und E-Mail erforderlich.",
-      );
-      return;
-    }
     setIsProcessing(true);
     try {
-      const functions = getFunctions();
       const expandedDates = [];
       selectedDates.forEach((d) => {
         for (let i = 0; i < d.count; i++) {
-          expandedDates.push({ id: d.id, date: d.date, time: d.time });
+          expandedDates.push({
+            id: d.id,
+            date: d.date,
+            time: d.time,
+            selectedAddons: d.selectedAddons || [],
+          });
         }
       });
-
+      const functions = getFunctions();
       if (mode === "redeem") {
         const redeemPack = httpsCallable(functions, "redeemPackCode");
         const res = await redeemPack({
@@ -181,53 +176,23 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           guestInfo: !currentUser ? guestInfo : null,
           currentLang,
         });
-
-        if (currentUser) {
-          await addDoc(collection(db, "credit_history"), {
-            userId: currentUser.uid,
-            amount: parseInt(selectedPackSize || pricing.packSize),
-            type: "purchase",
-            courseKey,
-            createdAt: serverTimestamp(),
-          });
-          if (totalTickets > 0) {
-            await addDoc(collection(db, "credit_history"), {
-              userId: currentUser.uid,
-              amount: -totalTickets,
-              type: "booking",
-              courseKey,
-              createdAt: serverTimestamp(),
-            });
-          }
-        }
         navigate(
           `/success?code=${packCode}&remaining=${res.data.remainingCredits}`,
         );
       } else {
         const createCheckout = httpsCallable(functions, "createStripeCheckout");
-        const getBaseUrl = () => {
-          const origin = window.location.origin;
-          return origin.includes("github.io")
-            ? `${origin}/website-sinneskueche/`
-            : `${origin}/`;
-        };
-
         const result = await createCheckout({
           mode,
-          packPrice:
-            mode === "pack"
-              ? parseFloat(selectedPackPrice)
-              : parseFloat(pricing.priceFull),
-          totalPrice: currentTotalPrice,
-          packSize:
-            mode === "pack"
-              ? parseInt(selectedPackSize)
-              : parseInt(pricing.packSize),
+          packPrice: parseFloat(selectedPackPrice),
+          totalPrice:
+            selectedDates.reduce((s, d) => s + (d.count || 1), 0) *
+            parseFloat(pricing?.priceSingle || 0),
+          packSize: parseInt(selectedPackSize),
           coursePath,
           selectedDates: expandedDates,
           guestInfo: !currentUser ? guestInfo : null,
           currentLang,
-          successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}`,
+          successUrl: `${window.location.origin}/#/success?session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: window.location.href,
         });
         if (result.data?.url) window.location.assign(result.data.url);
@@ -237,44 +202,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
       setIsProcessing(false);
     }
   };
-
-  const handleBookWithCredits = async () => {
-    setIsProcessing(true);
-    try {
-      const expandedDates = [];
-      selectedDates.forEach((d) => {
-        for (let i = 0; i < d.count; i++) {
-          expandedDates.push({ id: d.id, date: d.date, time: d.time });
-        }
-      });
-
-      const bookCall = httpsCallable(getFunctions(), "bookWithCredits");
-      await bookCall({
-        coursePath,
-        selectedDates: expandedDates,
-        currentLang,
-      });
-
-      await addDoc(collection(db, "credit_history"), {
-        userId: currentUser.uid,
-        amount: -totalTickets,
-        type: "booking",
-        courseKey,
-        createdAt: serverTimestamp(),
-      });
-      navigate("/success");
-    } catch (err) {
-      console.error(err);
-      setIsProcessing(false);
-    }
-  };
-
-  if (loading)
-    return (
-      <div style={S.initialLoaderStyle}>
-        <Loader2 className="spinner" size={40} color="#caaff3" />
-      </div>
-    );
 
   const monthName = currentViewDate.toLocaleString(
     currentLang === "en" ? "en-US" : "de-DE",
@@ -289,10 +216,18 @@ export default function PriceDisplay({ coursePath, currentLang }) {
     >
       {isProcessing && (
         <div style={S.overlayStyle}>
-          <Loader2 className="spinner" size={50} color="#caaff3" />
-          <p style={{ marginTop: "1.5rem", fontWeight: "700" }}>
-            {currentLang === "en" ? "Processing..." : "Verarbeitung..."}
-          </p>
+          <div style={{ textAlign: "center" }}>
+            <Loader2 className="spinner" size={50} color="#caaff3" />
+            <p
+              style={{
+                marginTop: "1.5rem",
+                fontWeight: "700",
+                color: "#fdf8e1",
+              }}
+            >
+              {currentLang === "en" ? "Processing..." : "Verarbeitung..."}
+            </p>
+          </div>
         </div>
       )}
 
@@ -311,7 +246,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           marginBottom: isMobile ? "0" : "2rem",
         }}
       >
-        <h2 style={{ ...S.overarchingTitleStyle(isMobile), margin: 0 }}>
+        <h2 style={S.overarchingTitleStyle(isMobile)}>
           {currentLang === "en"
             ? "Available Dates & Session Packs"
             : "Verfügbare Termine & Kurspakete"}
@@ -386,20 +321,91 @@ export default function PriceDisplay({ coursePath, currentLang }) {
               const isBooked = event && userBookedIds.includes(event.id);
               const isSelected =
                 event && selectedDates.find((d) => d.id === event.id);
+
+              const rawAddons = scheduleData?.specialAssignments?.[event?.id];
+              const activeAddons = Array.isArray(rawAddons)
+                ? rawAddons
+                : rawAddons
+                  ? [rawAddons]
+                  : [];
+
               return (
                 <div
                   key={i}
                   onClick={() => event && !isFull && toggleDate(event)}
                   style={S.dayStyle(event, isSelected, isMobile, isFull)}
                 >
+                  {activeAddons.length > 0 && (
+                    <div style={S.addonArcContainerStyle}>
+                      {activeAddons.map((id, idx) => {
+                        const mid = (activeAddons.length - 1) / 2;
+                        const offset = Math.pow(Math.abs(idx - mid), 2) * 3;
+                        return (
+                          <div
+                            key={id}
+                            style={S.addonDotStyle(getAddonColor(id), -offset)}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
                   {i + 1}
                   {event && !isFull && (
-                    // FIX: Passed isMobile to dotStyle
                     <div style={S.dotStyle(isSelected, isBooked, isMobile)} />
                   )}
                 </div>
               );
             })}
+          </div>
+
+          <div style={S.legendWrapperStyle(isMobile)}>
+            {/* Status Row: Available / Selected / Full sitting close together */}
+            <div style={S.legendStatusRowStyle(isMobile)}>
+              <div style={S.legendItemStyle(isMobile)}>
+                <div
+                  style={S.legendIndicatorStyle(
+                    "rgba(202, 175, 243, 0.4)",
+                    isMobile,
+                  )}
+                />
+                {currentLang === "en" ? "Available" : "Verfügbar"}
+              </div>
+
+              <div style={S.legendItemStyle(isMobile)}>
+                <div style={S.legendIndicatorStyle("#caaff3", isMobile)} />
+                {currentLang === "en" ? "Selected" : "Ausgewählt"}
+              </div>
+
+              <div style={S.legendItemStyle(isMobile)}>
+                <div
+                  style={S.legendIndicatorStyle("rgba(0,0,0,0.05)", isMobile)}
+                />
+                {currentLang === "en" ? "Full" : "Voll"}
+              </div>
+            </div>
+
+            {/* Special Add-on Events Flowing Below with tighter spacing */}
+            {pricing?.specialEvents && pricing.specialEvents.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: isMobile ? "0.6rem 12px" : "1rem 2rem",
+                }}
+              >
+                {pricing.specialEvents.map((se) => (
+                  <div key={se.id} style={S.legendItemStyle(isMobile)}>
+                    <div
+                      style={S.legendIndicatorStyle(
+                        getAddonColor(se.id),
+                        isMobile,
+                      )}
+                    />
+                    {currentLang === "en" ? se.nameEn : se.nameDe}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -407,17 +413,21 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           selectedDates={selectedDates}
           setSelectedDates={setSelectedDates}
           eventBookingCounts={eventBookingCounts}
-          totalPrice={currentTotalPrice}
-          availableCredits={availableCredits}
+          totalPrice={
+            selectedDates.reduce((s, d) => s + (d.count || 1), 0) *
+            parseFloat(pricing?.priceSingle || 0)
+          }
+          availableCredits={userData?.credits?.[coursePath] || 0}
           pricing={pricing}
+          scheduleData={scheduleData}
+          addonBookingCounts={addonBookingCounts}
           guestInfo={guestInfo}
           setGuestInfo={setGuestInfo}
           currentUser={currentUser}
           currentLang={currentLang}
           isMobile={isMobile}
-          onBookCredits={handleBookWithCredits}
-          onPayment={handlePayment}
           coursePath={coursePath}
+          onPayment={handlePayment}
         />
       </div>
     </div>

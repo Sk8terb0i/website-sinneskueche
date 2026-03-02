@@ -5,29 +5,25 @@ export const initialLoaderStyle = {
   alignItems: "center",
   minHeight: "400px",
 };
+
 export const overarchingTitleStyle = (isMobile) => ({
   fontFamily: "Harmond-SemiBoldCondensed",
   fontSize: isMobile ? "2.2rem" : "3.5rem",
   color: "#1c0700",
-  marginBottom: isMobile ? "1.5rem" : "2.5rem",
   textAlign: "center",
   textTransform: "lowercase",
+  marginTop: "0",
+  marginLeft: "0",
+  marginRight: "0",
+  marginBottom: isMobile ? "1.5rem" : "2.5rem",
 });
+
 export const outerWrapperStyle = {
   width: "100%",
   marginTop: "4rem",
   borderTop: "1px solid rgba(28, 7, 0, 0.05)",
   paddingTop: "3rem",
 };
-export const containerStyle = (isMobile, hasSelection) => ({
-  display: "flex",
-  flexDirection: isMobile ? "column" : "row",
-  gap: hasSelection ? (isMobile ? "1.5rem" : "2.5rem") : "0",
-  margin: "0 auto",
-  width: "100%",
-  maxWidth: "1200px",
-  justifyContent: "center",
-});
 
 // --- CALENDAR CARD STYLES ---
 export const calendarCardStyle = (isMobile, hasSelection) => ({
@@ -39,29 +35,34 @@ export const calendarCardStyle = (isMobile, hasSelection) => ({
   width: isMobile ? "100%" : "auto",
   boxSizing: "border-box",
 });
+
 export const calendarHeaderStyle = (isMobile) => ({
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   marginBottom: "2rem",
 });
+
 export const monthLabelStyle = (isMobile) => ({
   fontFamily: "Harmond-SemiBoldCondensed",
   fontSize: isMobile ? "1.1rem" : "1.5rem",
   margin: 0,
   textTransform: "lowercase",
 });
+
 export const calendarGridStyle = (isMobile) => ({
   display: "grid",
   gridTemplateColumns: "repeat(7, 1fr)",
   gap: isMobile ? "4px" : "10px",
 });
+
 export const dayOfWeekStyle = (isMobile) => ({
   fontSize: "0.75rem",
   fontWeight: "800",
   opacity: 0.3,
   textAlign: "center",
 });
+
 export const navBtnStyle = {
   background: "none",
   border: "none",
@@ -84,7 +85,7 @@ export const dayStyle = (hasEvent, isSelected, isMobile, isGreyedOut) => ({
     : isSelected
       ? "#caaff3"
       : hasEvent
-        ? "rgba(202, 175, 243, 0.15)"
+        ? "rgba(202, 175, 243, 0.4)"
         : "transparent",
   color: isGreyedOut ? "#ccc" : "#1c0700",
   fontWeight: hasEvent ? "800" : "400",
@@ -92,11 +93,32 @@ export const dayStyle = (hasEvent, isSelected, isMobile, isGreyedOut) => ({
   transition: "0.2s",
   position: "relative",
   boxSizing: "border-box",
-  // Pushes text up slightly more on mobile to avoid dot overlap
   paddingBottom: hasEvent ? (isMobile ? "4px" : "2px") : "0",
 });
 
-// --- DOT STYLE ---
+// Container for the arc of add-on dots ABOVE the circle
+export const addonArcContainerStyle = {
+  position: "absolute",
+  top: "-7px",
+  left: "50%",
+  transform: "translateX(-50%)",
+  display: "flex",
+  alignItems: "flex-end",
+  justifyContent: "center",
+  gap: "4px",
+  height: "12px",
+  zIndex: 10,
+};
+
+export const addonDotStyle = (color, offset) => ({
+  width: "9px",
+  height: "9px",
+  borderRadius: "50%",
+  backgroundColor: color,
+  transform: `translateY(${offset}px)`,
+  boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+});
+
 export const dotStyle = (isSelected, isAlreadyBooked, isMobile) => ({
   width: "4px",
   height: "4px",
@@ -107,10 +129,53 @@ export const dotStyle = (isSelected, isAlreadyBooked, isMobile) => ({
       ? "#1c0700"
       : "#caaff3",
   position: "absolute",
-  // FIX: Absolute pixels for tiny mobile view, proportional % for large desktop view
   bottom: isMobile ? "5px" : "15%",
   left: "50%",
   transform: "translateX(-50%)",
+});
+
+// --- LEGEND STYLES ---
+export const legendWrapperStyle = (isMobile) => ({
+  marginTop: isMobile ? "1.2rem" : "2.5rem",
+  padding: isMobile ? "1rem" : "1.5rem 1rem",
+  borderTop: "1px solid rgba(28, 7, 0, 0.05)",
+  backgroundColor: "rgba(28, 7, 0, 0.02)",
+  borderRadius: "16px",
+  display: "flex",
+  flexDirection: "column",
+  gap: isMobile ? "0.6rem" : "1.2rem", // Tightened vertical gap between rows
+});
+
+export const legendStatusRowStyle = (isMobile) => ({
+  display: "flex",
+  // CHANGED: Use flex-start instead of space-between to remove large gaps
+  justifyContent: "flex-start",
+  alignItems: "center",
+  // FIXED GAP: Ensures items sit close to each other
+  gap: isMobile ? "12px" : "2rem",
+  width: "100%",
+  flexWrap: "wrap", // Allows wrapping if the screen is extremely narrow
+});
+
+export const legendItemStyle = (isMobile) => ({
+  display: "flex",
+  alignItems: "center",
+  // Tightened internal gap between dot and text
+  gap: isMobile ? "6px" : "10px",
+  fontSize: isMobile ? "0.65rem" : "0.75rem",
+  fontWeight: "700",
+  color: "#1c0700",
+  opacity: 0.9,
+  whiteSpace: "nowrap",
+});
+
+export const legendIndicatorStyle = (color, isMobile) => ({
+  width: isMobile ? "8px" : "10px",
+  height: isMobile ? "8px" : "10px",
+  borderRadius: "50%",
+  backgroundColor: color,
+  flexShrink: 0, // CRITICAL: Prevents squishing into ovals
+  display: "inline-block",
 });
 
 // --- BOOKING SUMMARY STYLES ---
@@ -127,24 +192,7 @@ export const bookingCardStyle = (isMobile, hasSelection) => ({
   opacity: hasSelection ? 1 : 0,
   transition: "all 0.6s ease",
 });
-export const selectionInfoStyle = (isMobile) => ({
-  display: "flex",
-  justifyContent: "space-between",
-  borderBottom: "1px solid rgba(28,7,0,0.1)",
-  paddingBottom: "1.5rem",
-  marginBottom: "2rem",
-});
-export const totalPriceStyle = (isMobile) => ({
-  fontFamily: "Harmond-SemiBoldCondensed",
-  fontSize: "2.4rem",
-  color: "#4e5f28",
-});
-export const labelStyle = (isMobile) => ({
-  fontWeight: "700",
-  fontSize: "1rem",
-});
 
-// --- BUTTONS & OVERLAYS ---
 export const primaryBtnStyle = (isMobile) => ({
   width: "100%",
   padding: isMobile ? "1rem" : "1.2rem",
@@ -156,6 +204,7 @@ export const primaryBtnStyle = (isMobile) => ({
   fontWeight: "700",
   fontSize: isMobile ? "1rem" : "1.1rem",
 });
+
 export const secondaryBtnStyle = (isMobile) => ({
   width: "100%",
   padding: isMobile ? "0.9rem" : "1.1rem",
@@ -168,6 +217,7 @@ export const secondaryBtnStyle = (isMobile) => ({
   fontSize: isMobile ? "0.8rem" : "0.9rem",
   opacity: 0.7,
 });
+
 export const creditBtnStyle = (isMobile) => ({
   width: "100%",
   padding: isMobile ? "1rem" : "1.2rem",
@@ -186,23 +236,13 @@ export const overlayStyle = {
   left: 0,
   right: 0,
   bottom: 0,
-  backgroundColor: "rgba(253, 248, 225, 0.85)",
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "center",
-  alignItems: "center",
-  zIndex: 1000,
+  backgroundColor: "rgba(28, 7, 0, 0.6)",
+  display: "grid",
+  placeItems: "center",
+  zIndex: 10000,
   backdropFilter: "blur(5px)",
-  animation: "fadeIn 0.3s ease-out",
-};
-export const choiceCardStyle = {
-  background: "#fdf8e1",
-  padding: "2.5rem",
-  borderRadius: "24px",
-  textAlign: "center",
-  boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
-  width: "90%",
-  maxWidth: "400px",
+  padding: "20px",
+  boxSizing: "border-box",
 };
 
 export const guestInputStyle = {
@@ -211,7 +251,7 @@ export const guestInputStyle = {
   border: "1px solid rgba(28, 7, 0, 0.1)",
   fontFamily: "Satoshi",
   fontSize: "0.9rem",
-  background: "#fffce3",
+  background: "#fdf8e1",
   width: "100%",
   boxSizing: "border-box",
   color: "#1c0700",

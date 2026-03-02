@@ -714,3 +714,133 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
     return { success: true };
   });
 });
+
+// 8. REQUEST INSTRUCTOR AVAILABILITIES
+exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
+  const { courseId, instructors } = request.data;
+  const courseKey = getCleanCourseKey(courseId);
+  const origin = request.rawRequest.headers.origin || "https://sinneskueche.ch";
+
+  for (const uid of instructors) {
+    const userSnap = await db.collection("users").doc(uid).get();
+    if (!userSnap.exists) continue;
+    const { email, firstName } = userSnap.data();
+
+    await db.collection("mail").add({
+      to: email,
+      message: {
+        subject: `Instructor Availability: ${courseKey}`,
+        html: `
+          <div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">
+            <h2 style="color: #4e5f28;">Availability Requested</h2>
+            <p>Hi ${firstName || "Instructor"},</p>
+            <p>The schedule for <strong>${courseKey}</strong> is being prepared. Please log in to your profile to mark your available dates.</p>
+            <div style="margin-top: 25px; text-align: center;">
+                <a href="${origin}/#/profile" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Open My Profile</a>
+            </div>
+            <br/><p>Best,<br/>Atelier Sinnesküche Team</p>
+          </div>`,
+      },
+    });
+  }
+  return { success: true };
+});
+
+// 9. SEND FINAL SCHEDULES TO INSTRUCTORS
+exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
+  const { courseId, assignments, specialAssignments } = request.data;
+  const courseKey = getCleanCourseKey(courseId);
+
+  // Group assignments by instructor
+  const instructorSchedules = {};
+
+  // Resolve event names and instructors
+  for (const eventId in assignments) {
+    const uids = assignments[eventId];
+    const eventSnap = await db.collection("events").doc(eventId).get();
+    if (!eventSnap.exists) continue;
+    const eventData = eventSnap.data();
+
+    for (const uid of uids) {
+      if (!instructorSchedules[uid]) instructorSchedules[uid] = [];
+
+      const others = uids.filter((id) => id !== uid);
+      const otherNames = await Promise.all(
+        others.map(async (id) => {
+          const snap = await db.collection("users").doc(id).get();
+          return snap.exists
+            ? `${snap.data().firstName} ${snap.data().lastName}`
+            : "Unknown";
+        }),
+      );
+
+      // Find add-on names for this date
+      let addonText = "";
+      const addonIds = Array.isArray(specialAssignments[eventId])
+        ? specialAssignments[eventId]
+        : [];
+      if (addonIds.length > 0) {
+        const settingsSnap = await db
+          .collection("course_settings")
+          .doc(courseId.replace(/\//g, ""))
+          .get();
+        if (settingsSnap.exists()) {
+          const definedAddons = settingsSnap.data().specialEvents || [];
+          addonText = addonIds
+            .map((id) => {
+              const found = definedAddons.find((a) => a.id === id);
+              return found ? found.nameEn : "";
+            })
+            .filter((n) => n !== "")
+            .join(", ");
+        }
+      }
+
+      instructorSchedules[uid].push({
+        date: eventData.date,
+        time: eventData.time,
+        coInstructor: otherNames.join(", "),
+        addon: addonText,
+      });
+    }
+  }
+
+  // Send the emails
+  for (const uid in instructorSchedules) {
+    const userSnap = await db.collection("users").doc(uid).get();
+    if (!userSnap.exists) continue;
+    const { email, firstName } = userSnap.data();
+    const schedule = instructorSchedules[uid];
+
+    const listHtml = schedule
+      .map(
+        (s) => `
+      <li style="margin-bottom: 15px; list-style: none; padding: 15px; background: #fff; border-radius: 8px; border: 1px solid #caaff3;">
+        <strong style="color: #1c0700;">${formatDate(s.date)}</strong> | ${s.time || "No time set"}<br/>
+        <span style="font-size: 13px; opacity: 0.7;">Working with: ${s.coInstructor || "Solo"}</span>
+        ${s.addon ? `<br/><span style="font-size: 13px; color: #9960a8;"><strong>Add-on:</strong> ${s.addon}</span>` : ""}
+        <div style="margin-top: 10px;">
+          <a href="${getGoogleCalLink(courseKey + (s.addon ? " (" + s.addon + ")" : ""), s.date)}" target="_blank" style="font-size: 11px; text-decoration: none; color: #9960a8; border: 1px solid #9960a8; padding: 4px 8px; border-radius: 4px; background: white;">📅 Add to Calendar</a>
+        </div>
+      </li>
+    `,
+      )
+      .join("");
+
+    await db.collection("mail").add({
+      to: email,
+      message: {
+        subject: `Work Schedule: ${courseKey}`,
+        html: `
+          <div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">
+            <h2 style="color: #4e5f28;">Your Teaching Schedule</h2>
+            <p>Hi ${firstName},</p>
+            <p>The schedule for <strong>${courseKey}</strong> is finalized. You are assigned to the following dates:</p>
+            <ul style="padding: 0; margin: 0;">${listHtml}</ul>
+            <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>
+          </div>`,
+      },
+    });
+  }
+  return { success: true };
+});
