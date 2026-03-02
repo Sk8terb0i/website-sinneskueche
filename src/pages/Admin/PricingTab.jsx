@@ -12,6 +12,7 @@ import {
   CreditCard,
   Plus,
   Trash2,
+  Star,
 } from "lucide-react";
 import {
   sectionTitleStyle,
@@ -31,6 +32,10 @@ export default function PricingTab({
   const [priceData, setPriceData] = useState({});
   const [savingPriceId, setSavingPriceId] = useState(null);
   const [selectedCourse, setSelectedCourse] = useState("");
+
+  // State for the new special event inputs (EN & DE)
+  const [newEventEn, setNewEventEn] = useState("");
+  const [newEventDe, setNewEventDe] = useState("");
 
   const isFullAdmin = userRole === "admin";
   const courseSettingsCollection = collection(db, "course_settings");
@@ -101,6 +106,42 @@ export default function PricingTab({
     handlePriceChange(courseId, "packs", updatedPacks);
   };
 
+  // --- New Handlers for Special Events ---
+  const addSpecialEvent = (courseId) => {
+    if (!newEventEn.trim() || !newEventDe.trim()) {
+      alert("Please provide both English and German names.");
+      return;
+    }
+    const currentEvents = priceData[courseId]?.specialEvents || [];
+    handlePriceChange(courseId, "specialEvents", [
+      ...currentEvents,
+      {
+        id: Date.now().toString(),
+        nameEn: newEventEn.trim(),
+        nameDe: newEventDe.trim(),
+      },
+    ]);
+    setNewEventEn("");
+    setNewEventDe("");
+  };
+
+  const updateSpecialEvent = (courseId, eventId, field, value) => {
+    const currentEvents = priceData[courseId]?.specialEvents || [];
+    const updatedEvents = currentEvents.map((ev) =>
+      ev.id === eventId ? { ...ev, [field]: value } : ev,
+    );
+    handlePriceChange(courseId, "specialEvents", updatedEvents);
+  };
+
+  const removeSpecialEvent = (courseId, eventId) => {
+    const currentEvents = priceData[courseId]?.specialEvents || [];
+    handlePriceChange(
+      courseId,
+      "specialEvents",
+      currentEvents.filter((e) => e.id !== eventId),
+    );
+  };
+
   const savePrice = async (courseId, courseName) => {
     setSavingPriceId(courseId);
     const isPerHour = priceData[courseId]?.isPerHour ?? false;
@@ -122,6 +163,7 @@ export default function PricingTab({
         capacity: priceData[courseId]?.capacity || "",
         isVisible: priceData[courseId]?.isVisible ?? true,
         courseName: courseName,
+        specialEvents: priceData[courseId]?.specialEvents || [], // Save the special events
         updatedAt: new Date().toISOString(),
       };
       await setDoc(doc(db, "course_settings", courseId), dataToSave, {
@@ -135,7 +177,6 @@ export default function PricingTab({
     }
   };
 
-  // Find the data for the currently selected course
   const activeCourse = availableCourses.find(
     (c) => c.link.replace(/\//g, "") === selectedCourse,
   );
@@ -161,7 +202,11 @@ export default function PricingTab({
           <label style={labelStyle}>Select Course to Manage</label>
           <select
             value={selectedCourse}
-            onChange={(e) => setSelectedCourse(e.target.value)}
+            onChange={(e) => {
+              setSelectedCourse(e.target.value);
+              setNewEventEn("");
+              setNewEventDe("");
+            }}
             style={{
               ...inputStyle,
               backgroundColor: "rgba(202, 175, 243, 0.1)",
@@ -504,7 +549,7 @@ export default function PricingTab({
                       ...btnStyle,
                       width: "fit-content",
                       padding: "8px 16px",
-                      backgroundColor: "white",
+                      backgroundColor: "rgba(255,255,255,0.5)",
                       color: "#1c0700",
                       border: "1px dashed #caaff3",
                       fontSize: "0.8rem",
@@ -589,6 +634,170 @@ export default function PricingTab({
                   />
                 </div>
               )}
+            </div>
+
+            {/* --- NEW SPECIAL EVENTS SECTION --- */}
+            <div
+              style={{
+                backgroundColor: "rgba(202, 175, 243, 0.05)",
+                padding: "16px",
+                borderRadius: "16px",
+                border: "1px solid rgba(28,7,0,0.05)",
+              }}
+            >
+              <label
+                style={{
+                  ...labelStyle,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  marginBottom: "12px",
+                  opacity: 0.8,
+                }}
+              >
+                <Star size={14} color="#9960a8" /> Associated Special Events
+              </label>
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  opacity: 0.6,
+                  marginTop: "-8px",
+                  marginBottom: "12px",
+                }}
+              >
+                Add named events (e.g. "Introduction Class") that belong to this
+                course.
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                {/* List of existing editable events */}
+                {(priceData[selectedCourse]?.specialEvents || []).map((ev) => (
+                  <div
+                    key={ev.id}
+                    style={{
+                      display: "flex",
+                      flexDirection: isMobile ? "column" : "row",
+                      justifyContent: "space-between",
+                      alignItems: isMobile ? "stretch" : "center",
+                      backgroundColor: "rgba(202, 175, 243, 0.08)", // Subtle theme purple instead of pure white
+                      padding: "10px",
+                      borderRadius: "12px",
+                      border: "1px dashed rgba(202, 175, 243, 0.3)",
+                      gap: "10px",
+                    }}
+                  >
+                    <input
+                      value={ev.nameEn || ev.name || ""}
+                      onChange={(e) =>
+                        updateSpecialEvent(
+                          selectedCourse,
+                          ev.id,
+                          "nameEn",
+                          e.target.value,
+                        )
+                      }
+                      placeholder="Name (English)"
+                      style={{
+                        ...inputStyle,
+                        padding: "8px 12px",
+                        flex: 1,
+                        marginBottom: 0,
+                        fontSize: "0.85rem",
+                      }}
+                    />
+                    <input
+                      value={ev.nameDe || ev.name || ""}
+                      onChange={(e) =>
+                        updateSpecialEvent(
+                          selectedCourse,
+                          ev.id,
+                          "nameDe",
+                          e.target.value,
+                        )
+                      }
+                      placeholder="Name (Deutsch)"
+                      style={{
+                        ...inputStyle,
+                        padding: "8px 12px",
+                        flex: 1,
+                        marginBottom: 0,
+                        fontSize: "0.85rem",
+                      }}
+                    />
+                    <button
+                      onClick={() => removeSpecialEvent(selectedCourse, ev.id)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#ff4d4d",
+                        cursor: "pointer",
+                        padding: isMobile ? "8px" : "4px",
+                        display: "flex",
+                        justifyContent: "center",
+                      }}
+                      title="Remove Event"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Add new event row */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: isMobile ? "column" : "row",
+                    gap: "10px",
+                    marginTop: "8px",
+                    paddingTop: "12px",
+                    borderTop: "1px solid rgba(28, 7, 0, 0.05)",
+                  }}
+                >
+                  <input
+                    value={newEventEn}
+                    onChange={(e) => setNewEventEn(e.target.value)}
+                    placeholder="New Event (English)"
+                    style={{
+                      ...inputStyle,
+                      padding: "10px 12px",
+                      flex: 1,
+                      marginBottom: 0,
+                    }}
+                  />
+                  <input
+                    value={newEventDe}
+                    onChange={(e) => setNewEventDe(e.target.value)}
+                    placeholder="New Event (Deutsch)"
+                    style={{
+                      ...inputStyle,
+                      padding: "10px 12px",
+                      flex: 1,
+                      marginBottom: 0,
+                    }}
+                  />
+                  <button
+                    onClick={() => addSpecialEvent(selectedCourse)}
+                    style={{
+                      ...btnStyle,
+                      width: isMobile ? "100%" : "auto",
+                      padding: "0 18px",
+                      marginTop: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <Plus size={16} /> {isMobile && "Add Event"}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <button
