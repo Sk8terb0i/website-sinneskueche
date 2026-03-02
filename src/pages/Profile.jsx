@@ -17,6 +17,7 @@ import Header from "../components/Header/Header";
 import PersonalInfoCard from "../components/Profile/PersonalInfoCard";
 import BookingsCard from "../components/Profile/BookingsCard";
 import BuyPackCard from "../components/Profile/BuyPackCard";
+import RentalBookingsCard from "../components/Profile/RentalBookingsCard";
 
 import {
   LogOut,
@@ -28,9 +29,9 @@ import {
   Clock,
   Users,
   Star,
+  MapPin,
 } from "lucide-react";
 
-// --- EXACT MAPPING FROM YOUR CLOUD FUNCTIONS ---
 const courseMapping = {
   "/pottery": "pottery tuesdays",
   "/artistic-vision": "artistic vision",
@@ -49,12 +50,8 @@ export default function Profile({ currentLang, setCurrentLang }) {
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [packCourses, setPackCourses] = useState([]);
-
-  // Teaching Schedule State
   const [teachingEvents, setTeachingEvents] = useState([]);
   const [isScheduleLoading, setIsScheduleLoading] = useState(false);
-
-  // Tabs for mobile view
   const [activeTab, setActiveTab] = useState("bookings");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
@@ -78,7 +75,6 @@ export default function Profile({ currentLang, setCurrentLang }) {
     }
   }, [activeTab, isMobile]);
 
-  // Fetch pack settings
   useEffect(() => {
     const fetchPackSettings = async () => {
       try {
@@ -95,127 +91,74 @@ export default function Profile({ currentLang, setCurrentLang }) {
     if (currentUser) fetchPackSettings();
   }, [currentUser]);
 
-  // FETCH TEACHING SCHEDULE (Resolved with Co-Instructors and Add-ons)
   useEffect(() => {
     const fetchAssignedSchedule = async () => {
       if (!userData || !isAdmin || !currentUser) return;
-
       setIsScheduleLoading(true);
       try {
-        // 1. Get ALL assignments and special assignments
-        const scheduleRef = collection(db, "work_schedule");
-        const allAssignmentsSnap = await getDocs(scheduleRef);
-        const allData = allAssignmentsSnap.docs.map((d) => d.data());
-
-        // Also fetch the main schedule docs to get specialAssignments (Add-ons assigned to dates)
-        const schedulesSnap = await getDocs(collection(db, "schedules"));
-        const schedulesMap = {};
-        schedulesSnap.docs.forEach((d) => {
-          schedulesMap[d.id] = d.data();
-        });
-
-        // 2. Identify Event IDs assigned to current user
-        const myAssignedEventIds = allData
+        const sSnap = await getDocs(collection(db, "work_schedule"));
+        const allData = sSnap.docs.map((d) => d.data());
+        const schSnap = await getDocs(collection(db, "schedules"));
+        const schMap = {};
+        schSnap.docs.forEach((d) => (schMap[d.id] = d.data()));
+        const myIds = allData
           .filter((d) => d.userId === currentUser.uid)
           .map((d) => d.eventId);
-
-        if (myAssignedEventIds.length === 0) {
+        if (myIds.length === 0) {
           setTeachingEvents([]);
           return;
         }
-
-        // 3. Resolve user names
-        const usersSnap = await getDocs(collection(db, "users"));
-        const usersMap = {};
-        usersSnap.docs.forEach((d) => {
-          const u = d.data();
-          usersMap[d.id] = `${u.firstName} ${u.lastName}`;
-        });
-
-        // 4. Fetch the actual event details
-        const eventsRef = collection(db, "events");
+        const uSnap = await getDocs(collection(db, "users"));
+        const uMap = {};
+        uSnap.docs.forEach(
+          (d) => (uMap[d.id] = `${d.data().firstName} ${d.data().lastName}`),
+        );
         const today = new Date().toISOString().split("T")[0];
-        const eventsQuery = query(eventsRef, orderBy("date", "asc"));
-        const eventsSnap = await getDocs(eventsQuery);
+        const eSnap = await getDocs(
+          query(collection(db, "events"), orderBy("date", "asc")),
+        );
+        const bSnap = await getDocs(collection(db, "bookings"));
+        const allB = bSnap.docs.map((d) => d.data());
 
-        // 5. Fetch global bookings to count add-on bookings
-        const bookingsSnap = await getDocs(collection(db, "bookings"));
-        const allBookings = bookingsSnap.docs.map((d) => d.data());
-
-        const filteredEvents = await Promise.all(
-          eventsSnap.docs
-            .map((doc) => ({ id: doc.id, ...doc.data() }))
-            .filter(
-              (event) =>
-                myAssignedEventIds.includes(event.id) && event.date >= today,
-            )
-            .map(async (event) => {
-              const sanitizedId = (
-                event.coursePath ||
-                event.link ||
-                ""
-              ).replace(/\//g, "");
-
-              // Find co-instructors
-              const coInstructorNames = allData
+        const filtered = await Promise.all(
+          eSnap.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((e) => myIds.includes(e.id) && e.date >= today)
+            .map(async (e) => {
+              const sid = (e.coursePath || e.link || "").replace(/\//g, "");
+              const co = allData
                 .filter(
-                  (d) => d.eventId === event.id && d.userId !== currentUser.uid,
+                  (d) => d.eventId === e.id && d.userId !== currentUser.uid,
                 )
-                .map((d) => usersMap[d.userId] || "Unknown Instructor");
-
-              // Resolve Add-on names and booking counts
-              const scheduleConfig = schedulesMap[sanitizedId];
-              const assignedAddonIds =
-                scheduleConfig?.specialAssignments?.[event.id] || [];
-              const addonList = Array.isArray(assignedAddonIds)
-                ? assignedAddonIds
-                : assignedAddonIds
-                  ? [assignedAddonIds]
-                  : [];
-
-              // Fetch course settings for add-on names
-              const settingsSnap = await getDoc(
-                doc(db, "course_settings", sanitizedId),
-              );
-              const settingsData = settingsSnap.exists()
-                ? settingsSnap.data()
-                : {};
-              const definedAddons = settingsData.specialEvents || [];
-
-              const resolvedAddons = addonList.map((addonId) => {
-                const addonDef = definedAddons.find((a) => a.id === addonId);
-                const bookedCount = allBookings.filter(
-                  (b) =>
-                    b.eventId === event.id &&
-                    b.selectedAddons?.includes(addonId) &&
-                    b.status === "confirmed",
-                ).length;
-
-                return {
-                  id: addonId,
-                  name:
-                    currentLang === "de" ? addonDef?.nameDe : addonDef?.nameEn,
-                  bookedCount,
-                };
-              });
-
+                .map((d) => uMap[d.userId] || "Unknown");
+              const config = schMap[sid];
+              const aList = config?.specialAssignments?.[e.id] || [];
+              const rAddons = (Array.isArray(aList) ? aList : [aList])
+                .filter(Boolean)
+                .map((aid) => {
+                  const bCount = allB.filter(
+                    (b) =>
+                      b.eventId === e.id &&
+                      b.selectedAddons?.includes(aid) &&
+                      b.status === "confirmed",
+                  ).length;
+                  return { name: aid, bookedCount: bCount };
+                });
               return {
-                ...event,
-                displayName: getCleanCourseKey(event.coursePath || event.link),
-                coInstructors: coInstructorNames,
-                addons: resolvedAddons,
+                ...e,
+                displayName: getCleanCourseKey(e.coursePath || e.link),
+                coInstructors: co, // Normalized property name
+                addons: rAddons,
               };
             }),
         );
-
-        setTeachingEvents(filteredEvents);
+        setTeachingEvents(filtered);
       } catch (err) {
-        console.error("Error fetching assigned schedule:", err);
+        console.error(err);
       } finally {
         setIsScheduleLoading(false);
       }
     };
-
     fetchAssignedSchedule();
   }, [userData, isAdmin, currentUser, currentLang]);
 
@@ -250,8 +193,10 @@ export default function Profile({ currentLang, setCurrentLang }) {
       tabProfile: "Info",
       tabPacks: "Packs",
       tabSchedule: "Schedule",
+      tabRental: "Rentals",
       historyTitle: "credit history",
       teachingTitle: "my teaching schedule",
+      rentalTitle: "my rental bookings",
       noEvents: "no upcoming classes.",
       with: "with:",
       booked: "booked",
@@ -278,8 +223,10 @@ export default function Profile({ currentLang, setCurrentLang }) {
       tabProfile: "Profil",
       tabPacks: "Karten",
       tabSchedule: "Plan",
+      tabRental: "Mieten",
       historyTitle: "guthaben-verlauf",
       teachingTitle: "mein stundenplan",
+      rentalTitle: "meine mietbuchungen",
       noEvents: "keine anstehenden kurse.",
       with: "mit:",
       booked: "gebucht",
@@ -317,6 +264,12 @@ export default function Profile({ currentLang, setCurrentLang }) {
               style={styles.tabBtn(activeTab === "bookings")}
             >
               <Calendar size={16} /> {t.tabBookings}
+            </button>
+            <button
+              onClick={() => setActiveTab("rentals")}
+              style={styles.tabBtn(activeTab === "rentals")}
+            >
+              <MapPin size={16} /> {t.tabRental}
             </button>
             <button
               onClick={() => setActiveTab("packs")}
@@ -364,49 +317,25 @@ export default function Profile({ currentLang, setCurrentLang }) {
                   <div style={styles.eventList}>
                     {teachingEvents.map((event) => (
                       <div key={event.id} style={styles.eventItem}>
-                        <div style={styles.eventMain}>
-                          <span style={styles.eventCourse}>
-                            {event.displayName}
-                          </span>
-                          <div style={styles.eventMeta}>
-                            <div style={styles.metaItem}>
-                              <Calendar size={12} />{" "}
-                              {event.date.split("-").reverse().join(".")}
-                            </div>
-                            <div style={styles.metaItem}>
-                              <Clock size={12} /> {event.time}
-                            </div>
+                        <span style={styles.eventCourse}>
+                          {event.displayName}
+                        </span>
+                        <div style={styles.eventMeta}>
+                          <div style={styles.metaItem}>
+                            <Calendar size={12} />{" "}
+                            {event.date.split("-").reverse().join(".")}
                           </div>
-
-                          {/* ADD-ON DISPLAY */}
-                          {event.addons?.length > 0 && (
-                            <div style={styles.addonContainer}>
-                              {event.addons.map((addon, idx) => (
-                                <div key={idx} style={styles.addonBadge}>
-                                  <Star
-                                    size={10}
-                                    fill="#9960a8"
-                                    color="#9960a8"
-                                  />
-                                  <span>
-                                    {addon.name}:{" "}
-                                    <strong>{addon.bookedCount}</strong>{" "}
-                                    {t.booked}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* CO-INSTRUCTOR DISPLAY */}
-                          {event.coInstructors?.length > 0 && (
-                            <div style={styles.coInstructorRow}>
-                              <Users size={12} />
-                              <span style={{ fontWeight: 600 }}>{t.with}</span>
-                              {event.coInstructors.join(", ")}
-                            </div>
-                          )}
+                          <div style={styles.metaItem}>
+                            <Clock size={12} /> {event.time}
+                          </div>
                         </div>
+                        {event.coInstructors?.length > 0 && (
+                          <div style={styles.coInstructorRow}>
+                            <Users size={12} />{" "}
+                            <span style={{ fontWeight: 600 }}>{t.with}</span>{" "}
+                            {event.coInstructors.join(", ")}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -414,6 +343,10 @@ export default function Profile({ currentLang, setCurrentLang }) {
                   <p style={styles.emptyText}>{t.noEvents}</p>
                 )}
               </div>
+            )}
+
+            {(!isMobile || activeTab === "rentals") && (
+              <RentalBookingsCard t={t} currentLang={currentLang} />
             )}
 
             {(!isMobile || activeTab === "packs") && (
@@ -503,9 +436,9 @@ const styles = {
   },
   adminCard: {
     backgroundColor: "#fdf8e1",
-    padding: "2rem",
-    borderRadius: "30px",
-    border: "1px solid rgba(78, 95, 40, 0.1)",
+    padding: "2.5rem",
+    borderRadius: "24px",
+    border: "1px solid rgba(78, 95, 40, 0.05)",
   },
   cardTitle: {
     fontFamily: "Harmond-SemiBoldCondensed",
@@ -518,11 +451,7 @@ const styles = {
     gap: "12px",
     textTransform: "lowercase",
   },
-  eventList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-  },
+  eventList: { display: "flex", flexDirection: "column", gap: "12px" },
   eventItem: {
     background: "rgba(255, 252, 227, 0.5)",
     padding: "15px 20px",
@@ -536,10 +465,7 @@ const styles = {
     fontSize: "1rem",
     marginBottom: "6px",
   },
-  eventMeta: {
-    display: "flex",
-    gap: "15px",
-  },
+  eventMeta: { display: "flex", gap: "15px" },
   metaItem: {
     display: "flex",
     alignItems: "center",
@@ -547,23 +473,6 @@ const styles = {
     fontSize: "0.8rem",
     color: "#4e5f28",
     opacity: 0.8,
-  },
-  addonContainer: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "6px",
-    marginTop: "12px",
-    backgroundColor: "rgba(202, 175, 243, 0.05)",
-    padding: "10px",
-    borderRadius: "12px",
-    border: "1px dashed rgba(153, 96, 168, 0.2)",
-  },
-  addonBadge: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    fontSize: "0.75rem",
-    color: "#1c0700",
   },
   coInstructorRow: {
     display: "flex",
@@ -575,11 +484,7 @@ const styles = {
     paddingTop: "8px",
     borderTop: "1px dashed rgba(153, 96, 168, 0.2)",
   },
-  emptyText: {
-    opacity: 0.5,
-    fontStyle: "italic",
-    fontSize: "0.9rem",
-  },
+  emptyText: { opacity: 0.5, fontStyle: "italic", fontSize: "0.9rem" },
   tabNav: {
     display: "flex",
     background: "rgba(202, 175, 243, 0.1)",
