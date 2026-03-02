@@ -6,7 +6,7 @@ import AuthOverlay from "../Auth/AuthOverlay";
 import { useAuth } from "../../contexts/AuthContext";
 import { auth } from "../../firebase";
 import { signOut } from "firebase/auth";
-import { User, LogOut } from "lucide-react";
+import { User, LogOut, CalendarCog } from "lucide-react";
 
 export default function Header({
   currentLang,
@@ -28,6 +28,7 @@ export default function Header({
   const [langHovered, setLangHovered] = useState(false);
   const [menuHovered, setMenuHovered] = useState(false);
   const [userHovered, setUserHovered] = useState(false);
+  const [adminHovered, setAdminHovered] = useState(false); // New hover state
   const [logoutHovered, setLogoutHovered] = useState(false);
 
   useEffect(() => {
@@ -52,19 +53,20 @@ export default function Header({
     }
   };
 
-  // UPDATED: Logic to handle course_admin redirection
+  // Now simply goes to the standard user profile
   const handleProfileClick = () => {
     if (loading) return;
     if (!currentUser) {
       setIsAuthOpen(true);
-    } else if (
-      userData?.role === "admin" ||
-      userData?.role === "course_admin"
-    ) {
-      navigate("/admin-sinneskueche");
     } else {
       navigate("/profile");
     }
+  };
+
+  // New handler specifically for the admin panel
+  const handleAdminClick = () => {
+    if (loading) return;
+    navigate("/admin-sinneskueche");
   };
 
   const hoverTransition =
@@ -100,7 +102,6 @@ export default function Header({
     : { width: 24, height: 20 };
   const hamburgerBarHeight = isPortrait ? 2.4 : 4;
 
-  // UPDATED: Check for either admin role to apply bold icon styling
   const isAdmin =
     userData?.role === "admin" || userData?.role === "course_admin";
 
@@ -202,6 +203,27 @@ export default function Header({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: iconGap }}>
+            {/* New Admin Panel Icon (Only shows for admins) */}
+            {isAdmin && (
+              <div
+                onClick={handleAdminClick}
+                onMouseEnter={() => setAdminHovered(true)}
+                onMouseLeave={() => setAdminHovered(false)}
+                style={{
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  color: adminHovered ? "#9960a8" : "#4e5f28",
+                  transform: adminHovered ? "scale(1.1)" : "scale(1)",
+                  transition: hoverTransition,
+                }}
+                title={currentLang === "en" ? "Admin Panel" : "Admin Panel"}
+              >
+                <CalendarCog size={isPortrait ? 18 : 22} strokeWidth={2} />
+              </div>
+            )}
+
+            {/* Standard Profile Icon */}
             <div
               onClick={handleProfileClick}
               onMouseEnter={() => setUserHovered(true)}
@@ -217,7 +239,7 @@ export default function Header({
             >
               <User
                 size={isPortrait ? 18 : 22}
-                strokeWidth={isAdmin ? 2.5 : 2}
+                strokeWidth={2} // Removed bolding logic since Shield is now separate
               />
             </div>
 

@@ -24,7 +24,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!currentUser || userData?.role === "admin") navigate("/");
+    if (!currentUser) navigate("/");
   }, [currentUser, userData, authLoading, navigate]);
 
   useEffect(() => {
