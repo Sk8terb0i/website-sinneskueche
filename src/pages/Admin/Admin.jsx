@@ -18,7 +18,7 @@ import {
   CreditCard,
   Users,
   FileText,
-  Bell, // NEW ICON
+  Bell,
 } from "lucide-react";
 
 // Components & Styles
@@ -30,7 +30,7 @@ import PromotionsTab from "./PromotionsTab";
 import PackCodesTab from "./PackCodesTab";
 import ProfilesTab from "./ProfilesTab";
 import TermsTab from "./TermsTab";
-import RemindersTab from "./RemindersTab"; // NEW IMPORT
+import RemindersTab from "./RemindersTab";
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -193,6 +193,16 @@ export default function Admin({ currentLang, setCurrentLang }) {
 
   const isFullAdmin = adminData.role === "admin";
 
+  const groupStyle = {
+    ...tabContainerStyle,
+    backgroundColor: "rgba(28, 7, 0, 0.04)",
+    borderRadius: "100px",
+    padding: "4px",
+    display: "flex",
+    flexShrink: 0,
+    gap: "4px",
+  };
+
   return (
     <div
       style={{
@@ -248,24 +258,21 @@ export default function Admin({ currentLang, setCurrentLang }) {
         </button>
       </header>
 
+      {/* HORIZONTAL TAB NAVIGATION WITH GROUPS */}
       <div
         style={{
           width: "100%",
           overflowX: "auto",
           paddingBottom: "10px",
           marginBottom: "2rem",
+          display: "flex",
+          flexWrap: isMobile ? "nowrap" : "wrap", // FIX: Wraps on desktop to prevent cutoff
+          gap: "1.5rem",
         }}
+        className="hide-scrollbar"
       >
-        <nav
-          style={{
-            ...tabContainerStyle,
-            backgroundColor: "rgba(28, 7, 0, 0.03)",
-            borderRadius: "100px",
-            padding: "4px",
-            display: "inline-flex",
-            minWidth: isMobile ? "max-content" : "auto",
-          }}
-        >
+        {/* GROUP 1: Events & Profiles */}
+        <div style={groupStyle}>
           <button
             onClick={() => setActiveTab("events")}
             style={{
@@ -292,6 +299,10 @@ export default function Admin({ currentLang, setCurrentLang }) {
               <Users size={16} /> Profiles
             </button>
           )}
+        </div>
+
+        {/* GROUP 2: Course Mgmt, Reminders, Terms */}
+        <div style={groupStyle}>
           <button
             onClick={() => setActiveTab("course-management")}
             style={{
@@ -305,20 +316,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
             <Tag size={16} /> Course Management
           </button>
           <button
-            onClick={() => setActiveTab("promotions")}
-            style={{
-              ...tabButtonStyle(activeTab === "promotions"),
-              backgroundColor:
-                activeTab === "promotions" ? "#caaff3" : "transparent",
-              borderRadius: "100px",
-              color: "#1c0700",
-            }}
-          >
-            <Ticket size={16} /> Promotions
-          </button>
-
-          {/* NEW REMINDERS TAB */}
-          <button
             onClick={() => setActiveTab("reminders")}
             style={{
               ...tabButtonStyle(activeTab === "reminders"),
@@ -330,8 +327,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
           >
             <Bell size={16} /> Reminders
           </button>
-
-          {/* Terms & Conditions: Visible for ALL admins */}
           <button
             onClick={() => setActiveTab("terms")}
             style={{
@@ -344,36 +339,55 @@ export default function Admin({ currentLang, setCurrentLang }) {
           >
             <FileText size={16} /> Terms
           </button>
+        </div>
 
+        {/* GROUP 3: Pack Codes & Promotions */}
+        <div style={groupStyle}>
           {isFullAdmin && (
-            <>
-              <button
-                onClick={() => setActiveTab("pack-codes")}
-                style={{
-                  ...tabButtonStyle(activeTab === "pack-codes"),
-                  backgroundColor:
-                    activeTab === "pack-codes" ? "#caaff3" : "transparent",
-                  borderRadius: "100px",
-                  color: "#1c0700",
-                }}
-              >
-                <CreditCard size={16} /> Pack Codes
-              </button>
-              <button
-                onClick={() => setActiveTab("rental")}
-                style={{
-                  ...tabButtonStyle(activeTab === "rental"),
-                  backgroundColor:
-                    activeTab === "rental" ? "#caaff3" : "transparent",
-                  borderRadius: "100px",
-                  color: "#1c0700",
-                }}
-              >
-                <LayoutGrid size={16} /> Rental
-              </button>
-            </>
+            <button
+              onClick={() => setActiveTab("pack-codes")}
+              style={{
+                ...tabButtonStyle(activeTab === "pack-codes"),
+                backgroundColor:
+                  activeTab === "pack-codes" ? "#caaff3" : "transparent",
+                borderRadius: "100px",
+                color: "#1c0700",
+              }}
+            >
+              <CreditCard size={16} /> Pack Codes
+            </button>
           )}
-        </nav>
+          <button
+            onClick={() => setActiveTab("promotions")}
+            style={{
+              ...tabButtonStyle(activeTab === "promotions"),
+              backgroundColor:
+                activeTab === "promotions" ? "#caaff3" : "transparent",
+              borderRadius: "100px",
+              color: "#1c0700",
+            }}
+          >
+            <Ticket size={16} /> Promotions
+          </button>
+        </div>
+
+        {/* GROUP 4: Rental */}
+        {isFullAdmin && (
+          <div style={groupStyle}>
+            <button
+              onClick={() => setActiveTab("rental")}
+              style={{
+                ...tabButtonStyle(activeTab === "rental"),
+                backgroundColor:
+                  activeTab === "rental" ? "#caaff3" : "transparent",
+                borderRadius: "100px",
+                color: "#1c0700",
+              }}
+            >
+              <LayoutGrid size={16} /> Rental
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ animation: "fadeIn 0.4s ease-out" }}>
@@ -427,7 +441,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
 
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        div::-webkit-scrollbar { display: none; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .spinner { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>

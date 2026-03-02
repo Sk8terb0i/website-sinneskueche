@@ -15,6 +15,7 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
   const [termsData, setTermsData] = useState({});
   const [savingId, setSavingId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedCourse, setSelectedCourse] = useState("");
 
   const isFullAdmin = userRole === "admin";
 
@@ -27,6 +28,13 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
         .map((course) => [course.link, course]),
     ).values(),
   ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
+
+  // Set initial selected course once availableCourses is loaded
+  useEffect(() => {
+    if (availableCourses.length > 0 && !selectedCourse) {
+      setSelectedCourse(availableCourses[0].link.replace(/\//g, ""));
+    }
+  }, [availableCourses, selectedCourse]);
 
   useEffect(() => {
     fetchTerms();
@@ -85,6 +93,11 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
     );
   }
 
+  // Find the data for the currently selected course
+  const activeCourse = availableCourses.find(
+    (c) => c.link.replace(/\//g, "") === selectedCourse,
+  );
+
   return (
     <section
       style={{ maxWidth: "900px", margin: "0 auto", paddingBottom: "5rem" }}
@@ -94,121 +107,151 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
       </h3>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-        {availableCourses.map((c) => {
-          const courseId = c.link.replace(/\//g, "");
-          const isSaving = savingId === courseId;
+        {/* Dropdown Selector */}
+        <div
+          style={{
+            backgroundColor: "#fdf8e1",
+            padding: "1.5rem",
+            borderRadius: "16px",
+            border: "1px solid rgba(28, 7, 0, 0.05)",
+          }}
+        >
+          <label style={labelStyle}>Select Course to Edit Terms</label>
+          <select
+            value={selectedCourse}
+            onChange={(e) => setSelectedCourse(e.target.value)}
+            style={{
+              ...inputStyle,
+              backgroundColor: "rgba(202, 175, 243, 0.1)",
+              cursor: "pointer",
+              marginBottom: 0,
+            }}
+          >
+            {availableCourses.length === 0 && (
+              <option>No courses assigned</option>
+            )}
+            {availableCourses.map((c) => {
+              const cId = c.link.replace(/\//g, "");
+              return (
+                <option key={cId} value={cId}>
+                  {c.text.en}
+                </option>
+              );
+            })}
+          </select>
+        </div>
 
-          return (
+        {/* Active Course Terms Card */}
+        {activeCourse && (
+          <div
+            key={selectedCourse}
+            style={{
+              ...cardStyle,
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: "1.5rem",
+              padding: isMobile ? "1.5rem" : "2rem",
+              backgroundColor: "#fdf8e1",
+              borderLeft: "6px solid #caaff3",
+            }}
+          >
+            <div>
+              <h4 style={{ margin: 0, fontSize: "1.2rem", color: "#1c0700" }}>
+                {activeCourse.text.en}
+              </h4>
+              <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
+                Sanitized ID: {selectedCourse}
+              </span>
+            </div>
+
             <div
-              key={courseId}
               style={{
-                ...cardStyle,
-                flexDirection: "column",
-                alignItems: "stretch",
-                gap: "1.5rem",
-                padding: isMobile ? "1.5rem" : "2rem",
-                backgroundColor: "#fdf8e1",
-                borderLeft: "6px solid #caaff3",
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                gap: "2rem",
               }}
             >
+              {/* English Terms */}
               <div>
-                <h4 style={{ margin: 0, fontSize: "1.2rem", color: "#1c0700" }}>
-                  {c.text.en}
-                </h4>
-                <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
-                  Sanitized ID: {courseId}
-                </span>
+                <label
+                  style={{
+                    ...labelStyle,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                  }}
+                >
+                  <Globe size={14} /> Terms (English)
+                </label>
+                <textarea
+                  style={{
+                    ...inputStyle,
+                    minHeight: "250px",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    lineHeight: "1.4",
+                    padding: "12px",
+                  }}
+                  value={termsData[selectedCourse]?.en || ""}
+                  placeholder="Enter specific terms, rules or cancellation policies for this course..."
+                  onChange={(e) =>
+                    handleTextChange(selectedCourse, "en", e.target.value)
+                  }
+                />
               </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                  gap: "2rem",
-                }}
-              >
-                {/* English Terms */}
-                <div>
-                  <label
-                    style={{
-                      ...labelStyle,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "5px",
-                    }}
-                  >
-                    <Globe size={14} /> Terms (English)
-                  </label>
-                  <textarea
-                    style={{
-                      ...inputStyle,
-                      minHeight: "150px",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      lineHeight: "1.4",
-                      padding: "12px",
-                    }}
-                    value={termsData[courseId]?.en || ""}
-                    placeholder="Enter specific terms, rules or cancellation policies for this course..."
-                    onChange={(e) =>
-                      handleTextChange(courseId, "en", e.target.value)
-                    }
-                  />
-                </div>
-
-                {/* German Terms */}
-                <div>
-                  <label
-                    style={{
-                      ...labelStyle,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "5px",
-                    }}
-                  >
-                    <Globe size={14} /> AGB (Deutsch)
-                  </label>
-                  <textarea
-                    style={{
-                      ...inputStyle,
-                      minHeight: "150px",
-                      resize: "vertical",
-                      fontFamily: "inherit",
-                      lineHeight: "1.4",
-                      padding: "12px",
-                    }}
-                    value={termsData[courseId]?.de || ""}
-                    placeholder="Spezifische Bedingungen, Regeln oder Stornierungsbedingungen eingeben..."
-                    onChange={(e) =>
-                      handleTextChange(courseId, "de", e.target.value)
-                    }
-                  />
-                </div>
+              {/* German Terms */}
+              <div>
+                <label
+                  style={{
+                    ...labelStyle,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                  }}
+                >
+                  <Globe size={14} /> AGB (Deutsch)
+                </label>
+                <textarea
+                  style={{
+                    ...inputStyle,
+                    minHeight: "250px",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    lineHeight: "1.4",
+                    padding: "12px",
+                  }}
+                  value={termsData[selectedCourse]?.de || ""}
+                  placeholder="Spezifische Bedingungen, Regeln oder Stornierungsbedingungen eingeben..."
+                  onChange={(e) =>
+                    handleTextChange(selectedCourse, "de", e.target.value)
+                  }
+                />
               </div>
-
-              <button
-                onClick={() => saveTerms(courseId)}
-                disabled={isSaving}
-                style={{
-                  ...btnStyle,
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  gap: "10px",
-                  alignSelf: "flex-end",
-                  width: isMobile ? "100%" : "250px",
-                }}
-              >
-                {isSaving ? (
-                  <Loader2 size={18} className="spinner" />
-                ) : (
-                  <Save size={18} />
-                )}
-                {isSaving ? "Saving..." : "Save Terms"}
-              </button>
             </div>
-          );
-        })}
+
+            <button
+              onClick={() => saveTerms(selectedCourse)}
+              disabled={savingId === selectedCourse}
+              style={{
+                ...btnStyle,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "10px",
+                alignSelf: "flex-end",
+                width: isMobile ? "100%" : "250px",
+              }}
+            >
+              {savingId === selectedCourse ? (
+                <Loader2 size={18} className="spinner" />
+              ) : (
+                <Save size={18} />
+              )}
+              {savingId === selectedCourse ? "Saving..." : "Save Terms"}
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );

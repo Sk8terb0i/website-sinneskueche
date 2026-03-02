@@ -40,6 +40,13 @@ import {
   cardStyle,
 } from "./AdminStyles";
 
+// Helper to format date from YYYY-MM-DD to DD.MM.YYYY
+const formatDisplayDate = (dateStr) => {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : dateStr;
+};
+
 export default function EventsTab({
   isMobile,
   currentLang,
@@ -58,9 +65,7 @@ export default function EventsTab({
   const [editingId, setEditingId] = useState(null);
   const [isCancellingId, setIsCancellingId] = useState(null);
 
-  // Tab state for switching between Courses and Individual Events
   const [activeSubTab, setActiveSubTab] = useState("courses");
-
   const [expandedGroups, setExpandedGroups] = useState({});
   const [showParticipantsFor, setShowParticipantsFor] = useState(null);
   const [participantCache, setParticipantCache] = useState({});
@@ -118,7 +123,6 @@ export default function EventsTab({
 
   const eventsCollection = collection(db, "events");
 
-  // Filter available courses for the ADD dropdown based on permissions
   const availableCourses = Array.from(
     new Map(
       planets
@@ -166,7 +170,6 @@ export default function EventsTab({
           deleteDoc(doc(db, "events", event.id));
           return false;
         }
-        // Permission check: only set if full admin or course matches allowed list
         return isFullAdmin || allowedCourses.includes(event.link);
       });
       setEvents(validEvents);
@@ -463,7 +466,7 @@ export default function EventsTab({
         </div>
       </section>
 
-      <section style={{ flex: 1 }}>
+      <section style={{ flex: 1, marginTop: isMobile ? "2rem" : 0 }}>
         <div style={styles.tabNav}>
           <button
             onClick={() => setActiveSubTab("courses")}
@@ -505,9 +508,8 @@ export default function EventsTab({
                       className="custom-scrollbar"
                       style={{
                         ...styles.expandedContent,
-                        maxHeight: hasManyDates ? "280px" : "auto",
+                        maxHeight: hasManyDates ? "400px" : "auto",
                         overflowY: hasManyDates ? "auto" : "visible",
-                        paddingRight: hasManyDates ? "8px" : "0",
                       }}
                     >
                       {group.dates.map((ev) => (
@@ -515,25 +517,80 @@ export default function EventsTab({
                           <div
                             style={{
                               ...cardStyle,
-                              padding: "0.8rem 1.2rem",
+                              padding: isMobile ? "1rem" : "0.8rem 1.2rem",
                               backgroundColor: "#fdf8e1",
+                              flexDirection: isMobile ? "column" : "row",
+                              alignItems: isMobile ? "stretch" : "center",
+                              gap: isMobile ? "12px" : "16px",
                             }}
                           >
-                            <button
-                              onClick={() => startEdit(ev)}
-                              style={styles.editBtnIcon}
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                flex: 1,
+                              }}
                             >
-                              <Edit2 size={16} />
-                            </button>
-                            <div style={styles.eventMainInfo}>
-                              <span style={styles.dateLabel}>{ev.date}</span>
-                              {ev.time && (
-                                <span style={styles.timeLabel}>
-                                  <Clock size={12} /> {ev.time}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "10px",
+                                }}
+                              >
+                                {!isMobile && (
+                                  <button
+                                    onClick={() => startEdit(ev)}
+                                    style={styles.editBtnIcon}
+                                  >
+                                    <Edit2 size={16} />
+                                  </button>
+                                )}
+                                <span
+                                  style={{
+                                    ...styles.dateLabel,
+                                    fontSize: isMobile ? "1rem" : "0.9rem",
+                                  }}
+                                >
+                                  {formatDisplayDate(ev.date)}
                                 </span>
+                                {ev.time && (
+                                  <span style={styles.timeLabel}>
+                                    <Clock size={14} /> {ev.time}
+                                  </span>
+                                )}
+                              </div>
+                              {isMobile && (
+                                <button
+                                  onClick={() => startEdit(ev)}
+                                  style={{
+                                    background: "rgba(202, 175, 243, 0.15)",
+                                    border: "none",
+                                    padding: "8px",
+                                    borderRadius: "8px",
+                                    color: "#9960a8",
+                                    display: "flex",
+                                  }}
+                                >
+                                  <Edit2 size={14} />
+                                </button>
                               )}
                             </div>
-                            <div style={styles.actionRow}>
+
+                            <div
+                              style={{
+                                ...styles.actionRow,
+                                width: isMobile ? "100%" : "auto",
+                                justifyContent: isMobile
+                                  ? "space-between"
+                                  : "flex-end",
+                                borderTop: isMobile
+                                  ? "1px solid rgba(28, 7, 0, 0.08)"
+                                  : "none",
+                                paddingTop: isMobile ? "12px" : "0",
+                              }}
+                            >
                               <button
                                 onClick={() => handleShowParticipants(ev)}
                                 style={{
@@ -541,8 +598,14 @@ export default function EventsTab({
                                   opacity: ev.bookedCount > 0 ? 1 : 0.3,
                                 }}
                               >
-                                <Users size={16} color="#4e5f28" />{" "}
-                                <span style={{ fontWeight: "800" }}>
+                                <Users size={18} color="#4e5f28" />
+                                <span
+                                  style={{
+                                    fontWeight: "800",
+                                    fontSize: "1rem",
+                                    color: "#1c0700",
+                                  }}
+                                >
                                   {ev.bookedCount}
                                 </span>
                               </button>
@@ -559,21 +622,31 @@ export default function EventsTab({
                               </button>
                             </div>
                           </div>
+
                           {showParticipantsFor === ev.id &&
                             participantCache[ev.id] && (
                               <div style={styles.participantPanel}>
                                 {participantCache[ev.id].map((u, i) => (
                                   <div key={i} style={styles.userRow}>
-                                    <User size={12} />{" "}
-                                    <strong
+                                    <div
                                       style={{
-                                        color: u.isGuest
-                                          ? "#9960a8"
-                                          : "inherit",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
                                       }}
                                     >
-                                      {u.firstName} {u.lastName}
-                                    </strong>
+                                      <User size={12} />
+                                      <strong
+                                        style={{
+                                          color: u.isGuest
+                                            ? "#9960a8"
+                                            : "inherit",
+                                          fontSize: "0.85rem",
+                                        }}
+                                      >
+                                        {u.firstName} {u.lastName}
+                                      </strong>
+                                    </div>
                                     <span style={styles.contactText}>
                                       <Mail size={10} /> {u.email}
                                     </span>
@@ -601,33 +674,96 @@ export default function EventsTab({
             {scheduledEvents.map((ev) => (
               <div key={ev.id} style={styles.eventItemWrapper}>
                 <div
-                  onClick={() => startEdit(ev)}
-                  style={{ ...cardStyle, backgroundColor: "#fdf8e1" }}
+                  style={{
+                    ...cardStyle,
+                    backgroundColor: "#fdf8e1",
+                    padding: isMobile ? "1rem" : "1.2rem",
+                    flexDirection: isMobile ? "column" : "row",
+                    alignItems: isMobile ? "stretch" : "center",
+                    gap: isMobile ? "12px" : "1rem",
+                  }}
                 >
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      startEdit(ev);
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      flex: 1,
                     }}
-                    style={styles.editBtnIcon}
                   >
-                    <Edit2 size={16} />
-                  </button>
-                  <div style={{ flex: 1 }}>
                     <div
                       style={{
-                        fontSize: "0.7rem",
-                        color: "#caaff3",
-                        fontWeight: "800",
+                        display: "flex",
+                        gap: "10px",
+                        alignItems: "center",
                       }}
                     >
-                      {ev.date} {ev.time && `• ${ev.time}`}
+                      {!isMobile && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEdit(ev);
+                          }}
+                          style={styles.editBtnIcon}
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      )}
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#caaff3",
+                            fontWeight: "800",
+                            marginBottom: "2px",
+                          }}
+                        >
+                          {formatDisplayDate(ev.date)}{" "}
+                          {ev.time && `• ${ev.time}`}
+                        </div>
+                        <div
+                          style={{
+                            fontWeight: "700",
+                            fontSize: isMobile ? "1rem" : "1.05rem",
+                            color: "#1c0700",
+                          }}
+                        >
+                          {ev.title[currentLang || "en"]}
+                        </div>
+                      </div>
                     </div>
-                    <span style={{ fontWeight: "600" }}>
-                      {ev.title[currentLang || "en"]}
-                    </span>
+                    {isMobile && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEdit(ev);
+                        }}
+                        style={{
+                          background: "rgba(202, 175, 243, 0.15)",
+                          border: "none",
+                          padding: "8px",
+                          borderRadius: "8px",
+                          color: "#9960a8",
+                          display: "flex",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                    )}
                   </div>
-                  <div style={styles.actionRow}>
+
+                  <div
+                    style={{
+                      ...styles.actionRow,
+                      width: isMobile ? "100%" : "auto",
+                      justifyContent: isMobile ? "space-between" : "flex-end",
+                      borderTop: isMobile
+                        ? "1px solid rgba(28, 7, 0, 0.08)"
+                        : "none",
+                      paddingTop: isMobile ? "12px" : "0",
+                    }}
+                  >
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -638,8 +774,14 @@ export default function EventsTab({
                         opacity: ev.bookedCount > 0 ? 1 : 0.3,
                       }}
                     >
-                      <Users size={18} color="#4e5f28" />{" "}
-                      <span style={{ fontWeight: "800" }}>
+                      <Users size={18} color="#4e5f28" />
+                      <span
+                        style={{
+                          fontWeight: "800",
+                          fontSize: "1rem",
+                          color: "#1c0700",
+                        }}
+                      >
                         {ev.bookedCount}
                       </span>
                     </button>
@@ -656,16 +798,28 @@ export default function EventsTab({
                     </button>
                   </div>
                 </div>
+
                 {showParticipantsFor === ev.id && participantCache[ev.id] && (
                   <div style={styles.participantPanel}>
                     {participantCache[ev.id].map((u, i) => (
                       <div key={i} style={styles.userRow}>
-                        <User size={12} />{" "}
-                        <strong
-                          style={{ color: u.isGuest ? "#9960a8" : "inherit" }}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
                         >
-                          {u.firstName} {u.lastName}
-                        </strong>
+                          <User size={12} />
+                          <strong
+                            style={{
+                              color: u.isGuest ? "#9960a8" : "inherit",
+                              fontSize: "0.85rem",
+                            }}
+                          >
+                            {u.firstName} {u.lastName}
+                          </strong>
+                        </div>
                         <span style={styles.contactText}>
                           <Mail size={10} /> {u.email}
                         </span>
@@ -703,6 +857,8 @@ const styles = {
     marginBottom: "1.5rem",
     borderBottom: "1px solid rgba(28, 7, 0, 0.05)",
     paddingBottom: "10px",
+    overflowX: "auto",
+    paddingRight: "10px",
   },
   subTabBtn: (isActive) => ({
     background: isActive ? "#caaff3" : "transparent",
@@ -717,6 +873,7 @@ const styles = {
     gap: "8px",
     color: "#1c0700",
     transition: "all 0.2s ease",
+    whiteSpace: "nowrap",
   }),
   tabContent: {
     display: "flex",
@@ -728,7 +885,7 @@ const styles = {
     borderLeft: "3px solid #caaff3",
     backgroundColor: "rgba(28, 7, 0, 0.02)",
     borderRadius: "0 12px 12px 0",
-    padding: "0.5rem 1rem",
+    padding: "0.5rem 0.8rem",
     marginBottom: "0.5rem",
   },
   groupHeader: {
@@ -746,6 +903,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "8px",
+    lineHeight: "1.2",
   },
   expandedContent: {
     display: "flex",
@@ -771,6 +929,7 @@ const styles = {
     alignItems: "center",
     gap: "10px",
     fontSize: "0.85rem",
+    flexWrap: "wrap",
   },
   dateLabel: { color: "#caaff3", fontWeight: "700" },
   timeLabel: {
@@ -785,16 +944,17 @@ const styles = {
     background: "none",
     display: "flex",
     alignItems: "center",
-    gap: "4px",
+    gap: "6px",
     cursor: "pointer",
+    padding: "4px 0",
   },
   cancelCourseBtn: {
     background: "rgba(255, 77, 77, 0.1)",
     border: "none",
     color: "#ff4d4d",
-    padding: "6px 12px",
+    padding: "8px 16px",
     borderRadius: "100px",
-    fontSize: "0.7rem",
+    fontSize: "0.65rem",
     fontWeight: "800",
     cursor: "pointer",
     textTransform: "uppercase",
@@ -802,28 +962,32 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    minWidth: "120px",
+    minWidth: "110px",
   },
   participantPanel: {
     backgroundColor: "rgba(78, 95, 40, 0.05)",
-    padding: "10px 15px",
+    padding: "12px",
     borderRadius: "12px",
     border: "1px solid rgba(78, 95, 40, 0.1)",
     marginTop: "5px",
   },
   userRow: {
     display: "flex",
-    alignItems: "center",
-    gap: "10px",
+    flexDirection: "column",
+    gap: "4px",
     fontSize: "0.8rem",
-    marginBottom: "5px",
+    marginBottom: "10px",
     color: "#1c0700",
+    paddingBottom: "8px",
+    borderBottom: "1px solid rgba(0,0,0,0.03)",
   },
   contactText: {
     opacity: 0.6,
     fontSize: "0.75rem",
     display: "flex",
     alignItems: "center",
-    gap: "3px",
+    gap: "5px",
+    wordBreak: "break-all",
+    paddingLeft: "20px",
   },
 };
