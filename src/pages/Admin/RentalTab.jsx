@@ -19,6 +19,7 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  MessageSquare, // Added icon for the message section
 } from "lucide-react";
 import {
   formCardStyle,
@@ -43,7 +44,6 @@ export default function RentalTab({ isMobile }) {
   useEffect(() => {
     fetchSettings();
 
-    // Set up real-time listeners and cleanly unsubscribe on unmount
     const unsubRequests = onSnapshot(
       query(requestsCollection, orderBy("createdAt", "desc")),
       (snap) => {
@@ -76,7 +76,6 @@ export default function RentalTab({ isMobile }) {
       unsubRequests();
       unsubAvail();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchSettings = async () => {
@@ -132,6 +131,13 @@ export default function RentalTab({ isMobile }) {
   const deleteRequest = async (id) => {
     if (window.confirm("Delete this request?"))
       await deleteDoc(doc(db, "rent_requests", id));
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-");
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
   };
 
   return (
@@ -203,7 +209,7 @@ export default function RentalTab({ isMobile }) {
               }}
             >
               <span style={{ fontSize: "0.85rem" }}>
-                {a.date} — <strong>{a.status}</strong>
+                {formatDate(a.date)} — <strong>{a.status}</strong>
               </span>
               <button
                 onClick={() => deleteAvailability(a.id)}
@@ -309,6 +315,7 @@ export default function RentalTab({ isMobile }) {
                   gap: "10px",
                   width: "100%",
                   fontSize: "0.9rem",
+                  marginBottom: "15px",
                 }}
               >
                 <div>
@@ -319,13 +326,52 @@ export default function RentalTab({ isMobile }) {
                 </div>
                 <div>
                   <span style={labelStyle}>Requested Date:</span>{" "}
-                  <strong>{req.date}</strong>
+                  <strong>{formatDate(req.date)}</strong>
                 </div>
                 <div>
                   <span style={labelStyle}>Received:</span>{" "}
                   {new Date(req.createdAt).toLocaleDateString()}
                 </div>
               </div>
+
+              {/* NEW MESSAGE SECTION */}
+              {req.message && (
+                <div
+                  style={{
+                    width: "100%",
+                    backgroundColor: "rgba(28, 7, 0, 0.03)",
+                    padding: "12px",
+                    borderRadius: "12px",
+                    fontSize: "0.85rem",
+                    border: "1px dashed rgba(28, 7, 0, 0.1)",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: "0 0 6px 0",
+                      fontWeight: "bold",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      opacity: 0.6,
+                      fontSize: "0.7rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    <MessageSquare size={12} /> Message:
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      whiteSpace: "pre-wrap",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    "{req.message}"
+                  </p>
+                </div>
+              )}
             </div>
           ))}
         </div>

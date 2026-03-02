@@ -1,14 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Header from "../components/Header/Header";
 import RentalForm from "../components/Rental/RentalForm";
-import {
-  Info,
-  MapPin,
-  Sparkles,
-  Calendar,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react";
+import { Info, MapPin, Sparkles, Calendar } from "lucide-react";
 
 const CONFIG = {
   TRANSITION_SPEED: 1400,
@@ -28,8 +21,6 @@ const getImage = (filename) => {
 
 export default function Rent({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const formRef = useRef(null);
 
   const leftIdxRef = useRef(0);
   const rightIdxRef = useRef(1);
@@ -119,22 +110,10 @@ export default function Rent({ currentLang, setCurrentLang }) {
     return () => clearTimeout(timeoutId);
   }, []);
 
-  const handleTransitionEnd = (e) => {
-    // We target max-height because that determines the final size of the container
-    if (e.propertyName === "max-height" && isCalendarOpen && formRef.current) {
-      formRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
-  };
-
   const content = {
     en: {
       title: "Rent the Atelier",
       welcome: "a creative oasis for your independent projects",
-      ctaOpen: "Show Calendar",
-      ctaClose: "Hide Calendar",
       details: [
         { icon: <MapPin size={18} />, text: "Central Location" },
         { icon: <Sparkles size={18} />, text: "Full Equipment" },
@@ -144,8 +123,6 @@ export default function Rent({ currentLang, setCurrentLang }) {
     de: {
       title: "Atelier mieten",
       welcome: "Ein kreativer Rückzugsort für deine Projekte",
-      ctaOpen: "Kalender zeigen",
-      ctaClose: "Kalender ausblenden",
       details: [
         { icon: <MapPin size={18} />, text: "Zentrale Lage" },
         { icon: <Sparkles size={18} />, text: "Voll ausgestattet" },
@@ -201,9 +178,7 @@ export default function Rent({ currentLang, setCurrentLang }) {
       transform: isVisible
         ? `scale(${pos.s}) rotate(0deg)`
         : `scale(0) rotate(${side === "left" ? -45 : 45}deg)`,
-      // --- UPDATED FILTER ---
       filter: isVisible ? "blur(0px)" : "blur(15px)",
-      // --- UPDATED TRANSITION ---
       transition: `
         transform ${CONFIG.TRANSITION_SPEED}ms cubic-bezier(0.175, 0.885, 0.32, 1.275), 
         opacity ${CONFIG.TRANSITION_SPEED - 400}ms ease-in-out, 
@@ -229,30 +204,11 @@ export default function Rent({ currentLang, setCurrentLang }) {
       fontSize: "0.8rem",
       color: "#1c0700",
     },
-    toggleButton: {
-      display: "flex",
-      alignItems: "center",
-      gap: "12px",
-      padding: "14px 28px",
-      background: "#4e5f28",
-      color: "#fff",
-      border: "none",
-      borderRadius: "100px",
-      cursor: "pointer",
-      fontSize: "0.9rem",
-      fontWeight: "500",
-      transition: "all 0.3s ease",
-      marginBottom: "30px",
-    },
     formContainer: {
       width: "100%",
       display: "flex",
       justifyContent: "center",
-      maxHeight: isCalendarOpen ? "1000px" : "0px", // Reduced from 1500 to minimize transition "overhang"
-      opacity: isCalendarOpen ? 1 : 0,
-      overflow: "hidden",
-      transition:
-        "max-height 0.7s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease",
+      marginTop: "10px",
     },
   };
 
@@ -272,12 +228,6 @@ export default function Rent({ currentLang, setCurrentLang }) {
             50% { transform: translate(10px, -15px) rotate(4deg); }
           }
           
-          .toggle-btn:hover {
-            opacity: 0.9;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(28, 7, 0, 0.15);
-          }
-
           @media (max-width: 768px) {
             .course-title { font-size: 2.5rem !important; }
             .icon-touch { 
@@ -347,23 +297,7 @@ export default function Rent({ currentLang, setCurrentLang }) {
           ))}
         </div>
 
-        <button
-          className="toggle-btn"
-          style={styles.toggleButton}
-          onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-        >
-          <Calendar size={18} />
-          {isCalendarOpen
-            ? content[currentLang].ctaClose
-            : content[currentLang].ctaOpen}
-          {isCalendarOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-        </button>
-
-        <div
-          ref={formRef}
-          style={styles.formContainer}
-          onTransitionEnd={handleTransitionEnd}
-        >
+        <div style={styles.formContainer}>
           <RentalForm lang={currentLang} />
         </div>
       </main>
