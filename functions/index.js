@@ -85,7 +85,7 @@ const sendUserPackEmail = (
     lang === "de"
       ? `Dein Session-Pack: ${courseKey}`
       : `Your Session Pack: ${courseKey}`;
-  transaction.set(mailRef, {
+  const mailData = {
     to: email,
     message: {
       subject: subject,
@@ -101,7 +101,9 @@ const sendUserPackEmail = (
           <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
         </div>`,
     },
-  });
+  };
+  if (transaction) transaction.set(mailRef, mailData);
+  else mailRef.set(mailData);
 };
 
 const sendGuestPackCodeEmail = (
@@ -119,7 +121,7 @@ const sendGuestPackCodeEmail = (
   const mailRef = db.collection("mail").doc();
   const subject =
     lang === "de" ? `Dein Code für ${courseKey}` : `Your Code for ${courseKey}`;
-  transaction.set(mailRef, {
+  const mailData = {
     to: email,
     message: {
       subject: subject,
@@ -136,7 +138,9 @@ const sendGuestPackCodeEmail = (
           <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
         </div>`,
     },
-  });
+  };
+  if (transaction) transaction.set(mailRef, mailData);
+  else mailRef.set(mailData);
 };
 
 const sendBookingEmail = async (
@@ -153,7 +157,7 @@ const sendBookingEmail = async (
   const courseKey = getCleanCourseKey(coursePath);
   const sanitizedId = coursePath.replace(/\//g, "");
 
-  // Resolve Add-on info from Reminder Config
+  // Safe read: Resolve Add-on info
   const reminderRef = db.collection("course_reminders").doc(sanitizedId);
   const reminderSnap = await (transaction
     ? transaction.get(reminderRef)
@@ -239,10 +243,9 @@ const sendCancellationEmail = (
     htmlContent += `<div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;"><p>${code}</p></div>`;
   }
   htmlContent += `<br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`;
-  transaction.set(mailRef, {
-    to: email,
-    message: { subject, html: htmlContent },
-  });
+  const mailData = { to: email, message: { subject, html: htmlContent } };
+  if (transaction) transaction.set(mailRef, mailData);
+  else mailRef.set(mailData);
 };
 
 // ============================================================================
@@ -340,6 +343,8 @@ exports.handleStripeWebhook = onRequest(
         .doc(session.id);
 
       try {
+        let emailData = null;
+
         await db.runTransaction(async (transaction) => {
           const checkSnap = await transaction.get(paymentCheckRef);
           if (checkSnap.exists) return;
@@ -385,15 +390,6 @@ exports.handleStripeWebhook = onRequest(
                 },
                 { merge: true },
               );
-              sendUserPackEmail(
-                transaction,
-                email,
-                finalName,
-                courseKey,
-                packSize,
-                netIncrease,
-                lang,
-              );
             } else if (netIncrease > 0) {
               const newCode = generatePackCode();
               transaction.set(db.collection("pack_codes").doc(newCode), {
@@ -404,17 +400,6 @@ exports.handleStripeWebhook = onRequest(
                 buyerName: guestName,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
-              sendGuestPackCodeEmail(
-                transaction,
-                email,
-                guestName,
-                courseKey,
-                packSize,
-                netIncrease,
-                newCode,
-                lang,
-                origin,
-              );
             }
           }
 
@@ -426,30 +411,42 @@ exports.handleStripeWebhook = onRequest(
               eventId: d.id,
               date: d.date,
               coursePath,
-              selectedAddons: d.selectedAddons || [], // Tracking add-ons
+              selectedAddons: d.selectedAddons || [],
               status: "confirmed",
               lang,
               timestamp: admin.firestore.FieldValue.serverTimestamp(),
             });
           });
 
-          if (parsedDates.length > 0) {
-            await sendBookingEmail(
-              transaction,
-              email,
-              finalName,
-              coursePath,
-              parsedDates,
-              lang,
-              isGuest,
-              origin,
-            );
-          }
           transaction.set(paymentCheckRef, {
             processedAt: admin.firestore.FieldValue.serverTimestamp(),
             userId,
           });
+
+          // Prep data to trigger email outside transaction
+          emailData = {
+            email,
+            finalName,
+            coursePath,
+            parsedDates,
+            lang,
+            isGuest,
+            origin,
+          };
         });
+
+        if (emailData) {
+          await sendBookingEmail(
+            null,
+            emailData.email,
+            emailData.finalName,
+            emailData.coursePath,
+            emailData.parsedDates,
+            emailData.lang,
+            emailData.isGuest,
+            emailData.origin,
+          );
+        }
       } catch (e) {
         console.error("Webhook Error", e);
       }
@@ -468,38 +465,45 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
   const userRef = db.collection("users").doc(request.auth.uid);
   const email = request.auth.token.email;
 
-  return db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     const userSnap = await transaction.get(userRef);
     const firstName = userSnap.data()?.firstName || "Customer";
+
     transaction.update(userRef, {
       [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(
         -selectedDates.length,
       ),
     });
+
     selectedDates.forEach((d) => {
       transaction.set(db.collection("bookings").doc(), {
         userId: request.auth.uid,
         eventId: d.id,
         date: d.date,
         coursePath,
-        selectedAddons: d.selectedAddons || [], // Addons tracked
+        selectedAddons: d.selectedAddons || [],
         status: "confirmed",
         lang: currentLang || "en",
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
-    await sendBookingEmail(
-      transaction,
-      email,
-      firstName,
-      coursePath,
-      selectedDates,
-      currentLang || "en",
-      false,
-      null,
-    );
-    return { success: true };
+
+    return { firstName };
   });
+
+  // Call outside transaction to avoid Internal Error
+  await sendBookingEmail(
+    null,
+    email,
+    result.firstName,
+    coursePath,
+    selectedDates,
+    currentLang || "en",
+    false,
+    null,
+  );
+
+  return { success: true };
 });
 
 exports.redeemPackCode = onCall({ cors: true }, async (request) => {
@@ -507,7 +511,8 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
     request.data;
   const courseKey = getCleanCourseKey(coursePath);
   const codeRef = db.collection("pack_codes").doc(packCode);
-  return db.runTransaction(async (t) => {
+
+  await db.runTransaction(async (t) => {
     const snap = await t.get(codeRef);
     if (!snap.exists) throw new HttpsError("not-found", "Invalid code.");
     t.update(codeRef, {
@@ -523,24 +528,27 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
         eventId: d.id,
         date: d.date,
         coursePath,
-        selectedAddons: d.selectedAddons || [], // Addons tracked
+        selectedAddons: d.selectedAddons || [],
         status: "confirmed",
         lang: currentLang || "en",
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
-    await sendBookingEmail(
-      t,
-      guestInfo.email,
-      guestInfo.firstName,
-      coursePath,
-      selectedDates,
-      currentLang || "en",
-      true,
-      "https://sinneskueche.ch",
-    );
-    return { success: true };
   });
+
+  // Call outside transaction to avoid Internal Error
+  await sendBookingEmail(
+    null,
+    guestInfo.email,
+    guestInfo.firstName,
+    coursePath,
+    selectedDates,
+    currentLang || "en",
+    true,
+    "https://sinneskueche.ch",
+  );
+
+  return { success: true };
 });
 
 exports.cancelBooking = onCall({ cors: true }, async (request) => {

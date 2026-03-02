@@ -11,6 +11,7 @@ import {
   orderBy,
   onSnapshot,
   deleteDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { planets } from "../../data/planets";
@@ -284,20 +285,47 @@ export default function ScheduleTab({
     setIsProcessing(true);
     const sanitizedId = selectedCourse.replace(/\//g, "");
     try {
+      // 1. Update the master schedule document
       await setDoc(
         doc(db, "schedules", sanitizedId),
         { assignments, specialAssignments, status: "published" },
         { merge: true },
       );
+
+      // 2. Sync to individual 'work_schedule' docs for Profile.jsx visibility
+      const batch = writeBatch(db);
+
+      for (const eventId in assignments) {
+        const instructorIds = assignments[eventId];
+        for (const uid of instructorIds) {
+          const workDocId = `${eventId}_${uid}`;
+          const eventData = courseEvents.find((e) => e.id === eventId);
+
+          const workRef = doc(db, "work_schedule", workDocId);
+          batch.set(workRef, {
+            userId: uid,
+            eventId: eventId,
+            coursePath: selectedCourse,
+            courseName: eventData?.title?.en || selectedCourse,
+            date: eventData?.date || "",
+            time: eventData?.time || "",
+          });
+        }
+      }
+      await batch.commit();
+
+      // 3. Trigger Cloud Function for emails
       const sendSchedules = httpsCallable(functions, "sendFinalSchedules");
       await sendSchedules({
         courseId: selectedCourse,
         assignments,
         specialAssignments,
       });
+
       alert("Schedule published and instructors notified!");
     } catch (err) {
-      alert("Error publishing.");
+      console.error(err);
+      alert("Error publishing: " + err.message);
     }
     setIsProcessing(false);
   };
@@ -508,368 +536,351 @@ export default function ScheduleTab({
                 {scheduleDoc.mode} Mode — {scheduleDoc.status.replace("_", " ")}
               </h4>
             </div>
-            {scheduleDoc.status !== "published" && (
+            <button
+              onClick={() => {
+                if (window.confirm("Reset schedule?"))
+                  deleteDoc(
+                    doc(db, "schedules", selectedCourse.replace(/\//g, "")),
+                  );
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#ff4d4d",
+                textDecoration: "underline",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+              }}
+            >
+              Reset
+            </button>
+          </div>
+
+          {/* INSTRUCTOR SEARCH */}
+          <div
+            style={{
+              ...cardStyle,
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: "1.5rem",
+              padding: "1.5rem",
+              backgroundColor: "#fdf8e1",
+            }}
+          >
+            <h4 style={{ margin: 0, fontSize: "1.1rem" }}>
+              Course Instructors
+            </h4>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {selectedInstructors.length === 0 && (
+                <p style={{ opacity: 0.5, fontSize: "0.85rem" }}>
+                  No instructors added yet. Search below.
+                </p>
+              )}
+              {selectedInstructors.map((id) => (
+                <div
+                  key={id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "6px 12px",
+                    backgroundColor: "#caaff3",
+                    borderRadius: "100px",
+                    fontSize: "0.85rem",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {getUserName(id)}
+                  <X
+                    size={14}
+                    onClick={() => toggleInstructorSetup(id)}
+                    style={{ cursor: "pointer" }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div style={{ position: "relative" }}>
+              <div style={{ position: "relative" }}>
+                <Search
+                  size={16}
+                  style={{
+                    position: "absolute",
+                    left: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    opacity: 0.4,
+                  }}
+                />
+                <input
+                  placeholder="Search users to add as instructors..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  style={{
+                    ...inputStyle,
+                    paddingLeft: "36px",
+                    marginBottom: 0,
+                    backgroundColor: "rgba(255, 252, 227, 0.4)",
+                  }}
+                />
+              </div>
+
+              {userSearch && filteredUserResults.length > 0 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    backgroundColor: "#fdf8e1",
+                    border: "1px solid rgba(0,0,0,0.1)",
+                    borderRadius: "12px",
+                    marginTop: "4px",
+                    zIndex: 10,
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                  }}
+                >
+                  {filteredUserResults.map((u) => (
+                    <div
+                      key={u.id}
+                      onClick={() => {
+                        toggleInstructorSetup(u.id);
+                        setUserSearch("");
+                      }}
+                      style={{
+                        padding: "10px 14px",
+                        cursor: "pointer",
+                        borderBottom: "1px solid rgba(0,0,0,0.05)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: "bold", fontSize: "0.9rem" }}>
+                          {u.firstName} {u.lastName}
+                        </div>
+                        <div style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                          {u.email}
+                        </div>
+                      </div>
+                      <Plus size={16} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {scheduleDoc.mode === "auto" && scheduleDoc.status === "setup" && (
               <button
-                onClick={() => {
-                  if (window.confirm("Reset schedule?"))
-                    deleteDoc(
-                      doc(db, "schedules", selectedCourse.replace(/\//g, "")),
-                    );
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#ff4d4d",
-                  textDecoration: "underline",
-                  cursor: "pointer",
-                  fontSize: "0.8rem",
-                }}
+                onClick={sendAvailabilityRequests}
+                style={primaryBtnStyle(isMobile)}
               >
-                Reset
+                Request Availabilities
+              </button>
+            )}
+            {scheduleDoc.mode === "manual" && (
+              <button
+                onClick={saveInstructorList}
+                style={{ ...btnStyle, fontSize: "0.85rem", padding: "8px" }}
+              >
+                Save Instructor List
               </button>
             )}
           </div>
 
-          {/* INSTRUCTOR SEARCH */}
-          {scheduleDoc.status !== "published" && (
+          {/* CALENDAR ASSIGNMENTS: Remains editable for re-publishing */}
+          <div
+            style={{
+              ...cardStyle,
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: "1.5rem",
+              padding: isMobile ? "1rem" : "2rem",
+              backgroundColor: "#fdf8e1",
+            }}
+          >
+            <h4 style={{ margin: 0, fontSize: "1.2rem" }}>
+              Schedule Assignments
+            </h4>
+
             <div
               style={{
-                ...cardStyle,
+                display: "flex",
                 flexDirection: "column",
-                alignItems: "stretch",
-                gap: "1.5rem",
-                padding: "1.5rem",
-                backgroundColor: "#fdf8e1",
+                gap: "12px",
               }}
             >
-              <h4 style={{ margin: 0, fontSize: "1.1rem" }}>
-                Course Instructors
-              </h4>
-
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {selectedInstructors.length === 0 && (
-                  <p style={{ opacity: 0.5, fontSize: "0.85rem" }}>
-                    No instructors added yet. Search below.
-                  </p>
-                )}
-                {selectedInstructors.map((id) => (
-                  <div
-                    key={id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "6px 12px",
-                      backgroundColor: "#caaff3",
-                      borderRadius: "100px",
-                      fontSize: "0.85rem",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    {getUserName(id)}
-                    <X
-                      size={14}
-                      onClick={() => toggleInstructorSetup(id)}
-                      style={{ cursor: "pointer" }}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ position: "relative" }}>
-                <div style={{ position: "relative" }}>
-                  <Search
-                    size={16}
-                    style={{
-                      position: "absolute",
-                      left: "12px",
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      opacity: 0.4,
-                    }}
-                  />
-                  <input
-                    placeholder="Search users to add as instructors..."
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    style={{
-                      ...inputStyle,
-                      paddingLeft: "36px",
-                      marginBottom: 0,
-                      backgroundColor: "rgba(255, 252, 227, 0.4)",
-                    }}
-                  />
-                </div>
-
-                {userSearch && filteredUserResults.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      right: 0,
-                      backgroundColor: "#fdf8e1",
-                      border: "1px solid rgba(0,0,0,0.1)",
-                      borderRadius: "12px",
-                      marginTop: "4px",
-                      zIndex: 10,
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                    }}
-                  >
-                    {filteredUserResults.map((u) => (
-                      <div
-                        key={u.id}
-                        onClick={() => {
-                          toggleInstructorSetup(u.id);
-                          setUserSearch("");
-                        }}
-                        style={{
-                          padding: "10px 14px",
-                          cursor: "pointer",
-                          borderBottom: "1px solid rgba(0,0,0,0.05)",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <div>
-                          <div
-                            style={{ fontWeight: "bold", fontSize: "0.9rem" }}
-                          >
-                            {u.firstName} {u.lastName}
-                          </div>
-                          <div style={{ fontSize: "0.7rem", opacity: 0.6 }}>
-                            {u.email}
-                          </div>
-                        </div>
-                        <Plus size={16} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {scheduleDoc.mode === "auto" &&
-                scheduleDoc.status === "setup" && (
-                  <button
-                    onClick={sendAvailabilityRequests}
-                    style={primaryBtnStyle(isMobile)}
-                  >
-                    Request Availabilities
-                  </button>
-                )}
-              {scheduleDoc.mode === "manual" && (
-                <button
-                  onClick={saveInstructorList}
-                  style={{ ...btnStyle, fontSize: "0.85rem", padding: "8px" }}
+              {courseEvents.map((ev) => (
+                <div
+                  key={ev.id}
+                  style={{
+                    display: "flex",
+                    flexDirection: isMobile ? "column" : "row",
+                    gap: "15px",
+                    padding: "16px",
+                    backgroundColor: "rgba(202, 175, 243, 0.05)",
+                    border: "1px solid rgba(202, 175, 243, 0.15)",
+                    borderRadius: "16px",
+                  }}
                 >
-                  Save Instructor List
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* CALENDAR ASSIGNMENTS */}
-          {(scheduleDoc.status === "generated" ||
-            scheduleDoc.status === "draft" ||
-            scheduleDoc.status === "published") && (
-            <div
-              style={{
-                ...cardStyle,
-                flexDirection: "column",
-                alignItems: "stretch",
-                gap: "1.5rem",
-                padding: isMobile ? "1rem" : "2rem",
-                backgroundColor: "#fdf8e1",
-              }}
-            >
-              <h4 style={{ margin: 0, fontSize: "1.2rem" }}>
-                Schedule Assignments
-              </h4>
-
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                }}
-              >
-                {courseEvents.map((ev) => (
-                  <div
-                    key={ev.id}
-                    style={{
-                      display: "flex",
-                      flexDirection: isMobile ? "column" : "row",
-                      gap: "15px",
-                      padding: "16px",
-                      backgroundColor: "rgba(202, 175, 243, 0.05)",
-                      border: "1px solid rgba(202, 175, 243, 0.15)",
-                      borderRadius: "16px",
-                    }}
-                  >
-                    <div style={{ minWidth: "120px" }}>
-                      <div
-                        style={{
-                          fontWeight: "900",
-                          color: "#1c0700",
-                          fontSize: "1.1rem",
-                        }}
-                      >
-                        {formatDate(ev.date)}
-                      </div>
-                      <div style={{ fontSize: "0.8rem", opacity: 0.5 }}>
-                        {ev.time || "No time set"}
-                      </div>
+                  <div style={{ minWidth: "120px" }}>
+                    <div
+                      style={{
+                        fontWeight: "900",
+                        color: "#1c0700",
+                        fontSize: "1.1rem",
+                      }}
+                    >
+                      {formatDate(ev.date)}
                     </div>
+                    <div style={{ fontSize: "0.8rem", opacity: 0.5 }}>
+                      {ev.time || "No time set"}
+                    </div>
+                  </div>
 
-                    <div style={{ flex: 1 }}>
-                      <label style={{ ...labelStyle, fontSize: "0.65rem" }}>
-                        Instructors
-                      </label>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "6px",
-                        }}
-                      >
-                        {selectedInstructors.map((uid) => {
-                          const isAssigned = assignments[ev.id]?.includes(uid);
+                  <div style={{ flex: 1 }}>
+                    <label style={{ ...labelStyle, fontSize: "0.65rem" }}>
+                      Instructors
+                    </label>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "6px",
+                      }}
+                    >
+                      {selectedInstructors.map((uid) => {
+                        const isAssigned = assignments[ev.id]?.includes(uid);
+                        return (
+                          <button
+                            key={uid}
+                            onClick={() => updateAssignment(ev.id, uid)}
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: "100px",
+                              fontSize: "0.75rem",
+                              fontWeight: "bold",
+                              border: "1px solid",
+                              transition: "all 0.2s",
+                              backgroundColor: isAssigned
+                                ? "#caaff3"
+                                : "transparent",
+                              borderColor: isAssigned
+                                ? "#caaff3"
+                                : "rgba(28,7,0,0.2)",
+                              color: "#1c0700",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {getUserName(uid)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Multi-select Session Add-ons */}
+                  <div style={{ flex: 1, minWidth: "200px" }}>
+                    <label style={{ ...labelStyle, fontSize: "0.65rem" }}>
+                      Session Add-ons
+                    </label>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "6px",
+                      }}
+                    >
+                      {specialEvents.length === 0 ? (
+                        <span style={{ fontSize: "0.7rem", opacity: 0.4 }}>
+                          No add-ons defined
+                        </span>
+                      ) : (
+                        specialEvents.map((se) => {
+                          const isSelected = Array.isArray(
+                            specialAssignments[ev.id],
+                          )
+                            ? specialAssignments[ev.id].includes(se.id)
+                            : specialAssignments[ev.id] === se.id;
+
                           return (
                             <button
-                              key={uid}
+                              key={se.id}
                               onClick={() =>
-                                scheduleDoc.status !== "published" &&
-                                updateAssignment(ev.id, uid)
+                                toggleSpecialAssignment(ev.id, se.id)
                               }
-                              disabled={scheduleDoc.status === "published"}
                               style={{
-                                padding: "6px 12px",
-                                borderRadius: "100px",
-                                fontSize: "0.75rem",
-                                fontWeight: "bold",
+                                padding: "4px 10px",
+                                borderRadius: "8px",
+                                fontSize: "0.7rem",
+                                fontWeight: "700",
                                 border: "1px solid",
                                 transition: "all 0.2s",
-                                backgroundColor: isAssigned
-                                  ? "#caaff3"
+                                backgroundColor: isSelected
+                                  ? "#4e5f28"
                                   : "transparent",
-                                borderColor: isAssigned
-                                  ? "#caaff3"
+                                borderColor: isSelected
+                                  ? "#4e5f28"
                                   : "rgba(28,7,0,0.2)",
-                                color: "#1c0700",
-                                cursor:
-                                  scheduleDoc.status === "published"
-                                    ? "default"
-                                    : "pointer",
+                                color: isSelected ? "white" : "#1c0700",
+                                cursor: "pointer",
                               }}
                             >
-                              {getUserName(uid)}
+                              {se.nameEn}
                             </button>
                           );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* NEW: Multi-select Session Add-ons */}
-                    <div style={{ flex: 1, minWidth: "200px" }}>
-                      <label style={{ ...labelStyle, fontSize: "0.65rem" }}>
-                        Session Add-ons
-                      </label>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "6px",
-                        }}
-                      >
-                        {specialEvents.length === 0 ? (
-                          <span style={{ fontSize: "0.7rem", opacity: 0.4 }}>
-                            No add-ons defined
-                          </span>
-                        ) : (
-                          specialEvents.map((se) => {
-                            const isSelected = Array.isArray(
-                              specialAssignments[ev.id],
-                            )
-                              ? specialAssignments[ev.id].includes(se.id)
-                              : specialAssignments[ev.id] === se.id;
-
-                            return (
-                              <button
-                                key={se.id}
-                                onClick={() =>
-                                  scheduleDoc.status !== "published" &&
-                                  toggleSpecialAssignment(ev.id, se.id)
-                                }
-                                disabled={scheduleDoc.status === "published"}
-                                style={{
-                                  padding: "4px 10px",
-                                  borderRadius: "8px",
-                                  fontSize: "0.7rem",
-                                  fontWeight: "700",
-                                  border: "1px solid",
-                                  transition: "all 0.2s",
-                                  backgroundColor: isSelected
-                                    ? "#4e5f28"
-                                    : "transparent",
-                                  borderColor: isSelected
-                                    ? "#4e5f28"
-                                    : "rgba(28,7,0,0.2)",
-                                  color: isSelected ? "white" : "#1c0700",
-                                  cursor:
-                                    scheduleDoc.status === "published"
-                                      ? "default"
-                                      : "pointer",
-                                }}
-                              >
-                                {se.nameEn}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
+                        })
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
-
-              {scheduleDoc.status !== "published" && (
-                <div
-                  style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}
-                >
-                  <button
-                    onClick={saveDraft}
-                    disabled={isProcessing}
-                    style={{
-                      ...btnStyle,
-                      flex: 1,
-                      backgroundColor: "rgba(28, 7, 0, 0.05)",
-                      color: "#1c0700",
-                    }}
-                  >
-                    {isProcessing ? (
-                      <Loader2 className="spinner" size={18} />
-                    ) : (
-                      "Save Draft"
-                    )}
-                  </button>
-                  <button
-                    onClick={publishSchedule}
-                    disabled={isProcessing}
-                    style={{ ...primaryBtnStyle(isMobile), flex: 2 }}
-                  >
-                    {isProcessing ? (
-                      <Loader2 className="spinner" size={18} />
-                    ) : (
-                      "Publish & Email Schedule"
-                    )}
-                  </button>
                 </div>
-              )}
+              ))}
             </div>
-          )}
+
+            {/* SAVE & PUBLISH: Buttons stay visible even if published to allow re-notifying staff */}
+            <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
+              <button
+                onClick={saveDraft}
+                disabled={isProcessing}
+                style={{
+                  ...btnStyle,
+                  flex: 1,
+                  backgroundColor: "rgba(28, 7, 0, 0.05)",
+                  color: "#1c0700",
+                }}
+              >
+                {isProcessing ? (
+                  <Loader2 className="spinner" size={18} />
+                ) : (
+                  "Save Draft"
+                )}
+              </button>
+              <button
+                onClick={publishSchedule}
+                disabled={isProcessing}
+                style={{ ...primaryBtnStyle(isMobile), flex: 2 }}
+              >
+                {isProcessing ? (
+                  <Loader2 className="spinner" size={18} />
+                ) : (
+                  "Publish & Email Schedule"
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(28, 7, 0, 0.05); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #caaff3; border-radius: 10px; }
+        .spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
     </section>
   );
 }

@@ -26,7 +26,23 @@ import {
   Ticket,
   BookOpen,
   Clock,
+  Users,
+  Star,
 } from "lucide-react";
+
+// --- EXACT MAPPING FROM YOUR CLOUD FUNCTIONS ---
+const courseMapping = {
+  "/pottery": "pottery tuesdays",
+  "/artistic-vision": "artistic vision",
+  "/get-ink": "get ink!",
+  "/singing": "vocal coaching",
+  "/extended-voice-lab": "extended voice lab",
+  "/performing-words": "performing words",
+  "/singing-basics": "singing basics weekend",
+};
+
+const getCleanCourseKey = (path) =>
+  courseMapping[path] || (path ? path.replace(/\//g, "") : "workshop");
 
 export default function Profile({ currentLang, setCurrentLang }) {
   const { currentUser, userData, loading: authLoading } = useAuth();
@@ -62,7 +78,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
     }
   }, [activeTab, isMobile]);
 
-  // Fetch pack settings for the "Buy Pack" card
+  // Fetch pack settings
   useEffect(() => {
     const fetchPackSettings = async () => {
       try {
@@ -79,47 +95,118 @@ export default function Profile({ currentLang, setCurrentLang }) {
     if (currentUser) fetchPackSettings();
   }, [currentUser]);
 
-  // FETCH TEACHING SCHEDULE (Filtered by Assigned Work Schedule)
+  // FETCH TEACHING SCHEDULE (Resolved with Co-Instructors and Add-ons)
   useEffect(() => {
     const fetchAssignedSchedule = async () => {
       if (!userData || !isAdmin || !currentUser) return;
 
       setIsScheduleLoading(true);
       try {
-        // 1. Get assignments for this specific user from work_schedule
+        // 1. Get ALL assignments and special assignments
         const scheduleRef = collection(db, "work_schedule");
-        const scheduleQuery = query(
-          scheduleRef,
-          where("userId", "==", currentUser.uid),
-        );
-        const scheduleSnap = await getDocs(scheduleQuery);
+        const allAssignmentsSnap = await getDocs(scheduleRef);
+        const allData = allAssignmentsSnap.docs.map((d) => d.data());
 
-        // Get the list of event IDs this user is assigned to
-        const assignedEventIds = scheduleSnap.docs.map(
-          (doc) => doc.data().eventId,
-        );
+        // Also fetch the main schedule docs to get specialAssignments (Add-ons assigned to dates)
+        const schedulesSnap = await getDocs(collection(db, "schedules"));
+        const schedulesMap = {};
+        schedulesSnap.docs.forEach((d) => {
+          schedulesMap[d.id] = d.data();
+        });
 
-        if (assignedEventIds.length === 0) {
+        // 2. Identify Event IDs assigned to current user
+        const myAssignedEventIds = allData
+          .filter((d) => d.userId === currentUser.uid)
+          .map((d) => d.eventId);
+
+        if (myAssignedEventIds.length === 0) {
           setTeachingEvents([]);
           return;
         }
 
-        // 2. Fetch the actual event details
+        // 3. Resolve user names
+        const usersSnap = await getDocs(collection(db, "users"));
+        const usersMap = {};
+        usersSnap.docs.forEach((d) => {
+          const u = d.data();
+          usersMap[d.id] = `${u.firstName} ${u.lastName}`;
+        });
+
+        // 4. Fetch the actual event details
         const eventsRef = collection(db, "events");
         const today = new Date().toISOString().split("T")[0];
-
-        // Firestore 'in' queries are limited to 30 items.
-        // We filter for upcoming dates manually or via query if list is small.
         const eventsQuery = query(eventsRef, orderBy("date", "asc"));
         const eventsSnap = await getDocs(eventsQuery);
 
-        const filteredEvents = eventsSnap.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter(
-            (event) =>
-              assignedEventIds.includes(event.id) && // Only those assigned to me
-              event.date >= today, // Only upcoming
-          );
+        // 5. Fetch global bookings to count add-on bookings
+        const bookingsSnap = await getDocs(collection(db, "bookings"));
+        const allBookings = bookingsSnap.docs.map((d) => d.data());
+
+        const filteredEvents = await Promise.all(
+          eventsSnap.docs
+            .map((doc) => ({ id: doc.id, ...doc.data() }))
+            .filter(
+              (event) =>
+                myAssignedEventIds.includes(event.id) && event.date >= today,
+            )
+            .map(async (event) => {
+              const sanitizedId = (
+                event.coursePath ||
+                event.link ||
+                ""
+              ).replace(/\//g, "");
+
+              // Find co-instructors
+              const coInstructorNames = allData
+                .filter(
+                  (d) => d.eventId === event.id && d.userId !== currentUser.uid,
+                )
+                .map((d) => usersMap[d.userId] || "Unknown Instructor");
+
+              // Resolve Add-on names and booking counts
+              const scheduleConfig = schedulesMap[sanitizedId];
+              const assignedAddonIds =
+                scheduleConfig?.specialAssignments?.[event.id] || [];
+              const addonList = Array.isArray(assignedAddonIds)
+                ? assignedAddonIds
+                : assignedAddonIds
+                  ? [assignedAddonIds]
+                  : [];
+
+              // Fetch course settings for add-on names
+              const settingsSnap = await getDoc(
+                doc(db, "course_settings", sanitizedId),
+              );
+              const settingsData = settingsSnap.exists()
+                ? settingsSnap.data()
+                : {};
+              const definedAddons = settingsData.specialEvents || [];
+
+              const resolvedAddons = addonList.map((addonId) => {
+                const addonDef = definedAddons.find((a) => a.id === addonId);
+                const bookedCount = allBookings.filter(
+                  (b) =>
+                    b.eventId === event.id &&
+                    b.selectedAddons?.includes(addonId) &&
+                    b.status === "confirmed",
+                ).length;
+
+                return {
+                  id: addonId,
+                  name:
+                    currentLang === "de" ? addonDef?.nameDe : addonDef?.nameEn,
+                  bookedCount,
+                };
+              });
+
+              return {
+                ...event,
+                displayName: getCleanCourseKey(event.coursePath || event.link),
+                coInstructors: coInstructorNames,
+                addons: resolvedAddons,
+              };
+            }),
+        );
 
         setTeachingEvents(filteredEvents);
       } catch (err) {
@@ -130,7 +217,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
     };
 
     fetchAssignedSchedule();
-  }, [userData, isAdmin, currentUser]);
+  }, [userData, isAdmin, currentUser, currentLang]);
 
   if (authLoading || (!currentUser && !userData)) {
     return (
@@ -166,6 +253,8 @@ export default function Profile({ currentLang, setCurrentLang }) {
       historyTitle: "credit history",
       teachingTitle: "my teaching schedule",
       noEvents: "no upcoming classes.",
+      with: "with:",
+      booked: "booked",
     },
     de: {
       title: "mein profil",
@@ -192,6 +281,8 @@ export default function Profile({ currentLang, setCurrentLang }) {
       historyTitle: "guthaben-verlauf",
       teachingTitle: "mein stundenplan",
       noEvents: "keine anstehenden kurse.",
+      with: "mit:",
+      booked: "gebucht",
     },
   }[currentLang];
 
@@ -211,7 +302,6 @@ export default function Profile({ currentLang, setCurrentLang }) {
           </button>
         </div>
 
-        {/* --- MOBILE TAB NAVIGATION --- */}
         {isMobile && (
           <div style={styles.tabNav}>
             {isAdmin && (
@@ -244,7 +334,6 @@ export default function Profile({ currentLang, setCurrentLang }) {
         )}
 
         <div style={styles.grid}>
-          {/* PERSONAL INFO CARD */}
           {(!isMobile || activeTab === "info") && (
             <PersonalInfoCard
               currentUser={currentUser}
@@ -256,7 +345,6 @@ export default function Profile({ currentLang, setCurrentLang }) {
           )}
 
           <div style={styles.sideColumn}>
-            {/* TEACHING SCHEDULE CARD (Visible only to admins) */}
             {isAdmin && (!isMobile || activeTab === "schedule") && (
               <div style={styles.adminCard}>
                 <h2 style={styles.cardTitle}>
@@ -277,11 +365,8 @@ export default function Profile({ currentLang, setCurrentLang }) {
                     {teachingEvents.map((event) => (
                       <div key={event.id} style={styles.eventItem}>
                         <div style={styles.eventMain}>
-                          {/* Displaying Course Name */}
                           <span style={styles.eventCourse}>
-                            {event.courseName ||
-                              event.coursePath ||
-                              "Unknown Course"}
+                            {event.displayName}
                           </span>
                           <div style={styles.eventMeta}>
                             <div style={styles.metaItem}>
@@ -292,6 +377,35 @@ export default function Profile({ currentLang, setCurrentLang }) {
                               <Clock size={12} /> {event.time}
                             </div>
                           </div>
+
+                          {/* ADD-ON DISPLAY */}
+                          {event.addons?.length > 0 && (
+                            <div style={styles.addonContainer}>
+                              {event.addons.map((addon, idx) => (
+                                <div key={idx} style={styles.addonBadge}>
+                                  <Star
+                                    size={10}
+                                    fill="#9960a8"
+                                    color="#9960a8"
+                                  />
+                                  <span>
+                                    {addon.name}:{" "}
+                                    <strong>{addon.bookedCount}</strong>{" "}
+                                    {t.booked}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* CO-INSTRUCTOR DISPLAY */}
+                          {event.coInstructors?.length > 0 && (
+                            <div style={styles.coInstructorRow}>
+                              <Users size={12} />
+                              <span style={{ fontWeight: 600 }}>{t.with}</span>
+                              {event.coInstructors.join(", ")}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -302,7 +416,6 @@ export default function Profile({ currentLang, setCurrentLang }) {
               </div>
             )}
 
-            {/* BUY PACK CARD */}
             {(!isMobile || activeTab === "packs") && (
               <BuyPackCard
                 packCourses={packCourses}
@@ -311,7 +424,6 @@ export default function Profile({ currentLang, setCurrentLang }) {
               />
             )}
 
-            {/* BOOKINGS CARD */}
             {(!isMobile || activeTab === "bookings") && (
               <BookingsCard
                 userId={currentUser.uid}
@@ -327,7 +439,6 @@ export default function Profile({ currentLang, setCurrentLang }) {
 }
 
 const styles = {
-  // ... (Styles remain the same as your provided content)
   loadingWrapper: {
     height: "100vh",
     display: "flex",
@@ -436,6 +547,33 @@ const styles = {
     fontSize: "0.8rem",
     color: "#4e5f28",
     opacity: 0.8,
+  },
+  addonContainer: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    marginTop: "12px",
+    backgroundColor: "rgba(202, 175, 243, 0.05)",
+    padding: "10px",
+    borderRadius: "12px",
+    border: "1px dashed rgba(153, 96, 168, 0.2)",
+  },
+  addonBadge: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    fontSize: "0.75rem",
+    color: "#1c0700",
+  },
+  coInstructorRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    fontSize: "0.75rem",
+    color: "#9960a8",
+    marginTop: "10px",
+    paddingTop: "8px",
+    borderTop: "1px dashed rgba(153, 96, 168, 0.2)",
   },
   emptyText: {
     opacity: 0.5,
