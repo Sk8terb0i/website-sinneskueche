@@ -28,7 +28,7 @@ const courseMapping = {
 const getCreditKey = (path) =>
   courseMapping[path] || (path ? path.replace(/\//g, "") : "workshop");
 
-export default function PriceDisplay({ coursePath, currentLang }) {
+export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   const { currentUser, userData } = useAuth();
   const navigate = useNavigate();
   const [pricing, setPricing] = useState(null);
@@ -48,6 +48,12 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
+
+  useEffect(() => {
+    if (forceExpand) {
+      setIsMobileExpanded(true);
+    }
+  }, [forceExpand]);
 
   const balance = userData?.credits?.[getCreditKey(coursePath)] || 0;
   const addonColors = [
@@ -189,7 +195,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
         selectedDates: expandedDates,
         guestInfo: !currentUser ? guestInfo : null,
         currentLang,
-        // ADDED &mode=${mode} HERE
         successUrl: `${window.location.origin}/#/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}`,
         cancelUrl: window.location.href,
       });
@@ -227,10 +232,13 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          cursor: isMobile ? "pointer" : "default",
         }}
       >
         <h2 style={S.overarchingTitleStyle(isMobile)}>
-          {currentLang === "en" ? "Available Dates" : "Termine"}
+          {currentLang === "en"
+            ? "Available Dates & Session Packs"
+            : "Termine & Kurspakete"}
         </h2>
         {isMobile &&
           (isMobileExpanded ? (
@@ -334,7 +342,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
               );
             })}
           </div>
-          {/* RESTORED LEGEND */}
           <div style={S.legendWrapperStyle(isMobile)}>
             <div style={S.legendStatusRowStyle(isMobile)}>
               <div style={S.legendItemStyle(isMobile)}>

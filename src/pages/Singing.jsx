@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
 import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
+import RegisterShortcut from "../components/RegisterShortcut/RegisterShortcut";
 import {
   Music,
   Layers,
@@ -21,9 +22,7 @@ const getImage = (filename) =>
 
 export default function Singing({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
-  const [isIdle, setIsIdle] = useState(false);
-  const [isBookingVisible, setIsBookingVisible] = useState(false);
+  const [isBookingExpanded, setIsBookingExpanded] = useState(false);
   const bookingRef = useRef(null);
 
   const config = {
@@ -37,62 +36,6 @@ export default function Singing({ currentLang, setCurrentLang }) {
       bottomIcon: { top: "45px", left: "calc(100% - 40px)" },
       titleSize: "3.2rem",
     },
-  };
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsBookingVisible(entry.isIntersecting);
-      },
-      { threshold: 0.33 },
-    );
-
-    if (bookingRef.current) {
-      observer.observe(bookingRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 50) setIsVisible(false);
-      else setIsVisible(true);
-      setIsIdle(false);
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  useEffect(() => {
-    let timeout;
-    const startTimer = () => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => setIsIdle(true), 7000);
-    };
-    const handleActivity = () => startTimer();
-    const events = [
-      "mousedown",
-      "mousemove",
-      "keypress",
-      "touchstart",
-      "scroll",
-    ];
-    events.forEach((e) => window.addEventListener(e, handleActivity));
-    startTimer();
-    return () => {
-      clearTimeout(timeout);
-      events.forEach((e) => window.removeEventListener(e, handleActivity));
-    };
-  }, []);
-
-  const scrollToBooking = () => {
-    if (bookingRef.current) {
-      const offset = window.innerWidth <= 768 ? 80 : 120;
-      const elementPosition =
-        bookingRef.current.getBoundingClientRect().top + window.pageYOffset;
-      window.scrollTo({ top: elementPosition - offset, behavior: "smooth" });
-    }
   };
 
   const content = {
@@ -178,9 +121,8 @@ export default function Singing({ currentLang, setCurrentLang }) {
     },
   };
 
-  const icons = [getImage("hearing.png"), getImage("hearing_mic.png")];
-  const planetShortcutImg = getImage("sing.png");
   const current = content[currentLang];
+  const icons = [getImage("hearing.png"), getImage("hearing_mic.png")];
 
   const styles = {
     main: {
@@ -233,7 +175,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
     },
     lucaImage: {
       width: "100%",
-      height: "auto", // Removed cropping
+      height: "auto",
       borderRadius: "15px",
       display: "block",
     },
@@ -283,33 +225,6 @@ export default function Singing({ currentLang, setCurrentLang }) {
       fontSize: "0.85rem",
       fontWeight: "500",
     },
-    floatingPlanetWrapper: {
-      position: "fixed",
-      bottom: "30px",
-      right: "30px",
-      width: "100px",
-      height: "100px",
-      cursor: "pointer",
-      zIndex: 1000,
-      background: "none",
-      border: "none",
-      padding: 0,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      animation: "float-pulse 6s ease-in-out infinite",
-      transition:
-        "opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.6s ease",
-    },
-    svgText: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      animation: "rotate-slow 15s linear infinite",
-      zIndex: 1,
-    },
   };
 
   return (
@@ -321,87 +236,26 @@ export default function Singing({ currentLang, setCurrentLang }) {
         onMenuToggle={setIsMenuOpen}
       />
 
+      <RegisterShortcut
+        bookingRef={bookingRef}
+        ctaText={current.ctaFloating}
+        planetImage={getImage("sing.png")}
+        onClick={() => setIsBookingExpanded(true)}
+      />
+
       <style>{`
           html { scroll-behavior: smooth; }
-          @keyframes float-pulse { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-          @keyframes rotate-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
           @media (max-width: 768px) {
             .main-content { padding-top: 100px !important; }
             .course-title-wrapper { order: -1; margin-bottom: 10px; }
             .welcome-text { width: 80vw !important; margin-bottom: 25px !important; }
             .info-grid { flex-direction: column !important; align-items: center !important; margin-bottom: 30px !important; }
             .content-grid { grid-template-columns: 1fr !important; gap: 40px !important; margin-bottom: 20px !important; }
-            .luca-image { margin-bottom: 20px !important; }
+            
           }
-
-          .floating-shortcut:hover .planet-center { transform: scale(1.1); transition: transform 0.3s ease; }
-
-          /* Interactive Project Tags */
-          .project-tag {
-            background-color: rgba(28, 7, 0, 0.05);
-            color: #1c0700;
-            text-decoration: none;
-            transition: all 0.2s ease;
-            display: inline-block;
-          }
-          
-          .project-tag:hover, .project-tag:active {
-            background-color: #caaff3;
-            color: #fffce3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(202, 175, 243, 0.3);
-          }
+          .project-tag { background-color: rgba(28, 7, 0, 0.05); color: #1c0700; text-decoration: none; transition: all 0.2s ease; display: inline-block; }
+          .project-tag:hover { background-color: #caaff3; color: #fffce3; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(202, 175, 243, 0.3); }
       `}</style>
-
-      <button
-        onClick={scrollToBooking}
-        style={{
-          ...styles.floatingPlanetWrapper,
-          opacity: !isBookingVisible && (isVisible || isIdle) ? 1 : 0,
-          visibility:
-            !isBookingVisible && (isVisible || isIdle) ? "visible" : "hidden",
-          pointerEvents:
-            !isBookingVisible && (isVisible || isIdle) ? "auto" : "none",
-        }}
-        className="floating-shortcut"
-      >
-        <svg viewBox="0 0 100 100" style={styles.svgText}>
-          <defs>
-            <path
-              id="circlePath"
-              d="M 50, 50 m -35, 0 a 35,35 0 1,1 70,0 a 35,35 0 1,1 -70,0"
-            />
-          </defs>
-          <text
-            fill="#1c0700"
-            style={{
-              fontSize: "9px",
-              fontWeight: "500",
-              opacity: 0.5,
-              textTransform: "lowercase",
-              letterSpacing: "0.1em",
-            }}
-          >
-            <textPath href="#circlePath" startOffset="0%">
-              {current.ctaFloating} • {current.ctaFloating} •{" "}
-              {current.ctaFloating} •
-            </textPath>
-          </text>
-        </svg>
-        <img
-          src={planetShortcutImg}
-          alt="planet"
-          style={{
-            width: "45px",
-            height: "45px",
-            objectFit: "contain",
-            position: "absolute",
-            zIndex: 2,
-          }}
-          className="planet-center"
-        />
-      </button>
 
       <main style={styles.main} className="main-content">
         <div className="course-title-wrapper">
@@ -421,17 +275,12 @@ export default function Singing({ currentLang, setCurrentLang }) {
           ))}
         </div>
 
-        {/* Content Row: Image Left, All Bio Text Right */}
         <div className="content-grid" style={styles.contentGrid}>
-          <section>
-            <img
-              src="https://s3.instrumentor.ch/p/o/32519/luca-koch_pb5ec2.jpg"
-              alt="Luca Koch"
-              style={styles.lucaImage}
-              className="luca-image"
-            />
-          </section>
-
+          <img
+            src="https://s3.instrumentor.ch/p/o/32519/luca-koch_pb5ec2.jpg"
+            alt="Luca Koch"
+            style={styles.lucaImage}
+          />
           <section>
             <h3 style={styles.sectionTitle}>
               <BookOpen size={18} /> {current.teachingTitle}
@@ -497,21 +346,23 @@ export default function Singing({ currentLang, setCurrentLang }) {
               <Heart size={18} /> {current.repertoireTitle}
             </h3>
             <p
-              style={{
-                ...styles.bodyText,
-                marginBottom: "0",
-                fontStyle: "italic",
-                opacity: 0.6,
-              }}
+              style={{ ...styles.bodyText, fontStyle: "italic", opacity: 0.6 }}
             >
               {current.repertoireDetail}
             </p>
           </section>
         </div>
 
-        {/* Calendar / Booking section */}
-        <div ref={bookingRef} style={{ width: "100%", marginTop: "40px" }}>
-          <PriceDisplay coursePath="/singing" currentLang={currentLang} />
+        <div
+          ref={bookingRef}
+          className="booking-section"
+          style={{ width: "100%", marginTop: "40px" }}
+        >
+          <PriceDisplay
+            coursePath="/singing"
+            currentLang={currentLang}
+            forceExpand={isBookingExpanded}
+          />
         </div>
       </main>
     </div>

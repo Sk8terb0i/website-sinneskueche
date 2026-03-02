@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
 import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
+import CourseDescription from "../components/CourseDescription/CourseDescription";
+import RegisterShortcut from "../components/RegisterShortcut/RegisterShortcut";
 import { Clock, Users, Coffee } from "lucide-react";
 
 const planetImages = import.meta.glob("../assets/planets/*.png", {
@@ -12,6 +14,8 @@ const getImage = (filename) =>
 
 export default function Pottery({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isBookingExpanded, setIsBookingExpanded] = useState(false); // ADDED STATE
+  const bookingRef = useRef(null);
 
   const config = {
     desktop: {
@@ -22,7 +26,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     mobile: {
       topIcon: { top: "-10px", left: "-10px" },
       bottomIcon: { top: "45px", left: "calc(100% - 55px)" },
-      titleSize: "2.8rem", // Reduziert für weniger Streckung
+      titleSize: "2.8rem",
     },
   };
 
@@ -30,24 +34,31 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     en: {
       title: "pottery tuesdays",
       welcome: "Make Tuesdays your creative sanctuary",
+      ctaFloating: "register now",
       details: [
         { icon: <Clock size={18} />, text: "18:30 - 21:30" },
         { icon: <Users size={18} />, text: "All skill levels" },
         { icon: <Coffee size={18} />, text: "Small, cozy groups" },
       ],
+      description:
+        "Discover the art of hand-building pottery in our inspiring studio! In a relaxed atmosphere, you can practice the fundamentals of traditional hand-forming techniques, from kneading and shaping to refining your own ceramic pieces.\n\nWhether you want to create bowls, vases, or unique decorative objects – this workshop lets your creativity flow freely. No prior experience is needed. All materials are provided, and at the end, you'll take home your own handmade masterpiece.",
     },
     de: {
       title: "pottery tuesdays",
       welcome: "Mach den Dienstag zu deiner kreativen Auszeit",
+      ctaFloating: "jetzt anmelden",
       details: [
         { icon: <Clock size={18} />, text: "18:30 - 21:30" },
         { icon: <Users size={18} />, text: "Alle Level willkommen" },
         { icon: <Coffee size={18} />, text: "Kleine, gemütliche Gruppen" },
       ],
+      description:
+        "Entdecke die Kunst des Töpferns von Hand in unserem inspirierenden Studio! In entspannter Atmosphäre kannst du die Grundlagen traditioneller Aufbautechniken üben, vom Kneten und Formen bis hin zum Verfeinern deiner eigenen Keramikstücke.\n\nOb du Schalen, Vasen oder einzigartige Deko-Objekte kreieren möchtest – in diesem Workshop kann deine Kreativität frei fließen. Es sind keine Vorkenntnisse erforderlich. Alle Materialien werden gestellt, und am Ende nimmst du dein eigenes, handgefertigtes Meisterwerk mit nach Hause.",
     },
   };
 
   const icons = [getImage("touch.png"), getImage("sight.png")];
+  const current = content[currentLang];
 
   const styles = {
     main: {
@@ -58,7 +69,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       flexDirection: "column",
       alignItems: "center",
       textAlign: "center",
-      position: "relative", // Wichtig für die absolute Positionierung der Icons im Titel
+      position: "relative",
     },
     welcomeText: {
       fontSize: "0.9rem",
@@ -100,25 +111,33 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         onMenuToggle={setIsMenuOpen}
       />
 
+      <RegisterShortcut
+        bookingRef={bookingRef}
+        ctaText={current.ctaFloating}
+        planetImage={getImage("pottery_register.png")}
+        onClick={() => setIsBookingExpanded(true)} // TRIGGER EXPANSION
+      />
+
       <style>
         {`
+          html { scroll-behavior: smooth; }
           @media (max-width: 768px) {
             .main-content { 
               display: flex !important; 
-              flex-direction: column !important; // Erzwingt die korrekte Reihenfolge
+              flex-direction: column !important; 
               align-items: center; 
-              padding-top: 100px !important; // Weniger Padding oben auf Mobile
+              padding-top: 100px !important; 
               padding-bottom: 40px !important;
             }
             .course-title-wrapper { 
-              order: -1; // Stellt sicher, dass der Titel ganz oben steht
+              order: -1; 
               margin-bottom: 10px;
-              font-weight: 500 !important; // Reduzierte Stärke für Mobile
+              font-weight: 500 !important; 
             }
             .welcome-text { 
               margin-bottom: 25px !important; 
               font-size: 0.85rem !important; 
-              width: 80vw !important; // Breite angepasst für bessere Lesbarkeit
+              width: 80vw !important; 
             }
             .info-grid { 
               flex-direction: column !important; 
@@ -129,28 +148,21 @@ export default function Pottery({ currentLang, setCurrentLang }) {
             .info-item {
               padding: 8px 20px !important;
             }
-            .info-item:nth-child(1) { transform: translateX(0); }
-            .info-item:nth-child(2) { transform: translateX(0); }
-            .info-item:nth-child(3) { transform: translateX(0); }
           }
         `}
       </style>
 
       <main style={styles.main} className="main-content">
         <div className="course-title-wrapper">
-          <CourseTitle
-            title={content[currentLang].title}
-            config={config}
-            icons={icons}
-          />
+          <CourseTitle title={current.title} config={config} icons={icons} />
         </div>
 
         <p className="welcome-text" style={styles.welcomeText}>
-          {content[currentLang].welcome}
+          {current.welcome}
         </p>
 
         <div className="info-grid" style={styles.infoGrid}>
-          {content[currentLang].details.map((item, index) => (
+          {current.details.map((item, index) => (
             <div key={index} className="info-item" style={styles.infoItem}>
               <div style={{ display: "flex", opacity: 0.7 }}>{item.icon}</div>
               <span style={styles.infoLabel}>{item.text}</span>
@@ -158,8 +170,20 @@ export default function Pottery({ currentLang, setCurrentLang }) {
           ))}
         </div>
 
-        {/* Dynamic Pricing Component */}
-        <PriceDisplay coursePath="/pottery" currentLang={currentLang} />
+        {/* Restore Description Component */}
+        <CourseDescription text={current.description} />
+
+        <div
+          ref={bookingRef}
+          className="booking-section"
+          style={{ width: "100%", marginTop: "40px" }}
+        >
+          <PriceDisplay
+            coursePath="/pottery"
+            currentLang={currentLang}
+            forceExpand={isBookingExpanded} // PASS STATE
+          />
+        </div>
       </main>
     </div>
   );
