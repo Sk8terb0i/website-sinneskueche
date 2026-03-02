@@ -50,7 +50,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   const courseKey = getCreditKey(coursePath);
   const availableCredits = userData?.credits?.[courseKey] || 0;
 
-  // Helpers for multi-ticket calculations
   const totalTickets = selectedDates.reduce(
     (sum, d) => sum + (d.count || 1),
     0,
@@ -134,7 +133,6 @@ export default function PriceDisplay({ coursePath, currentLang }) {
   }, [isMobileExpanded, isMobile]);
 
   const toggleDate = (event) => {
-    // UPDATED: Removed userBookedIds blocking logic
     const isFull =
       pricing?.hasCapacity &&
       (eventBookingCounts[event.id] || 0) >= parseInt(pricing.capacity);
@@ -333,7 +331,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           gap: "2rem",
           marginTop: isMobile ? "2rem" : "0",
           animation: "fadeIn 0.5s ease-out",
-          alignItems: "flex-start",
+          alignItems: isMobile ? "stretch" : "flex-start",
         }}
       >
         <div style={S.calendarCardStyle(isMobile, !!pricing)}>
@@ -391,14 +389,13 @@ export default function PriceDisplay({ coursePath, currentLang }) {
               return (
                 <div
                   key={i}
-                  // UPDATED: Removed !isBooked condition
                   onClick={() => event && !isFull && toggleDate(event)}
-                  // UPDATED: Removed isBooked from disabled style logic
                   style={S.dayStyle(event, isSelected, isMobile, isFull)}
                 >
                   {i + 1}
                   {event && !isFull && (
-                    <div style={S.dotStyle(isSelected, isBooked)} />
+                    // FIX: Passed isMobile to dotStyle
+                    <div style={S.dotStyle(isSelected, isBooked, isMobile)} />
                   )}
                 </div>
               );
@@ -420,7 +417,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           isMobile={isMobile}
           onBookCredits={handleBookWithCredits}
           onPayment={handlePayment}
-          coursePath={coursePath} // Ensure this is passed
+          coursePath={coursePath}
         />
       </div>
     </div>

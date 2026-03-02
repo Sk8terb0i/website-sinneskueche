@@ -10,7 +10,7 @@ import {
   Check,
   FileText,
   X,
-  AlertCircle, // Added for the error feedback
+  AlertCircle,
 } from "lucide-react";
 import {
   signInWithEmailAndPassword,
@@ -49,14 +49,14 @@ export default function BookingSummary({
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
 
-  const [isRedeemingCode, setIsRedeemingCode] = useState(false);
-  const [packCode, setPackCode] = useState("");
   const [showStripeAlternative, setShowStripeAlternative] = useState(false);
 
-  const [isPromoExpanded, setIsPromoExpanded] = useState(false);
-  const [promoCodeInput, setPromoCodeInput] = useState("");
+  // --- UNIFIED CODE STATE ---
+  const [isCodeExpanded, setIsCodeExpanded] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
   const [activePromo, setActivePromo] = useState(null);
-  const [promoStatus, setPromoStatus] = useState({ loading: false, error: "" });
+  const [activePackCode, setActivePackCode] = useState(null);
+  const [codeStatus, setCodeStatus] = useState({ loading: false, error: "" });
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -64,7 +64,8 @@ export default function BookingSummary({
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
 
-  const [selectedPackIndex, setSelectedPackIndex] = useState(0);
+  // Null means NO pack is selected initially
+  const [selectedPackIndex, setSelectedPackIndex] = useState(null);
 
   // --- Terms and Conditions State ---
   const [courseTerms, setCourseTerms] = useState(null);
@@ -113,7 +114,11 @@ export default function BookingSummary({
         ? [{ size: Number(pricing.packSize), price: Number(pricing.priceFull) }]
         : [];
 
-  const currentPack = packOptions[selectedPackIndex] || { size: 0, price: 0 };
+  const currentPack =
+    selectedPackIndex !== null && packOptions[selectedPackIndex]
+      ? packOptions[selectedPackIndex]
+      : { size: 0, price: 0 };
+
   const hasSelection = selectedDates.length > 0;
   const totalTicketsSelected = selectedDates.reduce(
     (sum, d) => sum + (d.count || 1),
@@ -196,46 +201,88 @@ export default function BookingSummary({
     }
   };
 
-  const handleApplyPromo = async () => {
-    if (!promoCodeInput.trim()) return;
-    setPromoStatus({ loading: true, error: "" });
+  const handleApplyCode = async () => {
+    if (!codeInput.trim()) return;
+    setCodeStatus({ loading: true, error: "" });
     setActivePromo(null);
+    setActivePackCode(null);
+
+    const upperCode = codeInput.trim().toUpperCase();
+
     try {
-      const q = query(
+      const promoQ = query(
         collection(db, "promo_codes"),
-        where("code", "==", promoCodeInput.trim().toUpperCase()),
+        where("code", "==", upperCode),
       );
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        setPromoStatus({
-          loading: false,
-          error: currentLang === "en" ? "Invalid code." : "Ungültiger Code.",
-        });
+      const promoSnap = await getDocs(promoQ);
+
+      if (!promoSnap.empty) {
+        const promoData = promoSnap.docs[0].data();
+        const activePath = (coursePath || window.location.hash || "").replace(
+          /\//g,
+          "",
+        );
+        if (
+          promoData.coursePath &&
+          promoData.coursePath !== "all" &&
+          !activePath.includes(promoData.coursePath.replace(/\//g, ""))
+        ) {
+          setCodeStatus({
+            loading: false,
+            error:
+              currentLang === "en"
+                ? "Code not valid for this course."
+                : "Code gilt nicht für diesen Kurs.",
+          });
+          return;
+        }
+        setActivePromo(promoData);
+        setCodeStatus({ loading: false, error: "" });
         return;
       }
-      const promoData = snap.docs[0].data();
-      const activePath = (coursePath || window.location.hash || "").replace(
-        /\//g,
-        "",
-      );
-      if (
-        promoData.coursePath &&
-        promoData.coursePath !== "all" &&
-        !activePath.includes(promoData.coursePath.replace(/\//g, ""))
-      ) {
-        setPromoStatus({
+
+      const packDocRef = doc(db, "pack_codes", upperCode);
+      const packSnap = await getDoc(packDocRef);
+
+      if (packSnap.exists()) {
+        const packData = packSnap.data();
+        if (packData.remainingCredits > 0) {
+          setActivePackCode({
+            code: upperCode,
+            remaining: packData.remainingCredits,
+          });
+          setCodeStatus({ loading: false, error: "" });
+          return;
+        } else {
+          setCodeStatus({
+            loading: false,
+            error:
+              currentLang === "en"
+                ? "This pack code has 0 credits left."
+                : "Dieses Session-Pack hat kein Guthaben mehr.",
+          });
+          return;
+        }
+      }
+
+      setCodeStatus({
+        loading: false,
+        error: currentLang === "en" ? "Invalid code." : "Ungültiger Code.",
+      });
+    } catch (err) {
+      console.error(err);
+      if (err.code === "permission-denied") {
+        setActivePackCode({ code: upperCode, remaining: "?" });
+        setCodeStatus({ loading: false, error: "" });
+      } else {
+        setCodeStatus({
           loading: false,
           error:
             currentLang === "en"
-              ? "Code not valid for this course."
-              : "Code gilt nicht für diesen Kurs.",
+              ? "Error verifying code."
+              : "Fehler bei der Code-Prüfung.",
         });
-        return;
       }
-      setActivePromo(promoData);
-      setPromoStatus({ loading: false, error: "" });
-    } catch (err) {
-      setPromoStatus({ loading: false, error: "Error verifying code." });
     }
   };
 
@@ -332,7 +379,6 @@ export default function BookingSummary({
           </p>
         )}
 
-        {/* Modal Overlay */}
         {showTermsPopup && (
           <div
             style={{
@@ -443,309 +489,273 @@ export default function BookingSummary({
         <Calendar size={14} />{" "}
         {currentLang === "en" ? "Your Selection" : "Deine Auswahl"}
       </h4>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px",
-          maxHeight: "210px",
-          overflowY: "auto",
-          paddingRight: "5px",
-        }}
-        className="custom-scrollbar"
-      >
-        {selectedDates.map((d) => {
-          const booked = eventBookingCounts[d.id] || 0;
-          const cap = parseInt(pricing?.capacity || 99);
-          const canAddMore = !pricing?.hasCapacity || booked + d.count < cap;
-          const isSingleCapacity = cap === 1;
 
-          const updateCount = (delta) => {
-            setSelectedDates((prev) =>
-              prev.map((item) => {
-                if (item.id === d.id) {
-                  const newCount = Math.max(1, item.count + delta);
-                  if (delta > 0 && !canAddMore) return item;
-                  return { ...item, count: newCount };
-                }
-                return item;
-              }),
-            );
-          };
-          return (
-            <div
-              key={d.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                backgroundColor: "#fdf8e1",
-                padding: "10px 14px",
-                borderRadius: "12px",
-                border: "1px solid rgba(28, 7, 0, 0.05)",
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontWeight: "800", fontSize: "0.9rem" }}>
-                  {formatDate(d.date)}
-                </span>
-                <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
-                  {d.time || ""}
-                </span>
-              </div>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "12px" }}
-              >
-                {!isSingleCapacity && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      backgroundColor: "rgba(202, 175, 243, 0.1)",
-                      borderRadius: "8px",
-                      padding: "4px",
-                    }}
-                  >
-                    <button
-                      onClick={() => updateCount(-1)}
-                      style={{
-                        border: "none",
-                        background: "none",
-                        cursor: "pointer",
-                        fontWeight: "900",
-                        color: "#9960a8",
-                        padding: "0 6px",
-                      }}
-                    >
-                      -
-                    </button>
-                    <span
-                      style={{
-                        fontWeight: "900",
-                        fontSize: "0.9rem",
-                        minWidth: "15px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {d.count}
-                    </span>
-                    <button
-                      onClick={() => updateCount(1)}
-                      disabled={!canAddMore}
-                      style={{
-                        border: "none",
-                        background: "none",
-                        cursor: "pointer",
-                        fontWeight: "900",
-                        color: "#9960a8",
-                        padding: "0 6px",
-                        opacity: canAddMore ? 1 : 0.3,
-                      }}
-                    >
-                      +
-                    </button>
-                  </div>
-                )}
-                <button
-                  onClick={() =>
-                    setSelectedDates((prev) =>
-                      prev.filter((item) => item.id !== d.id),
-                    )
+      {!hasSelection ? (
+        <div
+          style={{
+            padding: "1.5rem",
+            border: "1px dashed rgba(28, 7, 0, 0.2)",
+            borderRadius: "12px",
+            textAlign: "center",
+            backgroundColor: "rgba(255, 252, 227, 0.4)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.85rem",
+              fontWeight: "600",
+              color: "#1c0700",
+              opacity: 0.7,
+            }}
+          >
+            {currentLang === "en"
+              ? "Select a date from the calendar to book a single session."
+              : "Wähle einen Termin im Kalender, um einen Einzelkurs zu buchen."}
+          </p>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            maxHeight: "210px",
+            overflowY: "auto",
+            paddingRight: "5px",
+          }}
+          className="custom-scrollbar"
+        >
+          {selectedDates.map((d) => {
+            const booked = eventBookingCounts[d.id] || 0;
+            const cap = parseInt(pricing?.capacity || 99);
+            const canAddMore = !pricing?.hasCapacity || booked + d.count < cap;
+            const isSingleCapacity = cap === 1;
+
+            const updateCount = (delta) => {
+              setSelectedDates((prev) =>
+                prev.map((item) => {
+                  if (item.id === d.id) {
+                    const newCount = Math.max(1, item.count + delta);
+                    if (delta > 0 && !canAddMore) return item;
+                    return { ...item, count: newCount };
                   }
-                  style={{
-                    border: "none",
-                    background: "none",
-                    cursor: "pointer",
-                    color: "#1c0700",
-                    opacity: 0.4,
-                  }}
-                >
-                  <XCircle size={18} />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  const renderPackOption = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      {!isRedeemingCode && (
-        <>
-          {packOptions.map((pack, idx) => {
-            const isSelected = selectedPackIndex === idx;
-            const savings = calculateSavings(pack);
-            const isExceeded = currentUser
-              ? totalTicketsSelected > availableCredits + pack.size
-              : totalTicketsSelected > pack.size;
+                  return item;
+                }),
+              );
+            };
             return (
               <div
-                key={idx}
-                onClick={() => setSelectedPackIndex(idx)}
+                key={d.id}
                 style={{
-                  backgroundColor: isSelected
-                    ? "rgba(202, 175, 243, 0.25)"
-                    : "rgba(202, 175, 243, 0.05)",
-                  borderRadius: "16px",
-                  padding: "1.2rem",
-                  border: isSelected
-                    ? "2px solid #9960a8"
-                    : "1px solid rgba(202, 175, 243, 0.3)",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  backgroundColor: "#fdf8e1",
+                  padding: "10px 14px",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(28, 7, 0, 0.05)",
                 }}
               >
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontWeight: "800", fontSize: "0.9rem" }}>
+                    {formatDate(d.date)}
+                  </span>
+                  <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
+                    {d.time || ""}
+                  </span>
+                </div>
                 <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
+                  style={{ display: "flex", alignItems: "center", gap: "12px" }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
+                  {!isSingleCapacity && (
                     <div
                       style={{
                         display: "flex",
                         alignItems: "center",
                         gap: "8px",
+                        backgroundColor: "rgba(202, 175, 243, 0.1)",
+                        borderRadius: "8px",
+                        padding: "4px",
                       }}
                     >
-                      {isSelected && (
-                        <Check size={16} color="#9960a8" strokeWidth={3} />
-                      )}
-                      <p
+                      <button
+                        onClick={() => updateCount(-1)}
                         style={{
-                          fontWeight: "800",
-                          margin: 0,
-                          fontSize: "1rem",
+                          border: "none",
+                          background: "none",
+                          cursor: "pointer",
+                          fontWeight: "900",
+                          color: "#9960a8",
+                          padding: "0 6px",
                         }}
                       >
-                        {pack.size}{" "}
-                        {currentLang === "en" ? "Sessions Pack" : "er Karte"}
-                      </p>
-                    </div>
-                    {savings >= 1 && (
+                        -
+                      </button>
                       <span
                         style={{
-                          fontSize: "0.6rem",
-                          color: "#9960a8",
-                          backgroundColor: "rgba(153, 96, 168, 0.1)",
-                          padding: "2px 6px",
-                          borderRadius: "4px",
                           fontWeight: "900",
-                          width: "fit-content",
+                          fontSize: "0.9rem",
+                          minWidth: "15px",
+                          textAlign: "center",
                         }}
                       >
-                        {currentLang === "en"
-                          ? `SAVE ${savings}%`
-                          : `${savings}% ERSPARNIS`}
+                        {d.count}
                       </span>
-                    )}
-                  </div>
-                  <p
+                      <button
+                        onClick={() => updateCount(1)}
+                        disabled={!canAddMore}
+                        style={{
+                          border: "none",
+                          background: "none",
+                          cursor: "pointer",
+                          fontWeight: "900",
+                          color: "#9960a8",
+                          padding: "0 6px",
+                          opacity: canAddMore ? 1 : 0.3,
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    onClick={() =>
+                      setSelectedDates((prev) =>
+                        prev.filter((item) => item.id !== d.id),
+                      )
+                    }
                     style={{
-                      fontWeight: "700",
-                      margin: 0,
-                      color: "#4e5f28",
-                      fontSize: "1.1rem",
-                    }}
-                  >
-                    {formatPrice(pack.price)} CHF
-                  </p>
-                </div>
-                {isSelected && isExceeded && (
-                  <div
-                    style={{
-                      marginTop: "10px",
-                      padding: "8px",
-                      backgroundColor: "rgba(28, 7, 0, 0.05)",
-                      borderRadius: "8px",
-                      fontSize: "0.7rem",
+                      border: "none",
+                      background: "none",
+                      cursor: "pointer",
                       color: "#1c0700",
+                      opacity: 0.4,
                     }}
                   >
-                    <p style={{ margin: 0, fontWeight: "700" }}>
-                      {currentLang === "en"
-                        ? `+ ${totalTicketsSelected - (currentUser ? availableCredits + pack.size : pack.size)} extra sessions @ single price`
-                        : `+ ${totalTicketsSelected - (currentUser ? availableCredits + pack.size : pack.size)} zusätzliche Termine zum Einzelpreis`}
-                    </p>
-                  </div>
-                )}
+                    <XCircle size={18} />
+                  </button>
+                </div>
               </div>
             );
           })}
-        </>
-      )}
-
-      {!currentUser && isRedeemingCode ? (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-            marginTop: "10px",
-          }}
-        >
-          <h4
-            style={{
-              marginTop: 0,
-              marginBottom: "5px",
-              fontFamily: "Harmond-SemiBoldCondensed",
-              fontSize: "1.2rem",
-            }}
-          >
-            {currentLang === "en"
-              ? "redeem session-pack"
-              : "session-pack einlösen"}
-          </h4>
-          <input
-            type="text"
-            placeholder={
-              currentLang === "en" ? "Enter pack code" : "Code eingeben"
-            }
-            value={packCode}
-            onChange={(e) => setPackCode(e.target.value.toUpperCase())}
-            style={{
-              ...S.guestInputStyle,
-              padding: "12px 14px",
-              fontSize: "0.9rem",
-            }}
-          />
-          {renderTermsAgreement()}
-          <button
-            onClick={() =>
-              validateAndProceed(() => onPayment("redeem", packCode))
-            }
-            style={S.primaryBtnStyle(isMobile)}
-            disabled={!packCode || !guestInfo.email}
-          >
-            {currentLang === "en" ? "Redeem & Book" : "Einlösen & Buchen"}
-          </button>
-          <button
-            onClick={() => setIsRedeemingCode(false)}
-            style={{
-              background: "none",
-              border: "none",
-              textDecoration: "underline",
-              color: "#4e5f28",
-              cursor: "pointer",
-              fontSize: "0.75rem",
-              padding: "8px 0",
-            }}
-          >
-            {currentLang === "en" ? "Back to buy pack" : "Zurück zum Kauf"}
-          </button>
         </div>
-      ) : (
+      )}
+    </div>
+  );
+
+  const renderPackOption = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      {packOptions.map((pack, idx) => {
+        const isSelected = selectedPackIndex === idx;
+        const savings = calculateSavings(pack);
+        const isExceeded = currentUser
+          ? totalTicketsSelected > availableCredits + pack.size
+          : totalTicketsSelected > pack.size;
+        return (
+          <div
+            key={idx}
+            onClick={() => setSelectedPackIndex(isSelected ? null : idx)}
+            style={{
+              backgroundColor: isSelected
+                ? "rgba(202, 175, 243, 0.25)"
+                : "rgba(202, 175, 243, 0.05)",
+              borderRadius: "16px",
+              padding: "1.2rem",
+              border: isSelected
+                ? "2px solid #9960a8"
+                : "1px solid rgba(202, 175, 243, 0.3)",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  {isSelected && (
+                    <Check size={16} color="#9960a8" strokeWidth={3} />
+                  )}
+                  <p
+                    style={{
+                      fontWeight: "800",
+                      margin: 0,
+                      fontSize: "1rem",
+                    }}
+                  >
+                    {pack.size}{" "}
+                    {currentLang === "en" ? "Sessions Pack" : "er Karte"}
+                  </p>
+                </div>
+                {savings >= 1 && (
+                  <span
+                    style={{
+                      fontSize: "0.6rem",
+                      color: "#9960a8",
+                      backgroundColor: "rgba(153, 96, 168, 0.1)",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      fontWeight: "900",
+                      width: "fit-content",
+                    }}
+                  >
+                    {currentLang === "en"
+                      ? `SAVE ${savings}%`
+                      : `${savings}% ERSPARNIS`}
+                  </span>
+                )}
+              </div>
+              <p
+                style={{
+                  fontWeight: "700",
+                  margin: 0,
+                  color: "#4e5f28",
+                  fontSize: "1.1rem",
+                }}
+              >
+                {formatPrice(pack.price)} CHF
+              </p>
+            </div>
+            {isSelected && isExceeded && (
+              <div
+                style={{
+                  marginTop: "10px",
+                  padding: "8px",
+                  backgroundColor: "rgba(28, 7, 0, 0.05)",
+                  borderRadius: "8px",
+                  fontSize: "0.7rem",
+                  color: "#1c0700",
+                }}
+              >
+                <p style={{ margin: 0, fontWeight: "700" }}>
+                  {currentLang === "en"
+                    ? `+ ${totalTicketsSelected - (currentUser ? availableCredits + pack.size : pack.size)} extra sessions @ single price`
+                    : `+ ${totalTicketsSelected - (currentUser ? availableCredits + pack.size : pack.size)} zusätzliche Termine zum Einzelpreis`}
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {selectedPackIndex !== null && (
         <div
           style={{
             display: "flex",
@@ -775,26 +785,6 @@ export default function BookingSummary({
               ? `${hasSelection ? "Buy & Book" : "Buy"} (${formatPrice(finalPackPrice)} CHF)`
               : `${hasSelection ? "Kaufen & Buchen" : "Kaufen"} (${formatPrice(finalPackPrice)} CHF)`}
           </button>
-          {!currentUser && (
-            <button
-              onClick={() => setIsRedeemingCode(true)}
-              style={{
-                background: "none",
-                border: "none",
-                textDecoration: "underline",
-                color: "#4e5f28",
-                cursor: "pointer",
-                fontSize: "0.75rem",
-                padding: "4px 0",
-              }}
-            >
-              {currentLang === "en"
-                ? "Have a pack code? Redeem here."
-                : "Hast du einen Code? Hier einlösen."}
-            </button>
-          )}
-
-          {/* Missing info text restored here! */}
           <p
             style={{
               fontSize: "0.7rem",
@@ -825,44 +815,102 @@ export default function BookingSummary({
     </div>
   );
 
-  const renderIndividualOption = () =>
-    hasSelection && (
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-        {promoAppliesToSingle && (
+  const renderIndividualOption = () => (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+        marginTop: "10px",
+      }}
+    >
+      {pricing?.hasPack && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            margin: "10px 0",
+          }}
+        >
           <div
             style={{
-              fontSize: "0.85rem",
-              textDecoration: "line-through",
-              color: "#1c0700",
+              flex: 1,
+              height: "1px",
+              backgroundColor: "rgba(28,7,0,0.1)",
+            }}
+          />
+          <span
+            style={{
+              fontSize: "0.7rem",
+              textTransform: "uppercase",
               opacity: 0.5,
-              textAlign: "center",
+              fontWeight: "800",
+              letterSpacing: "0.5px",
             }}
           >
-            {formatPrice(totalPrice)} CHF
-          </div>
-        )}
-        {!pricing?.hasPack && renderTermsAgreement()}
-        <button
-          onClick={() =>
-            validateAndProceed(() =>
-              onPayment(
-                "individual",
-                promoAppliesToSingle ? activePromo?.code : null,
-              ),
-            )
-          }
+            {currentLang === "en"
+              ? "Or book single sessions"
+              : "Oder Einzeltermine buchen"}
+          </span>
+          <div
+            style={{
+              flex: 1,
+              height: "1px",
+              backgroundColor: "rgba(28,7,0,0.1)",
+            }}
+          />
+        </div>
+      )}
+
+      {promoAppliesToSingle && hasSelection && (
+        <div
           style={{
-            ...S.secondaryBtnStyle(isMobile),
-            marginTop: !pricing?.hasPack ? "10px" : 0,
+            fontSize: "0.85rem",
+            textDecoration: "line-through",
+            color: "#1c0700",
+            opacity: 0.5,
+            textAlign: "center",
           }}
-          disabled={!currentUser && (!guestInfo.firstName || !guestInfo.email)}
         >
-          {currentLang === "en"
-            ? `Pay ${formatPrice(finalTotalPrice)} CHF`
-            : `${formatPrice(finalTotalPrice)} CHF zahlen`}
-        </button>
-      </div>
-    );
+          {formatPrice(totalPrice)} CHF
+        </div>
+      )}
+
+      {(!pricing?.hasPack || selectedPackIndex === null) &&
+        renderTermsAgreement()}
+
+      <button
+        onClick={() =>
+          validateAndProceed(() =>
+            onPayment(
+              "individual",
+              promoAppliesToSingle ? activePromo?.code : null,
+            ),
+          )
+        }
+        style={{
+          ...S.secondaryBtnStyle(isMobile),
+          marginTop:
+            !pricing?.hasPack || selectedPackIndex === null ? "10px" : 0,
+          backgroundColor: hasSelection
+            ? "rgba(153, 96, 168, 0.1)"
+            : "transparent",
+          border: hasSelection
+            ? "1px solid #9960a8"
+            : "1px solid rgba(28, 7, 0, 0.2)",
+        }}
+        disabled={
+          !hasSelection ||
+          (!currentUser && (!guestInfo.firstName || !guestInfo.email))
+        }
+      >
+        {currentLang === "en"
+          ? `Pay ${hasSelection ? formatPrice(finalTotalPrice) : "0"} CHF`
+          : `${hasSelection ? formatPrice(finalTotalPrice) : "0"} CHF zahlen`}
+      </button>
+    </div>
+  );
 
   const renderPurchaseOptions = () => (
     <div
@@ -874,6 +922,7 @@ export default function BookingSummary({
       }}
     >
       {!currentUser && renderSelectionSummary()}
+
       <div
         style={{
           backgroundColor: "rgba(202, 175, 243, 0.1)",
@@ -882,9 +931,9 @@ export default function BookingSummary({
           border: "1px dashed rgba(202, 175, 243, 0.4)",
         }}
       >
-        {!isPromoExpanded && !activePromo ? (
+        {!isCodeExpanded && !activePromo && !activePackCode ? (
           <button
-            onClick={() => setIsPromoExpanded(true)}
+            onClick={() => setIsCodeExpanded(true)}
             style={{
               background: "none",
               border: "none",
@@ -900,8 +949,8 @@ export default function BookingSummary({
           >
             <Ticket size={16} />{" "}
             {currentLang === "en"
-              ? "Add Promo / Discount Code"
-              : "Aktions- / Rabattcode hinzufügen"}
+              ? "Add Promo or Pack Code"
+              : "Promo- oder Kurspaket Code hinzufügen"}
           </button>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -920,14 +969,15 @@ export default function BookingSummary({
                   textTransform: "uppercase",
                 }}
               >
-                {currentLang === "en" ? "Discount Code" : "Rabattcode"}
+                {currentLang === "en" ? "Enter Code" : "Code eingeben"}
               </label>
               <button
                 onClick={() => {
-                  setIsPromoExpanded(false);
-                  setPromoCodeInput("");
+                  setIsCodeExpanded(false);
+                  setCodeInput("");
                   setActivePromo(null);
-                  setPromoStatus({ loading: false, error: "" });
+                  setActivePackCode(null);
+                  setCodeStatus({ loading: false, error: "" });
                 }}
                 style={{
                   background: "none",
@@ -945,25 +995,24 @@ export default function BookingSummary({
             <div style={{ display: "flex", gap: "8px" }}>
               <input
                 type="text"
-                placeholder="e.g. SUMMER24"
-                value={promoCodeInput}
-                onChange={(e) =>
-                  setPromoCodeInput(e.target.value.toUpperCase())
-                }
-                disabled={activePromo}
+                placeholder="e.g. SUMMER24 or X7B9K2"
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
+                disabled={activePromo || activePackCode}
                 style={{
                   ...S.guestInputStyle,
                   padding: "10px 12px",
                   flex: 1,
-                  backgroundColor: activePromo
-                    ? "rgba(78, 95, 40, 0.05)"
-                    : "rgba(255, 252, 227, 0.4)",
+                  backgroundColor:
+                    activePromo || activePackCode
+                      ? "rgba(78, 95, 40, 0.05)"
+                      : "rgba(255, 252, 227, 0.4)",
                 }}
               />
-              {!activePromo && (
+              {!activePromo && !activePackCode && (
                 <button
-                  onClick={handleApplyPromo}
-                  disabled={promoStatus.loading || !promoCodeInput}
+                  onClick={handleApplyCode}
+                  disabled={codeStatus.loading || !codeInput}
                   style={{
                     padding: "0 15px",
                     backgroundColor: "#9960a8",
@@ -974,7 +1023,7 @@ export default function BookingSummary({
                     cursor: "pointer",
                   }}
                 >
-                  {promoStatus.loading ? (
+                  {codeStatus.loading ? (
                     <Loader2 size={16} className="spinner" />
                   ) : currentLang === "en" ? (
                     "Apply"
@@ -998,11 +1047,29 @@ export default function BookingSummary({
               >
                 <CheckCircle size={14} />{" "}
                 {currentLang === "en"
-                  ? `Code applied: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% OFF" : " FREE"}`
-                  : `Code angewendet: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% RABATT" : " GRATIS"}`}
+                  ? `Promo applied: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% OFF" : " FREE"}`
+                  : `Promo angewendet: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% RABATT" : " GRATIS"}`}
               </p>
             )}
-            {promoStatus.error && (
+            {activePackCode && (
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#4e5f28",
+                  marginTop: "4px",
+                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <CheckCircle size={14} />{" "}
+                {currentLang === "en"
+                  ? `Pack Code applied: ${activePackCode.remaining !== "?" ? activePackCode.remaining : "Valid"} credits available`
+                  : `Pack Code angewendet: ${activePackCode.remaining !== "?" ? activePackCode.remaining : "Gültige"} Guthaben verfügbar`}
+              </p>
+            )}
+            {codeStatus.error && (
               <p
                 style={{
                   fontSize: "0.75rem",
@@ -1015,20 +1082,63 @@ export default function BookingSummary({
                   gap: "4px",
                 }}
               >
-                <XCircle size={14} /> {promoStatus.error}
+                <XCircle size={14} /> {codeStatus.error}
               </p>
             )}
           </div>
         )}
       </div>
-      {pricing?.hasPack && renderPackOption()}
-      {renderIndividualOption()}
+
+      {activePackCode ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            marginTop: "10px",
+          }}
+        >
+          {renderTermsAgreement()}
+          <button
+            onClick={() =>
+              validateAndProceed(() => onPayment("redeem", activePackCode.code))
+            }
+            style={{ ...S.primaryBtnStyle(isMobile), marginTop: "10px" }}
+            disabled={
+              (!currentUser && (!guestInfo.firstName || !guestInfo.email)) ||
+              !hasSelection
+            }
+          >
+            {currentLang === "en"
+              ? "Redeem Code & Book"
+              : "Code einlösen & Buchen"}
+          </button>
+          {!hasSelection && (
+            <p
+              style={{
+                textAlign: "center",
+                fontSize: "0.8rem",
+                color: "#1c0700",
+                opacity: 0.6,
+              }}
+            >
+              {currentLang === "en"
+                ? "Select dates to redeem your code."
+                : "Wähle Termine, um den Code einzulösen."}
+            </p>
+          )}
+        </div>
+      ) : (
+        <>
+          {pricing?.hasPack && renderPackOption()}
+          {renderIndividualOption()}
+        </>
+      )}
     </div>
   );
 
   return (
     <div style={S.bookingCardStyle(isMobile, true)}>
-      {/* CSS For Shake Animation */}
       <style>{`
         @keyframes shake {
           0% { transform: translateX(0); }
@@ -1293,7 +1403,10 @@ export default function BookingSummary({
                 <strong>{availableCredits}</strong>
               </span>
             </div>
-            {hasSelection && renderSelectionSummary()}
+
+            {/* Added for logged in users to also see the empty state prompt */}
+            {renderSelectionSummary()}
+
             <div
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >

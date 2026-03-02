@@ -32,10 +32,12 @@ export const containerStyle = (isMobile, hasSelection) => ({
 // --- CALENDAR CARD STYLES ---
 export const calendarCardStyle = (isMobile, hasSelection) => ({
   background: "#fdf8e1",
-  padding: isMobile ? "1.5rem" : "2.5rem",
+  padding: isMobile ? "1.2rem" : "2.5rem",
   borderRadius: "24px",
   border: "1px solid rgba(28,7,0,0.08)",
   flex: isMobile ? "0 0 auto" : hasSelection ? "0 0 520px" : "0 1 600px",
+  width: isMobile ? "100%" : "auto",
+  boxSizing: "border-box",
 });
 export const calendarHeaderStyle = (isMobile) => ({
   display: "flex",
@@ -52,7 +54,7 @@ export const monthLabelStyle = (isMobile) => ({
 export const calendarGridStyle = (isMobile) => ({
   display: "grid",
   gridTemplateColumns: "repeat(7, 1fr)",
-  gap: "10px",
+  gap: isMobile ? "4px" : "10px",
 });
 export const dayOfWeekStyle = (isMobile) => ({
   fontSize: "0.75rem",
@@ -67,15 +69,15 @@ export const navBtnStyle = {
   opacity: 0.5,
 };
 
-// --- UPDATED DAY STYLE ---
+// --- DAY STYLE ---
 export const dayStyle = (hasEvent, isSelected, isMobile, isGreyedOut) => ({
-  width: "100%", // Ensure it fills the grid cell
-  aspectRatio: "1/1", // Forces height to match width
+  width: "100%",
+  aspectRatio: "1/1",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   borderRadius: "50%",
-  fontSize: isMobile ? "0.85rem" : "1rem",
+  fontSize: isMobile ? "0.95rem" : "1rem",
   cursor: hasEvent && !isGreyedOut ? "pointer" : "default",
   backgroundColor: isGreyedOut
     ? "rgba(0,0,0,0.05)"
@@ -88,12 +90,14 @@ export const dayStyle = (hasEvent, isSelected, isMobile, isGreyedOut) => ({
   fontWeight: hasEvent ? "800" : "400",
   opacity: hasEvent ? 1 : 0.2,
   transition: "0.2s",
-  position: "relative", // Keeps absolute children (dots/labels) contained
+  position: "relative",
   boxSizing: "border-box",
+  // Pushes text up slightly more on mobile to avoid dot overlap
+  paddingBottom: hasEvent ? (isMobile ? "4px" : "2px") : "0",
 });
 
-// --- UPDATED DOT STYLE ---
-export const dotStyle = (isSelected, isAlreadyBooked) => ({
+// --- DOT STYLE ---
+export const dotStyle = (isSelected, isAlreadyBooked, isMobile) => ({
   width: "4px",
   height: "4px",
   borderRadius: "50%",
@@ -102,9 +106,9 @@ export const dotStyle = (isSelected, isAlreadyBooked) => ({
     : isSelected
       ? "#1c0700"
       : "#caaff3",
-  // CHANGED: Absolute positioning prevents the dot from "pushing" the circle's height
   position: "absolute",
-  bottom: "15%",
+  // FIX: Absolute pixels for tiny mobile view, proportional % for large desktop view
+  bottom: isMobile ? "5px" : "15%",
   left: "50%",
   transform: "translateX(-50%)",
 });
@@ -112,11 +116,14 @@ export const dotStyle = (isSelected, isAlreadyBooked) => ({
 // --- BOOKING SUMMARY STYLES ---
 export const bookingCardStyle = (isMobile, hasSelection) => ({
   display: hasSelection ? "flex" : "none",
+  flexDirection: "column",
   background: "#fdf8e1",
   padding: isMobile ? "1.5rem" : "2.5rem",
   borderRadius: "24px",
   border: "1px solid rgba(28,7,0,0.08)",
   flex: isMobile ? "0 0 auto" : "1 1 auto",
+  width: isMobile ? "100%" : "auto",
+  boxSizing: "border-box",
   opacity: hasSelection ? 1 : 0,
   transition: "all 0.6s ease",
 });
