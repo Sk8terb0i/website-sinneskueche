@@ -3,7 +3,7 @@ name: Build and Deploy
 on:
   push:
     branches:
-      - main # Change this to your fork's branch name if it's different
+      - master # Change this to your fork's branch name if it's different
 
 permissions:
   contents: write # Required for peaceiris/actions-gh-pages to push to gh-pages branch
