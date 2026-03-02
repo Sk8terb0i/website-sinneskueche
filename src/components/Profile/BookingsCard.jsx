@@ -17,21 +17,15 @@ export default function BookingsCard({ userId, currentLang, t }) {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
-  const [confirmingId, setConfirmingId] = useState(null);
+  const [confirmingId, setConfirmingId] = useState(null); // Use the combined key for this
 
-  /**
-   * Helper to find the localized course title based on the path.
-   * Checks for both exact matches (e.g., "/pottery") and normalized matches ("pottery").
-   */
   const getCourseTitle = (link) => {
     if (!link) return "Course";
     const normalizedLink = link.startsWith("/") ? link : `/${link}`;
-
     for (const planet of planets) {
       const course = planet.courses?.find((c) => c.link === normalizedLink);
       if (course) return course.text[currentLang];
     }
-    // Fallback: cleaning up the link for display
     return link.replace("/", "").replace(/-/g, " ");
   };
 
@@ -48,16 +42,12 @@ export default function BookingsCard({ userId, currentLang, t }) {
           querySnapshot.docs.map(async (bookingDoc) => {
             const bookingData = bookingDoc.data();
             let eventData = {};
-
             if (bookingData.eventId) {
               const eventRef = doc(db, "events", bookingData.eventId);
               const eventSnap = await getDoc(eventRef);
               if (eventSnap.exists()) eventData = eventSnap.data();
             }
-
-            // Determine path: prefer event specific link, fallback to booking link
             const coursePath = eventData.link || bookingData.coursePath;
-
             return {
               id: bookingDoc.id,
               ...bookingData,
@@ -67,8 +57,6 @@ export default function BookingsCard({ userId, currentLang, t }) {
             };
           }),
         );
-
-        // Sort chronologically
         bookingsWithEventData.sort(
           (a, b) => new Date(a.date) - new Date(b.date),
         );
@@ -79,29 +67,41 @@ export default function BookingsCard({ userId, currentLang, t }) {
         setDataLoading(false);
       }
     };
-
     if (userId) fetchUserBookings();
   }, [userId, currentLang]);
 
-  // Group bookings by courseTitle for better visual organization
+  // Group by Course Title, then by Date & Time
   const groupedBookings = useMemo(() => {
-    return bookings.reduce((acc, booking) => {
+    const grouped = {};
+    bookings.forEach((booking) => {
       const title = booking.courseTitle;
-      if (!acc[title]) acc[title] = [];
-      acc[title].push(booking);
-      return acc;
-    }, {});
+      // Use date+time to uniquely identify a session slot
+      const dateKey = `${booking.date}_${booking.time}`;
+
+      if (!grouped[title]) grouped[title] = {};
+      if (!grouped[title][dateKey]) {
+        grouped[title][dateKey] = {
+          date: booking.date,
+          time: booking.time,
+          count: 0,
+          ids: [], // Store all IDs for this slot
+        };
+      }
+      grouped[title][dateKey].count += 1;
+      grouped[title][dateKey].ids.push(booking.id);
+    });
+    return grouped;
   }, [bookings]);
 
-  const handleCancel = async (bookingId) => {
+  // Handle bulk cancellation
+  const handleCancelGroup = async (bookingIds) => {
     const functions = getFunctions();
-    const cancelBooking = httpsCallable(functions, "cancelBooking");
+    const cancelBookings = httpsCallable(functions, "cancelBookings"); // Updated to call bulk function
 
     try {
       setDataLoading(true);
-      await cancelBooking({ bookingId });
+      await cancelBookings({ bookingIds });
       setConfirmingId(null);
-      // Reload to refresh both Bookings and PersonalInfo (credits)
       window.location.reload();
     } catch (err) {
       alert(err.message);
@@ -111,14 +111,14 @@ export default function BookingsCard({ userId, currentLang, t }) {
 
   const labels = {
     en: {
-      cancelBtn: "cancel course",
+      cancelBtn: "cancel booking",
       policyNote: "cancellations are possible up to 5 days before the start.",
-      confirm: "confirm cancellation? (+1 credit)",
+      confirm: (count) => `confirm cancellation? (+${count} credits)`,
     },
     de: {
       cancelBtn: "termin stornieren",
       policyNote: "stornierungen sind bis zu 5 tage vor beginn möglich.",
-      confirm: "stornierung bestätigen? (+1 guthaben)",
+      confirm: (count) => `stornierung bestätigen? (+${count} guthaben)`,
     },
   }[currentLang];
 
@@ -146,19 +146,19 @@ export default function BookingsCard({ userId, currentLang, t }) {
           </button>
         </div>
       ) : (
-        Object.entries(groupedBookings).map(([title, courseBookings]) => (
+        Object.entries(groupedBookings).map(([title, dateGroups]) => (
           <div key={title} style={styles.courseGroup}>
             <h4 style={styles.courseGroupTitle}>{title}</h4>
             <div style={styles.bookingsList}>
-              {courseBookings.map((booking) => {
-                const dateObj = new Date(booking.date);
+              {Object.entries(dateGroups).map(([dateKey, groupData]) => {
+                const dateObj = new Date(groupData.date);
                 const daysUntil =
                   (dateObj - new Date()) / (1000 * 60 * 60 * 24);
                 const canCancel = daysUntil >= 5;
-                const isConfirming = confirmingId === booking.id;
+                const isConfirming = confirmingId === dateKey;
 
                 return (
-                  <div key={booking.id} style={styles.bookingItem}>
+                  <div key={dateKey} style={styles.bookingItem}>
                     <div style={styles.bookingDateBox}>
                       <span style={styles.bookingMonth}>
                         {dateObj.toLocaleString(
@@ -173,24 +173,47 @@ export default function BookingsCard({ userId, currentLang, t }) {
                       {!isConfirming ? (
                         <div style={styles.row}>
                           <div>
-                            <p style={styles.bookingTitle}>
-                              {dateObj.toLocaleDateString(
-                                currentLang === "en" ? "en-US" : "de-DE",
-                                {
-                                  weekday: "long",
-                                  year: "numeric",
-                                  month: "long",
-                                  day: "numeric",
-                                },
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                              }}
+                            >
+                              <p style={styles.bookingTitle}>
+                                {dateObj.toLocaleDateString(
+                                  currentLang === "en" ? "en-US" : "de-DE",
+                                  {
+                                    weekday: "long",
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  },
+                                )}
+                              </p>
+                              {/* Ticket Badge */}
+                              {groupData.count > 1 && (
+                                <span
+                                  style={{
+                                    backgroundColor: "rgba(202, 175, 243, 0.2)",
+                                    color: "#9960a8",
+                                    fontSize: "0.65rem",
+                                    fontWeight: "900",
+                                    padding: "2px 6px",
+                                    borderRadius: "100px",
+                                  }}
+                                >
+                                  {groupData.count} Tickets
+                                </span>
                               )}
-                            </p>
+                            </div>
                             <div style={styles.timeRow}>
-                              <Clock size={12} /> <span>{booking.time}</span>
+                              <Clock size={12} /> <span>{groupData.time}</span>
                             </div>
                           </div>
                           {canCancel && (
                             <button
-                              onClick={() => setConfirmingId(booking.id)}
+                              onClick={() => setConfirmingId(dateKey)}
                               style={styles.cancelActionBtn}
                             >
                               {labels.cancelBtn}
@@ -200,11 +223,11 @@ export default function BookingsCard({ userId, currentLang, t }) {
                       ) : (
                         <div style={styles.confirmView}>
                           <span style={styles.confirmText}>
-                            {labels.confirm}
+                            {labels.confirm(groupData.count)}
                           </span>
                           <div style={styles.confirmActions}>
                             <button
-                              onClick={() => handleCancel(booking.id)}
+                              onClick={() => handleCancelGroup(groupData.ids)}
                               style={{ ...styles.iconBtn, color: "#4e5f28" }}
                             >
                               <Check size={18} />
@@ -251,7 +274,7 @@ const styles = {
   },
   policyBox: {
     display: "flex",
-    alignItems: "flex-start", // Change from center to flex-start
+    alignItems: "flex-start",
     gap: "8px",
     fontSize: "0.75rem",
     fontFamily: "Satoshi",
@@ -306,7 +329,7 @@ const styles = {
   bookingDetails: { flex: 1, overflow: "hidden" },
   row: {
     display: "flex",
-    flexDirection: "column", // MODIFIED: Always stack info and button on mobile
+    flexDirection: "column",
     gap: "10px",
     alignItems: "flex-start",
   },
@@ -337,7 +360,6 @@ const styles = {
     cursor: "pointer",
     textTransform: "uppercase",
   },
-  // Add these for the empty state
   emptyState: { padding: "2rem", textAlign: "center" },
   browseBtn: {
     marginTop: "1rem",
@@ -347,5 +369,29 @@ const styles = {
     border: "none",
     fontWeight: "bold",
     cursor: "pointer",
+  },
+  confirmView: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    paddingTop: "5px",
+  },
+  confirmText: {
+    fontSize: "0.8rem",
+    color: "#4e5f28",
+    fontWeight: "600",
+  },
+  confirmActions: {
+    display: "flex",
+    gap: "10px",
+  },
+  iconBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: "0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
 };

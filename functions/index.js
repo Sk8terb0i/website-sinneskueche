@@ -266,7 +266,7 @@ exports.createStripeCheckout = onCall(
       successUrl,
       cancelUrl,
       creditsToUse,
-      baseUrl, // PASSED FROM FRONTEND
+      baseUrl,
     } = request.data;
 
     const userId = request.auth ? request.auth.uid : "GUEST_USER";
@@ -274,7 +274,6 @@ exports.createStripeCheckout = onCall(
       ? request.auth.token.email
       : guestInfo?.email;
 
-    // SAFELY USE FRONTEND BASEURL
     const origin =
       baseUrl || request.rawRequest.headers.origin || "https://sinneskueche.ch";
 
@@ -388,6 +387,16 @@ exports.handleStripeWebhook = onRequest(
               [`credits.${courseKey}`]:
                 admin.firestore.FieldValue.increment(-parsedCreditsToUse),
             });
+
+            // WRITE HISTORY RECORD FOR MIXED PAYMENT DEDUCTION
+            const historyRef = db.collection("credit_history").doc();
+            transaction.set(historyRef, {
+              userId: userId,
+              courseKey: courseKey,
+              amount: -parsedCreditsToUse,
+              type: "booking",
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
           }
 
           if (mode === "pack") {
@@ -406,6 +415,16 @@ exports.handleStripeWebhook = onRequest(
                 },
                 { merge: true },
               );
+
+              // WRITE HISTORY RECORD FOR PACK PURCHASE
+              const historyRef = db.collection("credit_history").doc();
+              transaction.set(historyRef, {
+                userId: userId,
+                courseKey: courseKey,
+                amount: netIncrease,
+                type: "purchase",
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
             } else if (netIncrease > 0) {
               const newCode = generatePackCode();
               transaction.set(db.collection("pack_codes").doc(newCode), {
@@ -492,6 +511,16 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
       ),
     });
 
+    // WRITE HISTORY RECORD FOR CREDIT BOOKING
+    const historyRef = db.collection("credit_history").doc();
+    transaction.set(historyRef, {
+      userId: request.auth.uid,
+      courseKey: courseKey,
+      amount: -selectedDates.length,
+      type: "booking",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
     selectedDates.forEach((d) => {
       transaction.set(db.collection("bookings").doc(), {
         userId: request.auth.uid,
@@ -517,7 +546,7 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
     selectedDates,
     currentLang || "en",
     false,
-    origin, // Dynamic origin
+    origin,
   );
 
   return { success: true };
@@ -569,7 +598,7 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
     selectedDates,
     currentLang || "en",
     true,
-    origin, // Dynamic origin
+    origin,
   );
 
   return { success: true };
@@ -587,7 +616,60 @@ exports.cancelBooking = onCall({ cors: true }, async (request) => {
     t.update(db.collection("users").doc(request.auth.uid), {
       [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
     });
+
+    // WRITE HISTORY RECORD FOR REFUND
+    const historyRef = db.collection("credit_history").doc();
+    t.set(historyRef, {
+      userId: request.auth.uid,
+      courseKey: courseKey,
+      amount: 1,
+      type: "refund",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
     t.delete(bRef);
+    return { success: true };
+  });
+});
+
+exports.cancelBookings = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const { bookingIds } = request.data;
+
+  if (!Array.isArray(bookingIds) || bookingIds.length === 0) {
+    throw new HttpsError("invalid-argument", "No bookings provided.");
+  }
+
+  return db.runTransaction(async (t) => {
+    const firstBookingRef = db.collection("bookings").doc(bookingIds[0]);
+    const firstSnap = await t.get(firstBookingRef);
+
+    if (!firstSnap.exists || firstSnap.data().userId !== request.auth.uid) {
+      throw new HttpsError("permission-denied", "Unauthorized.");
+    }
+
+    const courseKey = getCleanCourseKey(firstSnap.data().coursePath);
+
+    t.update(db.collection("users").doc(request.auth.uid), {
+      [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(
+        bookingIds.length,
+      ),
+    });
+
+    const historyRef = db.collection("credit_history").doc();
+    t.set(historyRef, {
+      userId: request.auth.uid,
+      courseKey: courseKey,
+      amount: bookingIds.length,
+      type: "refund",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    for (const id of bookingIds) {
+      const bRef = db.collection("bookings").doc(id);
+      t.delete(bRef);
+    }
+
     return { success: true };
   });
 });
@@ -639,6 +721,17 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
         transaction.update(userRef, {
           [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
         });
+
+        // WRITE HISTORY RECORD FOR ADMIN REFUND
+        const historyRef = db.collection("credit_history").doc();
+        transaction.set(historyRef, {
+          userId: bData.userId,
+          courseKey: courseKey,
+          amount: 1,
+          type: "refund",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
         sendCancellationEmail(
           transaction,
           bData.guestEmail || "Customer",
