@@ -6,7 +6,7 @@ import {
   signOut,
   sendPasswordResetEmail,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
 import {
   LogOut,
   Lock,
@@ -19,7 +19,8 @@ import {
   Users,
   FileText,
   Bell,
-  CalendarClock, // Added icon for the new tab
+  CalendarClock,
+  Pin,
 } from "lucide-react";
 
 // Components & Styles
@@ -32,7 +33,7 @@ import PackCodesTab from "./PackCodesTab";
 import ProfilesTab from "./ProfilesTab";
 import TermsTab from "./TermsTab";
 import RemindersTab from "./RemindersTab";
-import ScheduleTab from "./ScheduleTab"; // IMPORTED NEW TAB
+import ScheduleTab from "./ScheduleTab";
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -54,8 +55,26 @@ export default function Admin({ currentLang, setCurrentLang }) {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
-  const [activeTab, setActiveTab] = useState("events");
+
+  // Real-time notification state
+  const [hasNewRentalRequests, setHasNewRentalRequests] = useState(false);
+
+  // Initialize state from localStorage, fallback to 'events'
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem("adminActiveTab") || "events";
+  });
+
+  // Track the user's default tab
+  const [defaultTab, setDefaultTab] = useState(() => {
+    return localStorage.getItem("adminDefaultTab") || "events";
+  });
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  // Save to localStorage whenever activeTab changes
+  useEffect(() => {
+    localStorage.setItem("adminActiveTab", activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 900);
@@ -71,6 +90,20 @@ export default function Admin({ currentLang, setCurrentLang }) {
           ) {
             setUser(currentUser);
             setAdminData(data);
+
+            // Re-validate tab permissions on load
+            const isFullAdmin = data.role === "admin";
+            const savedTab = localStorage.getItem("adminActiveTab") || "events";
+
+            // If they try to access restricted tabs, bump them to events
+            if (
+              !isFullAdmin &&
+              (savedTab === "profiles" ||
+                savedTab === "pack-codes" ||
+                savedTab === "rental")
+            ) {
+              setActiveTab("events");
+            }
           } else {
             setUser(null);
             setAdminData(null);
@@ -91,6 +124,24 @@ export default function Admin({ currentLang, setCurrentLang }) {
     };
   }, []);
 
+  // Listen for active rental requests
+  useEffect(() => {
+    if (!user || adminData?.role !== "admin") return;
+
+    const unsubscribe = onSnapshot(collection(db, "rent_requests"), (snap) => {
+      const hasPending = snap.docs.some((doc) => {
+        const data = doc.data();
+        // Display dot if the request is pending, new, or has no status (unhandled)
+        return (
+          data.status === "pending" || data.status === "new" || !data.status
+        );
+      });
+      setHasNewRentalRequests(hasPending);
+    });
+
+    return () => unsubscribe();
+  }, [user, adminData]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -101,6 +152,11 @@ export default function Admin({ currentLang, setCurrentLang }) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSetDefaultTab = () => {
+    localStorage.setItem("adminDefaultTab", activeTab);
+    setDefaultTab(activeTab);
   };
 
   if (checkingRole && !user)
@@ -266,7 +322,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
           width: "100%",
           overflowX: "auto",
           paddingBottom: "10px",
-          marginBottom: "2rem",
+          marginBottom: "1rem",
           display: "flex",
           flexWrap: isMobile ? "nowrap" : "wrap",
           gap: "1.5rem",
@@ -398,12 +454,67 @@ export default function Admin({ currentLang, setCurrentLang }) {
                   activeTab === "rental" ? "#caaff3" : "transparent",
                 borderRadius: "100px",
                 color: "#1c0700",
+                position: "relative", // Added so the absolute dot works
               }}
             >
               <LayoutGrid size={16} /> Rental
+              {hasNewRentalRequests && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "4px",
+                    right: "4px",
+                    width: "8px",
+                    height: "8px",
+                    backgroundColor: "#ff4d4d",
+                    borderRadius: "50%",
+                  }}
+                />
+              )}
             </button>
           </div>
         )}
+      </div>
+
+      {/* Default Tab Toggle */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <button
+          onClick={handleSetDefaultTab}
+          style={{
+            background: "none",
+            border: "none",
+            color: defaultTab === activeTab ? "#9960a8" : "#4e5f28",
+            cursor: "pointer",
+            fontSize: "0.8rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            fontWeight: "700",
+            opacity: defaultTab === activeTab ? 1 : 0.6,
+            padding: "4px 8px",
+            borderRadius: "8px",
+            backgroundColor:
+              defaultTab === activeTab
+                ? "rgba(202, 175, 243, 0.15)"
+                : "transparent",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <Pin size={14} fill={defaultTab === activeTab ? "#9960a8" : "none"} />
+          {defaultTab === activeTab
+            ? currentLang === "en"
+              ? "Default View"
+              : "Standardansicht"
+            : currentLang === "en"
+              ? "Set as Default"
+              : "Als Standard setzen"}
+        </button>
       </div>
 
       <div style={{ animation: "fadeIn 0.4s ease-out" }}>

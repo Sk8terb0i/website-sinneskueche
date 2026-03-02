@@ -28,7 +28,7 @@ export default function Header({
   const [langHovered, setLangHovered] = useState(false);
   const [menuHovered, setMenuHovered] = useState(false);
   const [userHovered, setUserHovered] = useState(false);
-  const [adminHovered, setAdminHovered] = useState(false); // New hover state
+  const [adminHovered, setAdminHovered] = useState(false);
   const [logoutHovered, setLogoutHovered] = useState(false);
 
   useEffect(() => {
@@ -53,7 +53,6 @@ export default function Header({
     }
   };
 
-  // Now simply goes to the standard user profile
   const handleProfileClick = () => {
     if (loading) return;
     if (!currentUser) {
@@ -63,9 +62,11 @@ export default function Header({
     }
   };
 
-  // New handler specifically for the admin panel
   const handleAdminClick = () => {
     if (loading) return;
+    // Check if the user has set a preferred default tab, otherwise fallback to events
+    const defaultTab = localStorage.getItem("adminDefaultTab") || "events";
+    localStorage.setItem("adminActiveTab", defaultTab);
     navigate("/admin-sinneskueche");
   };
 
@@ -184,10 +185,6 @@ export default function Header({
                   width: "28px",
                   height: "28px",
                   objectFit: "contain",
-                  filter: titleHovered
-                    ? "invert(46%) sepia(13%) saturate(2251%) hue-rotate(242deg) brightness(87%) contrast(81%)"
-                    : "none",
-                  transition: "filter 0.2s ease",
                 }}
               />
             </div>
@@ -203,7 +200,7 @@ export default function Header({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: iconGap }}>
-            {/* New Admin Panel Icon (Only shows for admins) */}
+            {/* Admin Panel Icon */}
             {isAdmin && (
               <div
                 onClick={handleAdminClick}
@@ -237,10 +234,7 @@ export default function Header({
                 transition: hoverTransition,
               }}
             >
-              <User
-                size={isPortrait ? 18 : 22}
-                strokeWidth={2} // Removed bolding logic since Shield is now separate
-              />
+              <User size={isPortrait ? 18 : 22} strokeWidth={2} />
             </div>
 
             {currentUser && (
