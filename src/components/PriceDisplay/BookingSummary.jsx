@@ -73,7 +73,6 @@ export default function BookingSummary({
   const [showTermsPopup, setShowTermsPopup] = useState(false);
   const [shakeTerms, setShakeTerms] = useState(false);
 
-  // Signifier colors for add-ons (matching PriceDisplay)
   const addonColors = [
     "#9960a8",
     "#4e5f28",
@@ -151,22 +150,49 @@ export default function BookingSummary({
       : { size: 0, price: 0 };
 
   const hasSelection = selectedDates.length > 0;
-  const totalTicketsSelected = selectedDates.reduce(
-    (sum, d) => sum + (d.count || 1),
-    0,
-  );
-  const hasEnoughCredits = availableCredits >= totalTicketsSelected;
 
-  const neededCreditsAfterExisting = currentUser
-    ? Math.max(0, totalTicketsSelected - availableCredits)
-    : totalTicketsSelected;
+  // --- CREDIT & PAYMENT LOGIC ---
+  const limitOnePerDay = pricing?.limitOnePerDay ?? true;
+  let eligibleForCredit = 0;
+  let ineligibleForCredit = 0;
 
-  const extraSessionsCount = Math.max(
-    0,
-    neededCreditsAfterExisting - currentPack.size,
-  );
+  selectedDates.forEach((d) => {
+    const count = d.count || 1;
+    if (limitOnePerDay) {
+      eligibleForCredit += 1;
+      ineligibleForCredit += Math.max(0, count - 1);
+    } else {
+      eligibleForCredit += count;
+    }
+  });
+
+  const totalTicketsSelected = eligibleForCredit + ineligibleForCredit;
+  const usableUserCredits = currentUser
+    ? Math.min(availableCredits, eligibleForCredit)
+    : 0;
+  const usablePackCredits =
+    activePackCode && activePackCode.remaining > 0
+      ? Math.min(activePackCode.remaining, eligibleForCredit)
+      : 0;
+
+  const usableCredits = activePackCode ? usablePackCredits : usableUserCredits;
+  const remainingEligibleToPay = eligibleForCredit - usableCredits;
+
+  const ticketsToPayCash = remainingEligibleToPay + ineligibleForCredit;
+
+  // Mixed Payment happens if a credit is used but there is still cash owed
+  const isMixedPayment = usableCredits > 0 && ticketsToPayCash > 0;
+  // Full Coverage happens if we have tickets and NO cash is owed
+  const coversEntirely = totalTicketsSelected > 0 && ticketsToPayCash === 0;
+
+  const extraEligible = Math.max(0, remainingEligibleToPay - currentPack.size);
+  const extraSessionsCount = extraEligible + ineligibleForCredit;
   const extraSessionsCost =
     extraSessionsCount * parseFloat(pricing?.priceSingle || 0);
+
+  let finalTotalPrice =
+    ticketsToPayCash * parseFloat(pricing?.priceSingle || 0);
+  let finalPackPrice = parseFloat(currentPack?.price || 0) + extraSessionsCost;
 
   const calculateSavings = (pack) => {
     const singlePrice = Number(pricing?.priceSingle || 0);
@@ -180,9 +206,6 @@ export default function BookingSummary({
     activePromo && (promoApplyTo === "both" || promoApplyTo === "pack");
   const promoAppliesToSingle =
     activePromo && (promoApplyTo === "both" || promoApplyTo === "single");
-
-  let finalTotalPrice = parseFloat(totalPrice || 0);
-  let finalPackPrice = parseFloat(currentPack?.price || 0) + extraSessionsCost;
 
   if (activePromo) {
     if (activePromo.discountType === "percent") {
@@ -546,7 +569,9 @@ export default function BookingSummary({
             const booked = eventBookingCounts[d.id] || 0;
             const cap = parseInt(pricing?.capacity || 99);
             const canAddMore = !pricing?.hasCapacity || booked + d.count < cap;
+
             const isSingleCapacity = cap === 1;
+            const showCounter = !isSingleCapacity;
 
             const updateCount = (delta) => {
               setSelectedDates((prev) =>
@@ -561,7 +586,6 @@ export default function BookingSummary({
               );
             };
 
-            // FIX: Ensure dayAddons is always an array so .map() doesn't crash
             const rawAddons = scheduleData?.specialAssignments?.[d.id];
             const dayAddons = Array.isArray(rawAddons)
               ? rawAddons
@@ -604,7 +628,7 @@ export default function BookingSummary({
                       gap: "12px",
                     }}
                   >
-                    {!isSingleCapacity && (
+                    {showCounter && (
                       <div
                         style={{
                           display: "flex",
@@ -676,7 +700,6 @@ export default function BookingSummary({
                   </div>
                 </div>
 
-                {/* Session Add-ons opt-in checkboxes */}
                 {dayAddons.length > 0 && (
                   <div
                     style={{
@@ -805,9 +828,7 @@ export default function BookingSummary({
       {packOptions.map((pack, idx) => {
         const isSelected = selectedPackIndex === idx;
         const savings = calculateSavings(pack);
-        const isExceeded = currentUser
-          ? totalTicketsSelected > availableCredits + pack.size
-          : totalTicketsSelected > pack.size;
+
         return (
           <div
             key={idx}
@@ -889,7 +910,7 @@ export default function BookingSummary({
                 {formatPrice(pack.price)} CHF
               </p>
             </div>
-            {isSelected && isExceeded && (
+            {isSelected && extraSessionsCount > 0 && (
               <div
                 style={{
                   marginTop: "10px",
@@ -902,8 +923,8 @@ export default function BookingSummary({
               >
                 <p style={{ margin: 0, fontWeight: "700" }}>
                   {currentLang === "en"
-                    ? `+ ${totalTicketsSelected - (currentUser ? availableCredits + pack.size : pack.size)} extra sessions @ single price`
-                    : `+ ${totalTicketsSelected - (currentUser ? availableCredits + pack.size : pack.size)} zusätzliche Termine zum Einzelpreis`}
+                    ? `+ ${extraSessionsCount} extra session(s) @ single price`
+                    : `+ ${extraSessionsCount} zusätzliche(r) Termin(e) zum Einzelpreis`}
                 </p>
               </div>
             )}
@@ -941,6 +962,7 @@ export default function BookingSummary({
               ? `${hasSelection ? "Buy & Book" : "Buy"} (${formatPrice(finalPackPrice)} CHF)`
               : `${hasSelection ? "Kaufen & Buchen" : "Kaufen"} (${formatPrice(finalPackPrice)} CHF)`}
           </button>
+
           <p
             style={{
               fontSize: "0.7rem",
@@ -951,122 +973,151 @@ export default function BookingSummary({
               textAlign: "center",
             }}
           >
-            {totalTicketsSelected >
-            (currentUser
-              ? availableCredits + currentPack.size
-              : currentPack.size)
+            {extraSessionsCount > 0
               ? currentLang === "en"
                 ? "Selection exceeds available credits and pack size. Extras added at single price."
                 : "Auswahl überschreitet Guthaben und Kartengröße. Extras zum Einzelpreis berechnet."
-              : currentUser
-                ? currentLang === "en"
-                  ? `The ${totalTicketsSelected === 0 ? "full" : "remaining"} ${availableCredits + currentPack.size - totalTicketsSelected} credits will be saved to your profile.`
-                  : `Die ${totalTicketsSelected === 0 ? "vollen" : "restlichen"} ${availableCredits + currentPack.size - totalTicketsSelected} Guthaben werden deinem Profil gutgeschrieben.`
-                : currentLang === "en"
-                  ? `You will receive a code for the ${totalTicketsSelected === 0 ? "full" : "remaining"} ${currentPack.size - totalTicketsSelected} credits via email.`
-                  : `Du erhältst einen Code für die ${totalTicketsSelected === 0 ? "vollen" : "restlichen"} ${currentPack.size - totalTicketsSelected} Guthaben per E-Mail.`}
+              : currentLang === "en"
+                ? `The remaining ${Math.max(0, currentPack.size - remainingEligibleToPay)} credits will be saved to your profile.`
+                : `Die restlichen ${Math.max(0, currentPack.size - remainingEligibleToPay)} Guthaben werden deinem Profil gutgeschrieben.`}
           </p>
         </div>
       )}
     </div>
   );
 
-  const renderIndividualOption = () => (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "8px",
-        marginTop: "10px",
-      }}
-    >
-      {pricing?.hasPack && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            margin: "10px 0",
-          }}
-        >
+  const renderIndividualOption = () => {
+    // Dynamically show the credit usage in the button if it's a mixed payment
+    const btnLabel = isMixedPayment
+      ? currentLang === "en"
+        ? `Pay Balance (${formatPrice(finalTotalPrice)} CHF) + Use ${usableCredits} Credit${usableCredits !== 1 ? "s" : ""}`
+        : `Restbetrag zahlen (${formatPrice(finalTotalPrice)} CHF) + ${usableCredits} Guthaben nutzen`
+      : currentLang === "en"
+        ? `Pay ${hasSelection ? formatPrice(finalTotalPrice) : "0"} CHF`
+        : `${hasSelection ? formatPrice(finalTotalPrice) : "0"} CHF zahlen`;
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          marginTop: "10px",
+        }}
+      >
+        {pricing?.hasPack && (
           <div
             style={{
-              flex: 1,
-              height: "1px",
-              backgroundColor: "rgba(28,7,0,0.1)",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              margin: "10px 0",
             }}
-          />
-          <span
+          >
+            <div
+              style={{
+                flex: 1,
+                height: "1px",
+                backgroundColor: "rgba(28,7,0,0.1)",
+              }}
+            />
+            <span
+              style={{
+                fontSize: "0.7rem",
+                textTransform: "uppercase",
+                opacity: 0.5,
+                fontWeight: "800",
+                letterSpacing: "0.5px",
+              }}
+            >
+              {currentLang === "en"
+                ? "Or book single sessions"
+                : "Oder Einzeltermine buchen"}
+            </span>
+            <div
+              style={{
+                flex: 1,
+                height: "1px",
+                backgroundColor: "rgba(28,7,0,0.1)",
+              }}
+            />
+          </div>
+        )}
+
+        {promoAppliesToSingle && hasSelection && (
+          <div
             style={{
-              fontSize: "0.7rem",
-              textTransform: "uppercase",
+              fontSize: "0.85rem",
+              textDecoration: "line-through",
+              color: "#1c0700",
               opacity: 0.5,
-              fontWeight: "800",
-              letterSpacing: "0.5px",
+              textAlign: "center",
+            }}
+          >
+            {formatPrice(
+              ticketsToPayCash * parseFloat(pricing?.priceSingle || 0),
+            )}{" "}
+            CHF
+          </div>
+        )}
+
+        {(!pricing?.hasPack || selectedPackIndex === null) &&
+          renderTermsAgreement()}
+
+        <button
+          onClick={() =>
+            validateAndProceed(() =>
+              onPayment(
+                "individual",
+                activePackCode
+                  ? activePackCode.code
+                  : promoAppliesToSingle
+                    ? activePromo?.code
+                    : null,
+                0,
+                finalTotalPrice,
+              ),
+            )
+          }
+          style={{
+            ...S.secondaryBtnStyle(isMobile),
+            marginTop:
+              !pricing?.hasPack || selectedPackIndex === null ? "10px" : 0,
+            backgroundColor: hasSelection
+              ? "rgba(153, 96, 168, 0.1)"
+              : "transparent",
+            border: hasSelection
+              ? "1px solid #9960a8"
+              : "1px solid rgba(28, 7, 0, 0.2)",
+          }}
+          disabled={
+            !hasSelection ||
+            (!currentUser && (!guestInfo.firstName || !guestInfo.email))
+          }
+        >
+          {btnLabel}
+        </button>
+
+        {/* INELIGIBLE CREDIT USAGE HINT */}
+        {isMixedPayment && limitOnePerDay && (
+          <p
+            style={{
+              fontSize: "0.75rem",
+              color: "#4e5f28",
+              marginTop: "8px",
+              textAlign: "center",
+              fontStyle: "italic",
+              lineHeight: "1.4",
             }}
           >
             {currentLang === "en"
-              ? "Or book single sessions"
-              : "Oder Einzeltermine buchen"}
-          </span>
-          <div
-            style={{
-              flex: 1,
-              height: "1px",
-              backgroundColor: "rgba(28,7,0,0.1)",
-            }}
-          />
-        </div>
-      )}
-
-      {promoAppliesToSingle && hasSelection && (
-        <div
-          style={{
-            fontSize: "0.85rem",
-            textDecoration: "line-through",
-            color: "#1c0700",
-            opacity: 0.5,
-            textAlign: "center",
-          }}
-        >
-          {formatPrice(totalPrice)} CHF
-        </div>
-      )}
-
-      {(!pricing?.hasPack || selectedPackIndex === null) &&
-        renderTermsAgreement()}
-
-      <button
-        onClick={() =>
-          validateAndProceed(() =>
-            onPayment(
-              "individual",
-              promoAppliesToSingle ? activePromo?.code : null,
-            ),
-          )
-        }
-        style={{
-          ...S.secondaryBtnStyle(isMobile),
-          marginTop:
-            !pricing?.hasPack || selectedPackIndex === null ? "10px" : 0,
-          backgroundColor: hasSelection
-            ? "rgba(153, 96, 168, 0.1)"
-            : "transparent",
-          border: hasSelection
-            ? "1px solid #9960a8"
-            : "1px solid rgba(28, 7, 0, 0.2)",
-        }}
-        disabled={
-          !hasSelection ||
-          (!currentUser && (!guestInfo.firstName || !guestInfo.email))
-        }
-      >
-        {currentLang === "en"
-          ? `Pay ${hasSelection ? formatPrice(finalTotalPrice) : "0"} CHF`
-          : `${hasSelection ? formatPrice(finalTotalPrice) : "0"} CHF zahlen`}
-      </button>
-    </div>
-  );
+              ? "Only 1 ticket per day can be paid with a credit. Extra tickets are charged at the single price."
+              : "Pro Tag kann nur 1 Ticket mit Guthaben bezahlt werden. Zusätzliche Tickets werden zum Einzelpreis berechnet."}
+          </p>
+        )}
+      </div>
+    );
+  };
 
   const renderPurchaseOptions = () => (
     <div
@@ -1245,7 +1296,7 @@ export default function BookingSummary({
         )}
       </div>
 
-      {activePackCode ? (
+      {activePackCode && coversEntirely ? (
         <div
           style={{
             display: "flex",
@@ -1269,21 +1320,9 @@ export default function BookingSummary({
               ? "Redeem Code & Book"
               : "Code einlösen & Buchen"}
           </button>
-          {!hasSelection && (
-            <p
-              style={{
-                textAlign: "center",
-                fontSize: "0.8rem",
-                color: "#1c0700",
-                opacity: 0.6,
-              }}
-            >
-              {currentLang === "en"
-                ? "Select dates to redeem your code."
-                : "Wähle Termine, um den Code einzulösen."}
-            </p>
-          )}
         </div>
+      ) : activePackCode && isMixedPayment ? (
+        <>{renderIndividualOption()}</>
       ) : (
         <>
           {pricing?.hasPack && renderPackOption()}
@@ -1565,7 +1604,7 @@ export default function BookingSummary({
             <div
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
-              {hasEnoughCredits && hasSelection ? (
+              {coversEntirely && !activePackCode ? (
                 <>
                   {renderTermsAgreement()}
                   <button

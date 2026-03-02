@@ -33,7 +33,6 @@ export default function PricingTab({
   const [savingPriceId, setSavingPriceId] = useState(null);
   const [selectedCourse, setSelectedCourse] = useState("");
 
-  // State for new special event inputs
   const [newEventEn, setNewEventEn] = useState("");
   const [newEventDe, setNewEventDe] = useState("");
   const [newEventCap, setNewEventCap] = useState("");
@@ -105,7 +104,6 @@ export default function PricingTab({
     handlePriceChange(courseId, "packs", updatedPacks);
   };
 
-  // --- Special Event Handlers ---
   const addSpecialEvent = (courseId) => {
     if (!newEventEn.trim() || !newEventDe.trim()) {
       alert("Please provide both English and German names.");
@@ -118,7 +116,7 @@ export default function PricingTab({
         id: Date.now().toString(),
         nameEn: newEventEn.trim(),
         nameDe: newEventDe.trim(),
-        capacity: newEventCap || null, // Save capacity if provided
+        capacity: newEventCap || null,
       },
     ]);
     setNewEventEn("");
@@ -159,6 +157,8 @@ export default function PricingTab({
         packs: validPacks,
         duration: isPerHour ? priceData[courseId]?.duration || "" : "",
         hasPack: priceData[courseId]?.hasPack ?? false,
+        // NEW FIELD: Default to true if it hasn't been set yet
+        limitOnePerDay: priceData[courseId]?.limitOnePerDay ?? true,
         isPerHour: isPerHour,
         hasCapacity: priceData[courseId]?.hasCapacity ?? false,
         capacity: priceData[courseId]?.capacity || "",
@@ -248,7 +248,6 @@ export default function PricingTab({
                   : "#f5f5f5",
             }}
           >
-            {/* ... Existing Pricing & Capacity Sections ... */}
             <div
               style={{
                 display: "flex",
@@ -419,7 +418,6 @@ export default function PricingTab({
               </div>
             </div>
 
-            {/* Session Packs */}
             <div
               style={{
                 backgroundColor: "rgba(202, 175, 243, 0.05)",
@@ -452,117 +450,161 @@ export default function PricingTab({
                 />
                 Enable Session Packs
               </label>
+
               {(priceData[selectedCourse]?.hasPack ?? false) && (
                 <div
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: "12px",
+                    gap: "16px",
                   }}
                 >
-                  {(priceData[selectedCourse]?.packs || []).map((pack, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: "flex",
-                        gap: "10px",
-                        alignItems: "flex-end",
-                      }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <label
-                          style={{
-                            fontSize: "0.6rem",
-                            fontWeight: "bold",
-                            textTransform: "uppercase",
-                            opacity: 0.5,
-                          }}
-                        >
-                          Size
-                        </label>
-                        <input
-                          type="number"
-                          style={{
-                            ...inputStyle,
-                            padding: "8px",
-                            marginBottom: 0,
-                          }}
-                          value={pack.size}
-                          onChange={(e) =>
-                            updatePackOption(
-                              selectedCourse,
-                              idx,
-                              "size",
-                              e.target.value,
-                            )
-                          }
-                        />
-                      </div>
-                      <div style={{ flex: 2 }}>
-                        <label
-                          style={{
-                            fontSize: "0.6rem",
-                            fontWeight: "bold",
-                            textTransform: "uppercase",
-                            opacity: 0.5,
-                          }}
-                        >
-                          Price (CHF)
-                        </label>
-                        <input
-                          placeholder="200"
-                          style={{
-                            ...inputStyle,
-                            padding: "8px",
-                            marginBottom: 0,
-                          }}
-                          value={pack.price}
-                          onChange={(e) =>
-                            updatePackOption(
-                              selectedCourse,
-                              idx,
-                              "price",
-                              e.target.value,
-                            )
-                          }
-                        />
-                      </div>
-                      <button
-                        onClick={() => removePackOption(selectedCourse, idx)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "#ff4d4d",
-                          padding: "10px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    onClick={() => addPackOption(selectedCourse)}
+                  {/* NEW LIMIT TOGGLE */}
+                  <label
                     style={{
-                      ...btnStyle,
-                      width: "fit-content",
-                      padding: "8px 16px",
-                      backgroundColor: "rgba(255,255,255,0.5)",
-                      color: "#1c0700",
-                      border: "1px dashed #caaff3",
-                      fontSize: "0.8rem",
+                      ...labelStyle,
                       display: "flex",
                       alignItems: "center",
-                      gap: "6px",
+                      gap: "8px",
+                      cursor: "pointer",
+                      fontSize: "0.8rem",
+                      opacity: 0.8,
+                      backgroundColor: "rgba(255, 255, 255, 0.5)",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      margin: 0,
                     }}
                   >
-                    <Plus size={14} /> Add Pack Option
-                  </button>
+                    <input
+                      type="checkbox"
+                      checked={
+                        priceData[selectedCourse]?.limitOnePerDay ?? true
+                      } // Default true
+                      onChange={(e) =>
+                        handlePriceChange(
+                          selectedCourse,
+                          "limitOnePerDay",
+                          e.target.checked,
+                        )
+                      }
+                    />
+                    Limit users to 1 ticket per day
+                  </label>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                    }}
+                  >
+                    {(priceData[selectedCourse]?.packs || []).map(
+                      (pack, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: "flex",
+                            gap: "10px",
+                            alignItems: "flex-end",
+                          }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            <label
+                              style={{
+                                fontSize: "0.6rem",
+                                fontWeight: "bold",
+                                textTransform: "uppercase",
+                                opacity: 0.5,
+                              }}
+                            >
+                              Size
+                            </label>
+                            <input
+                              type="number"
+                              style={{
+                                ...inputStyle,
+                                padding: "8px",
+                                marginBottom: 0,
+                              }}
+                              value={pack.size}
+                              onChange={(e) =>
+                                updatePackOption(
+                                  selectedCourse,
+                                  idx,
+                                  "size",
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </div>
+                          <div style={{ flex: 2 }}>
+                            <label
+                              style={{
+                                fontSize: "0.6rem",
+                                fontWeight: "bold",
+                                textTransform: "uppercase",
+                                opacity: 0.5,
+                              }}
+                            >
+                              Price (CHF)
+                            </label>
+                            <input
+                              placeholder="200"
+                              style={{
+                                ...inputStyle,
+                                padding: "8px",
+                                marginBottom: 0,
+                              }}
+                              value={pack.price}
+                              onChange={(e) =>
+                                updatePackOption(
+                                  selectedCourse,
+                                  idx,
+                                  "price",
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </div>
+                          <button
+                            onClick={() =>
+                              removePackOption(selectedCourse, idx)
+                            }
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#ff4d4d",
+                              padding: "10px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      ),
+                    )}
+                    <button
+                      onClick={() => addPackOption(selectedCourse)}
+                      style={{
+                        ...btnStyle,
+                        width: "fit-content",
+                        padding: "8px 16px",
+                        backgroundColor: "rgba(255,255,255,0.5)",
+                        color: "#1c0700",
+                        border: "1px dashed #caaff3",
+                        fontSize: "0.8rem",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <Plus size={14} /> Add Pack Option
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Course Capacity */}
             <div
               style={{
                 backgroundColor: "rgba(78, 95, 40, 0.05)",
@@ -632,7 +674,6 @@ export default function PricingTab({
               )}
             </div>
 
-            {/* --- SESSION ADD-ONS (Special Events) SECTION --- */}
             <div
               style={{
                 backgroundColor: "rgba(202, 175, 243, 0.05)",
@@ -763,7 +804,6 @@ export default function PricingTab({
                   </div>
                 ))}
 
-                {/* New Add-on Row */}
                 <div
                   style={{
                     display: "flex",
