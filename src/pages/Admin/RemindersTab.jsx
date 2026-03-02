@@ -2,7 +2,15 @@ import React, { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { planets } from "../../data/planets";
-import { Save, Loader2, Info, Mail, Star, RefreshCcw } from "lucide-react";
+import {
+  Save,
+  Loader2,
+  Info,
+  Mail,
+  Star,
+  RefreshCcw,
+  PlusCircle,
+} from "lucide-react";
 import {
   sectionTitleStyle,
   cardStyle,
@@ -18,10 +26,11 @@ export default function RemindersTab({
 }) {
   const [selectedCourse, setSelectedCourse] = useState("");
   const [activeLangTab, setActiveLangTab] = useState("en");
+  const [courseAddons, setCourseAddons] = useState([]); // Store add-ons for the current course
   const [reminderData, setReminderData] = useState({
     daysBefore: 3,
-    en: { subject: "", text: "", firstTimerText: "" },
-    de: { subject: "", text: "", firstTimerText: "" },
+    en: { subject: "", text: "", firstTimerText: "", addonTexts: {} },
+    de: { subject: "", text: "", firstTimerText: "", addonTexts: {} },
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -29,17 +38,18 @@ export default function RemindersTab({
 
   const isFullAdmin = userRole === "admin";
 
-  // Templates ONLY for Subject and Main Body
   const templates = {
     en: {
       subject: "Reminder: Your workshop {courseName} is coming up!",
       text: "Hi {userName},\n\nWe are looking forward to seeing you soon for {courseName} on {courseDate}!\n\nPlease remember to arrive 5-10 minutes before the start time so we can begin together.\n\nBest,\nYour Atelier Team",
-      firstTimerText: "", // Keep empty by default
+      firstTimerText: "",
+      addonTexts: {},
     },
     de: {
       subject: "Erinnerung: Dein Workshop {courseName} findet bald statt!",
       text: "Hallo {userName},\n\nwir freuen uns schon sehr auf dich und den Workshop {courseName} am {courseDate}!\n\nBitte versuche 5-10 Minuten vor Beginn da zu sein, damit wir gemeinsam starten können.\n\nHerzliche Grüße,\nDein Atelier Team",
-      firstTimerText: "", // Keep empty by default
+      firstTimerText: "",
+      addonTexts: {},
     },
   };
 
@@ -59,12 +69,23 @@ export default function RemindersTab({
     }
   }, [availableCourses, selectedCourse]);
 
+  // Fetch both Reminder Data and Course Settings (for Add-ons)
   useEffect(() => {
     if (!selectedCourse) return;
-    const fetchReminderData = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       setSaveMessage("");
       try {
+        // 1. Fetch defined Add-ons for this course
+        const settingsRef = doc(db, "course_settings", selectedCourse);
+        const settingsSnap = await getDoc(settingsRef);
+        if (settingsSnap.exists()) {
+          setCourseAddons(settingsSnap.data().specialEvents || []);
+        } else {
+          setCourseAddons([]);
+        }
+
+        // 2. Fetch existing reminder template
         const docRef = doc(db, "course_reminders", selectedCourse);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
@@ -82,12 +103,12 @@ export default function RemindersTab({
           });
         }
       } catch (error) {
-        console.error("Error:", error);
+        console.error("Error fetching data:", error);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchReminderData();
+    fetchData();
   }, [selectedCourse]);
 
   const handleResetToDefault = () => {
@@ -122,6 +143,19 @@ export default function RemindersTab({
     }
   };
 
+  const handleAddonTextChange = (addonId, val) => {
+    setReminderData((p) => ({
+      ...p,
+      [activeLangTab]: {
+        ...p[activeLangTab],
+        addonTexts: {
+          ...(p[activeLangTab].addonTexts || {}),
+          [addonId]: val,
+        },
+      },
+    }));
+  };
+
   const wideInputStyle = {
     ...inputStyle,
     width: "100%",
@@ -141,7 +175,6 @@ export default function RemindersTab({
         <Mail size={18} /> Course Reminders
       </h3>
 
-      {/* GLOBAL SETTINGS */}
       <div
         style={{
           display: "grid",
@@ -180,7 +213,6 @@ export default function RemindersTab({
         </div>
       </div>
 
-      {/* EDITOR CARD */}
       <div
         style={{
           ...cardStyle,
@@ -296,7 +328,7 @@ export default function RemindersTab({
                 }
                 style={{
                   ...wideInputStyle,
-                  minHeight: "220px",
+                  minHeight: "180px",
                   resize: "vertical",
                 }}
               />
@@ -345,12 +377,83 @@ export default function RemindersTab({
                 }
                 style={{
                   ...wideInputStyle,
-                  minHeight: "100px",
+                  minHeight: "80px",
                   backgroundColor: "rgba(255,255,255,0.4)",
                 }}
-                placeholder="Optional: This text will be appended only for users booking this course for the first time."
+                placeholder="Optional: Appended for first-time bookings."
               />
             </div>
+
+            {/* ADD-ON SPECIFIC AREA */}
+            {courseAddons.length > 0 && (
+              <div
+                style={{
+                  backgroundColor: "rgba(78, 95, 40, 0.06)",
+                  padding: "20px",
+                  borderRadius: "16px",
+                  border: "1px dashed #4e5f28",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  <PlusCircle size={14} color="#4e5f28" />
+                  <span
+                    style={{
+                      fontWeight: 700,
+                      fontSize: "0.8rem",
+                      color: "#1c0700",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    Add-on Specific Information
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "1rem",
+                  }}
+                >
+                  {courseAddons.map((addon) => (
+                    <div key={addon.id}>
+                      <label
+                        style={{
+                          ...labelStyle,
+                          fontSize: "0.75rem",
+                          marginBottom: "4px",
+                          display: "block",
+                        }}
+                      >
+                        {activeLangTab === "de" ? addon.nameDe : addon.nameEn}
+                      </label>
+                      <textarea
+                        value={
+                          reminderData[activeLangTab].addonTexts?.[addon.id] ||
+                          ""
+                        }
+                        onChange={(e) =>
+                          handleAddonTextChange(addon.id, e.target.value)
+                        }
+                        style={{
+                          ...wideInputStyle,
+                          minHeight: "60px",
+                          backgroundColor: "rgba(255,255,255,0.4)",
+                        }}
+                        placeholder={`Optional: Text to include if ${addon.nameEn} is selected.`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div
               style={{
@@ -360,7 +463,6 @@ export default function RemindersTab({
                 backgroundColor: "rgba(78, 95, 40, 0.04)",
                 padding: "12px 20px",
                 borderRadius: "100px",
-                marginBottom: "2rem",
                 border: "1px solid rgba(78, 95, 40, 0.1)",
               }}
             >

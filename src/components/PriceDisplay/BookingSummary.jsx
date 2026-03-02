@@ -1106,7 +1106,7 @@ export default function BookingSummary({
             <Ticket size={16} />{" "}
             {currentLang === "en"
               ? "Add Promo or Pack Code"
-              : "Promo- oder Kurspaket Code hinzufügen"}
+              : "Code hinzufügen"}
           </button>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>

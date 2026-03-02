@@ -68,62 +68,73 @@ export default function PriceDisplay({ coursePath, currentLang }) {
       setLoading(true);
       const docId = coursePath.replace(/\//g, "");
       try {
-        const priceSnap = await getDoc(doc(db, "course_settings", docId));
+        // 1. CRITICAL FETCH: Pricing and Events first
+        const [priceSnap, eventSnap] = await Promise.all([
+          getDoc(doc(db, "course_settings", docId)),
+          getDocs(query(collection(db, "events"), orderBy("date", "asc"))),
+        ]);
+
         if (priceSnap.exists() && isMounted) setPricing(priceSnap.data());
 
-        const scheduleSnap = await getDoc(doc(db, "schedules", docId));
-        if (scheduleSnap.exists() && isMounted)
-          setScheduleData(scheduleSnap.data());
-
-        const eventSnap = await getDocs(
-          query(collection(db, "events"), orderBy("date", "asc")),
-        );
         const filteredEvents = eventSnap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
           .filter((ev) => ev.link === coursePath);
-        if (isMounted) setAvailableDates(filteredEvents);
 
-        const globalBSnap = await getDocs(
-          query(
-            collection(db, "bookings"),
-            where("coursePath", "==", coursePath),
-          ),
-        );
-        const counts = {};
-        const addonCounts = {};
-        globalBSnap.docs.forEach((d) => {
-          const bData = d.data();
-          counts[bData.eventId] = (counts[bData.eventId] || 0) + 1;
-          if (bData.selectedAddons && Array.isArray(bData.selectedAddons)) {
-            bData.selectedAddons.forEach((addonId) => {
-              const key = `${bData.eventId}_${addonId}`;
-              addonCounts[key] = (addonCounts[key] || 0) + 1;
-            });
-          }
-        });
         if (isMounted) {
-          setEventBookingCounts(counts);
-          setAddonBookingCounts(addonCounts);
+          setAvailableDates(filteredEvents);
+          if (filteredEvents.length > 0) {
+            const d = new Date(filteredEvents[0].date);
+            setCurrentViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
+          }
         }
 
-        if (currentUser) {
+        // 2. NON-CRITICAL FETCH: Separate block to prevent crashes for guests
+        try {
+          const scheduleSnap = await getDoc(doc(db, "schedules", docId));
+          if (scheduleSnap.exists() && isMounted)
+            setScheduleData(scheduleSnap.data());
+
+          const globalBSnap = await getDocs(
+            query(
+              collection(db, "bookings"),
+              where("coursePath", "==", coursePath),
+            ),
+          );
+          const counts = {};
+          const addonCounts = {};
+          globalBSnap.docs.forEach((d) => {
+            const bData = d.data();
+            counts[bData.eventId] = (counts[bData.eventId] || 0) + 1;
+            if (bData.selectedAddons && Array.isArray(bData.selectedAddons)) {
+              bData.selectedAddons.forEach((addonId) => {
+                const key = `${bData.eventId}_${addonId}`;
+                addonCounts[key] = (addonCounts[key] || 0) + 1;
+              });
+            }
+          });
+          if (isMounted) {
+            setEventBookingCounts(counts);
+            setAddonBookingCounts(addonCounts);
+          }
+        } catch (subErr) {
+          console.warn(
+            "Non-critical data fetch failed (Permission likely restricted for guests):",
+            subErr,
+          );
+        }
+
+        // 3. USER DATA FETCH: Only if logged in
+        if (currentUser && isMounted) {
           const userBSnap = await getDocs(
             query(
               collection(db, "bookings"),
               where("userId", "==", currentUser.uid),
             ),
           );
-          if (isMounted)
-            setUserBookedIds(userBSnap.docs.map((d) => d.data().eventId));
-        }
-
-        if (filteredEvents.length > 0 && isMounted) {
-          const nextAvailable = filteredEvents[0];
-          const d = new Date(nextAvailable.date);
-          setCurrentViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
+          setUserBookedIds(userBSnap.docs.map((d) => d.data().eventId));
         }
       } catch (err) {
-        console.error(err);
+        console.error("Critical fetch error:", err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -359,7 +370,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
           </div>
 
           <div style={S.legendWrapperStyle(isMobile)}>
-            {/* Status Row: Available / Selected / Full sitting close together */}
+            {/* Status Row: Available / Selected / Full */}
             <div style={S.legendStatusRowStyle(isMobile)}>
               <div style={S.legendItemStyle(isMobile)}>
                 <div
@@ -384,7 +395,7 @@ export default function PriceDisplay({ coursePath, currentLang }) {
               </div>
             </div>
 
-            {/* Special Add-on Events Flowing Below with tighter spacing */}
+            {/* Special Add-on Events underneath */}
             {pricing?.specialEvents && pricing.specialEvents.length > 0 && (
               <div
                 style={{

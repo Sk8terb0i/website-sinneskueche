@@ -139,33 +139,59 @@ const sendGuestPackCodeEmail = (
   });
 };
 
-const sendBookingEmail = (
+const sendBookingEmail = async (
   transaction,
   email,
   name,
-  courseKey,
+  coursePath,
   dates,
   lang,
   isGuest,
   origin,
 ) => {
   if (!email || dates.length === 0) return;
+  const courseKey = getCleanCourseKey(coursePath);
+  const sanitizedId = coursePath.replace(/\//g, "");
+
+  // Resolve Add-on info from Reminder Config
+  const reminderRef = db.collection("course_reminders").doc(sanitizedId);
+  const reminderSnap = await (transaction
+    ? transaction.get(reminderRef)
+    : reminderRef.get());
+  const addonTexts = reminderSnap.exists
+    ? reminderSnap.data()[lang]?.addonTexts || {}
+    : {};
+
   const mailRef = db.collection("mail").doc();
   const subject =
     lang === "de" ? `Bestätigung: ${courseKey}` : `Confirmation: ${courseKey}`;
+
   const datesHtml = dates
     .map((d) => {
       const fDate = formatDate(d.date);
       const fTime = d.time ? ` | ${d.time}` : "";
+
+      let addonBlock = "";
+      if (d.selectedAddons && Array.isArray(d.selectedAddons)) {
+        d.selectedAddons.forEach((id) => {
+          if (addonTexts[id]) {
+            addonBlock += `<div style="margin-top: 8px; padding: 12px; background: #fff; border-left: 3px solid #9960a8; font-size: 13px; color: #1c0700; white-space: pre-wrap;">${addonTexts[id]}</div>`;
+          }
+        });
+      }
+
       return `
-      <li style="margin-bottom: 12px; list-style: none; font-size: 15px;">
-        <span style="display: inline-block; font-weight: bold;">${fDate}${fTime}</span> 
-        <a href="${getGoogleCalLink(courseKey, d.date)}" target="_blank" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff; margin-left: 10px; vertical-align: middle;">${lang === "de" ? "📅 Zum Kalender" : "📅 Add to Calendar"}</a>
+      <li style="margin-bottom: 18px; list-style: none; font-size: 15px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+          <span style="font-weight: bold;">${fDate}${fTime}</span> 
+          <a href="${getGoogleCalLink(courseKey, d.date)}" target="_blank" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff;">${lang === "de" ? "📅 Zum Kalender" : "📅 Add to Calendar"}</a>
+        </div>
+        ${addonBlock}
       </li>`;
     })
     .join("");
 
-  transaction.set(mailRef, {
+  const mailData = {
     to: email,
     message: {
       subject: subject,
@@ -182,7 +208,10 @@ const sendBookingEmail = (
           <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
         </div>`,
     },
-  });
+  };
+
+  if (transaction) transaction.set(mailRef, mailData);
+  else await mailRef.set(mailData);
 };
 
 const sendCancellationEmail = (
@@ -397,6 +426,7 @@ exports.handleStripeWebhook = onRequest(
               eventId: d.id,
               date: d.date,
               coursePath,
+              selectedAddons: d.selectedAddons || [], // Tracking add-ons
               status: "confirmed",
               lang,
               timestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -404,11 +434,11 @@ exports.handleStripeWebhook = onRequest(
           });
 
           if (parsedDates.length > 0) {
-            sendBookingEmail(
+            await sendBookingEmail(
               transaction,
               email,
               finalName,
-              courseKey,
+              coursePath,
               parsedDates,
               lang,
               isGuest,
@@ -429,7 +459,7 @@ exports.handleStripeWebhook = onRequest(
 );
 
 // ============================================================================
-// 3. BOOK WITH CREDITS
+// 3. ADMIN & USER ACTIONS
 // ============================================================================
 exports.bookWithCredits = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
@@ -452,17 +482,17 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
         eventId: d.id,
         date: d.date,
         coursePath,
+        selectedAddons: d.selectedAddons || [], // Addons tracked
         status: "confirmed",
         lang: currentLang || "en",
-        type: "credit_redemption",
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
-    sendBookingEmail(
+    await sendBookingEmail(
       transaction,
       email,
       firstName,
-      courseKey,
+      coursePath,
       selectedDates,
       currentLang || "en",
       false,
@@ -472,129 +502,6 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
   });
 });
 
-// ============================================================================
-// 4. AUTOMATED COURSE REMINDERS (Daily at 08:00)
-// ============================================================================
-exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
-  const today = new Date();
-  const remindersSnap = await db.collection("course_reminders").get();
-  if (remindersSnap.empty) return;
-
-  const reminderConfigs = {};
-  remindersSnap.forEach((doc) => {
-    reminderConfigs[doc.id] = doc.data();
-  });
-
-  for (const courseId in reminderConfigs) {
-    const config = reminderConfigs[courseId];
-    const daysBefore = config.daysBefore || 3;
-    const targetDate = new Date();
-    targetDate.setDate(today.getDate() + daysBefore);
-    const targetDateStr = targetDate.toISOString().split("T")[0];
-
-    const bookingsSnap = await db
-      .collection("bookings")
-      .where("coursePath", "in", [`/${courseId}`, courseId])
-      .where("date", "==", targetDateStr)
-      .where("status", "==", "confirmed")
-      .get();
-
-    for (const bDoc of bookingsSnap.docs) {
-      const booking = bDoc.data();
-      if (booking.reminderSent) continue;
-
-      let email = booking.guestEmail;
-      let name = booking.guestName || "Customer";
-      let isFirstTimer = false;
-
-      if (booking.userId !== "GUEST_USER") {
-        const uSnap = await db.collection("users").doc(booking.userId).get();
-        if (uSnap.exists) {
-          email = uSnap.data().email;
-          name = uSnap.data().firstName || name;
-          const prevBookings = await db
-            .collection("bookings")
-            .where("userId", "==", booking.userId)
-            .where("coursePath", "==", booking.coursePath)
-            .limit(2)
-            .get();
-          isFirstTimer = prevBookings.size <= 1;
-        }
-      } else {
-        isFirstTimer = true; // Guest is default First-Timer
-      }
-
-      const lang = booking.lang || "en";
-      const template = config[lang] || config["en"];
-
-      let courseTime = "";
-      const evSnap = await db.collection("events").doc(booking.eventId).get();
-      if (evSnap.exists) courseTime = evSnap.data().time || "";
-
-      const replacements = {
-        "{userName}": name,
-        "{courseName}": getCleanCourseKey(booking.coursePath),
-        "{courseDate}": formatDate(booking.date),
-        "{courseTime}": courseTime,
-      };
-      let subject = template.subject;
-      let body = template.text;
-      Object.keys(replacements).forEach((k) => {
-        subject = subject.split(k).join(replacements[k]);
-        body = body.split(k).join(replacements[k]);
-      });
-
-      if (isFirstTimer && template.firstTimerText)
-        body += "\n\n" + template.firstTimerText;
-
-      await db.collection("mail").add({
-        to: email,
-        message: {
-          subject,
-          html: `<div style="font-family: Arial; background: #fffce3; padding: 30px; color: #1c0700; border-radius: 12px; border: 1px solid #caaff3;"><div style="white-space: pre-wrap;">${body}</div></div>`,
-        },
-      });
-      await bDoc.ref.update({ reminderSent: true });
-    }
-  }
-});
-
-// ============================================================================
-// 5. RENTAL REQUEST TRIGGER
-// ============================================================================
-exports.onRentRequestCreate = onDocumentCreated(
-  "rent_requests/{requestId}",
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const data = snap.data();
-    const settingsSnap = await db
-      .collection("settings")
-      .doc("admin_config")
-      .get();
-    const adminEmail = settingsSnap.exists
-      ? settingsSnap.data().adminEmail
-      : null;
-    if (!adminEmail) return;
-
-    await db.collection("mail").add({
-      to: adminEmail,
-      message: {
-        subject: `New Rental Request: ${data.name}`,
-        html: `<div style="font-family: Arial; padding: 20px; background: #fffce3; border: 1px solid #caaff3; border-radius: 12px;">
-        <h2>New Rental Request</h2>
-        <p><strong>From:</strong> ${data.name}</p>
-        <p><strong>Date:</strong> ${data.date}</p>
-        <p><strong>Message:</strong><br/>${data.message}</p>
-      </div>`,
-      },
-    });
-  },
-);
-
-// ============================================================================
-// 6. ADMIN & USER ACTIONS (Cancel, Redeem, etc.)
-// ============================================================================
 exports.redeemPackCode = onCall({ cors: true }, async (request) => {
   const { coursePath, selectedDates, packCode, guestInfo, currentLang } =
     request.data;
@@ -616,16 +523,17 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
         eventId: d.id,
         date: d.date,
         coursePath,
+        selectedAddons: d.selectedAddons || [], // Addons tracked
         status: "confirmed",
         lang: currentLang || "en",
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
-    sendBookingEmail(
+    await sendBookingEmail(
       t,
       guestInfo.email,
       guestInfo.firstName,
-      courseKey,
+      coursePath,
       selectedDates,
       currentLang || "en",
       true,
@@ -652,7 +560,6 @@ exports.cancelBooking = onCall({ cors: true }, async (request) => {
   });
 });
 
-// 7. ADMIN CANCEL EVENT (Refunds everyone)
 exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
   if (!request.auth)
     throw new HttpsError("unauthenticated", "Must be logged in.");
@@ -715,7 +622,136 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
   });
 });
 
-// 8. REQUEST INSTRUCTOR AVAILABILITIES
+// ============================================================================
+// 4. AUTOMATED COURSE REMINDERS
+// ============================================================================
+exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
+  const today = new Date();
+  const remindersSnap = await db.collection("course_reminders").get();
+  if (remindersSnap.empty) return;
+
+  const reminderConfigs = {};
+  remindersSnap.forEach((doc) => {
+    reminderConfigs[doc.id] = doc.data();
+  });
+
+  for (const courseId in reminderConfigs) {
+    const config = reminderConfigs[courseId];
+    const daysBefore = config.daysBefore || 3;
+    const targetDate = new Date();
+    targetDate.setDate(today.getDate() + daysBefore);
+    const targetDateStr = targetDate.toISOString().split("T")[0];
+
+    const bookingsSnap = await db
+      .collection("bookings")
+      .where("coursePath", "in", [`/${courseId}`, courseId])
+      .where("date", "==", targetDateStr)
+      .where("status", "==", "confirmed")
+      .get();
+
+    for (const bDoc of bookingsSnap.docs) {
+      const booking = bDoc.data();
+      if (booking.reminderSent) continue;
+
+      let email = booking.guestEmail;
+      let name = booking.guestName || "Customer";
+      let isFirstTimer = false;
+
+      if (booking.userId !== "GUEST_USER") {
+        const uSnap = await db.collection("users").doc(booking.userId).get();
+        if (uSnap.exists) {
+          email = uSnap.data().email;
+          name = uSnap.data().firstName || name;
+          const prevBookings = await db
+            .collection("bookings")
+            .where("userId", "==", booking.userId)
+            .where("coursePath", "==", booking.coursePath)
+            .limit(2)
+            .get();
+          isFirstTimer = prevBookings.size <= 1;
+        }
+      } else {
+        isFirstTimer = true;
+      }
+
+      const lang = booking.lang || "en";
+      const template = config[lang] || config["en"];
+
+      let courseTime = "";
+      const evSnap = await db.collection("events").doc(booking.eventId).get();
+      if (evSnap.exists) courseTime = evSnap.data().time || "";
+
+      const replacements = {
+        "{userName}": name,
+        "{courseName}": getCleanCourseKey(booking.coursePath),
+        "{courseDate}": formatDate(booking.date),
+        "{courseTime}": courseTime,
+      };
+      let subject = template.subject;
+      let body = template.text;
+      Object.keys(replacements).forEach((k) => {
+        subject = subject.split(k).join(replacements[k]);
+        body = body.split(k).join(replacements[k]);
+      });
+
+      if (isFirstTimer && template.firstTimerText)
+        body += "\n\n" + template.firstTimerText;
+
+      // Conditional Add-on text appending
+      if (booking.selectedAddons && Array.isArray(booking.selectedAddons)) {
+        const addonTexts = template.addonTexts || {};
+        booking.selectedAddons.forEach((addonId) => {
+          if (addonTexts[addonId]) {
+            body += "\n\n" + addonTexts[addonId];
+          }
+        });
+      }
+
+      await db.collection("mail").add({
+        to: email,
+        message: {
+          subject,
+          html: `<div style="font-family: Arial; background: #fffce3; padding: 30px; color: #1c0700; border-radius: 12px; border: 1px solid #caaff3;"><div style="white-space: pre-wrap;">${body}</div></div>`,
+        },
+      });
+      await bDoc.ref.update({ reminderSent: true });
+    }
+  }
+});
+
+// ============================================================================
+// 5. MISC TRIGGERS & INSTRUCTOR ACTIONS
+// ============================================================================
+exports.onRentRequestCreate = onDocumentCreated(
+  "rent_requests/{requestId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    const settingsSnap = await db
+      .collection("settings")
+      .doc("admin_config")
+      .get();
+    const adminEmail = settingsSnap.exists
+      ? settingsSnap.data().adminEmail
+      : null;
+    if (!adminEmail) return;
+
+    await db.collection("mail").add({
+      to: adminEmail,
+      message: {
+        subject: `New Rental Request: ${data.name}`,
+        html: `<div style="font-family: Arial; padding: 20px; background: #fffce3; border: 1px solid #caaff3; border-radius: 12px;">
+        <h2>New Rental Request</h2>
+        <p><strong>From:</strong> ${data.name}</p>
+        <p><strong>Date:</strong> ${data.date}</p>
+        <p><strong>Message:</strong><br/>${data.message}</p>
+      </div>`,
+      },
+    });
+  },
+);
+
 exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
   const { courseId, instructors } = request.data;
   const courseKey = getCleanCourseKey(courseId);
@@ -746,15 +782,11 @@ exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
   return { success: true };
 });
 
-// 9. SEND FINAL SCHEDULES TO INSTRUCTORS
 exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
   const { courseId, assignments, specialAssignments } = request.data;
   const courseKey = getCleanCourseKey(courseId);
-
-  // Group assignments by instructor
   const instructorSchedules = {};
 
-  // Resolve event names and instructors
   for (const eventId in assignments) {
     const uids = assignments[eventId];
     const eventSnap = await db.collection("events").doc(eventId).get();
@@ -763,7 +795,6 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
 
     for (const uid of uids) {
       if (!instructorSchedules[uid]) instructorSchedules[uid] = [];
-
       const others = uids.filter((id) => id !== uid);
       const otherNames = await Promise.all(
         others.map(async (id) => {
@@ -774,7 +805,6 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
         }),
       );
 
-      // Find add-on names for this date
       let addonText = "";
       const addonIds = Array.isArray(specialAssignments[eventId])
         ? specialAssignments[eventId]
@@ -805,13 +835,11 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
     }
   }
 
-  // Send the emails
   for (const uid in instructorSchedules) {
     const userSnap = await db.collection("users").doc(uid).get();
     if (!userSnap.exists) continue;
     const { email, firstName } = userSnap.data();
     const schedule = instructorSchedules[uid];
-
     const listHtml = schedule
       .map(
         (s) => `
@@ -822,8 +850,7 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
         <div style="margin-top: 10px;">
           <a href="${getGoogleCalLink(courseKey + (s.addon ? " (" + s.addon + ")" : ""), s.date)}" target="_blank" style="font-size: 11px; text-decoration: none; color: #9960a8; border: 1px solid #9960a8; padding: 4px 8px; border-radius: 4px; background: white;">📅 Add to Calendar</a>
         </div>
-      </li>
-    `,
+      </li>`,
       )
       .join("");
 

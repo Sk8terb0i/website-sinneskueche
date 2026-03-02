@@ -95,6 +95,7 @@ export default function EventsTab({
         "Are you sure? This will refund all participants and delete the event.",
       participants: "Participants",
       noParticipants: "No bookings yet.",
+      addons: "Add-ons:",
     },
     de: {
       newEntry: "NEUER EINTRAG",
@@ -118,6 +119,7 @@ export default function EventsTab({
         "Bist du sicher? Alle Teilnehmer erhalten eine Rückerstattung und der Termin wird gelöscht.",
       participants: "Teilnehmer",
       noParticipants: "Noch keine Buchungen.",
+      addons: "Extras:",
     },
   }[currentLang || "en"];
 
@@ -158,7 +160,7 @@ export default function EventsTab({
             ...data,
             id: docSnap.id,
             bookedCount: bSnap.size,
-            bookings: bSnap.docs.map((d) => d.data()),
+            bookings: bSnap.docs.map((d) => ({ ...d.data(), id: d.id })),
           };
         }),
       );
@@ -186,20 +188,44 @@ export default function EventsTab({
     if (event.bookedCount === 0) return alert(labels.noParticipants);
 
     if (!participantCache[event.id]) {
+      // 1. Fetch course settings to get Add-on names
+      const sanitizedId = event.link.replace(/\//g, "");
+      const settingsSnap = await getDoc(
+        doc(db, "course_settings", sanitizedId),
+      );
+      const specialEvents = settingsSnap.exists()
+        ? settingsSnap.data().specialEvents || []
+        : [];
+
+      // 2. Map participants and their selected add-ons
       const userDetails = await Promise.all(
         event.bookings.map(async (b) => {
+          let baseInfo = {};
           if (b.userId === "GUEST_USER") {
-            return {
+            baseInfo = {
               firstName: b.guestName || "Guest",
               lastName: "(Guest)",
               email: b.guestEmail || "Email not found",
               isGuest: true,
             };
+          } else {
+            const uSnap = await getDoc(doc(db, "users", b.userId));
+            baseInfo = uSnap.exists()
+              ? uSnap.data()
+              : { firstName: "Unknown", lastName: "User", email: "N/A" };
           }
-          const uSnap = await getDoc(doc(db, "users", b.userId));
-          return uSnap.exists()
-            ? uSnap.data()
-            : { firstName: "Unknown", lastName: "User", email: "N/A" };
+
+          // Resolve Add-on IDs to Names
+          const addonNames = (b.selectedAddons || []).map((id) => {
+            const match = specialEvents.find((se) => se.id === id);
+            return match
+              ? currentLang === "de"
+                ? match.nameDe
+                : match.nameEn
+              : id;
+          });
+
+          return { ...baseInfo, addons: addonNames };
         }),
       );
       setParticipantCache((prev) => ({ ...prev, [event.id]: userDetails }));
@@ -571,6 +597,7 @@ export default function EventsTab({
                                     borderRadius: "8px",
                                     color: "#9960a8",
                                     display: "flex",
+                                    alignItems: "center",
                                   }}
                                 >
                                   <Edit2 size={14} />
@@ -631,21 +658,50 @@ export default function EventsTab({
                                     <div
                                       style={{
                                         display: "flex",
-                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        alignItems: "flex-start",
+                                        flexWrap: "wrap",
                                         gap: "8px",
                                       }}
                                     >
-                                      <User size={12} />
-                                      <strong
+                                      <div
                                         style={{
-                                          color: u.isGuest
-                                            ? "#9960a8"
-                                            : "inherit",
-                                          fontSize: "0.85rem",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: "8px",
                                         }}
                                       >
-                                        {u.firstName} {u.lastName}
-                                      </strong>
+                                        <User size={12} />
+                                        <strong
+                                          style={{
+                                            color: u.isGuest
+                                              ? "#9960a8"
+                                              : "inherit",
+                                            fontSize: "0.85rem",
+                                          }}
+                                        >
+                                          {u.firstName} {u.lastName}
+                                        </strong>
+                                      </div>
+
+                                      {/* RENDER ADDONS HERE */}
+                                      {u.addons?.length > 0 && (
+                                        <div style={styles.addonList}>
+                                          {u.addons.map((an, ai) => (
+                                            <span
+                                              key={ai}
+                                              style={styles.addonBadge}
+                                            >
+                                              <Star
+                                                size={10}
+                                                fill="#caaff3"
+                                                color="#caaff3"
+                                              />{" "}
+                                              {an}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
                                     <span style={styles.contactText}>
                                       <Mail size={10} /> {u.email}
@@ -806,19 +862,44 @@ export default function EventsTab({
                         <div
                           style={{
                             display: "flex",
-                            alignItems: "center",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            flexWrap: "wrap",
                             gap: "8px",
                           }}
                         >
-                          <User size={12} />
-                          <strong
+                          <div
                             style={{
-                              color: u.isGuest ? "#9960a8" : "inherit",
-                              fontSize: "0.85rem",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
                             }}
                           >
-                            {u.firstName} {u.lastName}
-                          </strong>
+                            <User size={12} />
+                            <strong
+                              style={{
+                                color: u.isGuest ? "#9960a8" : "inherit",
+                                fontSize: "0.85rem",
+                              }}
+                            >
+                              {u.firstName} {u.lastName}
+                            </strong>
+                          </div>
+
+                          {u.addons?.length > 0 && (
+                            <div style={styles.addonList}>
+                              {u.addons.map((an, ai) => (
+                                <span key={ai} style={styles.addonBadge}>
+                                  <Star
+                                    size={10}
+                                    fill="#caaff3"
+                                    color="#caaff3"
+                                  />{" "}
+                                  {an}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <span style={styles.contactText}>
                           <Mail size={10} /> {u.email}
@@ -923,14 +1004,6 @@ const styles = {
     alignItems: "center",
     opacity: 0.7,
   },
-  eventMainInfo: {
-    flex: 1,
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    fontSize: "0.85rem",
-    flexWrap: "wrap",
-  },
   dateLabel: { color: "#caaff3", fontWeight: "700" },
   timeLabel: {
     opacity: 0.6,
@@ -989,5 +1062,22 @@ const styles = {
     gap: "5px",
     wordBreak: "break-all",
     paddingLeft: "20px",
+  },
+  addonList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+    alignItems: "flex-end",
+  },
+  addonBadge: {
+    fontSize: "0.65rem",
+    fontWeight: "800",
+    color: "#9960a8",
+    backgroundColor: "rgba(202, 175, 243, 0.15)",
+    padding: "2px 8px",
+    borderRadius: "4px",
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
   },
 };
