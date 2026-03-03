@@ -20,7 +20,6 @@ import {
 } from "./AdminStyles";
 
 export default function EmailTemplatesTab({ isMobile, currentLang }) {
-  // 1. Bilingual UI Strings
   const uiLabels = {
     en: {
       type: "Email Type",
@@ -54,7 +53,6 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
     },
   }[currentLang || "en"];
 
-  // 2. Bilingual Template Category Labels
   const typeLabels = {
     pack_purchase_user: { en: "Pack Success (User)", de: "Paketkauf (Nutzer)" },
     pack_purchase_guest: { en: "Pack Success (Guest)", de: "Paketkauf (Gast)" },
@@ -117,18 +115,36 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
     },
     {
       id: "cancellation_user",
-      vars: ["{userName}", "{courseKey}", "{courseDate}"],
+      vars: ["{userName}", "{courseKey}", "{courseDate}", "{refundAmount}"],
       defaults: {
-        en: { subject: "Session Cancelled: {courseKey}", body: "" },
-        de: { subject: "Termin abgesagt: {courseKey}", body: "" },
+        en: {
+          subject: "Session Cancelled: {courseKey}",
+          body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Session Cancelled</h2>\n  <p>Hi {userName},</p>\n  <p>The session for <strong>{courseKey}</strong> on <strong>{courseDate}</strong> has been cancelled.</p>\n  <p>We have automatically credited <strong>{refundAmount} session(s)</strong> back to your profile.</p>\n  <br/><p>Kind Regards,<br/>Atelier Sinnesküche</p>\n</div>`,
+        },
+        de: {
+          subject: "Termin abgesagt: {courseKey}",
+          body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Termin wurde abgesagt</h2>\n  <p>Hallo {userName},</p>\n  <p>Der Termin für <strong>{courseKey}</strong> am <strong>{courseDate}</strong> wurde abgesagt.</p>\n  <p>Wir haben deinem Profil automatisch <strong>{refundAmount} Termin(e)</strong> gutgeschrieben.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+        },
       },
     },
     {
       id: "cancellation_guest",
-      vars: ["{userName}", "{courseKey}", "{courseDate}", "{refundCode}"],
+      vars: [
+        "{userName}",
+        "{courseKey}",
+        "{courseDate}",
+        "{refundCode}",
+        "{refundAmount}",
+      ],
       defaults: {
-        en: { subject: "Session Cancelled: {courseKey}", body: "" },
-        de: { subject: "Termin abgesagt: {courseKey}", body: "" },
+        en: {
+          subject: "Session Cancelled: {courseKey}",
+          body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Session Cancelled</h2>\n  <p>Hi {userName},</p>\n  <p>The session for <strong>{courseKey}</strong> on <strong>{courseDate}</strong> has been cancelled.</p>\n  <p>As a guest, here is your unique code to redeem your <strong>{refundAmount} refunded session(s)</strong> on our website:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">\n    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9960a8; margin: 0;">{refundCode}</p>\n  </div>\n  <p>You can apply this code during your next checkout.</p>\n  <br/><p>Kind Regards,<br/>Atelier Sinnesküche</p>\n</div>`,
+        },
+        de: {
+          subject: "Termin abgesagt: {courseKey}",
+          body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Termin wurde abgesagt</h2>\n  <p>Hallo {userName},</p>\n  <p>Der Termin für <strong>{courseKey}</strong> am <strong>{courseDate}</strong> wurde abgesagt.</p>\n  <p>Da du als Gast gebucht hast, ist hier dein einzigartiger Code, um deine <strong>{refundAmount} erstatteten Termine</strong> auf unserer Website einzulösen:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">\n    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9960a8; margin: 0;">{refundCode}</p>\n  </div>\n  <p>Du kannst diesen Code bei deiner nächsten Buchung an der Kasse anwenden.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+        },
       },
     },
     {
@@ -218,6 +234,7 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
       "{netIncrease}": "5",
       "{courseDate}": "15.05.2025",
       "{refundCode}": "X9Y8Z7W6",
+      "{refundAmount}": "2",
       "{profileUrl}": "#",
       "{adminUrl}": "#",
       "{registrationCTA}":
@@ -256,7 +273,7 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
                 paddingRight: "40px",
                 backgroundColor: "rgba(202, 175, 243, 0.1)",
                 cursor: "pointer",
-                appearance: "none", // FIXED: Removes default browser double arrow
+                appearance: "none",
                 WebkitAppearance: "none",
                 MozAppearance: "none",
               }}

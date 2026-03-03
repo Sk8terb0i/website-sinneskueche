@@ -318,6 +318,7 @@ const sendCancellationEmail = async (
   date,
   lang,
   code = null,
+  amount = 1, // Added amount parameter for ticket aggregation
   origin,
 ) => {
   if (!email) return;
@@ -330,6 +331,7 @@ const sendCancellationEmail = async (
     "{courseKey}": courseKey,
     "{courseDate}": formatDate(date),
     "{refundCode}": code || "",
+    "{refundAmount}": amount.toString(), // Passes the aggregated amount to the email
   };
 
   const mailRef = db.collection("mail").doc();
@@ -814,7 +816,46 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
       .where("eventId", "==", eventId)
       .get();
 
-    // 2. Prepare email data outside the transaction
+    // 2. Aggregate bookings by user to combine multiple tickets into one refund
+    const aggregatedBookings = {};
+    for (const bDoc of bookingsSnap.docs) {
+      const bData = bDoc.data();
+      const isGuest = bData.userId === "GUEST_USER";
+      // Fallback key if guestEmail is missing (unlikely, but safe)
+      const key = isGuest
+        ? `guest_${bData.guestEmail || bDoc.id}`
+        : `user_${bData.userId}`;
+
+      if (!aggregatedBookings[key]) {
+        aggregatedBookings[key] = {
+          isGuest,
+          userId: bData.userId,
+          guestEmail: bData.guestEmail,
+          guestName: bData.guestName,
+          count: 0,
+          bookingRefs: [],
+        };
+      }
+      aggregatedBookings[key].count += 1;
+      aggregatedBookings[key].bookingRefs.push(bDoc.ref);
+    }
+
+    // 3. Pre-fetch user emails for registered users to avoid reads inside the write-phase
+    const userInfos = {};
+    for (const key in aggregatedBookings) {
+      const bData = aggregatedBookings[key];
+      if (!bData.isGuest) {
+        const uSnap = await db.collection("users").doc(bData.userId).get();
+        if (uSnap.exists) {
+          userInfos[bData.userId] = {
+            email: uSnap.data().email,
+            name: uSnap.data().firstName || "Customer",
+          };
+        }
+      }
+    }
+
+    // 4. Prepare email data outside the transaction
     const emailsToSend = [];
 
     await db.runTransaction(async (transaction) => {
@@ -827,55 +868,68 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
       const courseKey = getCleanCourseKey(eventData.link || "");
 
       // ALL WRITES
-      for (const bDoc of bookingsSnap.docs) {
-        const bData = bDoc.data();
+      for (const key in aggregatedBookings) {
+        const bData = aggregatedBookings[key];
+        const amount = bData.count;
 
-        if (bData.userId === "GUEST_USER") {
+        if (bData.isGuest) {
           const newCode = generatePackCode();
           transaction.set(db.collection("pack_codes").doc(newCode), {
             code: newCode,
             courseKey,
-            remainingCredits: 1,
+            remainingCredits: amount,
             buyerEmail: bData.guestEmail,
             buyerName: bData.guestName,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
-          // Store data for email later
+
           emailsToSend.push({
             email: bData.guestEmail,
             name: bData.guestName,
             courseKey,
             date: eventData.date,
             code: newCode,
+            amount: amount,
           });
         } else {
           const userRef = db.collection("users").doc(bData.userId);
           transaction.update(userRef, {
-            [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
+            [`credits.${courseKey}`]:
+              admin.firestore.FieldValue.increment(amount),
           });
+
           const historyRef = db.collection("credit_history").doc();
           transaction.set(historyRef, {
             userId: bData.userId,
             courseKey,
-            amount: 1,
+            amount: amount,
             type: "refund",
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
-          // Store data for email later
-          emailsToSend.push({
-            email: bData.guestEmail || "Customer",
-            name: "Customer",
-            courseKey,
-            date: eventData.date,
-            code: null,
-          });
+
+          const uInfo = userInfos[bData.userId];
+          if (uInfo && uInfo.email) {
+            emailsToSend.push({
+              email: uInfo.email,
+              name: uInfo.name,
+              courseKey,
+              date: eventData.date,
+              code: null,
+              amount: amount,
+            });
+          }
         }
-        transaction.delete(bDoc.ref);
+
+        // Delete all associated bookings for this user
+        for (const ref of bData.bookingRefs) {
+          transaction.delete(ref);
+        }
       }
+
       transaction.delete(eventRef);
     });
 
-    // 3. SEND EMAILS OUTSIDE THE TRANSACTION
+    // 5. SEND EMAILS OUTSIDE THE TRANSACTION
     // This completely eliminates the "Read after Write" error.
     const emailPromises = emailsToSend.map((e) =>
       sendCancellationEmail(
@@ -886,6 +940,7 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
         e.date,
         lang,
         e.code,
+        e.amount,
         origin,
       ),
     );
