@@ -543,7 +543,7 @@ export default function BookingSummary({
       {!hasSelection ? (
         <div
           style={{
-            padding: "1.5rem",
+            padding: "0.85rem",
             border: "1px dashed rgba(28, 7, 0, 0.2)",
             borderRadius: "12px",
             textAlign: "center",
@@ -561,7 +561,7 @@ export default function BookingSummary({
           >
             {currentLang === "en"
               ? "Select a date from the calendar to book a single session."
-              : "Wähle einen Termin im Kalender, um einen Einzelkurs zu buchen."}
+              : "Termin im Kalender wählen, um einen Einzelkurs zu buchen."}
           </p>
         </div>
       ) : (
