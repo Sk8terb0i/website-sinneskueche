@@ -90,6 +90,7 @@ export default function EventsTab({
       cancelCourse: "CANCEL COURSE",
       deleteConfirm:
         "Are you sure? This will refund all participants and delete the event.",
+      cancelSuccess: "Event successfully cancelled and participants refunded.",
       participants: "Participants",
       noParticipants: "No bookings yet.",
       addons: "Add-ons:",
@@ -114,6 +115,7 @@ export default function EventsTab({
       cancelCourse: "ABSAGEN",
       deleteConfirm:
         "Bist du sicher? Alle Teilnehmer erhalten eine Rückerstattung und der Termin wird gelöscht.",
+      cancelSuccess: "Event erfolgreich abgesagt und Teilnehmer erstattet.",
       participants: "Teilnehmer",
       noParticipants: "Noch keine Buchungen.",
       addons: "Extras:",
@@ -183,6 +185,7 @@ export default function EventsTab({
       const specialEvents = settingsSnap.exists()
         ? settingsSnap.data().specialEvents || []
         : [];
+
       const userDetails = await Promise.all(
         event.bookings.map(async (b) => {
           let baseInfo =
@@ -207,7 +210,23 @@ export default function EventsTab({
           return { ...baseInfo, addons: addonNames };
         }),
       );
-      setParticipantCache((prev) => ({ ...prev, [event.id]: userDetails }));
+
+      // Group identical users to show quantity instead of duplicate rows
+      const groupedUsersMap = {};
+      userDetails.forEach((u) => {
+        const key = `${u.email}_${u.firstName}_${u.lastName}`;
+        if (!groupedUsersMap[key]) {
+          groupedUsersMap[key] = { ...u, ticketCount: 1 };
+        } else {
+          groupedUsersMap[key].ticketCount += 1;
+          groupedUsersMap[key].addons.push(...u.addons);
+        }
+      });
+
+      setParticipantCache((prev) => ({
+        ...prev,
+        [event.id]: Object.values(groupedUsersMap),
+      }));
     }
     setShowParticipantsFor(event.id);
   };
@@ -292,6 +311,7 @@ export default function EventsTab({
     try {
       await adminCancelFn({ eventId: ev.id, currentLang: currentLang || "en" });
       await fetchEvents();
+      alert(labels.cancelSuccess);
     } catch (err) {
       alert("Error cancelling event: " + err.message);
     } finally {
@@ -648,7 +668,9 @@ export default function EventsTab({
                                           fontSize: "0.85rem",
                                         }}
                                       >
-                                        {u.firstName} {u.lastName}
+                                        {u.firstName} {u.lastName}{" "}
+                                        {u.ticketCount > 1 &&
+                                          `(${u.ticketCount})`}
                                       </strong>
                                     </div>
                                     {u.addons?.length > 0 && (
