@@ -1018,7 +1018,7 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
   for (const eventId in assignments) {
     const uids = assignments[eventId];
     const eventSnap = await db.collection("events").doc(eventId).get();
-    if (!eventSnap.exists) continue; // Fixed: .exists is a property
+    if (!eventSnap.exists) continue;
     const eventData = eventSnap.data();
 
     for (const uid of uids) {
@@ -1043,7 +1043,6 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
           .doc(courseId.replace(/\//g, ""))
           .get();
         if (settingsSnap.exists) {
-          // Fixed: .exists is a property
           const definedAddons = settingsSnap.data().specialEvents || [];
           addonText = addonIds
             .map((id) => {
