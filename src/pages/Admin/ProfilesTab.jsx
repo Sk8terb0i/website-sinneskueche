@@ -28,6 +28,7 @@ export default function ProfilesTab({
   isMobile,
   currentUserRole,
   allowedCourses = [],
+  currentLang,
 }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,14 +36,40 @@ export default function ProfilesTab({
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
 
-  // Get list of all possible course paths from our data
+  const labels = {
+    en: {
+      search: "Search users...",
+      first: "First Name",
+      role: "Role",
+      user: "User",
+      courseAdmin: "Course Admin",
+      fullAdmin: "Full Admin",
+      permitted: "PERMITTED COURSES",
+      save: "Save",
+      cancel: "Cancel",
+      accessTo: "ACCESS TO:",
+    },
+    de: {
+      search: "Nutzer suchen...",
+      first: "Vorname",
+      role: "Rolle",
+      user: "Nutzer",
+      courseAdmin: "Kurs-Admin",
+      fullAdmin: "Haupt-Admin",
+      permitted: "ERLAUBTE KURSE",
+      save: "Speichern",
+      cancel: "Abbrechen",
+      accessTo: "ZUGRIFF AUF:",
+    },
+  }[currentLang || "en"];
+
   const allPossibleCourses = Array.from(
     new Map(
       planets
         .filter((p) => p.type === "courses")
         .flatMap((p) => p.courses || [])
         .filter((c) => c.link)
-        .map((course) => [course.link, course.text.en]),
+        .map((course) => [course.link, course.text[currentLang || "en"]]),
     ),
   );
 
@@ -103,9 +130,6 @@ export default function ProfilesTab({
     const matchesSearch =
       u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.firstName?.toLowerCase().includes(searchQuery.toLowerCase());
-
-    // If current viewer is a course_admin, they can only see users who have bookings in THEIR courses
-    // For now, we show all users to course_admins so they can find their students.
     return matchesSearch;
   });
 
@@ -131,7 +155,7 @@ export default function ProfilesTab({
           />
           <input
             type="text"
-            placeholder="Search users..."
+            placeholder={labels.search}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -181,27 +205,26 @@ export default function ProfilesTab({
                     onChange={(e) =>
                       setEditForm({ ...editForm, firstName: e.target.value })
                     }
-                    placeholder="First Name"
+                    placeholder={labels.first}
                   />
-
-                  <label style={S.labelStyle}>Role</label>
+                  <label style={S.labelStyle}>{labels.role}</label>
                   <select
                     style={S.inputStyle}
                     value={editForm.role}
-                    disabled={currentUserRole !== "admin"} // Only Full Admins can change roles
+                    disabled={currentUserRole !== "admin"}
                     onChange={(e) =>
                       setEditForm({ ...editForm, role: e.target.value })
                     }
                   >
-                    <option value="user">User</option>
-                    <option value="course_admin">Course Admin</option>
-                    <option value="admin">Full Admin</option>
+                    <option value="user">{labels.user}</option>
+                    <option value="course_admin">{labels.courseAdmin}</option>
+                    <option value="admin">{labels.fullAdmin}</option>
                   </select>
 
                   {editForm.role === "course_admin" && (
                     <div style={{ marginTop: "5px" }}>
                       <label style={{ ...S.labelStyle, fontSize: "0.65rem" }}>
-                        PERMITTED COURSES
+                        {labels.permitted}
                       </label>
                       <div
                         style={{
@@ -243,7 +266,7 @@ export default function ProfilesTab({
                       onClick={handleSave}
                       style={{ ...S.btnStyle, flex: 1 }}
                     >
-                      <Save size={16} /> Save
+                      <Save size={16} /> {labels.save}
                     </button>
                     <button
                       onClick={() => setEditingId(null)}
@@ -253,7 +276,7 @@ export default function ProfilesTab({
                         backgroundColor: "rgba(28,7,0,0.1)",
                       }}
                     >
-                      <X size={16} /> Cancel
+                      <X size={16} /> {labels.cancel}
                     </button>
                   </div>
                 </div>
@@ -299,7 +322,11 @@ export default function ProfilesTab({
                         textTransform: "uppercase",
                       }}
                     >
-                      {u.role}
+                      {u.role === "admin"
+                        ? labels.fullAdmin
+                        : u.role === "course_admin"
+                          ? labels.courseAdmin
+                          : labels.user}
                     </div>
                   </div>
                   {u.role === "course_admin" &&
@@ -312,7 +339,7 @@ export default function ProfilesTab({
                             marginBottom: "4px",
                           }}
                         >
-                          ACCESS TO:
+                          {labels.accessTo}
                         </p>
                         <div
                           style={{

@@ -21,7 +21,7 @@ import {
   Bell,
   CalendarClock,
   Pin,
-  Mail, // Added icon for Email Templates
+  Mail,
 } from "lucide-react";
 
 // Components & Styles
@@ -35,7 +35,7 @@ import ProfilesTab from "./ProfilesTab";
 import TermsTab from "./TermsTab";
 import RemindersTab from "./RemindersTab";
 import ScheduleTab from "./ScheduleTab";
-import EmailTemplatesTab from "./EmailTemplatesTab"; // Added new component
+import EmailTemplatesTab from "./EmailTemplatesTab";
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -57,11 +57,55 @@ export default function Admin({ currentLang, setCurrentLang }) {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
-
-  // Real-time notification state
   const [hasNewRentalRequests, setHasNewRentalRequests] = useState(false);
 
-  // Initialize state from localStorage, fallback to 'events'
+  const labels = {
+    en: {
+      loginTitle: "Atelier Login",
+      email: "Email",
+      password: "Password",
+      forgot: "Forgot?",
+      signIn: "Sign In",
+      fullAdmin: "Full Admin",
+      courseAdmin: "Course Admin",
+      logout: "Logout",
+      events: "Events",
+      profiles: "Profiles",
+      courseMgmt: "Course Management",
+      schedule: "Work Schedule",
+      reminders: "Reminders",
+      terms: "Terms",
+      emails: "Email Templates",
+      packCodes: "Pack Codes",
+      promotions: "Promotions",
+      rental: "Rental",
+      defaultView: "Default View",
+      setDefault: "Set as Default",
+    },
+    de: {
+      loginTitle: "Atelier Login",
+      email: "E-Mail",
+      password: "Passwort",
+      forgot: "Vergessen?",
+      signIn: "Anmelden",
+      fullAdmin: "Haupt-Admin",
+      courseAdmin: "Kurs-Admin",
+      logout: "Abmelden",
+      events: "Termine",
+      profiles: "Profile",
+      courseMgmt: "Kurse Verwalten",
+      schedule: "Stundenplan",
+      reminders: "Erinnerungen",
+      terms: "AGB",
+      emails: "E-Mail Vorlagen",
+      packCodes: "Punkte-Pakete",
+      promotions: "Rabattcodes",
+      rental: "Vermietung",
+      defaultView: "Standardansicht",
+      setDefault: "Als Standard setzen",
+    },
+  }[currentLang || "en"];
+
   const [activeTab, setActiveTab] = useState(() => {
     const hash = window.location.hash;
     if (hash.includes("?tab=")) {
@@ -71,14 +115,12 @@ export default function Admin({ currentLang, setCurrentLang }) {
     return localStorage.getItem("adminActiveTab") || "events";
   });
 
-  // Track the user's default tab
   const [defaultTab, setDefaultTab] = useState(() => {
     return localStorage.getItem("adminDefaultTab") || "events";
   });
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // Save to localStorage whenever activeTab changes
   useEffect(() => {
     localStorage.setItem("adminActiveTab", activeTab);
   }, [activeTab]);
@@ -97,12 +139,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
           ) {
             setUser(currentUser);
             setAdminData(data);
-
-            // Re-validate tab permissions on load
             const isFullAdmin = data.role === "admin";
             const savedTab = localStorage.getItem("adminActiveTab") || "events";
-
-            // If they try to access restricted tabs, bump them to events
             if (
               !isFullAdmin &&
               (savedTab === "profiles" ||
@@ -131,21 +169,17 @@ export default function Admin({ currentLang, setCurrentLang }) {
     };
   }, []);
 
-  // Listen for active rental requests
   useEffect(() => {
     if (!user || adminData?.role !== "admin") return;
-
     const unsubscribe = onSnapshot(collection(db, "rent_requests"), (snap) => {
       const hasPending = snap.docs.some((doc) => {
         const data = doc.data();
-        // Display dot if the request is pending, new, or has no status (unhandled)
         return (
           data.status === "pending" || data.status === "new" || !data.status
         );
       });
       setHasNewRentalRequests(hasPending);
     });
-
     return () => unsubscribe();
   }, [user, adminData]);
 
@@ -204,10 +238,10 @@ export default function Admin({ currentLang, setCurrentLang }) {
                 color: "#1c0700",
               }}
             >
-              Atelier Login
+              {labels.loginTitle}
             </h1>
           </div>
-          <label style={labelStyle}>Email</label>
+          <label style={labelStyle}>{labels.email}</label>
           <input
             type="email"
             value={email}
@@ -227,13 +261,13 @@ export default function Admin({ currentLang, setCurrentLang }) {
               alignItems: "baseline",
             }}
           >
-            <label style={labelStyle}>Password</label>
+            <label style={labelStyle}>{labels.password}</label>
             <button
               type="button"
               onClick={() => email && sendPasswordResetEmail(auth, email)}
               style={forgotLinkStyle}
             >
-              Forgot?
+              {labels.forgot}
             </button>
           </div>
           <input
@@ -249,7 +283,11 @@ export default function Admin({ currentLang, setCurrentLang }) {
             required
           />
           <button type="submit" disabled={isLoading} style={btnStyle}>
-            {isLoading ? <Loader2 className="spinner" size={18} /> : "Sign In"}
+            {isLoading ? (
+              <Loader2 className="spinner" size={18} />
+            ) : (
+              labels.signIn
+            )}
           </button>
         </form>
       </div>
@@ -306,7 +344,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
               letterSpacing: "1px",
             }}
           >
-            {isFullAdmin ? "Full Admin" : "Course Admin"}: {user.email}
+            {isFullAdmin ? labels.fullAdmin : labels.courseAdmin}: {user.email}
           </p>
         </div>
         <button
@@ -319,7 +357,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
             padding: "8px 16px",
           }}
         >
-          <LogOut size={16} /> {!isMobile && "Logout"}
+          <LogOut size={16} /> {!isMobile && labels.logout}
         </button>
       </header>
 
@@ -336,7 +374,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
         }}
         className="hide-scrollbar"
       >
-        {/* GROUP 1: Events & Profiles */}
         <div style={groupStyle}>
           <button
             onClick={() => setActiveTab("events")}
@@ -348,7 +385,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
               color: "#1c0700",
             }}
           >
-            <CalendarIcon size={16} /> Events
+            <CalendarIcon size={16} /> {labels.events}
           </button>
           {isFullAdmin && (
             <button
@@ -361,12 +398,11 @@ export default function Admin({ currentLang, setCurrentLang }) {
                 color: "#1c0700",
               }}
             >
-              <Users size={16} /> Profiles
+              <Users size={16} /> {labels.profiles}
             </button>
           )}
         </div>
 
-        {/* GROUP 2: Course Mgmt, Schedule, Reminders, Terms, Email Templates */}
         <div style={groupStyle}>
           <button
             onClick={() => setActiveTab("course-management")}
@@ -378,7 +414,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
               color: "#1c0700",
             }}
           >
-            <Tag size={16} /> Course Management
+            <Tag size={16} /> {labels.courseMgmt}
           </button>
 
           <button
@@ -391,7 +427,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
               color: "#1c0700",
             }}
           >
-            <CalendarClock size={16} /> Work Schedule
+            <CalendarClock size={16} /> {labels.schedule}
           </button>
 
           <button
@@ -404,7 +440,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
               color: "#1c0700",
             }}
           >
-            <Bell size={16} /> Reminders
+            <Bell size={16} /> {labels.reminders}
           </button>
           <button
             onClick={() => setActiveTab("terms")}
@@ -416,7 +452,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
               color: "#1c0700",
             }}
           >
-            <FileText size={16} /> Terms
+            <FileText size={16} /> {labels.terms}
           </button>
           <button
             onClick={() => setActiveTab("emails")}
@@ -428,11 +464,10 @@ export default function Admin({ currentLang, setCurrentLang }) {
               color: "#1c0700",
             }}
           >
-            <Mail size={16} /> Email Templates
+            <Mail size={16} /> {labels.emails}
           </button>
         </div>
 
-        {/* GROUP 3: Pack Codes & Promotions */}
         <div style={groupStyle}>
           {isFullAdmin && (
             <button
@@ -445,7 +480,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
                 color: "#1c0700",
               }}
             >
-              <CreditCard size={16} /> Pack Codes
+              <CreditCard size={16} /> {labels.packCodes}
             </button>
           )}
           <button
@@ -458,11 +493,10 @@ export default function Admin({ currentLang, setCurrentLang }) {
               color: "#1c0700",
             }}
           >
-            <Ticket size={16} /> Promotions
+            <Ticket size={16} /> {labels.promotions}
           </button>
         </div>
 
-        {/* GROUP 4: Rental */}
         {isFullAdmin && (
           <div style={groupStyle}>
             <button
@@ -473,10 +507,10 @@ export default function Admin({ currentLang, setCurrentLang }) {
                   activeTab === "rental" ? "#caaff3" : "transparent",
                 borderRadius: "100px",
                 color: "#1c0700",
-                position: "relative", // Added so the absolute dot works
+                position: "relative",
               }}
             >
-              <LayoutGrid size={16} /> Rental
+              <LayoutGrid size={16} /> {labels.rental}
               {hasNewRentalRequests && (
                 <span
                   style={{
@@ -495,7 +529,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
         )}
       </div>
 
-      {/* Default Tab Toggle */}
       <div
         style={{
           display: "flex",
@@ -526,13 +559,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
           }}
         >
           <Pin size={14} fill={defaultTab === activeTab ? "#9960a8" : "none"} />
-          {defaultTab === activeTab
-            ? currentLang === "en"
-              ? "Default View"
-              : "Standardansicht"
-            : currentLang === "en"
-              ? "Set as Default"
-              : "Als Standard setzen"}
+          {defaultTab === activeTab ? labels.defaultView : labels.setDefault}
         </button>
       </div>
 
@@ -546,25 +573,28 @@ export default function Admin({ currentLang, setCurrentLang }) {
           />
         )}
         {activeTab === "profiles" && isFullAdmin && (
-          <ProfilesTab isMobile={isMobile} currentUserRole={adminData.role} />
+          <ProfilesTab
+            isMobile={isMobile}
+            currentUserRole={adminData.role}
+            currentLang={currentLang}
+          />
         )}
         {activeTab === "course-management" && (
           <PricingTab
             isMobile={isMobile}
             userRole={adminData.role}
             allowedCourses={adminData.allowedCourses || []}
+            currentLang={currentLang}
           />
         )}
-
-        {/* RENDER THE NEW SCHEDULE TAB */}
         {activeTab === "schedule" && (
           <ScheduleTab
             isMobile={isMobile}
             userRole={adminData.role}
             allowedCourses={adminData.allowedCourses || []}
+            currentLang={currentLang}
           />
         )}
-
         {activeTab === "promotions" && (
           <PromotionsTab
             isMobile={isMobile}
@@ -578,6 +608,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
             isMobile={isMobile}
             userRole={adminData.role}
             allowedCourses={adminData.allowedCourses || []}
+            currentLang={currentLang}
           />
         )}
         {activeTab === "terms" && (
@@ -588,12 +619,16 @@ export default function Admin({ currentLang, setCurrentLang }) {
           />
         )}
         {activeTab === "emails" && (
-          <EmailTemplatesTab isMobile={isMobile} userRole={adminData.role} />
+          <EmailTemplatesTab isMobile={isMobile} currentLang={currentLang} />
         )}
         {isFullAdmin && (
           <>
-            {activeTab === "pack-codes" && <PackCodesTab isMobile={isMobile} />}
-            {activeTab === "rental" && <RentalTab isMobile={isMobile} />}
+            {activeTab === "pack-codes" && (
+              <PackCodesTab isMobile={isMobile} currentLang={currentLang} />
+            )}
+            {activeTab === "rental" && (
+              <RentalTab isMobile={isMobile} currentLang={currentLang} />
+            )}
           </>
         )}
       </div>

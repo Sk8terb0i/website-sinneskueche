@@ -11,7 +11,7 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
-  ShieldCheck, // Added to visually distinguish profile credits
+  ShieldCheck,
 } from "lucide-react";
 import {
   sectionTitleStyle,
@@ -20,23 +20,65 @@ import {
   inputStyle,
 } from "./AdminStyles";
 
-export default function PackCodesTab({ isMobile }) {
+export default function PackCodesTab({ isMobile, currentLang }) {
   const [packCodes, setPackCodes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-
   const [expandedGroups, setExpandedGroups] = useState({});
   const [columnCount, setColumnCount] = useState(1);
 
+  const labels = {
+    en: {
+      title: "Active Session Packs",
+      search: "Search codes, emails...",
+      refresh: "Refresh",
+      loading: "Loading credits...",
+      noMatch: "No codes match your search.",
+      noActive: "No active pack credits found.",
+      total: "Total",
+      credits: "Credits",
+      profCreated: "Profile Created:",
+      codeCreated: "Code Created:",
+      left: "left",
+      collapse: "Collapse",
+      show: "Show",
+      more: "More",
+      errProf:
+        "This balance is attached to a registered user profile. To modify it, please go to the 'Profiles' tab and edit the user directly.",
+      delConfirm:
+        "Are you sure you want to delete this guest pack code? Any remaining credits will be lost forever.",
+      errDel: "Error deleting code: ",
+    },
+    de: {
+      title: "Aktive Session-Packs",
+      search: "Codes, E-Mails suchen...",
+      refresh: "Aktualisieren",
+      loading: "Guthaben wird geladen...",
+      noMatch: "Keine Codes gefunden.",
+      noActive: "Keine aktiven Pakete gefunden.",
+      total: "Gesamt",
+      credits: "Credits",
+      profCreated: "Profil erstellt:",
+      codeCreated: "Code erstellt:",
+      left: "übrig",
+      collapse: "Einklappen",
+      show: "Zeige",
+      more: "weitere",
+      errProf:
+        "Dieses Guthaben ist mit einem registrierten Profil verknüpft. Um es zu ändern, bearbeite den Nutzer direkt im Tab 'Profile'.",
+      delConfirm:
+        "Bist du sicher, dass du diesen Gast-Code löschen möchtest? Alle verbleibenden Credits gehen dauerhaft verloren.",
+      errDel: "Fehler beim Löschen: ",
+    },
+  }[currentLang || "en"];
+
   useEffect(() => {
     fetchPackCodes();
-
     const updateColumns = () => {
       if (window.innerWidth < 800) setColumnCount(1);
       else if (window.innerWidth < 1200) setColumnCount(2);
       else setColumnCount(3);
     };
-
     updateColumns();
     window.addEventListener("resize", updateColumns);
     return () => window.removeEventListener("resize", updateColumns);
@@ -45,38 +87,31 @@ export default function PackCodesTab({ isMobile }) {
   const fetchPackCodes = async () => {
     setIsLoading(true);
     try {
-      // 1. FETCH GUEST PACK CODES
       const codesQuery = query(collection(db, "pack_codes"));
       const codesSnap = await getDocs(codesQuery);
-
       let allCredits = codesSnap.docs.map((doc) => ({
         id: doc.id,
         isProfileCredit: false,
         ...doc.data(),
       }));
 
-      // 2. FETCH REGISTERED USER CREDITS
       const usersQuery = query(collection(db, "users"));
       const usersSnap = await getDocs(usersQuery);
 
       usersSnap.docs.forEach((doc) => {
         const userData = doc.data();
-
-        // If the user has a credits object, map each course balance as a "pack code"
         if (userData.credits && typeof userData.credits === "object") {
           Object.entries(userData.credits).forEach(([courseKey, count]) => {
             if (count > 0) {
-              // Only show active balances
               const fullName =
                 [userData.firstName, userData.lastName]
                   .filter(Boolean)
                   .join(" ") || "Registered User";
-
               allCredits.push({
                 id: `user_${doc.id}_${courseKey}`,
                 userId: doc.id,
                 isProfileCredit: true,
-                code: "PROFILE BALANCE", // Display text instead of a code
+                code: "PROFILE BALANCE",
                 buyerEmail: userData.email || "",
                 buyerName: fullName,
                 courseKey: courseKey,
@@ -88,7 +123,6 @@ export default function PackCodesTab({ isMobile }) {
         }
       });
 
-      // 3. SORT EVERYTHING TOGETHER
       allCredits.sort((a, b) => {
         const timeA = a.createdAt?.seconds
           ? a.createdAt.seconds * 1000
@@ -109,22 +143,15 @@ export default function PackCodesTab({ isMobile }) {
 
   const handleDelete = async (codeObj) => {
     if (codeObj.isProfileCredit) {
-      alert(
-        "This balance is attached to a registered user profile. To modify it, please go to the 'Profiles' tab and edit the user directly.",
-      );
+      alert(labels.errProf);
       return;
     }
-
-    if (
-      window.confirm(
-        "Are you sure you want to delete this guest pack code? Any remaining credits will be lost forever.",
-      )
-    ) {
+    if (window.confirm(labels.delConfirm)) {
       try {
         await deleteDoc(doc(db, "pack_codes", codeObj.id));
         fetchPackCodes();
       } catch (error) {
-        alert("Error deleting code: " + error.message);
+        alert(labels.errDel + error.message);
       }
     }
   };
@@ -132,12 +159,9 @@ export default function PackCodesTab({ isMobile }) {
   const formatDate = (timestamp) => {
     if (!timestamp) return "Unknown";
     try {
-      if (timestamp.seconds) {
+      if (timestamp.seconds)
         return new Date(timestamp.seconds * 1000).toLocaleDateString();
-      }
-      if (timestamp.toDate) {
-        return timestamp.toDate().toLocaleDateString();
-      }
+      if (timestamp.toDate) return timestamp.toDate().toLocaleDateString();
       return new Date(timestamp).toLocaleDateString();
     } catch (e) {
       return "Invalid Date";
@@ -145,17 +169,12 @@ export default function PackCodesTab({ isMobile }) {
   };
 
   const toggleGroup = (groupKey) => {
-    setExpandedGroups((prev) => ({
-      ...prev,
-      [groupKey]: !prev[groupKey],
-    }));
+    setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
   };
 
-  // Filter combined list
   const filteredCodes = packCodes.filter((code) => {
     const searchLower = searchTerm.toLowerCase().trim();
     if (!searchLower) return true;
-
     const codeString = String(code.code || "").toLowerCase();
     const emailString = String(
       code.buyerEmail || code.email || code.userEmail || "",
@@ -166,7 +185,6 @@ export default function PackCodesTab({ isMobile }) {
     const courseString = String(
       code.courseKey || code.coursePath || "",
     ).toLowerCase();
-
     return (
       codeString.includes(searchLower) ||
       emailString.includes(searchLower) ||
@@ -175,16 +193,13 @@ export default function PackCodesTab({ isMobile }) {
     );
   });
 
-  // Group by User -> Course
   const groupedCodes = filteredCodes.reduce((acc, code) => {
     const rawEmail =
       code.buyerEmail || code.email || code.userEmail || "no-email";
     const rawName = code.buyerName || code.name || code.userName || "Guest";
-
     const emailKey = String(rawEmail).toLowerCase().trim();
     const nameKey = String(rawName).toLowerCase().trim();
     const userKey = `${emailKey}_${nameKey}`;
-
     const rawCourse =
       code.courseKey || code.coursePath || code.course || "General";
     const courseKey = String(rawCourse).replace(/\//g, "").trim() || "General";
@@ -198,7 +213,6 @@ export default function PackCodesTab({ isMobile }) {
         courses: {},
       };
     }
-
     if (!acc[userKey].courses[courseKey]) {
       acc[userKey].courses[courseKey] = {
         courseName: courseKey,
@@ -206,18 +220,15 @@ export default function PackCodesTab({ isMobile }) {
         codes: [],
       };
     }
-
     acc[userKey].courses[courseKey].codes.push(code);
     acc[userKey].courses[courseKey].totalCredits += Number(
       code.remainingCredits || 0,
     );
     acc[userKey].totalCreditsAllCourses += Number(code.remainingCredits || 0);
-
     return acc;
   }, {});
 
   const groupedArray = Object.values(groupedCodes);
-
   const columns = Array.from({ length: columnCount }, () => []);
   groupedArray.forEach((group, index) => {
     columns[index % columnCount].push(group);
@@ -236,7 +247,7 @@ export default function PackCodesTab({ isMobile }) {
         }}
       >
         <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
-          <Ticket size={18} /> Active Session Packs
+          <Ticket size={18} /> {labels.title}
         </h3>
 
         <div
@@ -259,7 +270,7 @@ export default function PackCodesTab({ isMobile }) {
             />
             <input
               type="text"
-              placeholder="Search codes, emails..."
+              placeholder={labels.search}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -287,7 +298,7 @@ export default function PackCodesTab({ isMobile }) {
       </div>
 
       {isLoading ? (
-        <p style={{ opacity: 0.5 }}>Loading credits...</p>
+        <p style={{ opacity: 0.5 }}>{labels.loading}</p>
       ) : groupedArray.length === 0 ? (
         <div
           style={{
@@ -297,17 +308,11 @@ export default function PackCodesTab({ isMobile }) {
             padding: "2rem",
           }}
         >
-          {searchTerm
-            ? "No codes match your search."
-            : "No active pack credits found."}
+          {searchTerm ? labels.noMatch : labels.noActive}
         </div>
       ) : (
         <div
-          style={{
-            display: "flex",
-            gap: "1.5rem",
-            alignItems: "flex-start",
-          }}
+          style={{ display: "flex", gap: "1.5rem", alignItems: "flex-start" }}
         >
           {columns.map((colGroups, colIndex) => (
             <div
@@ -336,7 +341,6 @@ export default function PackCodesTab({ isMobile }) {
                       marginBottom: 0,
                     }}
                   >
-                    {/* USER HEADER */}
                     <div
                       style={{
                         display: "flex",
@@ -415,11 +419,10 @@ export default function PackCodesTab({ isMobile }) {
                         }}
                       >
                         <CreditCard size={14} />{" "}
-                        {userGroup.totalCreditsAllCourses} Total
+                        {userGroup.totalCreditsAllCourses} {labels.total}
                       </div>
                     </div>
 
-                    {/* RENDER EACH COURSE FOR THIS USER */}
                     {courseKeys.map((cKey) => {
                       const courseData = userGroup.courses[cKey];
                       const groupKey = `${userGroup.userKey}_${cKey}`;
@@ -464,7 +467,7 @@ export default function PackCodesTab({ isMobile }) {
                                   fontWeight: "bold",
                                 }}
                               >
-                                {courseData.totalCredits} Credits
+                                {courseData.totalCredits} {labels.credits}
                               </span>
                             )}
                           </div>
@@ -503,7 +506,7 @@ export default function PackCodesTab({ isMobile }) {
                                 >
                                   {code.isProfileCredit && (
                                     <ShieldCheck size={14} />
-                                  )}
+                                  )}{" "}
                                   {code.code}
                                 </div>
                                 <div
@@ -514,8 +517,8 @@ export default function PackCodesTab({ isMobile }) {
                                   }}
                                 >
                                   {code.isProfileCredit
-                                    ? "Profile Created:"
-                                    : "Code Created:"}{" "}
+                                    ? labels.profCreated
+                                    : labels.codeCreated}{" "}
                                   {formatDate(code.createdAt)}
                                 </div>
                               </div>
@@ -536,10 +539,8 @@ export default function PackCodesTab({ isMobile }) {
                                     whiteSpace: "nowrap",
                                   }}
                                 >
-                                  {code.remainingCredits} left
+                                  {code.remainingCredits} {labels.left}
                                 </span>
-
-                                {/* Do not allow standard deletion of profile accounts from this tab */}
                                 <button
                                   onClick={() => handleDelete(code)}
                                   style={{
@@ -589,12 +590,12 @@ export default function PackCodesTab({ isMobile }) {
                             >
                               {isExpanded ? (
                                 <>
-                                  <ChevronUp size={16} /> Collapse
+                                  <ChevronUp size={16} /> {labels.collapse}
                                 </>
                               ) : (
                                 <>
-                                  <ChevronDown size={16} /> Show{" "}
-                                  {courseData.codes.length - 1} More
+                                  <ChevronDown size={16} /> {labels.show}{" "}
+                                  {courseData.codes.length - 1} {labels.more}
                                 </>
                               )}
                             </button>

@@ -1010,14 +1010,15 @@ exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
 });
 
 exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
-  const { courseId, assignments, specialAssignments } = request.data;
+  const { courseId, assignments, specialAssignments, baseUrl } = request.data;
+  const origin = baseUrl || "https://sinneskueche.ch";
   const courseKey = getCleanCourseKey(courseId);
   const instructorSchedules = {};
 
   for (const eventId in assignments) {
     const uids = assignments[eventId];
     const eventSnap = await db.collection("events").doc(eventId).get();
-    if (!eventSnap.exists) continue;
+    if (!eventSnap.exists) continue; // Fixed: .exists is a property
     const eventData = eventSnap.data();
 
     for (const uid of uids) {
@@ -1041,7 +1042,8 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
           .collection("course_settings")
           .doc(courseId.replace(/\//g, ""))
           .get();
-        if (settingsSnap.exists()) {
+        if (settingsSnap.exists) {
+          // Fixed: .exists is a property
           const definedAddons = settingsSnap.data().specialEvents || [];
           addonText = addonIds
             .map((id) => {
@@ -1066,18 +1068,14 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
     const userSnap = await db.collection("users").doc(uid).get();
     if (!userSnap.exists) continue;
     const { email, firstName } = userSnap.data();
-    const schedule = instructorSchedules[uid];
 
-    const listHtml = schedule
+    const listHtml = instructorSchedules[uid]
       .map(
         (s) => `
       <li style="margin-bottom: 15px; list-style: none; padding: 15px; background: #fff; border-radius: 8px; border: 1px solid #caaff3;">
         <strong style="color: #1c0700;">${formatDate(s.date)}</strong> | ${s.time || "No time set"}<br/>
         <span style="font-size: 13px; opacity: 0.7;">Working with: ${s.coInstructor || "Solo"}</span>
         ${s.addon ? `<br/><span style="font-size: 13px; color: #9960a8;"><strong>Add-on:</strong> ${s.addon}</span>` : ""}
-        <div style="margin-top: 10px;">
-          <a href="${getGoogleCalLink(courseKey + (s.addon ? " (" + s.addon + ")" : ""), s.date)}" target="_blank" style="font-size: 11px; text-decoration: none; color: #9960a8; border: 1px solid #9960a8; padding: 4px 8px; border-radius: 4px; background: white;">📅 Add to Calendar</a>
-        </div>
       </li>`,
       )
       .join("");

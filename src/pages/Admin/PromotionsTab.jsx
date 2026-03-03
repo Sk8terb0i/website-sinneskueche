@@ -42,7 +42,61 @@ export default function PromotionsTab({
 
   const isFullAdmin = userRole === "admin";
 
-  // Filter available courses based on permissions
+  const labels = {
+    en: {
+      titleNew: "New Promo Code",
+      codeName: "Code Name",
+      applyTo: "Apply to Course",
+      validFor: "Valid For",
+      both: "Both",
+      pack: "Pack",
+      single: "Single",
+      discType: "Discount Type",
+      free: "Free Session",
+      percent: "% Discount",
+      discPercent: "Discount Percentage (%)",
+      limitBy: "Limit By",
+      maxUses: "Max Uses",
+      expiry: "Expiry Date",
+      totalUses: "Total Number of Uses",
+      validUntil: "Valid Until",
+      genIng: "Generating...",
+      genBtn: "Generate Code",
+      active: "Active Promotions",
+      myCourses: "(My Courses)",
+      off: "OFF",
+      used: "used",
+      expires: "Expires:",
+      noCodes: "No active codes.",
+    },
+    de: {
+      titleNew: "Neuer Rabattcode",
+      codeName: "Code-Name",
+      applyTo: "Gilt für Kurs",
+      validFor: "Gültig für",
+      both: "Beides",
+      pack: "Paket",
+      single: "Einzeln",
+      discType: "Rabatt-Typ",
+      free: "Gratis Session",
+      percent: "% Rabatt",
+      discPercent: "Rabatt in Prozent (%)",
+      limitBy: "Begrenzt durch",
+      maxUses: "Max. Nutzungen",
+      expiry: "Ablaufdatum",
+      totalUses: "Gesamtanzahl Nutzungen",
+      validUntil: "Gültig bis",
+      genIng: "Erstelle...",
+      genBtn: "Code erstellen",
+      active: "Aktive Rabattcodes",
+      myCourses: "(Meine Kurse)",
+      off: "RABATT",
+      used: "genutzt",
+      expires: "Läuft ab:",
+      noCodes: "Keine aktiven Codes.",
+    },
+  }[currentLang || "en"];
+
   const availableCourses = Array.from(
     new Map(
       planets
@@ -65,8 +119,6 @@ export default function PromotionsTab({
     );
     const snap = await getDocs(q);
     const allCodes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-    // Filter visible codes: Course admins only see codes for their courses
     const filteredCodes = allCodes.filter(
       (pc) => isFullAdmin || allowedCourses.includes(pc.coursePath),
     );
@@ -88,7 +140,7 @@ export default function PromotionsTab({
         expiryDate: limitType === "date" ? expiryDate : null,
         timesUsed: 0,
         createdAt: serverTimestamp(),
-        createdByRole: userRole, // Helpful for tracking
+        createdByRole: userRole,
       });
       setCode("");
       fetchCodes();
@@ -115,14 +167,14 @@ export default function PromotionsTab({
       <section style={{ width: isMobile ? "100%" : "400px" }}>
         <div style={formCardStyle}>
           <h3 style={sectionTitleStyle}>
-            <Ticket size={18} /> New Promo Code
+            <Ticket size={18} /> {labels.titleNew}
           </h3>
           <form
             onSubmit={handleSubmit}
             style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}
           >
             <div>
-              <label style={labelStyle}>Code Name</label>
+              <label style={labelStyle}>{labels.codeName}</label>
               <input
                 style={inputStyle}
                 placeholder="e.g. SUMMER24"
@@ -133,7 +185,7 @@ export default function PromotionsTab({
             </div>
 
             <div>
-              <label style={labelStyle}>Apply to Course</label>
+              <label style={labelStyle}>{labels.applyTo}</label>
               <select
                 style={inputStyle}
                 value={coursePath}
@@ -148,7 +200,7 @@ export default function PromotionsTab({
             </div>
 
             <div>
-              <label style={labelStyle}>Valid For</label>
+              <label style={labelStyle}>{labels.validFor}</label>
               <div style={toggleContainerStyle}>
                 {["both", "pack", "single"].map((type) => (
                   <div
@@ -161,14 +213,14 @@ export default function PromotionsTab({
                       textTransform: "capitalize",
                     }}
                   >
-                    {type}
+                    {labels[type]}
                   </div>
                 ))}
               </div>
             </div>
 
             <div>
-              <label style={labelStyle}>Discount Type</label>
+              <label style={labelStyle}>{labels.discType}</label>
               <div style={toggleContainerStyle}>
                 <div
                   onClick={() => setDiscountType("free")}
@@ -178,7 +230,7 @@ export default function PromotionsTab({
                       discountType === "free" ? "#caaff3" : "transparent",
                   }}
                 >
-                  Free Session
+                  {labels.free}
                 </div>
                 <div
                   onClick={() => setDiscountType("percent")}
@@ -188,14 +240,14 @@ export default function PromotionsTab({
                       discountType === "percent" ? "#caaff3" : "transparent",
                   }}
                 >
-                  % Discount
+                  {labels.percent}
                 </div>
               </div>
             </div>
 
             {discountType === "percent" && (
               <div>
-                <label style={labelStyle}>Discount Percentage (%)</label>
+                <label style={labelStyle}>{labels.discPercent}</label>
                 <input
                   style={inputStyle}
                   type="number"
@@ -208,7 +260,7 @@ export default function PromotionsTab({
             )}
 
             <div>
-              <label style={labelStyle}>Limit By</label>
+              <label style={labelStyle}>{labels.limitBy}</label>
               <div style={toggleContainerStyle}>
                 <div
                   onClick={() => setLimitType("uses")}
@@ -218,7 +270,7 @@ export default function PromotionsTab({
                       limitType === "uses" ? "#caaff3" : "transparent",
                   }}
                 >
-                  Max Uses
+                  {labels.maxUses}
                 </div>
                 <div
                   onClick={() => setLimitType("date")}
@@ -228,14 +280,14 @@ export default function PromotionsTab({
                       limitType === "date" ? "#caaff3" : "transparent",
                   }}
                 >
-                  Expiry Date
+                  {labels.expiry}
                 </div>
               </div>
             </div>
 
             {limitType === "uses" ? (
               <div>
-                <label style={labelStyle}>Total Number of Uses</label>
+                <label style={labelStyle}>{labels.totalUses}</label>
                 <input
                   style={inputStyle}
                   type="number"
@@ -246,7 +298,7 @@ export default function PromotionsTab({
               </div>
             ) : (
               <div>
-                <label style={labelStyle}>Valid Until</label>
+                <label style={labelStyle}>{labels.validUntil}</label>
                 <input
                   style={inputStyle}
                   type="date"
@@ -258,7 +310,7 @@ export default function PromotionsTab({
             )}
 
             <button type="submit" style={btnStyle} disabled={isLoading}>
-              {isLoading ? "Generating..." : "Generate Code"}
+              {isLoading ? labels.genIng : labels.genBtn}
             </button>
           </form>
         </div>
@@ -266,7 +318,7 @@ export default function PromotionsTab({
 
       <section style={{ flex: 1 }}>
         <h3 style={{ ...sectionTitleStyle, marginBottom: "1rem" }}>
-          <Star size={18} /> Active Promotions {!isFullAdmin && "(My Courses)"}
+          <Star size={18} /> {labels.active} {!isFullAdmin && labels.myCourses}
         </h3>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {promoCodes.map((pc) => (
@@ -311,7 +363,7 @@ export default function PromotionsTab({
                       fontWeight: "bold",
                     }}
                   >
-                    {pc.applyTo}
+                    {labels[pc.applyTo] || pc.applyTo}
                   </span>
                 </div>
                 <div
@@ -329,7 +381,7 @@ export default function PromotionsTab({
                       gap: "4px",
                     }}
                   >
-                    <Percent size={14} /> {pc.discountValue}% OFF
+                    <Percent size={14} /> {pc.discountValue}% {labels.off}
                   </span>
                   {pc.limitType === "uses" ? (
                     <span
@@ -339,7 +391,8 @@ export default function PromotionsTab({
                         gap: "4px",
                       }}
                     >
-                      <Hash size={14} /> {pc.timesUsed} / {pc.maxUses} used
+                      <Hash size={14} /> {pc.timesUsed} / {pc.maxUses}{" "}
+                      {labels.used}
                     </span>
                   ) : (
                     <span
@@ -349,7 +402,7 @@ export default function PromotionsTab({
                         gap: "4px",
                       }}
                     >
-                      <Clock size={14} /> Expires: {pc.expiryDate}
+                      <Clock size={14} /> {labels.expires} {pc.expiryDate}
                     </span>
                   )}
                 </div>
@@ -368,7 +421,7 @@ export default function PromotionsTab({
             </div>
           ))}
           {promoCodes.length === 0 && (
-            <p style={{ opacity: 0.5 }}>No active codes.</p>
+            <p style={{ opacity: 0.5 }}>{labels.noCodes}</p>
           )}
         </div>
       </section>

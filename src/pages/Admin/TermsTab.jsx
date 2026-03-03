@@ -11,13 +11,44 @@ import {
   btnStyle,
 } from "./AdminStyles";
 
-export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
+export default function TermsTab({
+  isMobile,
+  userRole,
+  allowedCourses = [],
+  currentLang,
+}) {
   const [termsData, setTermsData] = useState({});
   const [savingId, setSavingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState("");
 
   const isFullAdmin = userRole === "admin";
+  const labels = {
+    en: {
+      title: "Course Terms & Conditions",
+      select: "Select Course to Edit Terms",
+      noCourses: "No courses assigned",
+      pathId: "Sanitized ID:",
+      enLabel: "Terms (English)",
+      deLabel: "AGB (Deutsch)",
+      save: "Save Terms",
+      saving: "Saving...",
+      enPlace: "Enter terms...",
+      dePlace: "Bedingungen eingeben...",
+    },
+    de: {
+      title: "Kurs AGB",
+      select: "Kurs zur Bearbeitung wählen",
+      noCourses: "Keine Kurse zugewiesen",
+      pathId: "ID:",
+      enLabel: "AGB (Englisch)",
+      deLabel: "AGB (Deutsch)",
+      save: "AGB speichern",
+      saving: "Speichert...",
+      enPlace: "Bedingungen eingeben...",
+      dePlace: "Bedingungen eingeben...",
+    },
+  }[currentLang || "en"];
 
   const availableCourses = Array.from(
     new Map(
@@ -29,13 +60,10 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
     ).values(),
   ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
 
-  // Set initial selected course once availableCourses is loaded
   useEffect(() => {
-    if (availableCourses.length > 0 && !selectedCourse) {
+    if (availableCourses.length > 0 && !selectedCourse)
       setSelectedCourse(availableCourses[0].link.replace(/\//g, ""));
-    }
   }, [availableCourses, selectedCourse]);
-
   useEffect(() => {
     fetchTerms();
   }, []);
@@ -56,44 +84,31 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
     }
   };
 
-  const handleTextChange = (courseId, lang, value) => {
-    setTermsData((prev) => ({
-      ...prev,
-      [courseId]: {
-        ...prev[courseId],
-        [lang]: value,
-      },
-    }));
-  };
-
   const saveTerms = async (courseId) => {
     setSavingId(courseId);
     try {
-      const dataToSave = {
-        en: termsData[courseId]?.en || "",
-        de: termsData[courseId]?.de || "",
-        updatedAt: new Date().toISOString(),
-      };
-      // CourseId is the sanitized path (e.g., 'pottery')
-      await setDoc(doc(db, "course_terms", courseId), dataToSave, {
-        merge: true,
-      });
+      await setDoc(
+        doc(db, "course_terms", courseId),
+        {
+          en: termsData[courseId]?.en || "",
+          de: termsData[courseId]?.de || "",
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      );
     } catch (error) {
-      alert("Error saving terms: " + error.message);
+      alert("Error: " + error.message);
     } finally {
       setSavingId(null);
     }
   };
 
-  if (loading) {
+  if (loading)
     return (
       <div style={{ textAlign: "center", padding: "3rem" }}>
         <Loader2 className="spinner" size={30} color="#caaff3" />
       </div>
     );
-  }
-
-  // Find the data for the currently selected course
   const activeCourse = availableCourses.find(
     (c) => c.link.replace(/\//g, "") === selectedCourse,
   );
@@ -103,11 +118,9 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
       style={{ maxWidth: "900px", margin: "0 auto", paddingBottom: "5rem" }}
     >
       <h3 style={sectionTitleStyle}>
-        <FileText size={18} /> Course Terms & Conditions
+        <FileText size={18} /> {labels.title}
       </h3>
-
       <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-        {/* Dropdown Selector */}
         <div
           style={{
             backgroundColor: "#fdf8e1",
@@ -116,7 +129,7 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
             border: "1px solid rgba(28, 7, 0, 0.05)",
           }}
         >
-          <label style={labelStyle}>Select Course to Edit Terms</label>
+          <label style={labelStyle}>{labels.select}</label>
           <select
             value={selectedCourse}
             onChange={(e) => setSelectedCourse(e.target.value)}
@@ -128,20 +141,15 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
             }}
           >
             {availableCourses.length === 0 && (
-              <option>No courses assigned</option>
+              <option>{labels.noCourses}</option>
             )}
-            {availableCourses.map((c) => {
-              const cId = c.link.replace(/\//g, "");
-              return (
-                <option key={cId} value={cId}>
-                  {c.text.en}
-                </option>
-              );
-            })}
+            {availableCourses.map((c) => (
+              <option key={c.link} value={c.link.replace(/\//g, "")}>
+                {c.text[currentLang || "en"]}
+              </option>
+            ))}
           </select>
         </div>
-
-        {/* Active Course Terms Card */}
         {activeCourse && (
           <div
             key={selectedCourse}
@@ -157,13 +165,12 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
           >
             <div>
               <h4 style={{ margin: 0, fontSize: "1.2rem", color: "#1c0700" }}>
-                {activeCourse.text.en}
+                {activeCourse.text[currentLang || "en"]}
               </h4>
               <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
-                Sanitized ID: {selectedCourse}
+                {labels.pathId} {selectedCourse}
               </span>
             </div>
-
             <div
               style={{
                 display: "grid",
@@ -171,7 +178,6 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
                 gap: "2rem",
               }}
             >
-              {/* English Terms */}
               <div>
                 <label
                   style={{
@@ -181,7 +187,7 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
                     gap: "5px",
                   }}
                 >
-                  <Globe size={14} /> Terms (English)
+                  <Globe size={14} /> {labels.enLabel}
                 </label>
                 <textarea
                   style={{
@@ -193,14 +199,18 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
                     padding: "12px",
                   }}
                   value={termsData[selectedCourse]?.en || ""}
-                  placeholder="Enter specific terms, rules or cancellation policies for this course..."
+                  placeholder={labels.enPlace}
                   onChange={(e) =>
-                    handleTextChange(selectedCourse, "en", e.target.value)
+                    setTermsData((prev) => ({
+                      ...prev,
+                      [selectedCourse]: {
+                        ...prev[selectedCourse],
+                        en: e.target.value,
+                      },
+                    }))
                   }
                 />
               </div>
-
-              {/* German Terms */}
               <div>
                 <label
                   style={{
@@ -210,7 +220,7 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
                     gap: "5px",
                   }}
                 >
-                  <Globe size={14} /> AGB (Deutsch)
+                  <Globe size={14} /> {labels.deLabel}
                 </label>
                 <textarea
                   style={{
@@ -222,14 +232,19 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
                     padding: "12px",
                   }}
                   value={termsData[selectedCourse]?.de || ""}
-                  placeholder="Spezifische Bedingungen, Regeln oder Stornierungsbedingungen eingeben..."
+                  placeholder={labels.dePlace}
                   onChange={(e) =>
-                    handleTextChange(selectedCourse, "de", e.target.value)
+                    setTermsData((prev) => ({
+                      ...prev,
+                      [selectedCourse]: {
+                        ...prev[selectedCourse],
+                        de: e.target.value,
+                      },
+                    }))
                   }
                 />
               </div>
             </div>
-
             <button
               onClick={() => saveTerms(selectedCourse)}
               disabled={savingId === selectedCourse}
@@ -248,7 +263,7 @@ export default function TermsTab({ isMobile, userRole, allowedCourses = [] }) {
               ) : (
                 <Save size={18} />
               )}
-              {savingId === selectedCourse ? "Saving..." : "Save Terms"}
+              {savingId === selectedCourse ? labels.saving : labels.save}
             </button>
           </div>
         )}

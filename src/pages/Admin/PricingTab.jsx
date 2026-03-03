@@ -28,17 +28,78 @@ export default function PricingTab({
   isMobile,
   userRole,
   allowedCourses = [],
+  currentLang,
 }) {
   const [priceData, setPriceData] = useState({});
   const [savingPriceId, setSavingPriceId] = useState(null);
   const [selectedCourse, setSelectedCourse] = useState("");
-
   const [newEventEn, setNewEventEn] = useState("");
   const [newEventDe, setNewEventDe] = useState("");
   const [newEventCap, setNewEventCap] = useState("");
 
   const isFullAdmin = userRole === "admin";
   const courseSettingsCollection = collection(db, "course_settings");
+
+  const labels = {
+    en: {
+      title: "Course Management",
+      restricted: "(Restricted)",
+      selectCourse: "Select Course to Manage",
+      noCourses: "No courses assigned",
+      path: "Path:",
+      visible: "Visible",
+      hidden: "Hidden",
+      baseType: "Base Pricing Type",
+      sessionBased: "Session Based",
+      timeBased: "Time Based",
+      price: "Price",
+      singlePrice: "Single Price",
+      mins: "Mins",
+      enablePacks: "Enable Session Packs",
+      limitPacks: "Limit users to 1 ticket per day",
+      size: "Size",
+      priceChf: "Price (CHF)",
+      addPack: "Add Pack Option",
+      limitCap: "Limit Max Students",
+      addons: "Session Add-ons",
+      nameEn: "Name (EN)",
+      nameDe: "Name (DE)",
+      cap: "Cap",
+      addAddon: "Add Add-on",
+      saving: "Saving Updates...",
+      save: "Save Course Settings",
+      errNames: "Please provide both English and German names.",
+    },
+    de: {
+      title: "Kursverwaltung",
+      restricted: "(Eingeschränkt)",
+      selectCourse: "Kurs zur Verwaltung auswählen",
+      noCourses: "Keine Kurse zugewiesen",
+      path: "Pfad:",
+      visible: "Sichtbar",
+      hidden: "Versteckt",
+      baseType: "Preismodell",
+      sessionBased: "Pro Session",
+      timeBased: "Nach Zeit",
+      price: "Preis",
+      singlePrice: "Einzelpreis",
+      mins: "Min.",
+      enablePacks: "Session-Packs aktivieren",
+      limitPacks: "Nutzer auf 1 Ticket pro Tag beschränken",
+      size: "Größe",
+      priceChf: "Preis (CHF)",
+      addPack: "Paket hinzufügen",
+      limitCap: "Maximale Teilnehmerzahl",
+      addons: "Session Extras",
+      nameEn: "Name (EN)",
+      nameDe: "Name (DE)",
+      cap: "Max",
+      addAddon: "Extra hinzufügen",
+      saving: "Speichern...",
+      save: "Kurseinstellungen speichern",
+      errNames: "Bitte sowohl englischen als auch deutschen Namen angeben.",
+    },
+  }[currentLang || "en"];
 
   const availableCourses = Array.from(
     new Map(
@@ -76,10 +137,7 @@ export default function PricingTab({
   const handlePriceChange = (courseId, field, value) => {
     setPriceData((prev) => ({
       ...prev,
-      [courseId]: {
-        ...prev[courseId],
-        [field]: value,
-      },
+      [courseId]: { ...prev[courseId], [field]: value },
     }));
   };
 
@@ -105,10 +163,7 @@ export default function PricingTab({
   };
 
   const addSpecialEvent = (courseId) => {
-    if (!newEventEn.trim() || !newEventDe.trim()) {
-      alert("Please provide both English and German names.");
-      return;
-    }
+    if (!newEventEn.trim() || !newEventDe.trim()) return alert(labels.errNames);
     const currentEvents = priceData[courseId]?.specialEvents || [];
     handlePriceChange(courseId, "specialEvents", [
       ...currentEvents,
@@ -149,7 +204,6 @@ export default function PricingTab({
       const validPacks = (priceData[courseId]?.packs || []).filter(
         (p) => p.size !== "" && p.price !== "",
       );
-
       const dataToSave = {
         priceSingle: priceData[courseId]?.priceSingle || "",
         priceFull: validPacks[0]?.price || "",
@@ -157,7 +211,6 @@ export default function PricingTab({
         packs: validPacks,
         duration: isPerHour ? priceData[courseId]?.duration || "" : "",
         hasPack: priceData[courseId]?.hasPack ?? false,
-        // NEW FIELD: Default to true if it hasn't been set yet
         limitOnePerDay: priceData[courseId]?.limitOnePerDay ?? true,
         isPerHour: isPerHour,
         hasCapacity: priceData[courseId]?.hasCapacity ?? false,
@@ -187,7 +240,7 @@ export default function PricingTab({
       style={{ maxWidth: "800px", margin: "0 auto", paddingBottom: "5rem" }}
     >
       <h3 style={sectionTitleStyle}>
-        <Tag size={18} /> Course Management {!isFullAdmin && "(Restricted)"}
+        <Tag size={18} /> {labels.title} {!isFullAdmin && labels.restricted}
       </h3>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
@@ -199,7 +252,7 @@ export default function PricingTab({
             border: "1px solid rgba(28, 7, 0, 0.05)",
           }}
         >
-          <label style={labelStyle}>Select Course to Manage</label>
+          <label style={labelStyle}>{labels.selectCourse}</label>
           <select
             value={selectedCourse}
             onChange={(e) => {
@@ -216,14 +269,14 @@ export default function PricingTab({
             }}
           >
             {availableCourses.length === 0 && (
-              <option>No courses assigned</option>
+              <option>{labels.noCourses}</option>
             )}
             {availableCourses.map((c) => (
               <option
                 key={c.link.replace(/\//g, "")}
                 value={c.link.replace(/\//g, "")}
               >
-                {c.text.en}
+                {c.text[currentLang || "en"]}
               </option>
             ))}
           </select>
@@ -260,10 +313,10 @@ export default function PricingTab({
             >
               <div style={{ flex: 1 }}>
                 <h4 style={{ margin: 0, fontSize: "1.2rem", color: "#1c0700" }}>
-                  {activeCourse.text.en}
+                  {activeCourse.text[currentLang || "en"]}
                 </h4>
                 <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
-                  Path: {activeCourse.link}
+                  {labels.path} {activeCourse.link}
                 </span>
               </div>
               <div
@@ -287,7 +340,7 @@ export default function PricingTab({
                         : "transparent",
                   }}
                 >
-                  <Eye size={14} /> {!isMobile && "Visible"}
+                  <Eye size={14} /> {!isMobile && labels.visible}
                 </div>
                 <div
                   onClick={() =>
@@ -307,7 +360,7 @@ export default function PricingTab({
                       : "inherit",
                   }}
                 >
-                  <EyeOff size={14} /> {!isMobile && "Hidden"}
+                  <EyeOff size={14} /> {!isMobile && labels.hidden}
                 </div>
               </div>
             </div>
@@ -330,7 +383,7 @@ export default function PricingTab({
                     gap: "6px",
                   }}
                 >
-                  <CreditCard size={14} /> Base Pricing Type
+                  <CreditCard size={14} /> {labels.baseType}
                 </label>
                 <div
                   style={{
@@ -355,7 +408,7 @@ export default function PricingTab({
                         : "transparent",
                     }}
                   >
-                    Session Based
+                    {labels.sessionBased}
                   </div>
                   <div
                     onClick={() =>
@@ -372,7 +425,7 @@ export default function PricingTab({
                           : "transparent",
                     }}
                   >
-                    Time Based
+                    {labels.timeBased}
                   </div>
                 </div>
               </div>
@@ -380,8 +433,8 @@ export default function PricingTab({
                 <div style={{ flex: 2 }}>
                   <label style={{ ...labelStyle, fontSize: "0.75rem" }}>
                     {(priceData[selectedCourse]?.isPerHour ?? false)
-                      ? "Price"
-                      : "Single Price"}
+                      ? labels.price
+                      : labels.singlePrice}
                   </label>
                   <input
                     style={inputStyle}
@@ -399,7 +452,7 @@ export default function PricingTab({
                 {(priceData[selectedCourse]?.isPerHour ?? false) && (
                   <div style={{ flex: 1 }}>
                     <label style={{ ...labelStyle, fontSize: "0.75rem" }}>
-                      Mins
+                      {labels.mins}
                     </label>
                     <input
                       type="number"
@@ -448,7 +501,7 @@ export default function PricingTab({
                     )
                   }
                 />
-                Enable Session Packs
+                {labels.enablePacks}
               </label>
 
               {(priceData[selectedCourse]?.hasPack ?? false) && (
@@ -459,7 +512,6 @@ export default function PricingTab({
                     gap: "16px",
                   }}
                 >
-                  {/* NEW LIMIT TOGGLE */}
                   <label
                     style={{
                       ...labelStyle,
@@ -479,7 +531,7 @@ export default function PricingTab({
                       type="checkbox"
                       checked={
                         priceData[selectedCourse]?.limitOnePerDay ?? true
-                      } // Default true
+                      }
                       onChange={(e) =>
                         handlePriceChange(
                           selectedCourse,
@@ -488,9 +540,8 @@ export default function PricingTab({
                         )
                       }
                     />
-                    Limit users to 1 ticket per day
+                    {labels.limitPacks}
                   </label>
-
                   <div
                     style={{
                       display: "flex",
@@ -517,7 +568,7 @@ export default function PricingTab({
                                 opacity: 0.5,
                               }}
                             >
-                              Size
+                              {labels.size}
                             </label>
                             <input
                               type="number"
@@ -546,7 +597,7 @@ export default function PricingTab({
                                 opacity: 0.5,
                               }}
                             >
-                              Price (CHF)
+                              {labels.priceChf}
                             </label>
                             <input
                               placeholder="200"
@@ -598,7 +649,7 @@ export default function PricingTab({
                         gap: "6px",
                       }}
                     >
-                      <Plus size={14} /> Add Pack Option
+                      <Plus size={14} /> {labels.addPack}
                     </button>
                   </div>
                 </div>
@@ -644,7 +695,7 @@ export default function PricingTab({
                     )
                   }
                 />
-                Limit Max Students
+                {labels.limitCap}
               </label>
               {(priceData[selectedCourse]?.hasCapacity ?? false) && (
                 <div style={{ position: "relative" }}>
@@ -692,9 +743,8 @@ export default function PricingTab({
                   opacity: 0.8,
                 }}
               >
-                <Star size={14} color="#9960a8" /> Session Add-ons
+                <Star size={14} color="#9960a8" /> {labels.addons}
               </label>
-
               <div
                 style={{
                   display: "flex",
@@ -727,7 +777,7 @@ export default function PricingTab({
                           e.target.value,
                         )
                       }
-                      placeholder="Name (EN)"
+                      placeholder={labels.nameEn}
                       style={{
                         ...inputStyle,
                         padding: "8px 12px",
@@ -746,7 +796,7 @@ export default function PricingTab({
                           e.target.value,
                         )
                       }
-                      placeholder="Name (DE)"
+                      placeholder={labels.nameDe}
                       style={{
                         ...inputStyle,
                         padding: "8px 12px",
@@ -767,7 +817,7 @@ export default function PricingTab({
                             e.target.value,
                           )
                         }
-                        placeholder="Cap"
+                        placeholder={labels.cap}
                         style={{
                           ...inputStyle,
                           padding: "8px 8px 8px 30px",
@@ -803,7 +853,6 @@ export default function PricingTab({
                     </button>
                   </div>
                 ))}
-
                 <div
                   style={{
                     display: "flex",
@@ -817,7 +866,7 @@ export default function PricingTab({
                   <input
                     value={newEventEn}
                     onChange={(e) => setNewEventEn(e.target.value)}
-                    placeholder="New Add-on (EN)"
+                    placeholder={labels.newAddonEn}
                     style={{
                       ...inputStyle,
                       padding: "10px 12px",
@@ -828,7 +877,7 @@ export default function PricingTab({
                   <input
                     value={newEventDe}
                     onChange={(e) => setNewEventDe(e.target.value)}
-                    placeholder="New Add-on (DE)"
+                    placeholder={labels.newAddonDe}
                     style={{
                       ...inputStyle,
                       padding: "10px 12px",
@@ -841,7 +890,7 @@ export default function PricingTab({
                       type="number"
                       value={newEventCap}
                       onChange={(e) => setNewEventCap(e.target.value)}
-                      placeholder="Cap"
+                      placeholder={labels.cap}
                       style={{
                         ...inputStyle,
                         padding: "10px 10px 10px 32px",
@@ -873,7 +922,7 @@ export default function PricingTab({
                       gap: "6px",
                     }}
                   >
-                    <Plus size={16} /> {isMobile && "Add Add-on"}
+                    <Plus size={16} /> {isMobile && labels.addAddon}
                   </button>
                 </div>
               </div>
@@ -897,9 +946,7 @@ export default function PricingTab({
               ) : (
                 <Save size={18} />
               )}
-              {savingPriceId === selectedCourse
-                ? "Saving Updates..."
-                : "Save Course Settings"}
+              {savingPriceId === selectedCourse ? labels.saving : labels.save}
             </button>
           </div>
         )}

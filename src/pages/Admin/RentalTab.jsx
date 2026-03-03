@@ -34,7 +34,7 @@ import {
   deleteBtnStyle,
 } from "./AdminStyles";
 
-export default function RentalTab({ isMobile }) {
+export default function RentalTab({ isMobile, currentLang }) {
   const [rentRequests, setRentRequests] = useState([]);
   const [availabilities, setAvailabilities] = useState([]);
   const [availDate, setAvailDate] = useState("");
@@ -43,12 +43,54 @@ export default function RentalTab({ isMobile }) {
   const [showInProfile, setShowInProfile] = useState(false);
   const [requestFilter, setRequestFilter] = useState("pending");
 
+  const labels = {
+    en: {
+      setAvail: "Set Availability",
+      showInCal: "show approved requests in my calendar",
+      on: "ON",
+      off: "OFF",
+      pubDate: "Publish Date",
+      persistEmail: "Persistent Notification Email",
+      adminEmail: "Admin notification email",
+      liveAvail: "Live Availabilities",
+      rentReq: "Rent Requests",
+      inc: "Incoming",
+      app: "Approved",
+      noReq: "No",
+      reqFound: "requests found.",
+      email: "Email:",
+      phone: "Phone:",
+      reqDate: "Requested Date:",
+      received: "Received:",
+      msg: "Message:",
+    },
+    de: {
+      setAvail: "Verfügbarkeit einstellen",
+      showInCal: "Akzeptierte Anfragen im Kalender zeigen",
+      on: "AN",
+      off: "AUS",
+      pubDate: "Datum veröffentlichen",
+      persistEmail: "Benachrichtigungs-E-Mail",
+      adminEmail: "Admin Benachrichtigungs-E-Mail",
+      liveAvail: "Aktuelle Verfügbarkeiten",
+      rentReq: "Mietanfragen",
+      inc: "Eingehend",
+      app: "Bestätigt",
+      noReq: "Keine",
+      reqFound: "Anfragen gefunden.",
+      email: "E-Mail:",
+      phone: "Telefon:",
+      reqDate: "Gewünschtes Datum:",
+      received: "Erhalten:",
+      msg: "Nachricht:",
+    },
+  }[currentLang || "en"];
+
   const requestsCollection = collection(db, "rent_requests");
   const availabilityCollection = collection(db, "rental_availability");
 
   useEffect(() => {
     fetchSettings();
-
     const unsubRequests = onSnapshot(
       query(requestsCollection, orderBy("createdAt", "desc")),
       (snap) => {
@@ -138,11 +180,10 @@ export default function RentalTab({ isMobile }) {
 
   const handleReject = async (reqId, availId) => {
     await updateDoc(doc(db, "rent_requests", reqId), { status: "rejected" });
-    if (availId) {
+    if (availId)
       await updateDoc(doc(db, "rental_availability", availId), {
         status: "available",
       });
-    }
   };
 
   const deleteAvailability = async (id) => {
@@ -184,9 +225,8 @@ export default function RentalTab({ isMobile }) {
       <section style={{ width: isMobile ? "100%" : "400px" }}>
         <div style={formCardStyle}>
           <h3 style={sectionTitleStyle}>
-            <PlusCircle size={16} /> Set Availability
+            <PlusCircle size={16} /> {labels.setAvail}
           </h3>
-
           <div
             style={{
               marginBottom: "1.5rem",
@@ -205,7 +245,7 @@ export default function RentalTab({ isMobile }) {
                 <EyeOff size={16} color="#4e5f28" />
               )}
               <span style={{ fontSize: "0.8rem", fontWeight: "700" }}>
-                show approved requests in my calendar
+                {labels.showInCal}
               </span>
             </div>
             <button
@@ -221,10 +261,9 @@ export default function RentalTab({ isMobile }) {
                 fontWeight: "bold",
               }}
             >
-              {showInProfile ? "ON" : "OFF"}
+              {showInProfile ? labels.on : labels.off}
             </button>
           </div>
-
           <div
             style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
           >
@@ -249,16 +288,15 @@ export default function RentalTab({ isMobile }) {
                 color: "white",
               }}
             >
-              Publish Date
+              {labels.pubDate}
             </button>
           </div>
-
           <div style={{ marginTop: "2rem" }}>
-            <h4 style={labelStyle}>Persistent Notification Email</h4>
+            <h4 style={labelStyle}>{labels.persistEmail}</h4>
             <div style={{ display: "flex", gap: "5px" }}>
               <input
                 type="email"
-                placeholder="Admin notification email"
+                placeholder={labels.adminEmail}
                 value={notifyEmail}
                 onChange={(e) => setNotifyEmail(e.target.value)}
                 style={{ ...inputStyle, flex: 1 }}
@@ -266,7 +304,6 @@ export default function RentalTab({ isMobile }) {
               <button
                 onClick={updateNotifyEmail}
                 style={{ ...btnStyle, width: "auto", padding: "0 15px" }}
-                title="Save Email to Settings"
               >
                 <Mail size={16} />
               </button>
@@ -275,7 +312,7 @@ export default function RentalTab({ isMobile }) {
         </div>
 
         <div style={{ marginTop: "1.5rem" }}>
-          <h3 style={labelStyle}>Live Availabilities</h3>
+          <h3 style={labelStyle}>{labels.liveAvail}</h3>
           {availabilities.map((a) => (
             <div
               key={a.id}
@@ -310,23 +347,21 @@ export default function RentalTab({ isMobile }) {
           }}
         >
           <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
-            <Clock size={16} /> Rent Requests
+            <Clock size={16} /> {labels.rentReq}
           </h3>
-
           <div style={{ display: "flex", gap: "8px" }}>
             <button
               onClick={() => setRequestFilter("pending")}
               style={subTabStyle(requestFilter === "pending")}
             >
-              Incoming (
+              {labels.inc} (
               {rentRequests.filter((r) => r.status !== "approved").length})
             </button>
             <button
               onClick={() => setRequestFilter("approved")}
               style={subTabStyle(requestFilter === "approved")}
             >
-              <Check size={12} style={{ marginRight: "4px" }} />
-              Approved (
+              <Check size={12} style={{ marginRight: "4px" }} /> {labels.app} (
               {rentRequests.filter((r) => r.status === "approved").length})
             </button>
           </div>
@@ -343,7 +378,9 @@ export default function RentalTab({ isMobile }) {
                 fontSize: "0.9rem",
               }}
             >
-              No {requestFilter} requests found.
+              {labels.noReq}{" "}
+              {requestFilter === "pending" ? labels.inc : labels.app}{" "}
+              {labels.reqFound}
             </div>
           ) : (
             filteredRequests.map((req) => (
@@ -451,17 +488,17 @@ export default function RentalTab({ isMobile }) {
                   }}
                 >
                   <div>
-                    <span style={labelStyle}>Email:</span> {req.email}
+                    <span style={labelStyle}>{labels.email}</span> {req.email}
                   </div>
                   <div>
-                    <span style={labelStyle}>Phone:</span> {req.phone}
+                    <span style={labelStyle}>{labels.phone}</span> {req.phone}
                   </div>
                   <div>
-                    <span style={labelStyle}>Requested Date:</span>{" "}
+                    <span style={labelStyle}>{labels.reqDate}</span>{" "}
                     <strong>{formatDate(req.date)}</strong>
                   </div>
                   <div>
-                    <span style={labelStyle}>Received:</span>{" "}
+                    <span style={labelStyle}>{labels.received}</span>{" "}
                     {new Date(req.createdAt).toLocaleDateString()}
                   </div>
                 </div>
@@ -489,7 +526,7 @@ export default function RentalTab({ isMobile }) {
                         letterSpacing: "0.5px",
                       }}
                     >
-                      <MessageSquare size={12} /> Message:
+                      <MessageSquare size={12} /> {labels.msg}
                     </p>
                     <p
                       style={{

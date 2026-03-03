@@ -40,7 +40,6 @@ import {
   cardStyle,
 } from "./AdminStyles";
 
-// Helper to format date from YYYY-MM-DD to DD.MM.YYYY
 const formatDisplayDate = (dateStr) => {
   if (!dateStr) return "";
   const parts = dateStr.split("-");
@@ -64,14 +63,12 @@ export default function EventsTab({
   const [externalLink, setExternalLink] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [isCancellingId, setIsCancellingId] = useState(null);
-
   const [activeSubTab, setActiveSubTab] = useState("courses");
   const [expandedGroups, setExpandedGroups] = useState({});
   const [showParticipantsFor, setShowParticipantsFor] = useState(null);
   const [participantCache, setParticipantCache] = useState({});
 
   const isFullAdmin = userRole === "admin";
-
   const labels = {
     en: {
       newEntry: "NEW ENTRY",
@@ -108,13 +105,13 @@ export default function EventsTab({
       timeLabel: "Uhrzeit",
       titleEn: "Titel EN",
       titleDe: "Titel DE",
-      addBtn: "Zum Kalender hinzufügen",
+      addBtn: "Hinzufügen",
       updateBtn: "Eintrag aktualisieren",
       courseHeader: "KURSE",
       eventHeader: "EINZEL-EVENTS",
       noCourses: "Keine Kurse geplant.",
       noEvents: "Keine Events geplant.",
-      cancelCourse: "KURS ABSAGEN",
+      cancelCourse: "ABSAGEN",
       deleteConfirm:
         "Bist du sicher? Alle Teilnehmer erhalten eine Rückerstattung und der Termin wird gelöscht.",
       participants: "Teilnehmer",
@@ -124,7 +121,6 @@ export default function EventsTab({
   }[currentLang || "en"];
 
   const eventsCollection = collection(db, "events");
-
   const availableCourses = Array.from(
     new Map(
       planets
@@ -141,43 +137,36 @@ export default function EventsTab({
   }, [userRole, allowedCourses]);
 
   const fetchEvents = async () => {
-    try {
-      const q = query(eventsCollection, orderBy("date", "asc"));
-      const querySnapshot = await getDocs(q);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const allFetchedEvents = await Promise.all(
-        querySnapshot.docs.map(async (docSnap) => {
-          const data = docSnap.data();
-          const bQuery = query(
-            collection(db, "bookings"),
-            where("eventId", "==", docSnap.id),
-          );
-          const bSnap = await getDocs(bQuery);
-
-          return {
-            ...data,
-            id: docSnap.id,
-            bookedCount: bSnap.size,
-            bookings: bSnap.docs.map((d) => ({ ...d.data(), id: d.id })),
-          };
-        }),
-      );
-
-      const validEvents = allFetchedEvents.filter((event) => {
-        const eventDate = new Date(event.date);
-        eventDate.setHours(0, 0, 0, 0);
-        if (eventDate < today) {
-          deleteDoc(doc(db, "events", event.id));
-          return false;
-        }
-        return isFullAdmin || allowedCourses.includes(event.link);
-      });
-      setEvents(validEvents);
-    } catch (error) {
-      console.error("Error fetching events:", error);
-    }
+    const q = query(eventsCollection, orderBy("date", "asc"));
+    const querySnapshot = await getDocs(q);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const allFetchedEvents = await Promise.all(
+      querySnapshot.docs.map(async (docSnap) => {
+        const data = docSnap.data();
+        const bQuery = query(
+          collection(db, "bookings"),
+          where("eventId", "==", docSnap.id),
+        );
+        const bSnap = await getDocs(bQuery);
+        return {
+          ...data,
+          id: docSnap.id,
+          bookedCount: bSnap.size,
+          bookings: bSnap.docs.map((d) => ({ ...d.data(), id: d.id })),
+        };
+      }),
+    );
+    const validEvents = allFetchedEvents.filter((event) => {
+      const eventDate = new Date(event.date);
+      eventDate.setHours(0, 0, 0, 0);
+      if (eventDate < today) {
+        deleteDoc(doc(db, "events", event.id));
+        return false;
+      }
+      return isFullAdmin || allowedCourses.includes(event.link);
+    });
+    setEvents(validEvents);
   };
 
   const handleShowParticipants = async (event) => {
@@ -186,9 +175,7 @@ export default function EventsTab({
       return;
     }
     if (event.bookedCount === 0) return alert(labels.noParticipants);
-
     if (!participantCache[event.id]) {
-      // 1. Fetch course settings to get Add-on names
       const sanitizedId = event.link.replace(/\//g, "");
       const settingsSnap = await getDoc(
         doc(db, "course_settings", sanitizedId),
@@ -196,26 +183,19 @@ export default function EventsTab({
       const specialEvents = settingsSnap.exists()
         ? settingsSnap.data().specialEvents || []
         : [];
-
-      // 2. Map participants and their selected add-ons
       const userDetails = await Promise.all(
         event.bookings.map(async (b) => {
-          let baseInfo = {};
-          if (b.userId === "GUEST_USER") {
-            baseInfo = {
-              firstName: b.guestName || "Guest",
-              lastName: "(Guest)",
-              email: b.guestEmail || "Email not found",
-              isGuest: true,
-            };
-          } else {
-            const uSnap = await getDoc(doc(db, "users", b.userId));
-            baseInfo = uSnap.exists()
-              ? uSnap.data()
-              : { firstName: "Unknown", lastName: "User", email: "N/A" };
-          }
-
-          // Resolve Add-on IDs to Names
+          let baseInfo =
+            b.userId === "GUEST_USER"
+              ? {
+                  firstName: b.guestName || "Guest",
+                  lastName: "(Guest)",
+                  email: b.guestEmail || "Email not found",
+                  isGuest: true,
+                }
+              : (await getDoc(doc(db, "users", b.userId))).exists()
+                ? (await getDoc(doc(db, "users", b.userId))).data()
+                : { firstName: "Unknown", lastName: "User", email: "N/A" };
           const addonNames = (b.selectedAddons || []).map((id) => {
             const match = specialEvents.find((se) => se.id === id);
             return match
@@ -224,19 +204,12 @@ export default function EventsTab({
                 : match.nameEn
               : id;
           });
-
           return { ...baseInfo, addons: addonNames };
         }),
       );
       setParticipantCache((prev) => ({ ...prev, [event.id]: userDetails }));
     }
     setShowParticipantsFor(event.id);
-  };
-
-  const autoFillFirstCourse = () => {
-    if (availableCourses.length > 0 && !editingId && !isCustomCourseLink) {
-      handleCourseSelection(availableCourses[0].link);
-    }
   };
 
   const handleCourseSelection = (courseLink) => {
@@ -251,6 +224,11 @@ export default function EventsTab({
           : "",
       );
     }
+  };
+
+  const autoFillFirstCourse = () => {
+    if (availableCourses.length > 0 && !editingId && !isCustomCourseLink)
+      handleCourseSelection(availableCourses[0].link);
   };
 
   const handleSubmit = async (e) => {
@@ -284,17 +262,14 @@ export default function EventsTab({
       event.type || (event.link?.startsWith("http") ? "event" : "course");
     setLinkType(type);
     if (type === "course") {
-      const isStandard = availableCourses.some((c) => c.link === event.link);
-      if (isStandard) {
+      if (availableCourses.some((c) => c.link === event.link)) {
         setLink(event.link);
         setIsCustomCourseLink(false);
       } else {
         setExternalLink(event.link);
         setIsCustomCourseLink(true);
       }
-    } else {
-      setExternalLink(event.link || "");
-    }
+    } else setExternalLink(event.link || "");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -309,16 +284,11 @@ export default function EventsTab({
     if (linkType === "course") autoFillFirstCourse();
   };
 
-  const toggleGroup = (link) => {
-    setExpandedGroups((prev) => ({ ...prev, [link]: !prev[link] }));
-  };
-
   const handleCancelEvent = async (e, ev) => {
     e.stopPropagation();
     if (!window.confirm(labels.deleteConfirm)) return;
     setIsCancellingId(ev.id);
-    const functions = getFunctions();
-    const adminCancelFn = httpsCallable(functions, "adminCancelEvent");
+    const adminCancelFn = httpsCallable(getFunctions(), "adminCancelEvent");
     try {
       await adminCancelFn({ eventId: ev.id, currentLang: currentLang || "en" });
       await fetchEvents();
@@ -331,7 +301,6 @@ export default function EventsTab({
 
   const scheduledCourses = events.filter((ev) => ev.type === "course");
   const scheduledEvents = events.filter((ev) => ev.type === "event");
-
   const groupedCourses = scheduledCourses.reduce((acc, course) => {
     const key = course.link;
     if (!acc[key])
@@ -491,7 +460,6 @@ export default function EventsTab({
           </form>
         </div>
       </section>
-
       <section style={{ flex: 1, marginTop: isMobile ? "2rem" : 0 }}>
         <div style={styles.tabNav}>
           <button
@@ -508,425 +476,216 @@ export default function EventsTab({
             <Star size={16} /> {labels.eventHeader} ({scheduledEvents.length})
           </button>
         </div>
-
-        {activeSubTab === "courses" && (
-          <div style={styles.tabContent}>
-            {Object.values(groupedCourses).map((group) => {
-              const isExpanded = expandedGroups[group.link];
-              const hasManyDates = group.dates.length > 3;
-              return (
-                <div key={group.link} style={styles.courseGroupWrapper}>
-                  <div
-                    onClick={() => toggleGroup(group.link)}
-                    style={styles.groupHeader}
-                  >
-                    <div style={styles.groupTitleText}>
-                      {isExpanded ? (
-                        <ChevronDown size={14} />
-                      ) : (
-                        <ChevronRight size={14} />
-                      )}
-                      {group.title} ({group.dates.length})
-                    </div>
-                  </div>
-                  {isExpanded && (
-                    <div
-                      className="custom-scrollbar"
-                      style={{
-                        ...styles.expandedContent,
-                        maxHeight: hasManyDates ? "400px" : "auto",
-                        overflowY: hasManyDates ? "auto" : "visible",
-                      }}
-                    >
-                      {group.dates.map((ev) => (
-                        <div key={ev.id} style={styles.eventItemWrapper}>
-                          <div
-                            style={{
-                              ...cardStyle,
-                              padding: isMobile ? "1rem" : "0.8rem 1.2rem",
-                              backgroundColor: "#fdf8e1",
-                              flexDirection: isMobile ? "column" : "row",
-                              alignItems: isMobile ? "stretch" : "center",
-                              gap: isMobile ? "12px" : "16px",
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                flex: 1,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "10px",
-                                }}
-                              >
-                                {!isMobile && (
-                                  <button
-                                    onClick={() => startEdit(ev)}
-                                    style={styles.editBtnIcon}
-                                  >
-                                    <Edit2 size={16} />
-                                  </button>
-                                )}
-                                <span
-                                  style={{
-                                    ...styles.dateLabel,
-                                    fontSize: isMobile ? "1rem" : "0.9rem",
-                                  }}
-                                >
-                                  {formatDisplayDate(ev.date)}
-                                </span>
-                                {ev.time && (
-                                  <span style={styles.timeLabel}>
-                                    <Clock size={14} /> {ev.time}
-                                  </span>
-                                )}
-                              </div>
-                              {isMobile && (
-                                <button
-                                  onClick={() => startEdit(ev)}
-                                  style={{
-                                    background: "rgba(202, 175, 243, 0.15)",
-                                    border: "none",
-                                    padding: "8px",
-                                    borderRadius: "8px",
-                                    color: "#9960a8",
-                                    display: "flex",
-                                    alignItems: "center",
-                                  }}
-                                >
-                                  <Edit2 size={14} />
-                                </button>
-                              )}
-                            </div>
-
-                            <div
-                              style={{
-                                ...styles.actionRow,
-                                width: isMobile ? "100%" : "auto",
-                                justifyContent: isMobile
-                                  ? "space-between"
-                                  : "flex-end",
-                                borderTop: isMobile
-                                  ? "1px solid rgba(28, 7, 0, 0.08)"
-                                  : "none",
-                                paddingTop: isMobile ? "12px" : "0",
-                              }}
-                            >
-                              <button
-                                onClick={() => handleShowParticipants(ev)}
-                                style={{
-                                  ...styles.participantBadge,
-                                  opacity: ev.bookedCount > 0 ? 1 : 0.3,
-                                }}
-                              >
-                                <Users size={18} color="#4e5f28" />
-                                <span
-                                  style={{
-                                    fontWeight: "800",
-                                    fontSize: "1rem",
-                                    color: "#1c0700",
-                                  }}
-                                >
-                                  {ev.bookedCount}
-                                </span>
-                              </button>
-                              <button
-                                onClick={(e) => handleCancelEvent(e, ev)}
-                                style={styles.cancelCourseBtn}
-                                disabled={isCancellingId === ev.id}
-                              >
-                                {isCancellingId === ev.id ? (
-                                  <Loader2 size={14} className="spinner" />
-                                ) : (
-                                  labels.cancelCourse
-                                )}
-                              </button>
-                            </div>
-                          </div>
-
-                          {showParticipantsFor === ev.id &&
-                            participantCache[ev.id] && (
-                              <div style={styles.participantPanel}>
-                                {participantCache[ev.id].map((u, i) => (
-                                  <div key={i} style={styles.userRow}>
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        justifyContent: "space-between",
-                                        alignItems: "flex-start",
-                                        flexWrap: "wrap",
-                                        gap: "8px",
-                                      }}
-                                    >
-                                      <div
-                                        style={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          gap: "8px",
-                                        }}
-                                      >
-                                        <User size={12} />
-                                        <strong
-                                          style={{
-                                            color: u.isGuest
-                                              ? "#9960a8"
-                                              : "inherit",
-                                            fontSize: "0.85rem",
-                                          }}
-                                        >
-                                          {u.firstName} {u.lastName}
-                                        </strong>
-                                      </div>
-
-                                      {/* RENDER ADDONS HERE */}
-                                      {u.addons?.length > 0 && (
-                                        <div style={styles.addonList}>
-                                          {u.addons.map((an, ai) => (
-                                            <span
-                                              key={ai}
-                                              style={styles.addonBadge}
-                                            >
-                                              <Star
-                                                size={10}
-                                                fill="#caaff3"
-                                                color="#caaff3"
-                                              />{" "}
-                                              {an}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <span style={styles.contactText}>
-                                      <Mail size={10} /> {u.email}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {scheduledCourses.length === 0 && (
-              <p style={{ opacity: 0.4, fontSize: "0.8rem" }}>
-                {labels.noCourses}
-              </p>
-            )}
-          </div>
-        )}
-
-        {activeSubTab === "events" && (
-          <div style={styles.tabContent}>
-            {scheduledEvents.map((ev) => (
-              <div key={ev.id} style={styles.eventItemWrapper}>
+        <div style={styles.tabContent}>
+          {Object.values(groupedCourses).map((group) => {
+            const isExpanded = expandedGroups[group.link];
+            return (
+              <div key={group.link} style={styles.courseGroupWrapper}>
                 <div
-                  style={{
-                    ...cardStyle,
-                    backgroundColor: "#fdf8e1",
-                    padding: isMobile ? "1rem" : "1.2rem",
-                    flexDirection: isMobile ? "column" : "row",
-                    alignItems: isMobile ? "stretch" : "center",
-                    gap: isMobile ? "12px" : "1rem",
-                  }}
+                  onClick={() =>
+                    setExpandedGroups((prev) => ({
+                      ...prev,
+                      [group.link]: !prev[group.link],
+                    }))
+                  }
+                  style={styles.groupHeader}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      flex: 1,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "10px",
-                        alignItems: "center",
-                      }}
-                    >
-                      {!isMobile && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startEdit(ev);
-                          }}
-                          style={styles.editBtnIcon}
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                      )}
-                      <div>
-                        <div
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#caaff3",
-                            fontWeight: "800",
-                            marginBottom: "2px",
-                          }}
-                        >
-                          {formatDisplayDate(ev.date)}{" "}
-                          {ev.time && `• ${ev.time}`}
-                        </div>
-                        <div
-                          style={{
-                            fontWeight: "700",
-                            fontSize: isMobile ? "1rem" : "1.05rem",
-                            color: "#1c0700",
-                          }}
-                        >
-                          {ev.title[currentLang || "en"]}
-                        </div>
-                      </div>
-                    </div>
-                    {isMobile && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startEdit(ev);
-                        }}
-                        style={{
-                          background: "rgba(202, 175, 243, 0.15)",
-                          border: "none",
-                          padding: "8px",
-                          borderRadius: "8px",
-                          color: "#9960a8",
-                          display: "flex",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Edit2 size={14} />
-                      </button>
+                  <div style={styles.groupTitleText}>
+                    {isExpanded ? (
+                      <ChevronDown size={14} />
+                    ) : (
+                      <ChevronRight size={14} />
                     )}
-                  </div>
-
-                  <div
-                    style={{
-                      ...styles.actionRow,
-                      width: isMobile ? "100%" : "auto",
-                      justifyContent: isMobile ? "space-between" : "flex-end",
-                      borderTop: isMobile
-                        ? "1px solid rgba(28, 7, 0, 0.08)"
-                        : "none",
-                      paddingTop: isMobile ? "12px" : "0",
-                    }}
-                  >
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleShowParticipants(ev);
-                      }}
-                      style={{
-                        ...styles.participantBadge,
-                        opacity: ev.bookedCount > 0 ? 1 : 0.3,
-                      }}
-                    >
-                      <Users size={18} color="#4e5f28" />
-                      <span
-                        style={{
-                          fontWeight: "800",
-                          fontSize: "1rem",
-                          color: "#1c0700",
-                        }}
-                      >
-                        {ev.bookedCount}
-                      </span>
-                    </button>
-                    <button
-                      onClick={(e) => handleCancelEvent(e, ev)}
-                      style={styles.cancelCourseBtn}
-                      disabled={isCancellingId === ev.id}
-                    >
-                      {isCancellingId === ev.id ? (
-                        <Loader2 size={14} className="spinner" />
-                      ) : (
-                        labels.cancelCourse
-                      )}
-                    </button>
+                    {group.title} ({group.dates.length})
                   </div>
                 </div>
-
-                {showParticipantsFor === ev.id && participantCache[ev.id] && (
-                  <div style={styles.participantPanel}>
-                    {participantCache[ev.id].map((u, i) => (
-                      <div key={i} style={styles.userRow}>
+                {isExpanded && (
+                  <div
+                    className="custom-scrollbar"
+                    style={{
+                      ...styles.expandedContent,
+                      maxHeight: group.dates.length > 3 ? "400px" : "auto",
+                      overflowY: group.dates.length > 3 ? "auto" : "visible",
+                    }}
+                  >
+                    {group.dates.map((ev) => (
+                      <div key={ev.id} style={styles.eventItemWrapper}>
                         <div
                           style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                            flexWrap: "wrap",
-                            gap: "8px",
+                            ...cardStyle,
+                            padding: isMobile ? "1rem" : "0.8rem 1.2rem",
+                            backgroundColor: "#fdf8e1",
+                            flexDirection: isMobile ? "column" : "row",
+                            alignItems: isMobile ? "stretch" : "center",
+                            gap: isMobile ? "12px" : "16px",
                           }}
                         >
                           <div
                             style={{
                               display: "flex",
+                              justifyContent: "space-between",
                               alignItems: "center",
-                              gap: "8px",
+                              flex: 1,
                             }}
                           >
-                            <User size={12} />
-                            <strong
+                            <div
                               style={{
-                                color: u.isGuest ? "#9960a8" : "inherit",
-                                fontSize: "0.85rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "10px",
                               }}
                             >
-                              {u.firstName} {u.lastName}
-                            </strong>
-                          </div>
-
-                          {u.addons?.length > 0 && (
-                            <div style={styles.addonList}>
-                              {u.addons.map((an, ai) => (
-                                <span key={ai} style={styles.addonBadge}>
-                                  <Star
-                                    size={10}
-                                    fill="#caaff3"
-                                    color="#caaff3"
-                                  />{" "}
-                                  {an}
+                              {!isMobile && (
+                                <button
+                                  onClick={() => startEdit(ev)}
+                                  style={styles.editBtnIcon}
+                                >
+                                  <Edit2 size={16} />
+                                </button>
+                              )}
+                              <span
+                                style={{
+                                  ...styles.dateLabel,
+                                  fontSize: isMobile ? "1rem" : "0.9rem",
+                                }}
+                              >
+                                {formatDisplayDate(ev.date)}
+                              </span>
+                              {ev.time && (
+                                <span style={styles.timeLabel}>
+                                  <Clock size={14} /> {ev.time}
                                 </span>
+                              )}
+                            </div>
+                            {isMobile && (
+                              <button
+                                onClick={() => startEdit(ev)}
+                                style={{
+                                  background: "rgba(202, 175, 243, 0.15)",
+                                  border: "none",
+                                  padding: "8px",
+                                  borderRadius: "8px",
+                                  color: "#9960a8",
+                                  display: "flex",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                          <div
+                            style={{
+                              ...styles.actionRow,
+                              width: isMobile ? "100%" : "auto",
+                              justifyContent: isMobile
+                                ? "space-between"
+                                : "flex-end",
+                              borderTop: isMobile
+                                ? "1px solid rgba(28, 7, 0, 0.08)"
+                                : "none",
+                              paddingTop: isMobile ? "12px" : "0",
+                            }}
+                          >
+                            <button
+                              onClick={() => handleShowParticipants(ev)}
+                              style={{
+                                ...styles.participantBadge,
+                                opacity: ev.bookedCount > 0 ? 1 : 0.3,
+                              }}
+                            >
+                              <Users size={18} color="#4e5f28" />
+                              <span
+                                style={{
+                                  fontWeight: "800",
+                                  fontSize: "1rem",
+                                  color: "#1c0700",
+                                }}
+                              >
+                                {ev.bookedCount}
+                              </span>
+                            </button>
+                            <button
+                              onClick={(e) => handleCancelEvent(e, ev)}
+                              style={styles.cancelCourseBtn}
+                              disabled={isCancellingId === ev.id}
+                            >
+                              {isCancellingId === ev.id ? (
+                                <Loader2 size={14} className="spinner" />
+                              ) : (
+                                labels.cancelCourse
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                        {showParticipantsFor === ev.id &&
+                          participantCache[ev.id] && (
+                            <div style={styles.participantPanel}>
+                              {participantCache[ev.id].map((u, i) => (
+                                <div key={i} style={styles.userRow}>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      alignItems: "flex-start",
+                                      flexWrap: "wrap",
+                                      gap: "8px",
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                      }}
+                                    >
+                                      <User size={12} />
+                                      <strong
+                                        style={{
+                                          color: u.isGuest
+                                            ? "#9960a8"
+                                            : "inherit",
+                                          fontSize: "0.85rem",
+                                        }}
+                                      >
+                                        {u.firstName} {u.lastName}
+                                      </strong>
+                                    </div>
+                                    {u.addons?.length > 0 && (
+                                      <div style={styles.addonList}>
+                                        {u.addons.map((an, ai) => (
+                                          <span
+                                            key={ai}
+                                            style={styles.addonBadge}
+                                          >
+                                            <Star
+                                              size={10}
+                                              fill="#caaff3"
+                                              color="#caaff3"
+                                            />{" "}
+                                            {an}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span style={styles.contactText}>
+                                    <Mail size={10} /> {u.email}
+                                  </span>
+                                </div>
                               ))}
                             </div>
                           )}
-                        </div>
-                        <span style={styles.contactText}>
-                          <Mail size={10} /> {u.email}
-                        </span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            ))}
-            {scheduledEvents.length === 0 && (
-              <p style={{ opacity: 0.4, fontSize: "0.8rem" }}>
-                {labels.noEvents}
-              </p>
-            )}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </section>
-
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(28, 7, 0, 0.05); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #caaff3; border-radius: 10px; }
-        .spinner { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{` .custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: rgba(28, 7, 0, 0.05); border-radius: 10px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #caaff3; border-radius: 10px; } .spinner { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } `}</style>
     </div>
   );
 }

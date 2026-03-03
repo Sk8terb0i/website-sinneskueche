@@ -23,10 +23,11 @@ export default function RemindersTab({
   isMobile,
   userRole,
   allowedCourses = [],
+  currentLang,
 }) {
   const [selectedCourse, setSelectedCourse] = useState("");
   const [activeLangTab, setActiveLangTab] = useState("en");
-  const [courseAddons, setCourseAddons] = useState([]); // Store add-ons for the current course
+  const [courseAddons, setCourseAddons] = useState([]);
   const [reminderData, setReminderData] = useState({
     daysBefore: 3,
     en: { subject: "", text: "", firstTimerText: "", addonTexts: {} },
@@ -37,6 +38,45 @@ export default function RemindersTab({
   const [saveMessage, setSaveMessage] = useState("");
 
   const isFullAdmin = userRole === "admin";
+
+  const labels = {
+    en: {
+      title: "Course Reminders",
+      select: "Selected Course",
+      days: "Days Before",
+      en: "English",
+      de: "Deutsch",
+      reset: "Reset to Generic Draft",
+      subject: "Subject Line",
+      main: "Main Message",
+      first: "First-Timer Additional Text",
+      firstPlace: "Optional: Appended for first-time bookings.",
+      addonInfo: "Add-on Specific Information",
+      vars: "Variables:",
+      saving: "Saving...",
+      save: "Save Reminder",
+      success: "Saved successfully!",
+      resetConfirm: "Reset to generic draft?",
+    },
+    de: {
+      title: "Kurserinnerungen",
+      select: "Ausgewählter Kurs",
+      days: "Tage vorher",
+      en: "Englisch",
+      de: "Deutsch",
+      reset: "Auf Standard zurücksetzen",
+      subject: "Betreff",
+      main: "Hauptnachricht",
+      first: "Zusatztext für Neukunden",
+      firstPlace: "Optional: Wird bei Erstbuchungen angehängt.",
+      addonInfo: "Infos zu Extras",
+      vars: "Variablen:",
+      saving: "Speichern...",
+      save: "Erinnerung speichern",
+      success: "Erfolgreich gespeichert!",
+      resetConfirm: "Auf Standard zurücksetzen?",
+    },
+  }[currentLang || "en"];
 
   const templates = {
     en: {
@@ -69,23 +109,18 @@ export default function RemindersTab({
     }
   }, [availableCourses, selectedCourse]);
 
-  // Fetch both Reminder Data and Course Settings (for Add-ons)
   useEffect(() => {
     if (!selectedCourse) return;
     const fetchData = async () => {
       setIsLoading(true);
       setSaveMessage("");
       try {
-        // 1. Fetch defined Add-ons for this course
         const settingsRef = doc(db, "course_settings", selectedCourse);
         const settingsSnap = await getDoc(settingsRef);
-        if (settingsSnap.exists()) {
+        if (settingsSnap.exists())
           setCourseAddons(settingsSnap.data().specialEvents || []);
-        } else {
-          setCourseAddons([]);
-        }
+        else setCourseAddons([]);
 
-        // 2. Fetch existing reminder template
         const docRef = doc(db, "course_reminders", selectedCourse);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
@@ -112,9 +147,7 @@ export default function RemindersTab({
   }, [selectedCourse]);
 
   const handleResetToDefault = () => {
-    if (
-      window.confirm(`Reset ${activeLangTab.toUpperCase()} to generic draft?`)
-    ) {
+    if (window.confirm(labels.resetConfirm)) {
       setReminderData((prev) => ({
         ...prev,
         [activeLangTab]: { ...templates[activeLangTab] },
@@ -134,7 +167,7 @@ export default function RemindersTab({
         },
         { merge: true },
       );
-      setSaveMessage("Saved successfully!");
+      setSaveMessage(labels.success);
       setTimeout(() => setSaveMessage(""), 3000);
     } catch (error) {
       alert("Error saving: " + error.message);
@@ -172,7 +205,7 @@ export default function RemindersTab({
       style={{ maxWidth: "900px", margin: "0 auto", paddingBottom: "5rem" }}
     >
       <h3 style={sectionTitleStyle}>
-        <Mail size={18} /> Course Reminders
+        <Mail size={18} /> {labels.title}
       </h3>
 
       <div
@@ -184,7 +217,7 @@ export default function RemindersTab({
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <label style={labelStyle}>Selected Course</label>
+          <label style={labelStyle}>{labels.select}</label>
           <select
             value={selectedCourse}
             onChange={(e) => setSelectedCourse(e.target.value)}
@@ -192,13 +225,13 @@ export default function RemindersTab({
           >
             {availableCourses.map((c) => (
               <option key={c.link} value={c.link.replace(/\//g, "")}>
-                {c.text.en}
+                {c.text[currentLang || "en"]}
               </option>
             ))}
           </select>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <label style={labelStyle}>Days Before</label>
+          <label style={labelStyle}>{labels.days}</label>
           <input
             type="number"
             value={reminderData.daysBefore}
@@ -259,7 +292,7 @@ export default function RemindersTab({
                   transition: "all 0.2s",
                 }}
               >
-                {l === "en" ? "English" : "Deutsch"}
+                {l === "en" ? labels.en : labels.de}
               </button>
             ))}
           </div>
@@ -277,7 +310,7 @@ export default function RemindersTab({
               opacity: 0.6,
             }}
           >
-            <RefreshCcw size={12} /> Reset to Generic Draft
+            <RefreshCcw size={12} /> {labels.reset}
           </button>
         </div>
 
@@ -296,7 +329,7 @@ export default function RemindersTab({
             style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
           >
             <div>
-              <label style={labelStyle}>Subject Line</label>
+              <label style={labelStyle}>{labels.subject}</label>
               <input
                 type="text"
                 value={reminderData[activeLangTab].subject}
@@ -314,7 +347,7 @@ export default function RemindersTab({
             </div>
 
             <div>
-              <label style={labelStyle}>Main Message</label>
+              <label style={labelStyle}>{labels.main}</label>
               <textarea
                 value={reminderData[activeLangTab].text}
                 onChange={(e) =>
@@ -334,7 +367,6 @@ export default function RemindersTab({
               />
             </div>
 
-            {/* FIRST TIMER AREA */}
             <div
               style={{
                 backgroundColor: "rgba(202, 175, 243, 0.06)",
@@ -361,7 +393,7 @@ export default function RemindersTab({
                     letterSpacing: "0.5px",
                   }}
                 >
-                  First-Timer Additional Text
+                  {labels.first}
                 </span>
               </div>
               <textarea
@@ -380,11 +412,10 @@ export default function RemindersTab({
                   minHeight: "80px",
                   backgroundColor: "rgba(255,255,255,0.4)",
                 }}
-                placeholder="Optional: Appended for first-time bookings."
+                placeholder={labels.firstPlace}
               />
             </div>
 
-            {/* ADD-ON SPECIFIC AREA */}
             {courseAddons.length > 0 && (
               <div
                 style={{
@@ -412,7 +443,7 @@ export default function RemindersTab({
                       letterSpacing: "0.5px",
                     }}
                   >
-                    Add-on Specific Information
+                    {labels.addonInfo}
                   </span>
                 </div>
                 <div
@@ -447,7 +478,7 @@ export default function RemindersTab({
                           minHeight: "60px",
                           backgroundColor: "rgba(255,255,255,0.4)",
                         }}
-                        placeholder={`Optional: Text to include if ${addon.nameEn} is selected.`}
+                        placeholder={`Optional: Text to include if ${currentLang === "de" ? addon.nameDe : addon.nameEn} is selected.`}
                       />
                     </div>
                   ))}
@@ -470,7 +501,7 @@ export default function RemindersTab({
               <span
                 style={{ fontSize: "0.8rem", color: "#4e5f28", opacity: 0.8 }}
               >
-                Variables: <strong>{"{userName}"}</strong>,{" "}
+                {labels.vars} <strong>{"{userName}"}</strong>,{" "}
                 <strong>{"{courseName}"}</strong>,{" "}
                 <strong>{"{courseDate}"}</strong>,{" "}
                 <strong>{"{courseTime}"}</strong>
@@ -499,7 +530,7 @@ export default function RemindersTab({
             ) : (
               <Save size={18} />
             )}
-            {isSaving ? "Saving..." : "Save Reminder"}
+            {isSaving ? labels.saving : labels.save}
           </button>
           {saveMessage && (
             <span

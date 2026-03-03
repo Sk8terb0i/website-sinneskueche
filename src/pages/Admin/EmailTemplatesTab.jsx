@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { Save, Loader2, Info, MailOpen, Code, Eye, Globe } from "lucide-react";
+import {
+  Save,
+  Loader2,
+  Info,
+  MailOpen,
+  Code,
+  Eye,
+  Globe,
+  ChevronDown,
+} from "lucide-react";
 import {
   formCardStyle,
   sectionTitleStyle,
@@ -10,143 +19,142 @@ import {
   labelStyle,
 } from "./AdminStyles";
 
-const EMAIL_TYPES = [
-  {
-    id: "pack_purchase_user",
-    label: "Pack Success (User)",
-    vars: ["{userName}", "{courseKey}", "{packSize}", "{netIncrease}"],
-    defaults: {
-      en: {
-        subject: "Your Session Pack: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Purchase Successful!</h2>\n  <p>Hi {userName},</p>\n  <p>Thank you for purchasing a {packSize}-Session Pack for <strong>{courseKey}</strong>.</p>\n  <div style="background-color: rgba(78, 95, 40, 0.1); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #4e5f28;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #4e5f28;">+{netIncrease} Credits</p>\n  </div>\n  <p>Your credits have been added to your profile.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
-      de: {
-        subject: "Dein Session-Pack: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Kauf erfolgreich!</h2>\n  <p>Hallo {userName},</p>\n  <p>Vielen Dank für den Kauf einer {packSize}er Karte für <strong>{courseKey}</strong>.</p>\n  <div style="background-color: rgba(78, 95, 40, 0.1); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #4e5f28;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #4e5f28;">+{netIncrease} Credits</p>\n  </div>\n  <p>Dein Guthaben wurde deinem Profil hinzugefügt.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
+export default function EmailTemplatesTab({ isMobile, currentLang }) {
+  // 1. Bilingual UI Strings
+  const uiLabels = {
+    en: {
+      type: "Email Type",
+      code: "Code",
+      preview: "Preview",
+      save: "Save",
+      saving: "Saving...",
+      vars: "Available Variables:",
+      deTab: "German (DE)",
+      enTab: "English (EN)",
+      subject: "Subject",
+      body: "HTML Body",
+      success: "Templates saved successfully!",
+      fail: "Save failed: ",
+      selectType: "Select email to edit...",
     },
-  },
-  {
-    id: "pack_purchase_guest",
-    label: "Pack Success (Guest)",
-    vars: [
-      "{userName}",
-      "{courseKey}",
-      "{packSize}",
-      "{newCode}",
-      "{netIncrease}",
-      "{registrationCTA}",
-    ],
-    defaults: {
-      en: {
-        subject: "Your Code for {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Thank you for your purchase!</h2>\n  <p>Hi {userName},</p>\n  <p>Here is your code for the {packSize}-Session Pack (<strong>{courseKey}</strong>):</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">{newCode}</p>\n  </div>\n  <p>You have <strong>{netIncrease} credits</strong> remaining.</p>\n  {registrationCTA}\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
-      de: {
-        subject: "Dein Code für {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Vielen Dank für deinen Einkauf!</h2>\n  <p>Hallo {userName},</p>\n  <p>Hier ist dein Code für die {packSize}er Karte (<strong>{courseKey}</strong>):</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">{newCode}</p>\n  </div>\n  <p>Du hast noch <strong>{netIncrease} Guthaben</strong> übrig.</p>\n  {registrationCTA}\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
+    de: {
+      type: "E-Mail Typ",
+      code: "Code",
+      preview: "Vorschau",
+      save: "Speichern",
+      saving: "Speichern...",
+      vars: "Verfügbare Variablen:",
+      deTab: "Deutsch (DE)",
+      enTab: "Englisch (EN)",
+      subject: "Betreff",
+      body: "HTML Body",
+      success: "Vorlagen erfolgreich gespeichert!",
+      fail: "Fehler beim Speichern: ",
+      selectType: "E-Mail zum Bearbeiten wählen...",
     },
-  },
-  {
-    id: "booking_confirmation_user",
-    label: "Booking Confirmation (User)",
-    vars: ["{userName}", "{courseKey}", "{datesHtml}", "{profileUrl}"],
-    defaults: {
-      en: {
-        subject: "Confirmation: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Booking Confirmed!</h2>\n  <p style="font-weight: bold; color: #9960a8;">This email is your ticket.</p>\n  <p>Hi {userName},</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">\n    <ul style="margin: 0; padding: 0;">{datesHtml}</ul>\n  </div>\n  <p><strong>Location:</strong> Sägestrasse 11, 8952 Schlieren</p>\n  <p>You can also view and manage all your bookings directly on your <a href="{profileUrl}" style="color: #9960a8; font-weight: bold;">profile on our website</a>.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
-      de: {
-        subject: "Bestätigung: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Buchung bestätigt!</h2>\n  <p style="font-weight: bold; color: #9960a8;">Diese E-Mail ist dein Ticket.</p>\n  <p>Hallo {userName},</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">\n    <ul style="margin: 0; padding: 0;">{datesHtml}</ul>\n  </div>\n  <p><strong>Standort:</strong> Sägestrasse 11, 8952 Schlieren</p>\n  <p>Du kannst alle deine Buchungen auch jederzeit in deinem <a href="{profileUrl}" style="color: #9960a8; font-weight: bold;">Profil auf unserer Website</a> einsehen.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
-    },
-  },
-  {
-    id: "booking_confirmation_guest",
-    label: "Booking Confirmation (Guest)",
-    vars: ["{userName}", "{courseKey}", "{datesHtml}", "{registrationCTA}"],
-    defaults: {
-      en: {
-        subject: "Confirmation: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Booking Confirmed!</h2>\n  <p style="font-weight: bold; color: #9960a8;">This email is your ticket.</p>\n  <p>Hi {userName},</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">\n    <ul style="margin: 0; padding: 0;">{datesHtml}</ul>\n  </div>\n  <p><strong>Standort:</strong> Sägestrasse 11, 8952 Schlieren</p>\n  {registrationCTA}\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
-      de: {
-        subject: "Bestätigung: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Buchung bestätigt!</h2>\n  <p style="font-weight: bold; color: #9960a8;">Diese E-Mail ist dein Ticket.</p>\n  <p>Hallo {userName},</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">\n    <ul style="margin: 0; padding: 0;">{datesHtml}</ul>\n  </div>\n  <p><strong>Standort:</strong> Sägestrasse 11, 8952 Schlieren</p>\n  {registrationCTA}\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
-    },
-  },
-  {
-    id: "cancellation_user",
-    label: "Cancellation (User)",
-    vars: ["{userName}", "{courseKey}", "{courseDate}"],
-    defaults: {
-      en: {
-        subject: "Session Cancelled: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Session Cancelled</h2>\n  <p>Hi {userName},</p>\n  <p>The session for <strong>{courseKey}</strong> on <strong>{courseDate}</strong> has been cancelled.</p>\n  <p>We have automatically credited <strong>1 session</strong> back to your profile.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
-      de: {
-        subject: "Termin abgesagt: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Termin wurde abgesagt</h2>\n  <p>Hallo {userName},</p>\n  <p>Der Termin für <strong>{courseKey}</strong> am <strong>{courseDate}</strong> wurde abgesagt.</p>\n  <p>Wir haben deinem Profil automatisch <strong>1 Termin</strong> gutgeschrieben.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
-    },
-  },
-  {
-    id: "cancellation_guest",
-    label: "Cancellation (Guest)",
-    vars: ["{userName}", "{courseKey}", "{courseDate}", "{refundCode}"],
-    defaults: {
-      en: {
-        subject: "Session Cancelled: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Session Cancelled</h2>\n  <p>Hi {userName},</p>\n  <p>The session for <strong>{courseKey}</strong> on <strong>{courseDate}</strong> has been cancelled.</p>\n  <p>As a guest, here is your unique code to redeem your refunded session on our website:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">\n    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9960a8; margin: 0;">{refundCode}</p>\n  </div>\n  <p>You can apply this code during your next checkout.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
-      de: {
-        subject: "Termin abgesagt: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Termin wurde abgesagt</h2>\n  <p>Hallo {userName},</p>\n  <p>Der Termin für <strong>{courseKey}</strong> am <strong>{courseDate}</strong> wurde abgesagt.</p>\n  <p>Da du als Gast gebucht hast, ist hier dein einzigartiger Code, um deinen erstatteten Termin auf unserer Website einzulösen:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">\n    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9960a8; margin: 0;">{refundCode}</p>\n  </div>\n  <p>Du kannst diesen Code bei deiner nächsten Buchung an der Kasse anwenden.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
-      },
-    },
-  },
-  {
-    id: "instructor_availability",
-    label: "Instructor Avail Req",
-    vars: ["{firstName}", "{courseKey}", "{adminUrl}"],
-    defaults: {
-      en: {
-        subject: "Instructor Availability: {courseKey}",
-        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Availability Requested</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is being prepared. Please log in to the admin panel to mark your available dates.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{adminUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Open Schedule</a>\n  </div>\n  <br/><p>Best,<br/>Atelier Sinnesküche Team</p>\n</div>`,
-      },
-      de: {
-        subject: "Instructor Availability: {courseKey}",
-        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Verfügbarkeit angefragt</h2>\n  <p>Hallo {firstName},</p>\n  <p>Der Stundenplan für <strong>{courseKey}</strong> wird vorbereitet. Bitte logge dich im Admin-Bereich ein, um deine verfügbaren Termine zu markieren.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{adminUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Zum Stundenplan</a>\n  </div>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
-      },
-    },
-  },
-  {
-    id: "instructor_schedule",
-    label: "Final Schedule",
-    vars: ["{firstName}", "{courseKey}", "{scheduleList}", "{profileUrl}"],
-    defaults: {
-      en: {
-        subject: "Work Schedule: {courseKey}",
-        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Your Teaching Schedule</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is finalized. You are assigned to the following dates:</p>\n  <ul style="padding: 0; margin: 0;">{scheduleList}</ul>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
-      },
-      de: {
-        subject: "Work Schedule: {courseKey}",
-        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Dein Stundenplan</h2>\n  <p>Hallo {firstName},</p>\n  <p>Der Stundenplan für <strong>{courseKey}</strong> steht fest. Du bist für die folgenden Termine eingeteilt:</p>\n  <ul style="padding: 0; margin: 0;">{scheduleList}</ul>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
-      },
-    },
-  },
-];
+  }[currentLang || "en"];
 
-export default function EmailTemplatesTab({ isMobile }) {
+  // 2. Bilingual Template Category Labels
+  const typeLabels = {
+    pack_purchase_user: { en: "Pack Success (User)", de: "Paketkauf (Nutzer)" },
+    pack_purchase_guest: { en: "Pack Success (Guest)", de: "Paketkauf (Gast)" },
+    booking_confirmation_user: {
+      en: "Booking Conf. (User)",
+      de: "Buchung (Nutzer)",
+    },
+    booking_confirmation_guest: {
+      en: "Booking Conf. (Guest)",
+      de: "Buchung (Gast)",
+    },
+    cancellation_user: { en: "Cancellation (User)", de: "Absage (Nutzer)" },
+    cancellation_guest: { en: "Cancellation (Guest)", de: "Absage (Gast)" },
+    instructor_availability: {
+      en: "Instructor Avail Req",
+      de: "Verfügbarkeitsanfrage",
+    },
+    instructor_schedule: { en: "Final Schedule", de: "Stundenplan" },
+  };
+
+  const EMAIL_TYPES = [
+    {
+      id: "pack_purchase_user",
+      vars: ["{userName}", "{courseKey}", "{packSize}", "{netIncrease}"],
+      defaults: {
+        en: { subject: "Your Session Pack: {courseKey}", body: "" },
+        de: { subject: "Dein Session-Pack: {courseKey}", body: "" },
+      },
+    },
+    {
+      id: "pack_purchase_guest",
+      vars: [
+        "{userName}",
+        "{courseKey}",
+        "{packSize}",
+        "{newCode}",
+        "{netIncrease}",
+        "{registrationCTA}",
+      ],
+      defaults: {
+        en: { subject: "Your Code for {courseKey}", body: "" },
+        de: { subject: "Dein Code für {courseKey}", body: "" },
+      },
+    },
+    {
+      id: "booking_confirmation_user",
+      vars: ["{userName}", "{courseKey}", "{datesHtml}", "{profileUrl}"],
+      defaults: {
+        en: { subject: "Confirmation: {courseKey}", body: "" },
+        de: { subject: "Bestätigung: {courseKey}", body: "" },
+      },
+    },
+    {
+      id: "booking_confirmation_guest",
+      vars: ["{userName}", "{courseKey}", "{datesHtml}", "{registrationCTA}"],
+      defaults: {
+        en: { subject: "Confirmation: {courseKey}", body: "" },
+        de: { subject: "Bestätigung: {courseKey}", body: "" },
+      },
+    },
+    {
+      id: "cancellation_user",
+      vars: ["{userName}", "{courseKey}", "{courseDate}"],
+      defaults: {
+        en: { subject: "Session Cancelled: {courseKey}", body: "" },
+        de: { subject: "Termin abgesagt: {courseKey}", body: "" },
+      },
+    },
+    {
+      id: "cancellation_guest",
+      vars: ["{userName}", "{courseKey}", "{courseDate}", "{refundCode}"],
+      defaults: {
+        en: { subject: "Session Cancelled: {courseKey}", body: "" },
+        de: { subject: "Termin abgesagt: {courseKey}", body: "" },
+      },
+    },
+    {
+      id: "instructor_availability",
+      vars: ["{firstName}", "{courseKey}", "{adminUrl}"],
+      defaults: {
+        en: { subject: "Instructor Availability: {courseKey}", body: "" },
+        de: { subject: "Verfügbarkeit angefragt: {courseKey}", body: "" },
+      },
+    },
+    {
+      id: "instructor_schedule",
+      vars: ["{firstName}", "{courseKey}", "{scheduleList}", "{profileUrl}"],
+      defaults: {
+        en: { subject: "Work Schedule: {courseKey}", body: "" },
+        de: { subject: "Dein Stundenplan: {courseKey}", body: "" },
+      },
+    },
+  ];
+
   const [selectedType, setSelectedType] = useState(EMAIL_TYPES[0]);
   const [templates, setTemplates] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [viewMode, setViewMode] = useState("code"); // 'code' or 'preview'
-  const [mobileLang, setMobileLang] = useState("de"); // Active tab on mobile
+  const [viewMode, setViewMode] = useState("code");
+  const [mobileLang, setMobileLang] = useState("de");
 
   useEffect(() => {
     fetchTemplates();
@@ -156,11 +164,7 @@ export default function EmailTemplatesTab({ isMobile }) {
     setLoading(true);
     try {
       const docSnap = await getDoc(doc(db, "settings", "email_templates"));
-      let dbData = {};
-      if (docSnap.exists()) {
-        dbData = docSnap.data();
-      }
-
+      let dbData = docSnap.exists() ? docSnap.data() : {};
       const merged = {};
       EMAIL_TYPES.forEach((type) => {
         merged[type.id] = {
@@ -187,9 +191,9 @@ export default function EmailTemplatesTab({ isMobile }) {
       await setDoc(doc(db, "settings", "email_templates"), templates, {
         merge: true,
       });
-      alert("Templates saved successfully!");
+      alert(uiLabels.success);
     } catch (err) {
-      alert("Save failed: " + err.message);
+      alert(uiLabels.fail + err.message);
     }
     setSaving(false);
   };
@@ -199,10 +203,7 @@ export default function EmailTemplatesTab({ isMobile }) {
       ...prev,
       [selectedType.id]: {
         ...prev[selectedType.id],
-        [lang]: {
-          ...prev[selectedType.id][lang],
-          [field]: value,
-        },
+        [lang]: { ...prev[selectedType.id][lang], [field]: value },
       },
     }));
   };
@@ -221,34 +222,11 @@ export default function EmailTemplatesTab({ isMobile }) {
       "{adminUrl}": "#",
       "{registrationCTA}":
         lang === "de"
-          ? `
-        <div style="margin-top: 30px; padding: 20px; border: 1px dashed #caaff3; background-color: rgba(202, 175, 243, 0.05); border-radius: 12px; text-align: center;">
-          <p style="font-size: 14px; margin-bottom: 15px; color: #1c0700;">Möchtest du deine Buchungen und Guthaben an einem Ort verwalten? Erstelle jetzt ein Profil und verknüpfe diesen Kauf automatisch.</p>
-          <a href="#" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold; font-size: 14px;">Profil erstellen</a>
-        </div>
-        `
-          : `
-        <div style="margin-top: 30px; padding: 20px; border: 1px dashed #caaff3; background-color: rgba(202, 175, 243, 0.05); border-radius: 12px; text-align: center;">
-          <p style="font-size: 14px; margin-bottom: 15px; color: #1c0700;">Want to manage your bookings and credits in one place? Create a profile now and automatically link this purchase.</p>
-          <a href="#" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold; font-size: 14px;">Create Profile</a>
-        </div>
-        `,
-      "{datesHtml}": `
-        <li style="margin-bottom: 18px; list-style: none; font-size: 15px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
-            <span style="font-weight: bold;">15.05.2025 | 18:00</span> 
-            <a href="#" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff;">📅 Add to Calendar</a>
-          </div>
-        </li>
-      `,
-      "{scheduleList}": `
-        <li style="margin-bottom: 15px; list-style: none; padding: 15px; background: #fff; border-radius: 8px; border: 1px solid #caaff3;">
-          <strong style="color: #1c0700;">15.05.2025</strong> | 18:00<br/>
-          <span style="font-size: 13px; opacity: 0.7;">Working with: John Smith</span>
-        </li>
-      `,
+          ? `<div style="margin-top: 30px; padding: 20px; border: 1px dashed #caaff3; background-color: rgba(202, 175, 243, 0.05); border-radius: 12px; text-align: center;"><p style="font-size: 14px; margin-bottom: 15px; color: #1c0700;">Möchtest du deine Buchungen verwalten?</p><a href="#" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold; font-size: 14px;">Profil erstellen</a></div>`
+          : `<div style="margin-top: 30px; padding: 20px; border: 1px dashed #caaff3; background-color: rgba(202, 175, 243, 0.05); border-radius: 12px; text-align: center;"><p style="font-size: 14px; margin-bottom: 15px; color: #1c0700;">Want to manage your bookings?</p><a href="#" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold; font-size: 14px;">Create Profile</a></div>`,
+      "{datesHtml}": `<li style="margin-bottom: 18px; list-style: none; font-size: 15px;"><div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;"><span style="font-weight: bold;">15.05.2025 | 18:00</span><a href="#" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff;">📅 Add to Calendar</a></div></li>`,
+      "{scheduleList}": `<li style="margin-bottom: 15px; list-style: none; padding: 15px; background: #fff; border-radius: 8px; border: 1px solid #caaff3;"><strong style="color: #1c0700;">15.05.2025</strong> | 18:00<br/><span style="font-size: 13px; opacity: 0.7;">Working with: John Smith</span></li>`,
     };
-
     let previewHtml = htmlStr || "";
     Object.keys(sampleData).forEach((key) => {
       previewHtml = previewHtml.split(key).join(sampleData[key]);
@@ -257,7 +235,6 @@ export default function EmailTemplatesTab({ isMobile }) {
   };
 
   if (loading) return <Loader2 className="spinner" size={30} color="#caaff3" />;
-
   const current = templates[selectedType.id];
 
   return (
@@ -269,45 +246,73 @@ export default function EmailTemplatesTab({ isMobile }) {
       }}
     >
       <section style={{ width: isMobile ? "100%" : "300px" }}>
-        {/* On Desktop: Show a header. On Mobile: It's just a row of pills. */}
-        {!isMobile && <h3 style={labelStyle}>Email Type</h3>}
+        {!isMobile && <h3 style={labelStyle}>{uiLabels.type}</h3>}
 
-        <div
-          style={{
-            display: "flex",
-            flexDirection: isMobile ? "row" : "column",
-            gap: "0.5rem",
-            overflowX: isMobile ? "auto" : "visible",
-            paddingBottom: isMobile ? "10px" : "0",
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
-          {EMAIL_TYPES.map((type) => (
-            <button
-              key={type.id}
-              onClick={() => setSelectedType(type)}
+        {isMobile ? (
+          <div style={{ position: "relative", marginBottom: "1.5rem" }}>
+            <select
               style={{
-                ...btnStyle,
-                backgroundColor:
-                  selectedType.id === type.id
-                    ? "#caaff3"
-                    : "rgba(202, 175, 243, 0.1)",
-                textAlign: "center",
-                fontSize: "0.85rem",
-                padding: "12px 15px",
-                flexShrink: 0,
-                whiteSpace: isMobile ? "nowrap" : "normal",
+                ...inputStyle,
+                paddingRight: "40px",
+                backgroundColor: "rgba(202, 175, 243, 0.1)",
+                cursor: "pointer",
+                appearance: "none", // FIXED: Removes default browser double arrow
+                WebkitAppearance: "none",
+                MozAppearance: "none",
               }}
+              value={selectedType.id}
+              onChange={(e) =>
+                setSelectedType(
+                  EMAIL_TYPES.find((t) => t.id === e.target.value),
+                )
+              }
             >
-              {type.label}
-            </button>
-          ))}
-        </div>
+              {EMAIL_TYPES.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {typeLabels[type.id][currentLang || "en"]}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={18}
+              style={{
+                position: "absolute",
+                right: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                opacity: 0.5,
+                pointerEvents: "none",
+              }}
+            />
+          </div>
+        ) : (
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+          >
+            {EMAIL_TYPES.map((type) => (
+              <button
+                key={type.id}
+                onClick={() => setSelectedType(type)}
+                style={{
+                  ...btnStyle,
+                  backgroundColor:
+                    selectedType.id === type.id
+                      ? "#caaff3"
+                      : "rgba(202, 175, 243, 0.1)",
+                  textAlign: "center",
+                  fontSize: "0.85rem",
+                  padding: "12px 15px",
+                }}
+              >
+                {typeLabels[type.id][currentLang || "en"]}
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       <section style={{ flex: 1 }}>
         <div style={formCardStyle}>
-          {/* HEADER ROW - Optimized for perfect alignment */}
           <div
             style={{
               display: "flex",
@@ -318,18 +323,12 @@ export default function EmailTemplatesTab({ isMobile }) {
               gap: "1rem",
             }}
           >
-            <h3
-              style={{
-                ...sectionTitleStyle,
-                margin: 0,
-                flex: "1 1 auto",
-              }}
-            >
+            <h3 style={{ ...sectionTitleStyle, margin: 0, flex: "1 1 auto" }}>
               <MailOpen
                 size={18}
                 style={{ marginRight: "8px", verticalAlign: "text-bottom" }}
               />
-              {selectedType.label}
+              {typeLabels[selectedType.id][currentLang || "en"]}
             </h3>
 
             <div
@@ -338,9 +337,10 @@ export default function EmailTemplatesTab({ isMobile }) {
                 gap: "1rem",
                 alignItems: "center",
                 flexWrap: "wrap",
+                justifyContent: isMobile ? "space-between" : "flex-end",
+                width: isMobile ? "100%" : "auto",
               }}
             >
-              {/* CODE / PREVIEW TOGGLE */}
               <div
                 style={{
                   display: "flex",
@@ -358,9 +358,6 @@ export default function EmailTemplatesTab({ isMobile }) {
                     borderRadius: "100px",
                     fontSize: "0.8rem",
                     fontWeight: "bold",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "5px",
                     cursor: "pointer",
                     boxShadow:
                       viewMode === "code"
@@ -369,7 +366,7 @@ export default function EmailTemplatesTab({ isMobile }) {
                     color: "#1c0700",
                   }}
                 >
-                  <Code size={14} /> Code
+                  <Code size={14} /> {uiLabels.code}
                 </button>
                 <button
                   onClick={() => setViewMode("preview")}
@@ -381,9 +378,6 @@ export default function EmailTemplatesTab({ isMobile }) {
                     borderRadius: "100px",
                     fontSize: "0.8rem",
                     fontWeight: "bold",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "5px",
                     cursor: "pointer",
                     boxShadow:
                       viewMode === "preview"
@@ -392,11 +386,10 @@ export default function EmailTemplatesTab({ isMobile }) {
                     color: "#1c0700",
                   }}
                 >
-                  <Eye size={14} /> Preview
+                  <Eye size={14} /> {uiLabels.preview}
                 </button>
               </div>
 
-              {/* SAVE BUTTON */}
               <button
                 onClick={handleSave}
                 disabled={saving}
@@ -411,7 +404,7 @@ export default function EmailTemplatesTab({ isMobile }) {
                   <Loader2 className="spinner" size={16} />
                 ) : (
                   <>
-                    <Save size={16} /> Save
+                    <Save size={16} /> {uiLabels.save}
                   </>
                 )}
               </button>
@@ -437,14 +430,13 @@ export default function EmailTemplatesTab({ isMobile }) {
                 marginBottom: "5px",
               }}
             >
-              <Info size={14} /> Available Variables:
+              <Info size={14} /> {uiLabels.vars}
             </div>
             <code style={{ color: "#9960a8", lineBreak: "anywhere" }}>
               {selectedType.vars.join(" , ")}
             </code>
           </div>
 
-          {/* MOBILE LANGUAGE TAB TOGGLE */}
           {isMobile && (
             <div style={{ display: "flex", gap: "10px", marginBottom: "1rem" }}>
               <button
@@ -460,7 +452,7 @@ export default function EmailTemplatesTab({ isMobile }) {
                   color: mobileLang === "de" ? "white" : "#9960a8",
                 }}
               >
-                German (DE)
+                {uiLabels.deTab}
               </button>
               <button
                 onClick={() => setMobileLang("en")}
@@ -475,7 +467,7 @@ export default function EmailTemplatesTab({ isMobile }) {
                   color: mobileLang === "en" ? "white" : "#9960a8",
                 }}
               >
-                English (EN)
+                {uiLabels.enTab}
               </button>
             </div>
           )}
@@ -487,7 +479,6 @@ export default function EmailTemplatesTab({ isMobile }) {
               gap: "2rem",
             }}
           >
-            {/* GERMAN COLUMN */}
             {(!isMobile || mobileLang === "de") && (
               <div>
                 {!isMobile && (
@@ -496,11 +487,11 @@ export default function EmailTemplatesTab({ isMobile }) {
                       size={14}
                       style={{ display: "inline", verticalAlign: "middle" }}
                     />{" "}
-                    German (DE)
+                    {uiLabels.deTab}
                   </h4>
                 )}
                 <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
-                  Subject
+                  {uiLabels.subject}
                 </label>
                 <input
                   style={{ ...inputStyle, marginBottom: "1rem" }}
@@ -508,9 +499,8 @@ export default function EmailTemplatesTab({ isMobile }) {
                   onChange={(e) => updateField("de", "subject", e.target.value)}
                 />
                 <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
-                  HTML Body
+                  {uiLabels.body}
                 </label>
-
                 {viewMode === "code" ? (
                   <textarea
                     style={{
@@ -543,7 +533,6 @@ export default function EmailTemplatesTab({ isMobile }) {
               </div>
             )}
 
-            {/* ENGLISH COLUMN */}
             {(!isMobile || mobileLang === "en") && (
               <div>
                 {!isMobile && (
@@ -552,11 +541,11 @@ export default function EmailTemplatesTab({ isMobile }) {
                       size={14}
                       style={{ display: "inline", verticalAlign: "middle" }}
                     />{" "}
-                    English (EN)
+                    {uiLabels.enTab}
                   </h4>
                 )}
                 <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
-                  Subject
+                  {uiLabels.subject}
                 </label>
                 <input
                   style={{ ...inputStyle, marginBottom: "1rem" }}
@@ -564,9 +553,8 @@ export default function EmailTemplatesTab({ isMobile }) {
                   onChange={(e) => updateField("en", "subject", e.target.value)}
                 />
                 <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
-                  HTML Body
+                  {uiLabels.body}
                 </label>
-
                 {viewMode === "code" ? (
                   <textarea
                     style={{

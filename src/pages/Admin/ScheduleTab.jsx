@@ -42,6 +42,7 @@ export default function ScheduleTab({
   isMobile,
   userRole,
   allowedCourses = [],
+  currentLang,
 }) {
   const [selectedCourse, setSelectedCourse] = useState("");
   const [courseEvents, setCourseEvents] = useState([]);
@@ -53,16 +54,86 @@ export default function ScheduleTab({
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Setup State
   const [selectedInstructors, setSelectedInstructors] = useState([]);
   const [instructorsPerSlot, setInstructorsPerSlot] = useState(1);
 
-  // Editable Assignments State
   const [assignments, setAssignments] = useState({});
   const [specialAssignments, setSpecialAssignments] = useState({});
 
   const isFullAdmin = userRole === "admin";
   const functions = getFunctions();
+
+  const labels = {
+    en: {
+      title: "Work Schedule Management",
+      course: "Course",
+      autoTitle: "Automatic Schedule",
+      autoDesc: "Request availability and let the system generate the shifts.",
+      startAuto: "Start Auto Schedule",
+      manTitle: "Manual Schedule",
+      manDesc: "Assign instructors manually to each date.",
+      startMan: "Start Manual Schedule",
+      status: "Status",
+      reset: "Reset",
+      confirmReset: "Reset schedule?",
+      instructors: "Course Instructors",
+      noInstructors: "No instructors added yet. Search below.",
+      searchPlace: "Search users to add as instructors...",
+      reqAvail: "Request Availabilities",
+      saveList: "Save Instructor List",
+      assignmentsTitle: "Schedule Assignments",
+      instLabel: "Instructors",
+      addonsLabel: "Session Add-ons",
+      noAddons: "No add-ons defined",
+      saveDraft: "Save Draft",
+      publish: "Publish & Email Schedule",
+      noTime: "No time set",
+      errAvail: "Select at least one instructor.",
+      msgUpdated: "Instructor list updated.",
+      msgDraft: "Draft saved successfully.",
+      msgErrDraft: "Error saving draft.",
+      msgReq: "Availability requests sent!",
+      msgErrReq: "Status updated locally. Cloud Function failed.",
+      msgPub: "Schedule published and instructors notified!",
+      msgErrPub: "Error publishing: ",
+      processing: "Processing...",
+    },
+    de: {
+      title: "Stundenplan Verwaltung",
+      course: "Kurs",
+      autoTitle: "Automatischer Plan",
+      autoDesc:
+        "Verfügbarkeiten anfragen und Schichten automatisch generieren lassen.",
+      startAuto: "Auto-Planung starten",
+      manTitle: "Manueller Plan",
+      manDesc: "Kursleiter manuell den Terminen zuweisen.",
+      startMan: "Manuelle Planung starten",
+      status: "Status",
+      reset: "Zurücksetzen",
+      confirmReset: "Stundenplan zurücksetzen?",
+      instructors: "Kursleiter",
+      noInstructors: "Noch keine Kursleiter hinzugefügt. Suche unten.",
+      searchPlace: "Nutzer suchen und als Kursleiter hinzufügen...",
+      reqAvail: "Verfügbarkeiten anfragen",
+      saveList: "Kursleiter-Liste speichern",
+      assignmentsTitle: "Schichtzuweisungen",
+      instLabel: "Kursleiter",
+      addonsLabel: "Session Extras",
+      noAddons: "Keine Extras definiert",
+      saveDraft: "Entwurf speichern",
+      publish: "Veröffentlichen & E-Mail senden",
+      noTime: "Keine Zeit",
+      errAvail: "Wähle mindestens einen Kursleiter aus.",
+      msgUpdated: "Kursleiter-Liste aktualisiert.",
+      msgDraft: "Entwurf erfolgreich gespeichert.",
+      msgErrDraft: "Fehler beim Speichern des Entwurfs.",
+      msgReq: "Verfügbarkeitsanfragen gesendet!",
+      msgErrReq: "Status lokal aktualisiert. Cloud Function fehlgeschlagen.",
+      msgPub: "Stundenplan veröffentlicht und Kursleiter benachrichtigt!",
+      msgErrPub: "Fehler beim Veröffentlichen: ",
+      processing: "Wird bearbeitet...",
+    },
+  }[currentLang || "en"];
 
   const availableCourses = Array.from(
     new Map(
@@ -74,7 +145,6 @@ export default function ScheduleTab({
     ).values(),
   ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
 
-  // Helper: Format date to DD.MM.YYYY
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
     const [y, m, d] = dateStr.split("-");
@@ -147,8 +217,6 @@ export default function ScheduleTab({
     return () => unsub();
   }, [selectedCourse]);
 
-  // --- ACTIONS ---
-
   const initSchedule = async (mode) => {
     setIsProcessing(true);
     const sanitizedId = selectedCourse.replace(/\//g, "");
@@ -180,7 +248,7 @@ export default function ScheduleTab({
       },
       { merge: true },
     );
-    alert("Instructor list updated.");
+    alert(labels.msgUpdated);
   };
 
   const saveDraft = async () => {
@@ -190,22 +258,23 @@ export default function ScheduleTab({
       await setDoc(
         doc(db, "schedules", sanitizedId),
         {
+          instructors: selectedInstructors, // Added to ensure list is saved
+          instructorsPerSlot, // Added to ensure slot count is saved
           assignments,
           specialAssignments,
           updatedAt: new Date().toISOString(),
         },
         { merge: true },
       );
-      alert("Draft saved successfully.");
+      alert(labels.msgDraft);
     } catch (err) {
-      alert("Error saving draft.");
+      alert(labels.msgErrDraft);
     }
     setIsProcessing(false);
   };
 
   const sendAvailabilityRequests = async () => {
-    if (selectedInstructors.length === 0)
-      return alert("Select at least one instructor.");
+    if (selectedInstructors.length === 0) return alert(labels.errAvail);
     setIsProcessing(true);
     const sanitizedId = selectedCourse.replace(/\//g, "");
     try {
@@ -225,9 +294,9 @@ export default function ScheduleTab({
         instructors: selectedInstructors,
       });
 
-      alert("Availability requests sent!");
+      alert(labels.msgReq);
     } catch (err) {
-      alert("Status updated locally. Cloud Function failed.");
+      alert(labels.msgErrReq);
     }
     setIsProcessing(false);
   };
@@ -285,10 +354,16 @@ export default function ScheduleTab({
     setIsProcessing(true);
     const sanitizedId = selectedCourse.replace(/\//g, "");
     try {
-      // 1. Update the master schedule document
+      // 1. Update the master schedule document with EVERYTHING
       await setDoc(
         doc(db, "schedules", sanitizedId),
-        { assignments, specialAssignments, status: "published" },
+        {
+          instructors: selectedInstructors, // Sync instructor list
+          instructorsPerSlot, // Sync slot count
+          assignments,
+          specialAssignments,
+          status: "published",
+        },
         { merge: true },
       );
 
@@ -306,7 +381,8 @@ export default function ScheduleTab({
             userId: uid,
             eventId: eventId,
             coursePath: selectedCourse,
-            courseName: eventData?.title?.en || selectedCourse,
+            courseName:
+              eventData?.title?.[currentLang || "en"] || selectedCourse,
             date: eventData?.date || "",
             time: eventData?.time || "",
           });
@@ -320,12 +396,14 @@ export default function ScheduleTab({
         courseId: selectedCourse,
         assignments,
         specialAssignments,
+        // Ensure baseUrl is passed if your backend needs it for {profileUrl}
+        baseUrl: window.location.origin,
       });
 
-      alert("Schedule published and instructors notified!");
+      alert(labels.msgPub);
     } catch (err) {
       console.error(err);
-      alert("Error publishing: " + err.message);
+      alert(labels.msgErrPub + err.message);
     }
     setIsProcessing(false);
   };
@@ -351,7 +429,6 @@ export default function ScheduleTab({
     });
   };
 
-  // Logic to toggle multiple session add-ons
   const toggleSpecialAssignment = (eventId, addonId) => {
     setSpecialAssignments((prev) => {
       const current = Array.isArray(prev[eventId]) ? prev[eventId] : [];
@@ -396,7 +473,7 @@ export default function ScheduleTab({
         }}
       >
         <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
-          <CalendarClock size={18} /> Work Schedule Management
+          <CalendarClock size={18} /> {labels.title}
         </h3>
 
         <div
@@ -408,7 +485,9 @@ export default function ScheduleTab({
             width: isMobile ? "100%" : "300px",
           }}
         >
-          <label style={{ ...labelStyle, marginBottom: "4px" }}>Course</label>
+          <label style={{ ...labelStyle, marginBottom: "4px" }}>
+            {labels.course}
+          </label>
           <select
             value={selectedCourse}
             onChange={(e) => setSelectedCourse(e.target.value)}
@@ -421,7 +500,7 @@ export default function ScheduleTab({
           >
             {availableCourses.map((c) => (
               <option key={c.link} value={c.link}>
-                {c.text.en}
+                {c.text[currentLang || "en"]}
               </option>
             ))}
           </select>
@@ -450,10 +529,10 @@ export default function ScheduleTab({
             <Wand2 size={40} color="#9960a8" />
             <div>
               <h4 style={{ margin: "0 0 10px 0", fontSize: "1.2rem" }}>
-                Automatic Schedule
+                {labels.autoTitle}
               </h4>
               <p style={{ fontSize: "0.85rem", opacity: 0.7, margin: 0 }}>
-                Request availability and let the system generate the shifts.
+                {labels.autoDesc}
               </p>
             </div>
             <button
@@ -464,7 +543,7 @@ export default function ScheduleTab({
               {isProcessing ? (
                 <Loader2 size={16} className="spinner" />
               ) : (
-                "Start Auto Schedule"
+                labels.startAuto
               )}
             </button>
           </div>
@@ -483,10 +562,10 @@ export default function ScheduleTab({
             <UserPlus size={40} color="#4e5f28" />
             <div>
               <h4 style={{ margin: "0 0 10px 0", fontSize: "1.2rem" }}>
-                Manual Schedule
+                {labels.manTitle}
               </h4>
               <p style={{ fontSize: "0.85rem", opacity: 0.7, margin: 0 }}>
-                Assign instructors manually to each date.
+                {labels.manDesc}
               </p>
             </div>
             <button
@@ -497,7 +576,7 @@ export default function ScheduleTab({
               {isProcessing ? (
                 <Loader2 size={16} className="spinner" />
               ) : (
-                "Start Manual Schedule"
+                labels.startMan
               )}
             </button>
           </div>
@@ -524,7 +603,7 @@ export default function ScheduleTab({
                   fontWeight: "bold",
                 }}
               >
-                Status
+                {labels.status}
               </span>
               <h4
                 style={{
@@ -538,7 +617,7 @@ export default function ScheduleTab({
             </div>
             <button
               onClick={() => {
-                if (window.confirm("Reset schedule?"))
+                if (window.confirm(labels.confirmReset))
                   deleteDoc(
                     doc(db, "schedules", selectedCourse.replace(/\//g, "")),
                   );
@@ -552,11 +631,10 @@ export default function ScheduleTab({
                 fontSize: "0.8rem",
               }}
             >
-              Reset
+              {labels.reset}
             </button>
           </div>
 
-          {/* INSTRUCTOR SEARCH */}
           <div
             style={{
               ...cardStyle,
@@ -568,13 +646,13 @@ export default function ScheduleTab({
             }}
           >
             <h4 style={{ margin: 0, fontSize: "1.1rem" }}>
-              Course Instructors
+              {labels.instructors}
             </h4>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
               {selectedInstructors.length === 0 && (
                 <p style={{ opacity: 0.5, fontSize: "0.85rem" }}>
-                  No instructors added yet. Search below.
+                  {labels.noInstructors}
                 </p>
               )}
               {selectedInstructors.map((id) => (
@@ -614,7 +692,7 @@ export default function ScheduleTab({
                   }}
                 />
                 <input
-                  placeholder="Search users to add as instructors..."
+                  placeholder={labels.searchPlace}
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
                   style={{
@@ -677,7 +755,7 @@ export default function ScheduleTab({
                 onClick={sendAvailabilityRequests}
                 style={primaryBtnStyle(isMobile)}
               >
-                Request Availabilities
+                {labels.reqAvail}
               </button>
             )}
             {scheduleDoc.mode === "manual" && (
@@ -685,12 +763,11 @@ export default function ScheduleTab({
                 onClick={saveInstructorList}
                 style={{ ...btnStyle, fontSize: "0.85rem", padding: "8px" }}
               >
-                Save Instructor List
+                {labels.saveList}
               </button>
             )}
           </div>
 
-          {/* CALENDAR ASSIGNMENTS: Remains editable for re-publishing */}
           <div
             style={{
               ...cardStyle,
@@ -702,15 +779,11 @@ export default function ScheduleTab({
             }}
           >
             <h4 style={{ margin: 0, fontSize: "1.2rem" }}>
-              Schedule Assignments
+              {labels.assignmentsTitle}
             </h4>
 
             <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-              }}
+              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
             >
               {courseEvents.map((ev) => (
                 <div
@@ -736,20 +809,16 @@ export default function ScheduleTab({
                       {formatDate(ev.date)}
                     </div>
                     <div style={{ fontSize: "0.8rem", opacity: 0.5 }}>
-                      {ev.time || "No time set"}
+                      {ev.time || labels.noTime}
                     </div>
                   </div>
 
                   <div style={{ flex: 1 }}>
                     <label style={{ ...labelStyle, fontSize: "0.65rem" }}>
-                      Instructors
+                      {labels.instLabel}
                     </label>
                     <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "6px",
-                      }}
+                      style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}
                     >
                       {selectedInstructors.map((uid) => {
                         const isAssigned = assignments[ev.id]?.includes(uid);
@@ -781,21 +850,16 @@ export default function ScheduleTab({
                     </div>
                   </div>
 
-                  {/* Multi-select Session Add-ons */}
                   <div style={{ flex: 1, minWidth: "200px" }}>
                     <label style={{ ...labelStyle, fontSize: "0.65rem" }}>
-                      Session Add-ons
+                      {labels.addonsLabel}
                     </label>
                     <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "6px",
-                      }}
+                      style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}
                     >
                       {specialEvents.length === 0 ? (
                         <span style={{ fontSize: "0.7rem", opacity: 0.4 }}>
-                          No add-ons defined
+                          {labels.noAddons}
                         </span>
                       ) : (
                         specialEvents.map((se) => {
@@ -828,7 +892,7 @@ export default function ScheduleTab({
                                 cursor: "pointer",
                               }}
                             >
-                              {se.nameEn}
+                              {currentLang === "de" ? se.nameDe : se.nameEn}
                             </button>
                           );
                         })
@@ -839,7 +903,6 @@ export default function ScheduleTab({
               ))}
             </div>
 
-            {/* SAVE & PUBLISH: Buttons stay visible even if published to allow re-notifying staff */}
             <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
               <button
                 onClick={saveDraft}
@@ -854,7 +917,7 @@ export default function ScheduleTab({
                 {isProcessing ? (
                   <Loader2 className="spinner" size={18} />
                 ) : (
-                  "Save Draft"
+                  labels.saveDraft
                 )}
               </button>
               <button
@@ -865,14 +928,13 @@ export default function ScheduleTab({
                 {isProcessing ? (
                   <Loader2 className="spinner" size={18} />
                 ) : (
-                  "Publish & Email Schedule"
+                  labels.publish
                 )}
               </button>
             </div>
           </div>
         </div>
       )}
-
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
