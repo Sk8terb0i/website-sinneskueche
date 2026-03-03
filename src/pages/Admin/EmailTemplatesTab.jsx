@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { Save, Loader2, Info, MailOpen } from "lucide-react";
+import { Save, Loader2, Info, MailOpen, Code, Eye, Globe } from "lucide-react";
 import {
   formCardStyle,
   sectionTitleStyle,
@@ -111,22 +111,22 @@ const EMAIL_TYPES = [
   {
     id: "instructor_availability",
     label: "Instructor Avail Req",
-    vars: ["{firstName}", "{courseKey}", "{profileUrl}"],
+    vars: ["{firstName}", "{courseKey}", "{adminUrl}"],
     defaults: {
       en: {
         subject: "Instructor Availability: {courseKey}",
-        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Availability Requested</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is being prepared. Please log in to your profile to mark your available dates.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{profileUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Open My Profile</a>\n  </div>\n  <br/><p>Best,<br/>Atelier Sinnesküche Team</p>\n</div>`,
+        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Availability Requested</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is being prepared. Please log in to the admin panel to mark your available dates.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{adminUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Open Schedule</a>\n  </div>\n  <br/><p>Best,<br/>Atelier Sinnesküche Team</p>\n</div>`,
       },
       de: {
         subject: "Instructor Availability: {courseKey}",
-        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Availability Requested</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is being prepared. Please log in to your profile to mark your available dates.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{profileUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Open My Profile</a>\n  </div>\n  <br/><p>Best,<br/>Atelier Sinnesküche Team</p>\n</div>`,
+        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Verfügbarkeit angefragt</h2>\n  <p>Hallo {firstName},</p>\n  <p>Der Stundenplan für <strong>{courseKey}</strong> wird vorbereitet. Bitte logge dich im Admin-Bereich ein, um deine verfügbaren Termine zu markieren.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{adminUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Zum Stundenplan</a>\n  </div>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
       },
     },
   },
   {
     id: "instructor_schedule",
     label: "Final Schedule",
-    vars: ["{firstName}", "{courseKey}", "{scheduleList}"],
+    vars: ["{firstName}", "{courseKey}", "{scheduleList}", "{profileUrl}"],
     defaults: {
       en: {
         subject: "Work Schedule: {courseKey}",
@@ -134,7 +134,7 @@ const EMAIL_TYPES = [
       },
       de: {
         subject: "Work Schedule: {courseKey}",
-        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Your Teaching Schedule</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is finalized. You are assigned to the following dates:</p>\n  <ul style="padding: 0; margin: 0;">{scheduleList}</ul>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
+        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Dein Stundenplan</h2>\n  <p>Hallo {firstName},</p>\n  <p>Der Stundenplan für <strong>{courseKey}</strong> steht fest. Du bist für die folgenden Termine eingeteilt:</p>\n  <ul style="padding: 0; margin: 0;">{scheduleList}</ul>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
       },
     },
   },
@@ -145,6 +145,8 @@ export default function EmailTemplatesTab({ isMobile }) {
   const [templates, setTemplates] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [viewMode, setViewMode] = useState("code"); // 'code' or 'preview'
+  const [mobileLang, setMobileLang] = useState("de"); // Active tab on mobile
 
   useEffect(() => {
     fetchTemplates();
@@ -159,7 +161,6 @@ export default function EmailTemplatesTab({ isMobile }) {
         dbData = docSnap.data();
       }
 
-      // Initialize with DB data or fall back to defaults
       const merged = {};
       EMAIL_TYPES.forEach((type) => {
         merged[type.id] = {
@@ -206,6 +207,55 @@ export default function EmailTemplatesTab({ isMobile }) {
     }));
   };
 
+  const generatePreview = (htmlStr, lang) => {
+    const sampleData = {
+      "{userName}": "Jane Doe",
+      "{firstName}": "Jane",
+      "{courseKey}": "pottery tuesdays",
+      "{packSize}": "5",
+      "{newCode}": "A1B2C3D4",
+      "{netIncrease}": "5",
+      "{courseDate}": "15.05.2025",
+      "{refundCode}": "X9Y8Z7W6",
+      "{profileUrl}": "#",
+      "{adminUrl}": "#",
+      "{registrationCTA}":
+        lang === "de"
+          ? `
+        <div style="margin-top: 30px; padding: 20px; border: 1px dashed #caaff3; background-color: rgba(202, 175, 243, 0.05); border-radius: 12px; text-align: center;">
+          <p style="font-size: 14px; margin-bottom: 15px; color: #1c0700;">Möchtest du deine Buchungen und Guthaben an einem Ort verwalten? Erstelle jetzt ein Profil und verknüpfe diesen Kauf automatisch.</p>
+          <a href="#" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold; font-size: 14px;">Profil erstellen</a>
+        </div>
+        `
+          : `
+        <div style="margin-top: 30px; padding: 20px; border: 1px dashed #caaff3; background-color: rgba(202, 175, 243, 0.05); border-radius: 12px; text-align: center;">
+          <p style="font-size: 14px; margin-bottom: 15px; color: #1c0700;">Want to manage your bookings and credits in one place? Create a profile now and automatically link this purchase.</p>
+          <a href="#" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold; font-size: 14px;">Create Profile</a>
+        </div>
+        `,
+      "{datesHtml}": `
+        <li style="margin-bottom: 18px; list-style: none; font-size: 15px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+            <span style="font-weight: bold;">15.05.2025 | 18:00</span> 
+            <a href="#" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff;">📅 Add to Calendar</a>
+          </div>
+        </li>
+      `,
+      "{scheduleList}": `
+        <li style="margin-bottom: 15px; list-style: none; padding: 15px; background: #fff; border-radius: 8px; border: 1px solid #caaff3;">
+          <strong style="color: #1c0700;">15.05.2025</strong> | 18:00<br/>
+          <span style="font-size: 13px; opacity: 0.7;">Working with: John Smith</span>
+        </li>
+      `,
+    };
+
+    let previewHtml = htmlStr || "";
+    Object.keys(sampleData).forEach((key) => {
+      previewHtml = previewHtml.split(key).join(sampleData[key]);
+    });
+    return previewHtml;
+  };
+
   if (loading) return <Loader2 className="spinner" size={30} color="#caaff3" />;
 
   const current = templates[selectedType.id];
@@ -219,9 +269,18 @@ export default function EmailTemplatesTab({ isMobile }) {
       }}
     >
       <section style={{ width: isMobile ? "100%" : "300px" }}>
-        <h3 style={labelStyle}>Email Type</h3>
+        {/* On Desktop: Show a header. On Mobile: It's just a row of pills. */}
+        {!isMobile && <h3 style={labelStyle}>Email Type</h3>}
+
         <div
-          style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+          style={{
+            display: "flex",
+            flexDirection: isMobile ? "row" : "column",
+            gap: "0.5rem",
+            overflowX: isMobile ? "auto" : "visible",
+            paddingBottom: isMobile ? "10px" : "0",
+            WebkitOverflowScrolling: "touch",
+          }}
         >
           {EMAIL_TYPES.map((type) => (
             <button
@@ -233,9 +292,11 @@ export default function EmailTemplatesTab({ isMobile }) {
                   selectedType.id === type.id
                     ? "#caaff3"
                     : "rgba(202, 175, 243, 0.1)",
-                textAlign: "left",
+                textAlign: "center",
                 fontSize: "0.85rem",
                 padding: "12px 15px",
+                flexShrink: 0,
+                whiteSpace: isMobile ? "nowrap" : "normal",
               }}
             >
               {type.label}
@@ -246,30 +307,115 @@ export default function EmailTemplatesTab({ isMobile }) {
 
       <section style={{ flex: 1 }}>
         <div style={formCardStyle}>
+          {/* HEADER ROW - Optimized for perfect alignment */}
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: "2rem",
+              marginBottom: "1.5rem",
+              flexWrap: "wrap",
+              gap: "1rem",
             }}
           >
-            <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
-              <MailOpen size={18} /> {selectedType.label}
-            </h3>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{ ...btnStyle, width: "auto", padding: "0 20px" }}
+            <h3
+              style={{
+                ...sectionTitleStyle,
+                margin: 0,
+                flex: "1 1 auto",
+              }}
             >
-              {saving ? (
-                <Loader2 className="spinner" size={16} />
-              ) : (
-                <>
-                  <Save size={16} /> Save Changes
-                </>
-              )}
-            </button>
+              <MailOpen
+                size={18}
+                style={{ marginRight: "8px", verticalAlign: "text-bottom" }}
+              />
+              {selectedType.label}
+            </h3>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "1rem",
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              {/* CODE / PREVIEW TOGGLE */}
+              <div
+                style={{
+                  display: "flex",
+                  background: "rgba(28, 7, 0, 0.05)",
+                  borderRadius: "100px",
+                  padding: "4px",
+                }}
+              >
+                <button
+                  onClick={() => setViewMode("code")}
+                  style={{
+                    border: "none",
+                    background: viewMode === "code" ? "#fffce3" : "transparent",
+                    padding: "6px 12px",
+                    borderRadius: "100px",
+                    fontSize: "0.8rem",
+                    fontWeight: "bold",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    cursor: "pointer",
+                    boxShadow:
+                      viewMode === "code"
+                        ? "0 2px 5px rgba(0,0,0,0.05)"
+                        : "none",
+                    color: "#1c0700",
+                  }}
+                >
+                  <Code size={14} /> Code
+                </button>
+                <button
+                  onClick={() => setViewMode("preview")}
+                  style={{
+                    border: "none",
+                    background:
+                      viewMode === "preview" ? "#fffce3" : "transparent",
+                    padding: "6px 12px",
+                    borderRadius: "100px",
+                    fontSize: "0.8rem",
+                    fontWeight: "bold",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    cursor: "pointer",
+                    boxShadow:
+                      viewMode === "preview"
+                        ? "0 2px 5px rgba(0,0,0,0.05)"
+                        : "none",
+                    color: "#1c0700",
+                  }}
+                >
+                  <Eye size={14} /> Preview
+                </button>
+              </div>
+
+              {/* SAVE BUTTON */}
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                style={{
+                  ...btnStyle,
+                  width: "auto",
+                  padding: "8px 20px",
+                  margin: 0,
+                }}
+              >
+                {saving ? (
+                  <Loader2 className="spinner" size={16} />
+                ) : (
+                  <>
+                    <Save size={16} /> Save
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           <div
@@ -293,10 +439,46 @@ export default function EmailTemplatesTab({ isMobile }) {
             >
               <Info size={14} /> Available Variables:
             </div>
-            <code style={{ color: "#9960a8" }}>
+            <code style={{ color: "#9960a8", lineBreak: "anywhere" }}>
               {selectedType.vars.join(" , ")}
             </code>
           </div>
+
+          {/* MOBILE LANGUAGE TAB TOGGLE */}
+          {isMobile && (
+            <div style={{ display: "flex", gap: "10px", marginBottom: "1rem" }}>
+              <button
+                onClick={() => setMobileLang("de")}
+                style={{
+                  flex: 1,
+                  padding: "8px",
+                  borderRadius: "8px",
+                  border: "none",
+                  fontWeight: "bold",
+                  backgroundColor:
+                    mobileLang === "de" ? "#9960a8" : "rgba(153, 96, 168, 0.1)",
+                  color: mobileLang === "de" ? "white" : "#9960a8",
+                }}
+              >
+                German (DE)
+              </button>
+              <button
+                onClick={() => setMobileLang("en")}
+                style={{
+                  flex: 1,
+                  padding: "8px",
+                  borderRadius: "8px",
+                  border: "none",
+                  fontWeight: "bold",
+                  backgroundColor:
+                    mobileLang === "en" ? "#9960a8" : "rgba(153, 96, 168, 0.1)",
+                  color: mobileLang === "en" ? "white" : "#9960a8",
+                }}
+              >
+                English (EN)
+              </button>
+            </div>
+          )}
 
           <div
             style={{
@@ -305,57 +487,117 @@ export default function EmailTemplatesTab({ isMobile }) {
               gap: "2rem",
             }}
           >
-            <div>
-              <h4 style={labelStyle}>German (DE)</h4>
-              <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
-                Subject
-              </label>
-              <input
-                style={{ ...inputStyle, marginBottom: "1rem" }}
-                value={current.de.subject}
-                onChange={(e) => updateField("de", "subject", e.target.value)}
-              />
-              <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
-                HTML Body
-              </label>
-              <textarea
-                style={{
-                  ...inputStyle,
-                  minHeight: "400px",
-                  paddingTop: "10px",
-                  lineHeight: "1.5",
-                  fontSize: "0.8rem",
-                }}
-                value={current.de.body}
-                onChange={(e) => updateField("de", "body", e.target.value)}
-              />
-            </div>
+            {/* GERMAN COLUMN */}
+            {(!isMobile || mobileLang === "de") && (
+              <div>
+                {!isMobile && (
+                  <h4 style={labelStyle}>
+                    <Globe
+                      size={14}
+                      style={{ display: "inline", verticalAlign: "middle" }}
+                    />{" "}
+                    German (DE)
+                  </h4>
+                )}
+                <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                  Subject
+                </label>
+                <input
+                  style={{ ...inputStyle, marginBottom: "1rem" }}
+                  value={current.de.subject}
+                  onChange={(e) => updateField("de", "subject", e.target.value)}
+                />
+                <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                  HTML Body
+                </label>
 
-            <div>
-              <h4 style={labelStyle}>English (EN)</h4>
-              <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
-                Subject
-              </label>
-              <input
-                style={{ ...inputStyle, marginBottom: "1rem" }}
-                value={current.en.subject}
-                onChange={(e) => updateField("en", "subject", e.target.value)}
-              />
-              <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
-                HTML Body
-              </label>
-              <textarea
-                style={{
-                  ...inputStyle,
-                  minHeight: "400px",
-                  paddingTop: "10px",
-                  lineHeight: "1.5",
-                  fontSize: "0.8rem",
-                }}
-                value={current.en.body}
-                onChange={(e) => updateField("en", "body", e.target.value)}
-              />
-            </div>
+                {viewMode === "code" ? (
+                  <textarea
+                    style={{
+                      ...inputStyle,
+                      minHeight: "400px",
+                      paddingTop: "10px",
+                      lineHeight: "1.5",
+                      fontSize: "0.8rem",
+                      fontFamily: "monospace",
+                      whiteSpace: "pre-wrap",
+                    }}
+                    value={current.de.body}
+                    onChange={(e) => updateField("de", "body", e.target.value)}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      ...inputStyle,
+                      minHeight: "400px",
+                      padding: "0",
+                      background: "#f9f9f9",
+                      border: "1px solid #ddd",
+                      overflowY: "auto",
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: generatePreview(current.de.body, "de"),
+                    }}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* ENGLISH COLUMN */}
+            {(!isMobile || mobileLang === "en") && (
+              <div>
+                {!isMobile && (
+                  <h4 style={labelStyle}>
+                    <Globe
+                      size={14}
+                      style={{ display: "inline", verticalAlign: "middle" }}
+                    />{" "}
+                    English (EN)
+                  </h4>
+                )}
+                <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                  Subject
+                </label>
+                <input
+                  style={{ ...inputStyle, marginBottom: "1rem" }}
+                  value={current.en.subject}
+                  onChange={(e) => updateField("en", "subject", e.target.value)}
+                />
+                <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                  HTML Body
+                </label>
+
+                {viewMode === "code" ? (
+                  <textarea
+                    style={{
+                      ...inputStyle,
+                      minHeight: "400px",
+                      paddingTop: "10px",
+                      lineHeight: "1.5",
+                      fontSize: "0.8rem",
+                      fontFamily: "monospace",
+                      whiteSpace: "pre-wrap",
+                    }}
+                    value={current.en.body}
+                    onChange={(e) => updateField("en", "body", e.target.value)}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      ...inputStyle,
+                      minHeight: "400px",
+                      padding: "0",
+                      background: "#f9f9f9",
+                      border: "1px solid #ddd",
+                      overflowY: "auto",
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: generatePreview(current.en.body, "en"),
+                    }}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>

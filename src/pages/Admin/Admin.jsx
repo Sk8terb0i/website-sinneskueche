@@ -63,6 +63,11 @@ export default function Admin({ currentLang, setCurrentLang }) {
 
   // Initialize state from localStorage, fallback to 'events'
   const [activeTab, setActiveTab] = useState(() => {
+    const hash = window.location.hash;
+    if (hash.includes("?tab=")) {
+      const tabFromUrl = new URLSearchParams(hash.split("?")[1]).get("tab");
+      if (tabFromUrl) return tabFromUrl;
+    }
     return localStorage.getItem("adminActiveTab") || "events";
   });
 

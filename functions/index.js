@@ -908,7 +908,13 @@ exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
       }
 
       const lang = booking.lang || "en";
-      const template = config[lang] || config["en"];
+      // We fall back to English if the specific language isn't defined in the config
+      const template = config[lang] ||
+        config["en"] || {
+          subject: "Reminder",
+          text: "You have a class coming up.",
+        };
+
       let courseTime = "";
       const evSnap = await db.collection("events").doc(booking.eventId).get();
       if (evSnap.exists) courseTime = evSnap.data().time || "";
@@ -919,15 +925,14 @@ exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
         "{courseDate}": formatDate(booking.date),
         "{courseTime}": courseTime,
       };
-      let subject = template.subject;
-      let body = template.text;
-      Object.keys(replacements).forEach((k) => {
-        subject = subject.split(k).join(replacements[k]);
-        body = body.split(k).join(replacements[k]);
-      });
 
-      if (isFirstTimer && template.firstTimerText)
+      let subject = replaceVars(template.subject || "", replacements);
+      let body = replaceVars(template.text || "", replacements);
+
+      if (isFirstTimer && template.firstTimerText) {
         body += "\n\n" + template.firstTimerText;
+      }
+
       if (booking.selectedAddons && Array.isArray(booking.selectedAddons)) {
         const addonTexts = template.addonTexts || {};
         booking.selectedAddons.forEach((addonId) => {
@@ -990,7 +995,7 @@ exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
     const replacements = {
       "{firstName}": firstName || "Instructor",
       "{courseKey}": courseKey,
-      "{profileUrl}": `${origin}/#/profile`,
+      "{adminUrl}": `${origin}/#/admin-sinneskueche?tab=schedule`,
     };
 
     await db.collection("mail").add({
@@ -1082,6 +1087,7 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
       "{firstName}": firstName,
       "{courseKey}": courseKey,
       "{scheduleList}": listHtml,
+      "{profileUrl}": `${origin}/#/profile`,
     };
 
     await db.collection("mail").add({
