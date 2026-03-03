@@ -25,7 +25,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     },
     mobile: {
       topIcon: { top: "-10px", left: "-10px" },
-      bottomIcon: { top: "45px", left: "calc(100% - 55px)" },
+      bottomIcon: { top: "15px", left: "calc(100% - 35px)" },
       titleSize: "2.8rem",
     },
   };
@@ -46,7 +46,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     de: {
       title: "pottery tuesdays",
       welcome: "Mach den Dienstag zu deiner kreativen Auszeit",
-      ctaFloating: "jetzt anmelden",
+      ctaFloating: "jetzt buchen",
       details: [
         { icon: <Clock size={18} />, text: "18:30 - 21:30" },
         { icon: <Users size={18} />, text: "Alle Level willkommen" },

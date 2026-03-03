@@ -11,11 +11,21 @@ export default function RegisterShortcut({
   const [isBookingVisible, setIsBookingVisible] = useState(false);
 
   useEffect(() => {
+    // define your thresholds here
+    const mobileThreshold = 0.3;
+    const desktopThreshold = 0.65;
+
+    // check current width
+    const currentThreshold =
+      window.innerWidth <= 768 ? mobileThreshold : desktopThreshold;
+
     const observer = new IntersectionObserver(
       ([entry]) => setIsBookingVisible(entry.isIntersecting),
-      { threshold: 0.1 },
+      { threshold: currentThreshold },
     );
+
     if (bookingRef.current) observer.observe(bookingRef.current);
+
     return () => observer.disconnect();
   }, [bookingRef]);
 
@@ -83,8 +93,8 @@ export default function RegisterShortcut({
       className="floating-shortcut"
       style={{
         position: "fixed",
-        bottom: "30px",
-        right: "30px",
+        bottom: window.innerWidth <= 768 ? "5px" : "30px",
+        right: window.innerWidth <= 768 ? "5px" : "30px",
         width: "100px",
         height: "100px",
         cursor: "pointer",
@@ -112,8 +122,8 @@ export default function RegisterShortcut({
         viewBox="0 0 100 100"
         style={{
           position: "absolute",
-          width: "100%",
-          height: "100%",
+          width: window.innerWidth <= 768 ? "80%" : "95%",
+          height: window.innerWidth <= 768 ? "80%" : "95%",
           animation: "rotate-slow 15s linear infinite",
         }}
       >
@@ -126,8 +136,8 @@ export default function RegisterShortcut({
           fill="#1c0700"
           style={{
             fontSize: "9px",
-            fontWeight: "500",
-            opacity: 0.5,
+            fontWeight: window.innerWidth <= 768 ? "200" : "500",
+            opacity: window.innerWidth <= 768 ? 0.75 : 0.5,
             textTransform: "lowercase",
             letterSpacing: "0.1em",
           }}
@@ -142,8 +152,8 @@ export default function RegisterShortcut({
         alt="icon"
         className="planet-center"
         style={{
-          width: "45px",
-          height: "45px",
+          width: window.innerWidth <= 768 ? "40px" : "45px",
+          height: window.innerWidth <= 768 ? "40px" : "45px",
           objectFit: "contain",
           position: "absolute",
           zIndex: 2,

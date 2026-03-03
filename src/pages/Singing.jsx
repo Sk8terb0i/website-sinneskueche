@@ -33,7 +33,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
     },
     mobile: {
       topIcon: { top: "-15px", left: "-10px" },
-      bottomIcon: { top: "45px", left: "calc(100% - 40px)" },
+      bottomIcon: { top: "45px", left: "calc(100% - 50px)" },
       titleSize: "3.2rem",
     },
   };
@@ -83,7 +83,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
       title: "gesang und songwriting",
       welcome:
         "Finde deinen eigenen Klang durch technische Präzision und kreative Freiheit",
-      ctaFloating: "jetzt anmelden",
+      ctaFloating: "jetzt buchen",
       teachingTitle: "Das bringe ich dir bei",
       teachingList: [
         "Neue stimmliche Ausdrucksmittel suchen",
