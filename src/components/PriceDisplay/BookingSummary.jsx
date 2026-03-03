@@ -1611,7 +1611,8 @@ export default function BookingSummary({
                 <Ticket size={16} />
                 <span>
                   {currentLang === "en" ? "Your Balance:" : "Dein Guthaben:"}{" "}
-                  {availableCredits}
+                  {availableCredits}{" "}
+                  {currentLang === "en" ? "credits" : "Karten"}
                 </span>
               </div>
             )}
