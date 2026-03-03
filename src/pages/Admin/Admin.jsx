@@ -21,6 +21,7 @@ import {
   Bell,
   CalendarClock,
   Pin,
+  Mail, // Added icon for Email Templates
 } from "lucide-react";
 
 // Components & Styles
@@ -34,6 +35,7 @@ import ProfilesTab from "./ProfilesTab";
 import TermsTab from "./TermsTab";
 import RemindersTab from "./RemindersTab";
 import ScheduleTab from "./ScheduleTab";
+import EmailTemplatesTab from "./EmailTemplatesTab"; // Added new component
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -359,7 +361,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
           )}
         </div>
 
-        {/* GROUP 2: Course Mgmt, Schedule, Reminders, Terms */}
+        {/* GROUP 2: Course Mgmt, Schedule, Reminders, Terms, Email Templates */}
         <div style={groupStyle}>
           <button
             onClick={() => setActiveTab("course-management")}
@@ -410,6 +412,18 @@ export default function Admin({ currentLang, setCurrentLang }) {
             }}
           >
             <FileText size={16} /> Terms
+          </button>
+          <button
+            onClick={() => setActiveTab("emails")}
+            style={{
+              ...tabButtonStyle(activeTab === "emails"),
+              backgroundColor:
+                activeTab === "emails" ? "#caaff3" : "transparent",
+              borderRadius: "100px",
+              color: "#1c0700",
+            }}
+          >
+            <Mail size={16} /> Email Templates
           </button>
         </div>
 
@@ -567,6 +581,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
             userRole={adminData.role}
             allowedCourses={adminData.allowedCourses || []}
           />
+        )}
+        {activeTab === "emails" && (
+          <EmailTemplatesTab isMobile={isMobile} userRole={adminData.role} />
         )}
         {isFullAdmin && (
           <>

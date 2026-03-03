@@ -49,7 +49,107 @@ const getGoogleCalLink = (title, dateStr) => {
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent("Atelier Sinnesküche: " + title)}&dates=${start}/${end}`;
 };
 
-// --- EMAIL HTML COMPONENTS ---
+// --- DYNAMIC EMAIL TEMPLATE FETCHER ---
+const getTemplate = async (transaction, typeId, lang) => {
+  const ref = db.collection("settings").doc("email_templates");
+  const snap = await (transaction ? transaction.get(ref) : ref.get());
+
+  const defaults = {
+    pack_purchase_user: {
+      en: {
+        subject: "Your Session Pack: {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Purchase Successful!</h2>\n  <p>Hi {userName},</p>\n  <p>Thank you for purchasing a {packSize}-Session Pack for <strong>{courseKey}</strong>.</p>\n  <div style="background-color: rgba(78, 95, 40, 0.1); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #4e5f28;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #4e5f28;">+{netIncrease} Credits</p>\n  </div>\n  <p>Your credits have been added to your profile.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+      de: {
+        subject: "Dein Session-Pack: {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Kauf erfolgreich!</h2>\n  <p>Hallo {userName},</p>\n  <p>Vielen Dank für den Kauf einer {packSize}er Karte für <strong>{courseKey}</strong>.</p>\n  <div style="background-color: rgba(78, 95, 40, 0.1); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #4e5f28;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #4e5f28;">+{netIncrease} Credits</p>\n  </div>\n  <p>Dein Guthaben wurde deinem Profil hinzugefügt.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+    },
+    pack_purchase_guest: {
+      en: {
+        subject: "Your Code for {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Thank you for your purchase!</h2>\n  <p>Hi {userName},</p>\n  <p>Here is your code for the {packSize}-Session Pack (<strong>{courseKey}</strong>):</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">{newCode}</p>\n  </div>\n  <p>You have <strong>{netIncrease} credits</strong> remaining.</p>\n  {registrationCTA}\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+      de: {
+        subject: "Dein Code für {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Vielen Dank für deinen Einkauf!</h2>\n  <p>Hallo {userName},</p>\n  <p>Hier ist dein Code für die {packSize}er Karte (<strong>{courseKey}</strong>):</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">{newCode}</p>\n  </div>\n  <p>Du hast noch <strong>{netIncrease} Guthaben</strong> übrig.</p>\n  {registrationCTA}\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+    },
+    booking_confirmation_user: {
+      en: {
+        subject: "Confirmation: {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Booking Confirmed!</h2>\n  <p style="font-weight: bold; color: #9960a8;">This email is your ticket.</p>\n  <p>Hi {userName},</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">\n    <ul style="margin: 0; padding: 0;">{datesHtml}</ul>\n  </div>\n  <p><strong>Location:</strong> Sägestrasse 11, 8952 Schlieren</p>\n  <p>You can also view and manage all your bookings directly on your <a href="{profileUrl}" style="color: #9960a8; font-weight: bold;">profile on our website</a>.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+      de: {
+        subject: "Bestätigung: {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Buchung bestätigt!</h2>\n  <p style="font-weight: bold; color: #9960a8;">Diese E-Mail ist dein Ticket.</p>\n  <p>Hallo {userName},</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">\n    <ul style="margin: 0; padding: 0;">{datesHtml}</ul>\n  </div>\n  <p><strong>Standort:</strong> Sägestrasse 11, 8952 Schlieren</p>\n  <p>Du kannst alle deine Buchungen auch jederzeit in deinem <a href="{profileUrl}" style="color: #9960a8; font-weight: bold;">Profil auf unserer Website</a> einsehen.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+    },
+    booking_confirmation_guest: {
+      en: {
+        subject: "Confirmation: {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Booking Confirmed!</h2>\n  <p style="font-weight: bold; color: #9960a8;">This email is your ticket.</p>\n  <p>Hi {userName},</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">\n    <ul style="margin: 0; padding: 0;">{datesHtml}</ul>\n  </div>\n  <p><strong>Standort:</strong> Sägestrasse 11, 8952 Schlieren</p>\n  {registrationCTA}\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+      de: {
+        subject: "Bestätigung: {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Buchung bestätigt!</h2>\n  <p style="font-weight: bold; color: #9960a8;">Diese E-Mail ist dein Ticket.</p>\n  <p>Hallo {userName},</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">\n    <ul style="margin: 0; padding: 0;">{datesHtml}</ul>\n  </div>\n  <p><strong>Standort:</strong> Sägestrasse 11, 8952 Schlieren</p>\n  {registrationCTA}\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+    },
+    cancellation_user: {
+      en: {
+        subject: "Session Cancelled: {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Session Cancelled</h2>\n  <p>Hi {userName},</p>\n  <p>The session for <strong>{courseKey}</strong> on <strong>{courseDate}</strong> has been cancelled.</p>\n  <p>We have automatically credited <strong>1 session</strong> back to your profile.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+      de: {
+        subject: "Termin abgesagt: {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Termin wurde abgesagt</h2>\n  <p>Hallo {userName},</p>\n  <p>Der Termin für <strong>{courseKey}</strong> am <strong>{courseDate}</strong> wurde abgesagt.</p>\n  <p>Wir haben deinem Profil automatisch <strong>1 Termin</strong> gutgeschrieben.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+    },
+    cancellation_guest: {
+      en: {
+        subject: "Session Cancelled: {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Session Cancelled</h2>\n  <p>Hi {userName},</p>\n  <p>The session for <strong>{courseKey}</strong> on <strong>{courseDate}</strong> has been cancelled.</p>\n  <p>As a guest, here is your unique code to redeem your refunded session on our website:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">\n    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9960a8; margin: 0;">{refundCode}</p>\n  </div>\n  <p>You can apply this code during your next checkout.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+      de: {
+        subject: "Termin abgesagt: {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Termin wurde abgesagt</h2>\n  <p>Hallo {userName},</p>\n  <p>Der Termin für <strong>{courseKey}</strong> am <strong>{courseDate}</strong> wurde abgesagt.</p>\n  <p>Da du als Gast gebucht hast, ist hier dein einzigartiger Code, um deinen erstatteten Termin auf unserer Website einzulösen:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">\n    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9960a8; margin: 0;">{refundCode}</p>\n  </div>\n  <p>Du kannst diesen Code bei deiner nächsten Buchung an der Kasse anwenden.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+    },
+    instructor_availability: {
+      en: {
+        subject: "Instructor Availability: {courseKey}",
+        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Availability Requested</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is being prepared. Please log in to your profile to mark your available dates.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{profileUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Open My Profile</a>\n  </div>\n  <br/><p>Best,<br/>Atelier Sinnesküche Team</p>\n</div>`,
+      },
+      de: {
+        subject: "Instructor Availability: {courseKey}",
+        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Availability Requested</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is being prepared. Please log in to your profile to mark your available dates.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{profileUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Open My Profile</a>\n  </div>\n  <br/><p>Best,<br/>Atelier Sinnesküche Team</p>\n</div>`,
+      },
+    },
+    instructor_schedule: {
+      en: {
+        subject: "Work Schedule: {courseKey}",
+        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Your Teaching Schedule</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is finalized. You are assigned to the following dates:</p>\n  <ul style="padding: 0; margin: 0;">{scheduleList}</ul>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
+      },
+      de: {
+        subject: "Work Schedule: {courseKey}",
+        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Your Teaching Schedule</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is finalized. You are assigned to the following dates:</p>\n  <ul style="padding: 0; margin: 0;">{scheduleList}</ul>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
+      },
+    },
+  };
+
+  if (snap.exists() && snap.data()[typeId] && snap.data()[typeId][lang]) {
+    return snap.data()[typeId][lang];
+  }
+  return defaults[typeId][lang] || defaults[typeId]["en"];
+};
+
+const replaceVars = (str, replacements) => {
+  let result = str;
+  for (const [key, value] of Object.entries(replacements)) {
+    result = result.split(key).join(value);
+  }
+  return result;
+};
 
 const getRegistrationCTA = (lang, email, origin) => {
   if (!origin || !email) return "";
@@ -70,7 +170,7 @@ const getRegistrationCTA = (lang, email, origin) => {
 
 // --- EMAIL SENDING HELPERS ---
 
-const sendUserPackEmail = (
+const sendUserPackEmail = async (
   transaction,
   email,
   name,
@@ -80,33 +180,28 @@ const sendUserPackEmail = (
   lang,
 ) => {
   if (!email) return;
+  const template = await getTemplate(transaction, "pack_purchase_user", lang);
+
+  const replacements = {
+    "{userName}": name,
+    "{courseKey}": courseKey,
+    "{packSize}": packSize,
+    "{netIncrease}": netIncrease,
+  };
+
   const mailRef = db.collection("mail").doc();
-  const subject =
-    lang === "de"
-      ? `Dein Session-Pack: ${courseKey}`
-      : `Your Session Pack: ${courseKey}`;
   const mailData = {
     to: email,
     message: {
-      subject: subject,
-      html: `
-        <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
-          <h2 style="color: #4e5f28;">${lang === "de" ? "Kauf erfolgreich!" : "Purchase Successful!"}</h2>
-          <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
-          <p>${lang === "de" ? `Vielen Dank für den Kauf einer ${packSize}er Karte für <strong>${courseKey}</strong>.` : `Thank you for purchasing a ${packSize}-Session Pack for <strong>${courseKey}</strong>.`}</p>
-          <div style="background-color: rgba(78, 95, 40, 0.1); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #4e5f28;">
-            <p style="margin: 0; font-size: 32px; font-weight: bold; color: #4e5f28;">+${netIncrease} Credits</p>
-          </div>
-          <p>${lang === "de" ? "Dein Guthaben wurde deinem Profil hinzugefügt." : "Your credits have been added to your profile."}</p>
-          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
-        </div>`,
+      subject: replaceVars(template.subject, replacements),
+      html: replaceVars(template.body, replacements),
     },
   };
   if (transaction) transaction.set(mailRef, mailData);
-  else mailRef.set(mailData);
+  else await mailRef.set(mailData);
 };
 
-const sendGuestPackCodeEmail = (
+const sendGuestPackCodeEmail = async (
   transaction,
   email,
   name,
@@ -118,29 +213,27 @@ const sendGuestPackCodeEmail = (
   origin,
 ) => {
   if (!email) return;
+  const template = await getTemplate(transaction, "pack_purchase_guest", lang);
+
+  const replacements = {
+    "{userName}": name,
+    "{courseKey}": courseKey,
+    "{packSize}": packSize,
+    "{newCode}": newCode,
+    "{netIncrease}": netIncrease,
+    "{registrationCTA}": getRegistrationCTA(lang, email, origin),
+  };
+
   const mailRef = db.collection("mail").doc();
-  const subject =
-    lang === "de" ? `Dein Code für ${courseKey}` : `Your Code for ${courseKey}`;
   const mailData = {
     to: email,
     message: {
-      subject: subject,
-      html: `
-        <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
-          <h2 style="color: #4e5f28;">${lang === "de" ? "Vielen Dank für deinen Einkauf!" : "Thank you for your purchase!"}</h2>
-          <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
-          <p>${lang === "de" ? `Hier ist dein Code für die ${packSize}er Karte (<strong>${courseKey}</strong>):` : `Here is your code for the ${packSize}-Session Pack (<strong>${courseKey}</strong>):`}</p>
-          <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">
-            <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">${newCode}</p>
-          </div>
-          <p>${lang === "de" ? `Du hast noch <strong>${netIncrease} Guthaben</strong> übrig.` : `You have <strong>${netIncrease} credits</strong> remaining.`}</p>
-          ${getRegistrationCTA(lang, email, origin)}
-          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
-        </div>`,
+      subject: replaceVars(template.subject, replacements),
+      html: replaceVars(template.body, replacements),
     },
   };
   if (transaction) transaction.set(mailRef, mailData);
-  else mailRef.set(mailData);
+  else await mailRef.set(mailData);
 };
 
 const sendBookingEmail = async (
@@ -157,7 +250,6 @@ const sendBookingEmail = async (
   const courseKey = getCleanCourseKey(coursePath);
   const sanitizedId = coursePath.replace(/\//g, "");
 
-  // Safe read: Resolve Add-on info
   const reminderRef = db.collection("course_reminders").doc(sanitizedId);
   const reminderSnap = await (transaction
     ? transaction.get(reminderRef)
@@ -166,15 +258,11 @@ const sendBookingEmail = async (
     ? reminderSnap.data()[lang]?.addonTexts || {}
     : {};
 
-  const mailRef = db.collection("mail").doc();
-  const subject =
-    lang === "de" ? `Bestätigung: ${courseKey}` : `Confirmation: ${courseKey}`;
-
+  // {datesHtml} contains the dates, times, and calendar links for every session booked
   const datesHtml = dates
     .map((d) => {
       const fDate = formatDate(d.date);
       const fTime = d.time ? ` | ${d.time}` : "";
-
       let addonBlock = "";
       if (d.selectedAddons && Array.isArray(d.selectedAddons)) {
         d.selectedAddons.forEach((id) => {
@@ -183,34 +271,36 @@ const sendBookingEmail = async (
           }
         });
       }
-
       return `
-      <li style="margin-bottom: 18px; list-style: none; font-size: 15px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
-          <span style="font-weight: bold;">${fDate}${fTime}</span> 
-          <a href="${getGoogleCalLink(courseKey, d.date)}" target="_blank" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff;">${lang === "de" ? "📅 Zum Kalender" : "📅 Add to Calendar"}</a>
-        </div>
-        ${addonBlock}
-      </li>`;
+    <li style="margin-bottom: 18px; list-style: none; font-size: 15px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+        <span style="font-weight: bold;">${fDate}${fTime}</span> 
+        <a href="${getGoogleCalLink(courseKey, d.date)}" target="_blank" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff;">${lang === "de" ? "📅 Zum Kalender" : "📅 Add to Calendar"}</a>
+      </div>
+      ${addonBlock}
+    </li>`;
     })
     .join("");
 
+  const typeId = isGuest
+    ? "booking_confirmation_guest"
+    : "booking_confirmation_user";
+  const template = await getTemplate(transaction, typeId, lang);
+
+  const replacements = {
+    "{userName}": name,
+    "{courseKey}": courseKey,
+    "{datesHtml}": datesHtml,
+    "{registrationCTA}": isGuest ? getRegistrationCTA(lang, email, origin) : "",
+    "{profileUrl}": `${origin}/#/profile`,
+  };
+
+  const mailRef = db.collection("mail").doc();
   const mailData = {
     to: email,
     message: {
-      subject: subject,
-      html: `
-        <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
-          <h2 style="color: #4e5f28;">${lang === "de" ? "Buchung bestätigt!" : "Booking Confirmed!"}</h2>
-          <p style="font-weight: bold; color: #9960a8;">${lang === "de" ? "Diese E-Mail ist dein Ticket." : "This email is your ticket."}</p>
-          <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
-          <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #caaff3;">
-            <ul style="margin: 0; padding: 0;">${datesHtml}</ul>
-          </div>
-          <p><strong>Standort:</strong> Sägestrasse 11, 8952 Schlieren</p>
-          ${isGuest ? getRegistrationCTA(lang, email, origin) : ""}
-          <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>
-        </div>`,
+      subject: replaceVars(template.subject, replacements),
+      html: replaceVars(template.body, replacements),
     },
   };
 
@@ -218,7 +308,7 @@ const sendBookingEmail = async (
   else await mailRef.set(mailData);
 };
 
-const sendCancellationEmail = (
+const sendCancellationEmail = async (
   transaction,
   email,
   name,
@@ -229,23 +319,28 @@ const sendCancellationEmail = (
   origin,
 ) => {
   if (!email) return;
+
+  const typeId = code ? "cancellation_guest" : "cancellation_user";
+  const template = await getTemplate(transaction, typeId, lang);
+
+  const replacements = {
+    "{userName}": name,
+    "{courseKey}": courseKey,
+    "{courseDate}": formatDate(date),
+    "{refundCode}": code || "",
+  };
+
   const mailRef = db.collection("mail").doc();
-  const subject =
-    lang === "de"
-      ? `Termin abgesagt: ${courseKey}`
-      : `Session Cancelled: ${courseKey}`;
-  let htmlContent = `
-    <div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">
-      <h2 style="color: #ff4d4d;">${lang === "de" ? "Termin wurde abgesagt" : "Session Cancelled"}</h2>
-      <p>${lang === "de" ? `Hallo ${name},` : `Hi ${name},`}</p>
-      <p>${lang === "de" ? `Der Termin für <strong>${courseKey}</strong> am <strong>${formatDate(date)}</strong> wurde abgesagt.` : `The session for <strong>${courseKey}</strong> on <strong>${formatDate(date)}</strong> has been cancelled.`}</p>`;
-  if (code) {
-    htmlContent += `<div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;"><p>${code}</p></div>`;
-  }
-  htmlContent += `<br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`;
-  const mailData = { to: email, message: { subject, html: htmlContent } };
+  const mailData = {
+    to: email,
+    message: {
+      subject: replaceVars(template.subject, replacements),
+      html: replaceVars(template.body, replacements),
+    },
+  };
+
   if (transaction) transaction.set(mailRef, mailData);
-  else mailRef.set(mailData);
+  else await mailRef.set(mailData);
 };
 
 // ============================================================================
@@ -268,12 +363,10 @@ exports.createStripeCheckout = onCall(
       creditsToUse,
       baseUrl,
     } = request.data;
-
     const userId = request.auth ? request.auth.uid : "GUEST_USER";
     const userEmail = request.auth
       ? request.auth.token.email
       : guestInfo?.email;
-
     const origin =
       baseUrl || request.rawRequest.headers.origin || "https://sinneskueche.ch";
 
@@ -349,6 +442,8 @@ exports.handleStripeWebhook = onRequest(
 
       try {
         let emailData = null;
+        let isPackUser = false;
+        let isPackGuest = false;
 
         await db.runTransaction(async (transaction) => {
           const checkSnap = await transaction.get(paymentCheckRef);
@@ -381,29 +476,26 @@ exports.handleStripeWebhook = onRequest(
               finalName = userSnap.data().firstName || guestName;
           }
 
-          // DEDUCT MIXED CART CREDITS BEFORE ADDING PACK CREDITS
           if (!isGuest && parsedCreditsToUse > 0) {
             transaction.update(db.collection("users").doc(userId), {
               [`credits.${courseKey}`]:
                 admin.firestore.FieldValue.increment(-parsedCreditsToUse),
             });
-
-            // WRITE HISTORY RECORD FOR MIXED PAYMENT DEDUCTION
             const historyRef = db.collection("credit_history").doc();
             transaction.set(historyRef, {
-              userId: userId,
-              courseKey: courseKey,
+              userId,
+              courseKey,
               amount: -parsedCreditsToUse,
               type: "booking",
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
           }
 
+          let netIncrease = 0;
+          let generatedCode = null;
+
           if (mode === "pack") {
-            const netIncrease = Math.max(
-              0,
-              parseInt(packSize) - parsedDates.length,
-            );
+            netIncrease = Math.max(0, parseInt(packSize) - parsedDates.length);
             if (!isGuest) {
               transaction.set(
                 db.collection("users").doc(userId),
@@ -415,26 +507,26 @@ exports.handleStripeWebhook = onRequest(
                 },
                 { merge: true },
               );
-
-              // WRITE HISTORY RECORD FOR PACK PURCHASE
               const historyRef = db.collection("credit_history").doc();
               transaction.set(historyRef, {
-                userId: userId,
-                courseKey: courseKey,
+                userId,
+                courseKey,
                 amount: netIncrease,
                 type: "purchase",
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
+              isPackUser = true;
             } else if (netIncrease > 0) {
-              const newCode = generatePackCode();
-              transaction.set(db.collection("pack_codes").doc(newCode), {
-                code: newCode,
+              generatedCode = generatePackCode();
+              transaction.set(db.collection("pack_codes").doc(generatedCode), {
+                code: generatedCode,
                 courseKey,
                 remainingCredits: netIncrease,
                 buyerEmail: email,
                 buyerName: guestName,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
+              isPackGuest = true;
             }
           }
 
@@ -466,20 +558,50 @@ exports.handleStripeWebhook = onRequest(
             lang,
             isGuest,
             origin,
+            packSize,
+            netIncrease,
+            generatedCode,
+            courseKey,
           };
         });
 
         if (emailData) {
-          await sendBookingEmail(
-            null,
-            emailData.email,
-            emailData.finalName,
-            emailData.coursePath,
-            emailData.parsedDates,
-            emailData.lang,
-            emailData.isGuest,
-            emailData.origin,
-          );
+          if (emailData.parsedDates.length === 0) {
+            if (isPackUser) {
+              await sendUserPackEmail(
+                null,
+                emailData.email,
+                emailData.finalName,
+                emailData.courseKey,
+                emailData.packSize,
+                emailData.netIncrease,
+                emailData.lang,
+              );
+            } else if (isPackGuest) {
+              await sendGuestPackCodeEmail(
+                null,
+                emailData.email,
+                emailData.finalName,
+                emailData.courseKey,
+                emailData.packSize,
+                emailData.netIncrease,
+                emailData.generatedCode,
+                emailData.lang,
+                emailData.origin,
+              );
+            }
+          } else {
+            await sendBookingEmail(
+              null,
+              emailData.email,
+              emailData.finalName,
+              emailData.coursePath,
+              emailData.parsedDates,
+              emailData.lang,
+              emailData.isGuest,
+              emailData.origin,
+            );
+          }
         }
       } catch (e) {
         console.error("Webhook Error", e);
@@ -496,7 +618,6 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const { coursePath, selectedDates, currentLang, baseUrl } = request.data;
   const origin = baseUrl || "https://sinneskueche.ch";
-
   const courseKey = getCleanCourseKey(coursePath);
   const userRef = db.collection("users").doc(request.auth.uid);
   const email = request.auth.token.email;
@@ -511,11 +632,10 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
       ),
     });
 
-    // WRITE HISTORY RECORD FOR CREDIT BOOKING
     const historyRef = db.collection("credit_history").doc();
     transaction.set(historyRef, {
       userId: request.auth.uid,
-      courseKey: courseKey,
+      courseKey,
       amount: -selectedDates.length,
       type: "booking",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -533,11 +653,9 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
-
     return { firstName };
   });
 
-  // Call outside transaction to avoid Internal Error
   await sendBookingEmail(
     null,
     email,
@@ -548,7 +666,6 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
     false,
     origin,
   );
-
   return { success: true };
 });
 
@@ -589,7 +706,6 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
     });
   });
 
-  // Call outside transaction to avoid Internal Error
   await sendBookingEmail(
     null,
     guestInfo.email,
@@ -600,7 +716,6 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
     true,
     origin,
   );
-
   return { success: true };
 });
 
@@ -616,17 +731,14 @@ exports.cancelBooking = onCall({ cors: true }, async (request) => {
     t.update(db.collection("users").doc(request.auth.uid), {
       [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
     });
-
-    // WRITE HISTORY RECORD FOR REFUND
     const historyRef = db.collection("credit_history").doc();
     t.set(historyRef, {
       userId: request.auth.uid,
-      courseKey: courseKey,
+      courseKey,
       amount: 1,
       type: "refund",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-
     t.delete(bRef);
     return { success: true };
   });
@@ -635,41 +747,30 @@ exports.cancelBooking = onCall({ cors: true }, async (request) => {
 exports.cancelBookings = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const { bookingIds } = request.data;
-
-  if (!Array.isArray(bookingIds) || bookingIds.length === 0) {
+  if (!Array.isArray(bookingIds) || bookingIds.length === 0)
     throw new HttpsError("invalid-argument", "No bookings provided.");
-  }
 
   return db.runTransaction(async (t) => {
     const firstBookingRef = db.collection("bookings").doc(bookingIds[0]);
     const firstSnap = await t.get(firstBookingRef);
-
-    if (!firstSnap.exists || firstSnap.data().userId !== request.auth.uid) {
+    if (!firstSnap.exists || firstSnap.data().userId !== request.auth.uid)
       throw new HttpsError("permission-denied", "Unauthorized.");
-    }
 
     const courseKey = getCleanCourseKey(firstSnap.data().coursePath);
-
     t.update(db.collection("users").doc(request.auth.uid), {
       [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(
         bookingIds.length,
       ),
     });
-
     const historyRef = db.collection("credit_history").doc();
     t.set(historyRef, {
       userId: request.auth.uid,
-      courseKey: courseKey,
+      courseKey,
       amount: bookingIds.length,
       type: "refund",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-
-    for (const id of bookingIds) {
-      const bRef = db.collection("bookings").doc(id);
-      t.delete(bRef);
-    }
-
+    for (const id of bookingIds) t.delete(db.collection("bookings").doc(id));
     return { success: true };
   });
 });
@@ -681,7 +782,6 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
   const lang = currentLang || "en";
   const origin =
     baseUrl || request.rawRequest.headers.origin || "https://sinneskueche.ch";
-
   const eventRef = db.collection("events").doc(eventId);
   const eventSnap = await eventRef.get();
   if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found");
@@ -694,6 +794,8 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
     .get();
 
   return await db.runTransaction(async (transaction) => {
+    const emailPromises = [];
+
     for (const bDoc of bookingsSnap.docs) {
       const bData = bDoc.data();
       if (bData.userId === "GUEST_USER") {
@@ -706,45 +808,48 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
           buyerName: bData.guestName,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        sendCancellationEmail(
-          transaction,
-          bData.guestEmail,
-          bData.guestName,
-          courseKey,
-          eventData.date,
-          lang,
-          newCode,
-          origin,
+        emailPromises.push(
+          sendCancellationEmail(
+            transaction,
+            bData.guestEmail,
+            bData.guestName,
+            courseKey,
+            eventData.date,
+            lang,
+            newCode,
+            origin,
+          ),
         );
       } else {
         const userRef = db.collection("users").doc(bData.userId);
         transaction.update(userRef, {
           [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
         });
-
-        // WRITE HISTORY RECORD FOR ADMIN REFUND
         const historyRef = db.collection("credit_history").doc();
         transaction.set(historyRef, {
           userId: bData.userId,
-          courseKey: courseKey,
+          courseKey,
           amount: 1,
           type: "refund",
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-
-        sendCancellationEmail(
-          transaction,
-          bData.guestEmail || "Customer",
-          "Customer",
-          courseKey,
-          eventData.date,
-          lang,
-          null,
-          origin,
+        emailPromises.push(
+          sendCancellationEmail(
+            transaction,
+            bData.guestEmail || "Customer",
+            "Customer",
+            courseKey,
+            eventData.date,
+            lang,
+            null,
+            origin,
+          ),
         );
       }
       transaction.delete(bDoc.ref);
     }
+
+    await Promise.all(emailPromises);
     transaction.delete(eventRef);
     return { success: true };
   });
@@ -804,7 +909,6 @@ exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
 
       const lang = booking.lang || "en";
       const template = config[lang] || config["en"];
-
       let courseTime = "";
       const evSnap = await db.collection("events").doc(booking.eventId).get();
       if (evSnap.exists) courseTime = evSnap.data().time || "";
@@ -824,14 +928,10 @@ exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
 
       if (isFirstTimer && template.firstTimerText)
         body += "\n\n" + template.firstTimerText;
-
-      // Conditional Add-on text appending
       if (booking.selectedAddons && Array.isArray(booking.selectedAddons)) {
         const addonTexts = template.addonTexts || {};
         booking.selectedAddons.forEach((addonId) => {
-          if (addonTexts[addonId]) {
-            body += "\n\n" + addonTexts[addonId];
-          }
+          if (addonTexts[addonId]) body += "\n\n" + addonTexts[addonId];
         });
       }
 
@@ -869,12 +969,7 @@ exports.onRentRequestCreate = onDocumentCreated(
       to: adminEmail,
       message: {
         subject: `New Rental Request: ${data.name}`,
-        html: `<div style="font-family: Arial; padding: 20px; background: #fffce3; border: 1px solid #caaff3; border-radius: 12px;">
-        <h2>New Rental Request</h2>
-        <p><strong>From:</strong> ${data.name}</p>
-        <p><strong>Date:</strong> ${data.date}</p>
-        <p><strong>Message:</strong><br/>${data.message}</p>
-      </div>`,
+        html: `<div style="font-family: Arial; padding: 20px; background: #fffce3; border: 1px solid #caaff3; border-radius: 12px;"><h2>New Rental Request</h2><p><strong>From:</strong> ${data.name}</p><p><strong>Date:</strong> ${data.date}</p><p><strong>Message:</strong><br/>${data.message}</p></div>`,
       },
     });
   },
@@ -891,20 +986,18 @@ exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
     if (!userSnap.exists) continue;
     const { email, firstName } = userSnap.data();
 
+    const template = await getTemplate(null, "instructor_availability", "en");
+    const replacements = {
+      "{firstName}": firstName || "Instructor",
+      "{courseKey}": courseKey,
+      "{profileUrl}": `${origin}/#/profile`,
+    };
+
     await db.collection("mail").add({
       to: email,
       message: {
-        subject: `Instructor Availability: ${courseKey}`,
-        html: `
-          <div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">
-            <h2 style="color: #4e5f28;">Availability Requested</h2>
-            <p>Hi ${firstName || "Instructor"},</p>
-            <p>The schedule for <strong>${courseKey}</strong> is being prepared. Please log in to your profile to mark your available dates.</p>
-            <div style="margin-top: 25px; text-align: center;">
-                <a href="${origin}/#/profile" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Open My Profile</a>
-            </div>
-            <br/><p>Best,<br/>Atelier Sinnesküche Team</p>
-          </div>`,
+        subject: replaceVars(template.subject, replacements),
+        html: replaceVars(template.body, replacements),
       },
     });
   }
@@ -969,6 +1062,7 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
     if (!userSnap.exists) continue;
     const { email, firstName } = userSnap.data();
     const schedule = instructorSchedules[uid];
+
     const listHtml = schedule
       .map(
         (s) => `
@@ -983,18 +1077,18 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
       )
       .join("");
 
+    const template = await getTemplate(null, "instructor_schedule", "en");
+    const replacements = {
+      "{firstName}": firstName,
+      "{courseKey}": courseKey,
+      "{scheduleList}": listHtml,
+    };
+
     await db.collection("mail").add({
       to: email,
       message: {
-        subject: `Work Schedule: ${courseKey}`,
-        html: `
-          <div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">
-            <h2 style="color: #4e5f28;">Your Teaching Schedule</h2>
-            <p>Hi ${firstName},</p>
-            <p>The schedule for <strong>${courseKey}</strong> is finalized. You are assigned to the following dates:</p>
-            <ul style="padding: 0; margin: 0;">${listHtml}</ul>
-            <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>
-          </div>`,
+        subject: replaceVars(template.subject, replacements),
+        html: replaceVars(template.body, replacements),
       },
     });
   }
