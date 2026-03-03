@@ -137,9 +137,10 @@ const getTemplate = async (transaction, typeId, lang) => {
     },
   };
 
-  // FIXED: DocumentSnapshot.exists is a PROPERTY in the Admin SDK, not a function.
-  if (snap.exists && snap.data()[typeId] && snap.data()[typeId][lang]) {
-    return snap.data()[typeId][lang];
+  // FIXED: DocumentSnapshot.exists is a boolean PROPERTY in the Admin SDK.
+  const data = snap.exists ? snap.data() : null;
+  if (data && data[typeId] && data[typeId][lang]) {
+    return data[typeId][lang];
   }
   return defaults[typeId][lang] || defaults[typeId]["en"];
 };
@@ -147,7 +148,7 @@ const getTemplate = async (transaction, typeId, lang) => {
 const replaceVars = (str, replacements) => {
   let result = str;
   for (const [key, value] of Object.entries(replacements)) {
-    result = result.split(key).join(value);
+    result = result.split(key).join(value || "");
   }
   return result;
 };
@@ -255,11 +256,12 @@ const sendBookingEmail = async (
   const reminderSnap = await (transaction
     ? transaction.get(reminderRef)
     : reminderRef.get());
+
+  // FIXED: DocumentSnapshot.exists is a boolean PROPERTY.
   const addonTexts = reminderSnap.exists
     ? reminderSnap.data()[lang]?.addonTexts || {}
     : {};
 
-  // {datesHtml} contains the dates, times, and calendar links for every session booked
   const datesHtml = dates
     .map((d) => {
       const fDate = formatDate(d.date);
@@ -368,8 +370,9 @@ exports.createStripeCheckout = onCall(
     const userEmail = request.auth
       ? request.auth.token.email
       : guestInfo?.email;
-    const origin =
-      baseUrl || request.rawRequest.headers.origin || "https://sinneskueche.ch";
+
+    // FIXED: request.rawRequest is undefined in onCall.
+    const origin = baseUrl || "https://sinneskueche.ch";
 
     if (!request.auth && !guestInfo)
       throw new HttpsError("unauthenticated", "Login required.");
@@ -779,22 +782,26 @@ exports.cancelBookings = onCall({ cors: true }, async (request) => {
 exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
   if (!request.auth)
     throw new HttpsError("unauthenticated", "Must be logged in.");
+
   const { eventId, currentLang, baseUrl } = request.data;
   const lang = currentLang || "en";
-  const origin =
-    baseUrl || request.rawRequest.headers.origin || "https://sinneskueche.ch";
-  const eventRef = db.collection("events").doc(eventId);
-  const eventSnap = await eventRef.get();
-  if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found");
+  const origin = baseUrl || "https://sinneskueche.ch";
 
-  const eventData = eventSnap.data();
-  const courseKey = getCleanCourseKey(eventData.link || "");
-  const bookingsSnap = await db
-    .collection("bookings")
-    .where("eventId", "==", eventId)
-    .get();
-
+  // FIXED: Transaction Read Order.
+  // All reads (getDoc, query) must happen BEFORE writes (set, delete, update).
   return await db.runTransaction(async (transaction) => {
+    const eventRef = db.collection("events").doc(eventId);
+    const eventSnap = await transaction.get(eventRef);
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found");
+
+    const eventData = eventSnap.data();
+    const courseKey = getCleanCourseKey(eventData.link || "");
+
+    // FETCH BOOKINGS INSIDE THE TRANSACTION
+    const bookingsSnap = await transaction.get(
+      db.collection("bookings").where("eventId", "==", eventId),
+    );
+
     const emailPromises = [];
 
     for (const bDoc of bookingsSnap.docs) {
@@ -909,7 +916,6 @@ exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
       }
 
       const lang = booking.lang || "en";
-      // We fall back to English if the specific language isn't defined in the config
       const template = config[lang] ||
         config["en"] || {
           subject: "Reminder",
@@ -966,6 +972,8 @@ exports.onRentRequestCreate = onDocumentCreated(
       .collection("settings")
       .doc("admin_config")
       .get();
+
+    // FIXED: Property usage.
     const adminEmail = settingsSnap.exists
       ? settingsSnap.data().adminEmail
       : null;
@@ -984,15 +992,13 @@ exports.onRentRequestCreate = onDocumentCreated(
 exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
   const { courseId, instructors, baseUrl } = request.data;
   const courseKey = getCleanCourseKey(courseId);
-  const origin =
-    baseUrl || request.rawRequest.headers.origin || "https://sinneskueche.ch";
+  const origin = baseUrl || "https://sinneskueche.ch";
 
   for (const uid of instructors) {
     const userSnap = await db.collection("users").doc(uid).get();
     if (!userSnap.exists) continue;
     const { email, firstName } = userSnap.data();
 
-    // Use adminUrl replacement to match instructor_availability template
     const template = await getTemplate(null, "instructor_availability", "en");
     const replacements = {
       "{firstName}": firstName || "Instructor",
@@ -1017,7 +1023,6 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
   const courseKey = getCleanCourseKey(courseId);
   const instructorSchedules = {};
 
-  // 1. pre-fetch all instructor names to avoid lookups in the loop
   const allInstructorIds = [...new Set(Object.values(assignments).flat())];
   const nameMap = {};
 
@@ -1025,7 +1030,6 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
     allInstructorIds.map(async (uid) => {
       const snap = await db.collection("users").doc(uid).get();
       if (snap.exists) {
-        // FIXED: Admin SDK DocumentSnapshot.exists is a property
         const userData = snap.data();
         nameMap[uid] =
           `${userData.firstName} ${userData.lastName || ""}`.trim();
@@ -1033,28 +1037,24 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
     }),
   );
 
-  // 2. pre-fetch course settings once to avoid lookups in the loop
   let definedAddons = [];
   const settingsSnap = await db
     .collection("course_settings")
     .doc(courseId.replace(/\//g, ""))
     .get();
   if (settingsSnap.exists) {
-    // FIXED: Property, not function
     definedAddons = settingsSnap.data().specialEvents || [];
   }
 
-  // 3. map assignments to instructor-specific schedules
   for (const eventId in assignments) {
     const uids = assignments[eventId];
     const eventSnap = await db.collection("events").doc(eventId).get();
-    if (!eventSnap.exists) continue; // FIXED: Property, not function
+    if (!eventSnap.exists) continue;
     const eventData = eventSnap.data();
 
     for (const uid of uids) {
       if (!instructorSchedules[uid]) instructorSchedules[uid] = [];
 
-      // get names of co-instructors using the pre-fetched nameMap
       const otherNames = uids
         .filter((id) => id !== uid)
         .map((id) => nameMap[id] || "Unknown");
@@ -1083,10 +1083,9 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
     }
   }
 
-  // 4. send emails to each instructor
   for (const uid in instructorSchedules) {
     const userSnap = await db.collection("users").doc(uid).get();
-    if (!userSnap.exists) continue; // FIXED: Property, not function
+    if (!userSnap.exists) continue;
     const { email, firstName } = userSnap.data();
 
     const listHtml = instructorSchedules[uid]
