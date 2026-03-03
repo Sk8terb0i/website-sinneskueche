@@ -5,6 +5,7 @@ const {
 } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { logger } = require("firebase-functions"); // Added for better logging
 const admin = require("firebase-admin");
 
 const stripe = require("stripe")(
@@ -137,7 +138,6 @@ const getTemplate = async (transaction, typeId, lang) => {
     },
   };
 
-  // FIXED: DocumentSnapshot.exists is a boolean PROPERTY in the Admin SDK.
   const data = snap.exists ? snap.data() : null;
   if (data && data[typeId] && data[typeId][lang]) {
     return data[typeId][lang];
@@ -257,7 +257,6 @@ const sendBookingEmail = async (
     ? transaction.get(reminderRef)
     : reminderRef.get());
 
-  // FIXED: DocumentSnapshot.exists is a boolean PROPERTY.
   const addonTexts = reminderSnap.exists
     ? reminderSnap.data()[lang]?.addonTexts || {}
     : {};
@@ -352,32 +351,31 @@ const sendCancellationEmail = async (
 exports.createStripeCheckout = onCall(
   { cors: true, secrets: ["STRIPE_SECRET_KEY"] },
   async (request) => {
-    const {
-      mode,
-      packPrice,
-      totalPrice,
-      packSize,
-      selectedDates,
-      coursePath,
-      guestInfo,
-      currentLang,
-      successUrl,
-      cancelUrl,
-      creditsToUse,
-      baseUrl,
-    } = request.data;
-    const userId = request.auth ? request.auth.uid : "GUEST_USER";
-    const userEmail = request.auth
-      ? request.auth.token.email
-      : guestInfo?.email;
-
-    // FIXED: request.rawRequest is undefined in onCall.
-    const origin = baseUrl || "https://sinneskueche.ch";
-
-    if (!request.auth && !guestInfo)
-      throw new HttpsError("unauthenticated", "Login required.");
-
     try {
+      const {
+        mode,
+        packPrice,
+        totalPrice,
+        packSize,
+        selectedDates,
+        coursePath,
+        guestInfo,
+        currentLang,
+        successUrl,
+        cancelUrl,
+        creditsToUse,
+        baseUrl,
+      } = request.data;
+      const userId = request.auth ? request.auth.uid : "GUEST_USER";
+      const userEmail = request.auth
+        ? request.auth.token.email
+        : guestInfo?.email;
+
+      const origin = baseUrl || "https://sinneskueche.ch";
+
+      if (!request.auth && !guestInfo)
+        throw new HttpsError("unauthenticated", "Login required.");
+
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         customer_email: userEmail,
@@ -418,6 +416,7 @@ exports.createStripeCheckout = onCall(
       });
       return { url: session.url };
     } catch (error) {
+      logger.error("createStripeCheckout failed", error);
       throw new HttpsError("internal", error.message);
     }
   },
@@ -608,7 +607,7 @@ exports.handleStripeWebhook = onRequest(
           }
         }
       } catch (e) {
-        console.error("Webhook Error", e);
+        logger.error("Webhook logic failed", e);
       }
     }
     res.json({ received: true });
@@ -620,247 +619,283 @@ exports.handleStripeWebhook = onRequest(
 // ============================================================================
 exports.bookWithCredits = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-  const { coursePath, selectedDates, currentLang, baseUrl } = request.data;
-  const origin = baseUrl || "https://sinneskueche.ch";
-  const courseKey = getCleanCourseKey(coursePath);
-  const userRef = db.collection("users").doc(request.auth.uid);
-  const email = request.auth.token.email;
+  try {
+    const { coursePath, selectedDates, currentLang, baseUrl } = request.data;
+    const origin = baseUrl || "https://sinneskueche.ch";
+    const courseKey = getCleanCourseKey(coursePath);
+    const userRef = db.collection("users").doc(request.auth.uid);
+    const email = request.auth.token.email;
 
-  const result = await db.runTransaction(async (transaction) => {
-    const userSnap = await transaction.get(userRef);
-    const firstName = userSnap.data()?.firstName || "Customer";
+    const result = await db.runTransaction(async (transaction) => {
+      const userSnap = await transaction.get(userRef);
+      const firstName = userSnap.data()?.firstName || "Customer";
 
-    transaction.update(userRef, {
-      [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(
-        -selectedDates.length,
-      ),
-    });
-
-    const historyRef = db.collection("credit_history").doc();
-    transaction.set(historyRef, {
-      userId: request.auth.uid,
-      courseKey,
-      amount: -selectedDates.length,
-      type: "booking",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    selectedDates.forEach((d) => {
-      transaction.set(db.collection("bookings").doc(), {
-        userId: request.auth.uid,
-        eventId: d.id,
-        date: d.date,
-        coursePath,
-        selectedAddons: d.selectedAddons || [],
-        status: "confirmed",
-        lang: currentLang || "en",
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      transaction.update(userRef, {
+        [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(
+          -selectedDates.length,
+        ),
       });
-    });
-    return { firstName };
-  });
 
-  await sendBookingEmail(
-    null,
-    email,
-    result.firstName,
-    coursePath,
-    selectedDates,
-    currentLang || "en",
-    false,
-    origin,
-  );
-  return { success: true };
+      const historyRef = db.collection("credit_history").doc();
+      transaction.set(historyRef, {
+        userId: request.auth.uid,
+        courseKey,
+        amount: -selectedDates.length,
+        type: "booking",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      selectedDates.forEach((d) => {
+        transaction.set(db.collection("bookings").doc(), {
+          userId: request.auth.uid,
+          eventId: d.id,
+          date: d.date,
+          coursePath,
+          selectedAddons: d.selectedAddons || [],
+          status: "confirmed",
+          lang: currentLang || "en",
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      return { firstName };
+    });
+
+    await sendBookingEmail(
+      null,
+      email,
+      result.firstName,
+      coursePath,
+      selectedDates,
+      currentLang || "en",
+      false,
+      origin,
+    );
+    return { success: true };
+  } catch (error) {
+    logger.error("bookWithCredits failed", error);
+    throw new HttpsError("internal", error.message);
+  }
 });
 
 exports.redeemPackCode = onCall({ cors: true }, async (request) => {
-  const {
-    coursePath,
-    selectedDates,
-    packCode,
-    guestInfo,
-    currentLang,
-    baseUrl,
-  } = request.data;
-  const origin = baseUrl || "https://sinneskueche.ch";
-  const courseKey = getCleanCourseKey(coursePath);
-  const codeRef = db.collection("pack_codes").doc(packCode);
+  try {
+    const {
+      coursePath,
+      selectedDates,
+      packCode,
+      guestInfo,
+      currentLang,
+      baseUrl,
+    } = request.data;
+    const origin = baseUrl || "https://sinneskueche.ch";
+    const courseKey = getCleanCourseKey(coursePath);
+    const codeRef = db.collection("pack_codes").doc(packCode);
 
-  await db.runTransaction(async (t) => {
-    const snap = await t.get(codeRef);
-    if (!snap.exists) throw new HttpsError("not-found", "Invalid code.");
-    t.update(codeRef, {
-      remainingCredits: admin.firestore.FieldValue.increment(
-        -selectedDates.length,
-      ),
-    });
-    selectedDates.forEach((d) => {
-      t.set(db.collection("bookings").doc(), {
-        userId: "GUEST_USER",
-        guestName: `${guestInfo.firstName} ${guestInfo.lastName}`,
-        guestEmail: guestInfo.email,
-        eventId: d.id,
-        date: d.date,
-        coursePath,
-        selectedAddons: d.selectedAddons || [],
-        status: "confirmed",
-        lang: currentLang || "en",
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    await db.runTransaction(async (t) => {
+      const snap = await t.get(codeRef);
+      if (!snap.exists) throw new HttpsError("not-found", "Invalid code.");
+      t.update(codeRef, {
+        remainingCredits: admin.firestore.FieldValue.increment(
+          -selectedDates.length,
+        ),
+      });
+      selectedDates.forEach((d) => {
+        t.set(db.collection("bookings").doc(), {
+          userId: "GUEST_USER",
+          guestName: `${guestInfo.firstName} ${guestInfo.lastName}`,
+          guestEmail: guestInfo.email,
+          eventId: d.id,
+          date: d.date,
+          coursePath,
+          selectedAddons: d.selectedAddons || [],
+          status: "confirmed",
+          lang: currentLang || "en",
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
       });
     });
-  });
 
-  await sendBookingEmail(
-    null,
-    guestInfo.email,
-    guestInfo.firstName,
-    coursePath,
-    selectedDates,
-    currentLang || "en",
-    true,
-    origin,
-  );
-  return { success: true };
+    await sendBookingEmail(
+      null,
+      guestInfo.email,
+      guestInfo.firstName,
+      coursePath,
+      selectedDates,
+      currentLang || "en",
+      true,
+      origin,
+    );
+    return { success: true };
+  } catch (error) {
+    logger.error("redeemPackCode failed", error);
+    throw new HttpsError("internal", error.message);
+  }
 });
 
 exports.cancelBooking = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-  const { bookingId } = request.data;
-  const bRef = db.collection("bookings").doc(bookingId);
-  return db.runTransaction(async (t) => {
-    const snap = await t.get(bRef);
-    if (!snap.exists || snap.data().userId !== request.auth.uid)
-      throw new HttpsError("permission-denied", "Unauthorized.");
-    const courseKey = getCleanCourseKey(snap.data().coursePath);
-    t.update(db.collection("users").doc(request.auth.uid), {
-      [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
+  try {
+    const { bookingId } = request.data;
+    const bRef = db.collection("bookings").doc(bookingId);
+    return db.runTransaction(async (t) => {
+      const snap = await t.get(bRef);
+      if (!snap.exists || snap.data().userId !== request.auth.uid)
+        throw new HttpsError("permission-denied", "Unauthorized.");
+      const courseKey = getCleanCourseKey(snap.data().coursePath);
+      t.update(db.collection("users").doc(request.auth.uid), {
+        [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
+      });
+      const historyRef = db.collection("credit_history").doc();
+      t.set(historyRef, {
+        userId: request.auth.uid,
+        courseKey,
+        amount: 1,
+        type: "refund",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      t.delete(bRef);
+      return { success: true };
     });
-    const historyRef = db.collection("credit_history").doc();
-    t.set(historyRef, {
-      userId: request.auth.uid,
-      courseKey,
-      amount: 1,
-      type: "refund",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    t.delete(bRef);
-    return { success: true };
-  });
+  } catch (error) {
+    logger.error("cancelBooking failed", error);
+    throw new HttpsError("internal", error.message);
+  }
 });
 
 exports.cancelBookings = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-  const { bookingIds } = request.data;
-  if (!Array.isArray(bookingIds) || bookingIds.length === 0)
-    throw new HttpsError("invalid-argument", "No bookings provided.");
+  try {
+    const { bookingIds } = request.data;
+    if (!Array.isArray(bookingIds) || bookingIds.length === 0)
+      throw new HttpsError("invalid-argument", "No bookings provided.");
 
-  return db.runTransaction(async (t) => {
-    const firstBookingRef = db.collection("bookings").doc(bookingIds[0]);
-    const firstSnap = await t.get(firstBookingRef);
-    if (!firstSnap.exists || firstSnap.data().userId !== request.auth.uid)
-      throw new HttpsError("permission-denied", "Unauthorized.");
+    return db.runTransaction(async (t) => {
+      const firstBookingRef = db.collection("bookings").doc(bookingIds[0]);
+      const firstSnap = await t.get(firstBookingRef);
+      if (!firstSnap.exists || firstSnap.data().userId !== request.auth.uid)
+        throw new HttpsError("permission-denied", "Unauthorized.");
 
-    const courseKey = getCleanCourseKey(firstSnap.data().coursePath);
-    t.update(db.collection("users").doc(request.auth.uid), {
-      [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(
-        bookingIds.length,
-      ),
+      const courseKey = getCleanCourseKey(firstSnap.data().coursePath);
+      t.update(db.collection("users").doc(request.auth.uid), {
+        [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(
+          bookingIds.length,
+        ),
+      });
+      const historyRef = db.collection("credit_history").doc();
+      t.set(historyRef, {
+        userId: request.auth.uid,
+        courseKey,
+        amount: bookingIds.length,
+        type: "refund",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      for (const id of bookingIds) t.delete(db.collection("bookings").doc(id));
+      return { success: true };
     });
-    const historyRef = db.collection("credit_history").doc();
-    t.set(historyRef, {
-      userId: request.auth.uid,
-      courseKey,
-      amount: bookingIds.length,
-      type: "refund",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    for (const id of bookingIds) t.delete(db.collection("bookings").doc(id));
-    return { success: true };
-  });
+  } catch (error) {
+    logger.error("cancelBookings failed", error);
+    throw new HttpsError("internal", error.message);
+  }
 });
 
 exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
   if (!request.auth)
     throw new HttpsError("unauthenticated", "Must be logged in.");
 
-  const { eventId, currentLang, baseUrl } = request.data;
-  const lang = currentLang || "en";
-  const origin = baseUrl || "https://sinneskueche.ch";
+  try {
+    const { eventId, currentLang, baseUrl } = request.data;
+    const lang = currentLang || "en";
+    const origin = baseUrl || "https://sinneskueche.ch";
 
-  // FIXED: Transaction Read Order.
-  // All reads (getDoc, query) must happen BEFORE writes (set, delete, update).
-  return await db.runTransaction(async (transaction) => {
+    // 1. Fetch bookings outside transaction to avoid read/write conflicts
     const eventRef = db.collection("events").doc(eventId);
-    const eventSnap = await transaction.get(eventRef);
-    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found");
+    const bookingsSnap = await db
+      .collection("bookings")
+      .where("eventId", "==", eventId)
+      .get();
 
-    const eventData = eventSnap.data();
-    const courseKey = getCleanCourseKey(eventData.link || "");
+    // 2. Prepare email data outside the transaction
+    const emailsToSend = [];
 
-    // FETCH BOOKINGS INSIDE THE TRANSACTION
-    const bookingsSnap = await transaction.get(
-      db.collection("bookings").where("eventId", "==", eventId),
-    );
+    await db.runTransaction(async (transaction) => {
+      // READ FIRST
+      const eventSnap = await transaction.get(eventRef);
+      if (!eventSnap.exists)
+        throw new HttpsError("not-found", "Event not found");
 
-    const emailPromises = [];
+      const eventData = eventSnap.data();
+      const courseKey = getCleanCourseKey(eventData.link || "");
 
-    for (const bDoc of bookingsSnap.docs) {
-      const bData = bDoc.data();
-      if (bData.userId === "GUEST_USER") {
-        const newCode = generatePackCode();
-        transaction.set(db.collection("pack_codes").doc(newCode), {
-          code: newCode,
-          courseKey,
-          remainingCredits: 1,
-          buyerEmail: bData.guestEmail,
-          buyerName: bData.guestName,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        emailPromises.push(
-          sendCancellationEmail(
-            transaction,
-            bData.guestEmail,
-            bData.guestName,
+      // ALL WRITES
+      for (const bDoc of bookingsSnap.docs) {
+        const bData = bDoc.data();
+
+        if (bData.userId === "GUEST_USER") {
+          const newCode = generatePackCode();
+          transaction.set(db.collection("pack_codes").doc(newCode), {
+            code: newCode,
             courseKey,
-            eventData.date,
-            lang,
-            newCode,
-            origin,
-          ),
-        );
-      } else {
-        const userRef = db.collection("users").doc(bData.userId);
-        transaction.update(userRef, {
-          [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
-        });
-        const historyRef = db.collection("credit_history").doc();
-        transaction.set(historyRef, {
-          userId: bData.userId,
-          courseKey,
-          amount: 1,
-          type: "refund",
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        emailPromises.push(
-          sendCancellationEmail(
-            transaction,
-            bData.guestEmail || "Customer",
-            "Customer",
+            remainingCredits: 1,
+            buyerEmail: bData.guestEmail,
+            buyerName: bData.guestName,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          // Store data for email later
+          emailsToSend.push({
+            email: bData.guestEmail,
+            name: bData.guestName,
             courseKey,
-            eventData.date,
-            lang,
-            null,
-            origin,
-          ),
-        );
+            date: eventData.date,
+            code: newCode,
+          });
+        } else {
+          const userRef = db.collection("users").doc(bData.userId);
+          transaction.update(userRef, {
+            [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
+          });
+          const historyRef = db.collection("credit_history").doc();
+          transaction.set(historyRef, {
+            userId: bData.userId,
+            courseKey,
+            amount: 1,
+            type: "refund",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          // Store data for email later
+          emailsToSend.push({
+            email: bData.guestEmail || "Customer",
+            name: "Customer",
+            courseKey,
+            date: eventData.date,
+            code: null,
+          });
+        }
+        transaction.delete(bDoc.ref);
       }
-      transaction.delete(bDoc.ref);
-    }
+      transaction.delete(eventRef);
+    });
 
+    // 3. SEND EMAILS OUTSIDE THE TRANSACTION
+    // This completely eliminates the "Read after Write" error.
+    const emailPromises = emailsToSend.map((e) =>
+      sendCancellationEmail(
+        null,
+        e.email,
+        e.name,
+        e.courseKey,
+        e.date,
+        lang,
+        e.code,
+        origin,
+      ),
+    );
     await Promise.all(emailPromises);
-    transaction.delete(eventRef);
+
     return { success: true };
-  });
+  } catch (error) {
+    logger.error("adminCancelEvent failed", error);
+    throw new HttpsError("internal", error.message);
+  }
 });
 
 // ============================================================================
@@ -973,7 +1008,6 @@ exports.onRentRequestCreate = onDocumentCreated(
       .doc("admin_config")
       .get();
 
-    // FIXED: Property usage.
     const adminEmail = settingsSnap.exists
       ? settingsSnap.data().adminEmail
       : null;
@@ -990,131 +1024,141 @@ exports.onRentRequestCreate = onDocumentCreated(
 );
 
 exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
-  const { courseId, instructors, baseUrl } = request.data;
-  const courseKey = getCleanCourseKey(courseId);
-  const origin = baseUrl || "https://sinneskueche.ch";
+  try {
+    const { courseId, instructors, baseUrl } = request.data;
+    const courseKey = getCleanCourseKey(courseId);
+    const origin = baseUrl || "https://sinneskueche.ch";
 
-  for (const uid of instructors) {
-    const userSnap = await db.collection("users").doc(uid).get();
-    if (!userSnap.exists) continue;
-    const { email, firstName } = userSnap.data();
+    for (const uid of instructors) {
+      const userSnap = await db.collection("users").doc(uid).get();
+      if (!userSnap.exists) continue;
+      const { email, firstName } = userSnap.data();
 
-    const template = await getTemplate(null, "instructor_availability", "en");
-    const replacements = {
-      "{firstName}": firstName || "Instructor",
-      "{courseKey}": courseKey,
-      "{adminUrl}": `${origin}/#/admin-sinneskueche?tab=schedule`,
-    };
+      const template = await getTemplate(null, "instructor_availability", "en");
+      const replacements = {
+        "{firstName}": firstName || "Instructor",
+        "{courseKey}": courseKey,
+        "{adminUrl}": `${origin}/#/admin-sinneskueche?tab=schedule`,
+      };
 
-    await db.collection("mail").add({
-      to: email,
-      message: {
-        subject: replaceVars(template.subject, replacements),
-        html: replaceVars(template.body, replacements),
-      },
-    });
+      await db.collection("mail").add({
+        to: email,
+        message: {
+          subject: replaceVars(template.subject, replacements),
+          html: replaceVars(template.body, replacements),
+        },
+      });
+    }
+    return { success: true };
+  } catch (error) {
+    logger.error("requestAvailabilities failed", error);
+    throw new HttpsError("internal", error.message);
   }
-  return { success: true };
 });
 
 exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
-  const { courseId, assignments, specialAssignments, baseUrl } = request.data;
-  const origin = baseUrl || "https://sinneskueche.ch";
-  const courseKey = getCleanCourseKey(courseId);
-  const instructorSchedules = {};
+  try {
+    const { courseId, assignments, specialAssignments, baseUrl } = request.data;
+    const origin = baseUrl || "https://sinneskueche.ch";
+    const courseKey = getCleanCourseKey(courseId);
+    const instructorSchedules = {};
 
-  const allInstructorIds = [...new Set(Object.values(assignments).flat())];
-  const nameMap = {};
+    const allInstructorIds = [...new Set(Object.values(assignments).flat())];
+    const nameMap = {};
 
-  await Promise.all(
-    allInstructorIds.map(async (uid) => {
-      const snap = await db.collection("users").doc(uid).get();
-      if (snap.exists) {
-        const userData = snap.data();
-        nameMap[uid] =
-          `${userData.firstName} ${userData.lastName || ""}`.trim();
+    await Promise.all(
+      allInstructorIds.map(async (uid) => {
+        const snap = await db.collection("users").doc(uid).get();
+        if (snap.exists) {
+          const userData = snap.data();
+          nameMap[uid] =
+            `${userData.firstName} ${userData.lastName || ""}`.trim();
+        }
+      }),
+    );
+
+    let definedAddons = [];
+    const settingsSnap = await db
+      .collection("course_settings")
+      .doc(courseId.replace(/\//g, ""))
+      .get();
+    if (settingsSnap.exists) {
+      definedAddons = settingsSnap.data().specialEvents || [];
+    }
+
+    for (const eventId in assignments) {
+      const uids = assignments[eventId];
+      const eventSnap = await db.collection("events").doc(eventId).get();
+      if (!eventSnap.exists) continue;
+      const eventData = eventSnap.data();
+
+      for (const uid of uids) {
+        if (!instructorSchedules[uid]) instructorSchedules[uid] = [];
+
+        const otherNames = uids
+          .filter((id) => id !== uid)
+          .map((id) => nameMap[id] || "Unknown");
+
+        let addonText = "";
+        const addonIds = Array.isArray(specialAssignments[eventId])
+          ? specialAssignments[eventId]
+          : [];
+
+        if (addonIds.length > 0) {
+          addonText = addonIds
+            .map((id) => {
+              const found = definedAddons.find((a) => a.id === id);
+              return found ? found.nameEn : "";
+            })
+            .filter((n) => n !== "")
+            .join(", ");
+        }
+
+        instructorSchedules[uid].push({
+          date: eventData.date,
+          time: eventData.time,
+          coInstructor: otherNames.length > 0 ? otherNames.join(", ") : "Solo",
+          addon: addonText,
+        });
       }
-    }),
-  );
+    }
 
-  let definedAddons = [];
-  const settingsSnap = await db
-    .collection("course_settings")
-    .doc(courseId.replace(/\//g, ""))
-    .get();
-  if (settingsSnap.exists) {
-    definedAddons = settingsSnap.data().specialEvents || [];
-  }
+    for (const uid in instructorSchedules) {
+      const userSnap = await db.collection("users").doc(uid).get();
+      if (!userSnap.exists) continue;
+      const { email, firstName } = userSnap.data();
 
-  for (const eventId in assignments) {
-    const uids = assignments[eventId];
-    const eventSnap = await db.collection("events").doc(eventId).get();
-    if (!eventSnap.exists) continue;
-    const eventData = eventSnap.data();
+      const listHtml = instructorSchedules[uid]
+        .map(
+          (s) => `
+        <li style="margin-bottom: 15px; list-style: none; padding: 15px; background: #fff; border-radius: 8px; border: 1px solid #caaff3;">
+          <strong style="color: #1c0700;">${formatDate(s.date)}</strong> | ${s.time || "No time set"}<br/>
+          <span style="font-size: 13px; opacity: 0.7;">Working with: ${s.coInstructor}</span>
+          ${s.addon ? `<br/><span style="font-size: 13px; color: #9960a8;"><strong>Add-on:</strong> ${s.addon}</span>` : ""}
+        </li>`,
+        )
+        .join("");
 
-    for (const uid of uids) {
-      if (!instructorSchedules[uid]) instructorSchedules[uid] = [];
+      const template = await getTemplate(null, "instructor_schedule", "en");
+      const replacements = {
+        "{firstName}": firstName || "Instructor",
+        "{courseKey}": courseKey,
+        "{scheduleList}": listHtml,
+        "{profileUrl}": `${origin}/#/profile`,
+      };
 
-      const otherNames = uids
-        .filter((id) => id !== uid)
-        .map((id) => nameMap[id] || "Unknown");
-
-      let addonText = "";
-      const addonIds = Array.isArray(specialAssignments[eventId])
-        ? specialAssignments[eventId]
-        : [];
-
-      if (addonIds.length > 0) {
-        addonText = addonIds
-          .map((id) => {
-            const found = definedAddons.find((a) => a.id === id);
-            return found ? found.nameEn : "";
-          })
-          .filter((n) => n !== "")
-          .join(", ");
-      }
-
-      instructorSchedules[uid].push({
-        date: eventData.date,
-        time: eventData.time,
-        coInstructor: otherNames.length > 0 ? otherNames.join(", ") : "Solo",
-        addon: addonText,
+      await db.collection("mail").add({
+        to: email,
+        message: {
+          subject: replaceVars(template.subject, replacements),
+          html: replaceVars(template.body, replacements),
+        },
       });
     }
+
+    return { success: true };
+  } catch (error) {
+    logger.error("sendFinalSchedules failed", error);
+    throw new HttpsError("internal", error.message);
   }
-
-  for (const uid in instructorSchedules) {
-    const userSnap = await db.collection("users").doc(uid).get();
-    if (!userSnap.exists) continue;
-    const { email, firstName } = userSnap.data();
-
-    const listHtml = instructorSchedules[uid]
-      .map(
-        (s) => `
-      <li style="margin-bottom: 15px; list-style: none; padding: 15px; background: #fff; border-radius: 8px; border: 1px solid #caaff3;">
-        <strong style="color: #1c0700;">${formatDate(s.date)}</strong> | ${s.time || "No time set"}<br/>
-        <span style="font-size: 13px; opacity: 0.7;">Working with: ${s.coInstructor}</span>
-        ${s.addon ? `<br/><span style="font-size: 13px; color: #9960a8;"><strong>Add-on:</strong> ${s.addon}</span>` : ""}
-      </li>`,
-      )
-      .join("");
-
-    const template = await getTemplate(null, "instructor_schedule", "en");
-    const replacements = {
-      "{firstName}": firstName || "Instructor",
-      "{courseKey}": courseKey,
-      "{scheduleList}": listHtml,
-      "{profileUrl}": `${origin}/#/profile`,
-    };
-
-    await db.collection("mail").add({
-      to: email,
-      message: {
-        subject: replaceVars(template.subject, replacements),
-        html: replaceVars(template.body, replacements),
-      },
-    });
-  }
-
-  return { success: true };
 });
