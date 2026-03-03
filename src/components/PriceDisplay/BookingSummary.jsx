@@ -402,8 +402,8 @@ export default function BookingSummary({
 
           <span
             style={{
-              fontSize: "0.85rem",
-              fontWeight: "600",
+              fontSize: isMobile ? "0.75rem" : "0.85rem",
+              fontWeight: isMobile ? "400" : "600",
               color: "#1c0700",
               userSelect: "none",
             }}
@@ -526,14 +526,14 @@ export default function BookingSummary({
     >
       <h4
         style={{
-          fontSize: "0.8rem",
-          textTransform: "uppercase",
+          fontSize: "0.85rem",
           letterSpacing: "1px",
           opacity: 0.6,
           marginBottom: "1rem",
           display: "flex",
           alignItems: "center",
           gap: "8px",
+          justifyContent: isMobile ? "center" : "left",
         }}
       >
         <Calendar size={14} />{" "}
@@ -554,7 +554,7 @@ export default function BookingSummary({
             style={{
               margin: 0,
               fontSize: "0.85rem",
-              fontWeight: "600",
+              fontWeight: "400",
               color: "#1c0700",
               opacity: 0.7,
             }}
@@ -1034,8 +1034,7 @@ export default function BookingSummary({
             />
             <span
               style={{
-                fontSize: "0.7rem",
-                textTransform: "uppercase",
+                fontSize: "0.85rem",
                 opacity: 0.5,
                 fontWeight: "800",
                 letterSpacing: "0.5px",
@@ -1160,7 +1159,7 @@ export default function BookingSummary({
               cursor: "pointer",
               fontSize: "0.85rem",
               padding: 0,
-              fontWeight: "bold",
+              fontWeight: isMobile ? "400" : "bold",
               display: "flex",
               alignItems: "center",
               gap: "6px",
@@ -1370,8 +1369,10 @@ export default function BookingSummary({
           style={{
             fontFamily: "Harmond-SemiBoldCondensed",
             fontSize: isMobile ? "1.8rem" : "2rem",
+            fontWeight: isMobile ? "400" : "bold",
             marginBottom: "1.5rem",
             marginTop: 0,
+            textAlign: "center",
           }}
         >
           {hasSelection
@@ -1589,29 +1590,31 @@ export default function BookingSummary({
           </div>
         ) : (
           <>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                backgroundColor: "rgba(78, 95, 40, 0.1)",
-                color: "#4e5f28",
-                padding: "10px 18px",
-                borderRadius: "100px",
-                fontSize: "0.85rem",
-                marginBottom: "1.5rem",
-                width: "fit-content",
-                fontWeight: "600",
-              }}
-            >
-              <Ticket size={16} />
-              <span>
-                {currentLang === "en" ? "Your Balance:" : "Dein Guthaben:"}{" "}
-                <strong>{availableCredits}</strong>
-              </span>
-            </div>
-
             {renderSelectionSummary()}
+
+            {availableCredits > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  backgroundColor: "rgba(78, 95, 40, 0.1)",
+                  color: "#4e5f28",
+                  padding: "8px 16px",
+                  borderRadius: "100px",
+                  fontSize: "0.85rem",
+                  marginBottom: "1.5rem",
+                  width: "fit-content",
+                  fontWeight: "400",
+                }}
+              >
+                <Ticket size={16} />
+                <span>
+                  {currentLang === "en" ? "Your Balance:" : "Dein Guthaben:"}{" "}
+                  {availableCredits}
+                </span>
+              </div>
+            )}
 
             <div
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
