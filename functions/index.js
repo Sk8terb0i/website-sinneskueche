@@ -118,26 +118,27 @@ const getTemplate = async (transaction, typeId, lang) => {
     instructor_availability: {
       en: {
         subject: "Instructor Availability: {courseKey}",
-        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Availability Requested</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is being prepared. Please log in to your profile to mark your available dates.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{profileUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Open My Profile</a>\n  </div>\n  <br/><p>Best,<br/>Atelier Sinnesküche Team</p>\n</div>`,
+        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Availability Requested</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is being prepared. Please log in to the admin panel to mark your available dates.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{adminUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Open Schedule</a>\n  </div>\n  <br/><p>Best,<br/>Atelier Sinnesküche Team</p>\n</div>`,
       },
       de: {
         subject: "Instructor Availability: {courseKey}",
-        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Availability Requested</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is being prepared. Please log in to your profile to mark your available dates.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{profileUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Open My Profile</a>\n  </div>\n  <br/><p>Best,<br/>Atelier Sinnesküche Team</p>\n</div>`,
+        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Verfügbarkeit angefragt</h2>\n  <p>Hallo {firstName},</p>\n  <p>Der Stundenplan für <strong>{courseKey}</strong> wird vorbereitet. Bitte logge dich im Admin-Bereich ein, um deine verfügbaren Termine zu markieren.</p>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{adminUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Zum Stundenplan</a>\n  </div>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
       },
     },
     instructor_schedule: {
       en: {
         subject: "Work Schedule: {courseKey}",
-        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Your Teaching Schedule</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is finalized. You are assigned to the following dates:</p>\n  <ul style="padding: 0; margin: 0;">{scheduleList}</ul>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
+        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Your Teaching Schedule</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is finalized. You are assigned to the following dates:</p>\n  <ul style="padding: 0; margin: 0;">{scheduleList}</ul>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{profileUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">View on My Profile</a>\n  </div>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
       },
       de: {
         subject: "Work Schedule: {courseKey}",
-        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Your Teaching Schedule</h2>\n  <p>Hi {firstName},</p>\n  <p>The schedule for <strong>{courseKey}</strong> is finalized. You are assigned to the following dates:</p>\n  <ul style="padding: 0; margin: 0;">{scheduleList}</ul>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
+        body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">\n  <h2 style="color: #4e5f28;">Dein Stundenplan</h2>\n  <p>Hallo {firstName},</p>\n  <p>Der Stundenplan für <strong>{courseKey}</strong> steht fest. Du bist für die folgenden Termine eingeteilt:</p>\n  <ul style="padding: 0; margin: 0;">{scheduleList}</ul>\n  <div style="margin-top: 25px; text-align: center;">\n      <a href="{profileUrl}" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold;">Zum Profil</a>\n  </div>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>\n</div>`,
       },
     },
   };
 
-  if (snap.exists() && snap.data()[typeId] && snap.data()[typeId][lang]) {
+  // FIXED: DocumentSnapshot.exists is a PROPERTY in the Admin SDK, not a function.
+  if (snap.exists && snap.data()[typeId] && snap.data()[typeId][lang]) {
     return snap.data()[typeId][lang];
   }
   return defaults[typeId][lang] || defaults[typeId]["en"];
@@ -991,6 +992,7 @@ exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
     if (!userSnap.exists) continue;
     const { email, firstName } = userSnap.data();
 
+    // Use adminUrl replacement to match instructor_availability template
     const template = await getTemplate(null, "instructor_availability", "en");
     const replacements = {
       "{firstName}": firstName || "Instructor",
@@ -1015,57 +1017,76 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
   const courseKey = getCleanCourseKey(courseId);
   const instructorSchedules = {};
 
+  // 1. pre-fetch all instructor names to avoid lookups in the loop
+  const allInstructorIds = [...new Set(Object.values(assignments).flat())];
+  const nameMap = {};
+
+  await Promise.all(
+    allInstructorIds.map(async (uid) => {
+      const snap = await db.collection("users").doc(uid).get();
+      if (snap.exists) {
+        // FIXED: Admin SDK DocumentSnapshot.exists is a property
+        const userData = snap.data();
+        nameMap[uid] =
+          `${userData.firstName} ${userData.lastName || ""}`.trim();
+      }
+    }),
+  );
+
+  // 2. pre-fetch course settings once to avoid lookups in the loop
+  let definedAddons = [];
+  const settingsSnap = await db
+    .collection("course_settings")
+    .doc(courseId.replace(/\//g, ""))
+    .get();
+  if (settingsSnap.exists) {
+    // FIXED: Property, not function
+    definedAddons = settingsSnap.data().specialEvents || [];
+  }
+
+  // 3. map assignments to instructor-specific schedules
   for (const eventId in assignments) {
     const uids = assignments[eventId];
     const eventSnap = await db.collection("events").doc(eventId).get();
-    if (!eventSnap.exists) continue;
+    if (!eventSnap.exists) continue; // FIXED: Property, not function
     const eventData = eventSnap.data();
 
     for (const uid of uids) {
       if (!instructorSchedules[uid]) instructorSchedules[uid] = [];
-      const others = uids.filter((id) => id !== uid);
-      const otherNames = await Promise.all(
-        others.map(async (id) => {
-          const snap = await db.collection("users").doc(id).get();
-          return snap.exists
-            ? `${snap.data().firstName} ${snap.data().lastName}`
-            : "Unknown";
-        }),
-      );
+
+      // get names of co-instructors using the pre-fetched nameMap
+      const otherNames = uids
+        .filter((id) => id !== uid)
+        .map((id) => nameMap[id] || "Unknown");
 
       let addonText = "";
       const addonIds = Array.isArray(specialAssignments[eventId])
         ? specialAssignments[eventId]
         : [];
+
       if (addonIds.length > 0) {
-        const settingsSnap = await db
-          .collection("course_settings")
-          .doc(courseId.replace(/\//g, ""))
-          .get();
-        if (settingsSnap.exists) {
-          const definedAddons = settingsSnap.data().specialEvents || [];
-          addonText = addonIds
-            .map((id) => {
-              const found = definedAddons.find((a) => a.id === id);
-              return found ? found.nameEn : "";
-            })
-            .filter((n) => n !== "")
-            .join(", ");
-        }
+        addonText = addonIds
+          .map((id) => {
+            const found = definedAddons.find((a) => a.id === id);
+            return found ? found.nameEn : "";
+          })
+          .filter((n) => n !== "")
+          .join(", ");
       }
 
       instructorSchedules[uid].push({
         date: eventData.date,
         time: eventData.time,
-        coInstructor: otherNames.join(", "),
+        coInstructor: otherNames.length > 0 ? otherNames.join(", ") : "Solo",
         addon: addonText,
       });
     }
   }
 
+  // 4. send emails to each instructor
   for (const uid in instructorSchedules) {
     const userSnap = await db.collection("users").doc(uid).get();
-    if (!userSnap.exists) continue;
+    if (!userSnap.exists) continue; // FIXED: Property, not function
     const { email, firstName } = userSnap.data();
 
     const listHtml = instructorSchedules[uid]
@@ -1073,7 +1094,7 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
         (s) => `
       <li style="margin-bottom: 15px; list-style: none; padding: 15px; background: #fff; border-radius: 8px; border: 1px solid #caaff3;">
         <strong style="color: #1c0700;">${formatDate(s.date)}</strong> | ${s.time || "No time set"}<br/>
-        <span style="font-size: 13px; opacity: 0.7;">Working with: ${s.coInstructor || "Solo"}</span>
+        <span style="font-size: 13px; opacity: 0.7;">Working with: ${s.coInstructor}</span>
         ${s.addon ? `<br/><span style="font-size: 13px; color: #9960a8;"><strong>Add-on:</strong> ${s.addon}</span>` : ""}
       </li>`,
       )
@@ -1081,7 +1102,7 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
 
     const template = await getTemplate(null, "instructor_schedule", "en");
     const replacements = {
-      "{firstName}": firstName,
+      "{firstName}": firstName || "Instructor",
       "{courseKey}": courseKey,
       "{scheduleList}": listHtml,
       "{profileUrl}": `${origin}/#/profile`,
@@ -1095,5 +1116,6 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
       },
     });
   }
+
   return { success: true };
 });
