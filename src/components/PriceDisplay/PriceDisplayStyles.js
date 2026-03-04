@@ -182,31 +182,30 @@ export const legendIndicatorStyle = (color, isMobile) => ({
 
 // --- BOOKING SUMMARY STYLES ---
 export const bookingCardStyle = (isMobile, hasSelection) => ({
-  display: hasSelection ? "flex" : "none",
+  display: "flex",
   flexDirection: "column",
   background: "#fdf8e1",
-  padding: isMobile ? "1.5rem" : "2.5rem",
+  padding: isMobile ? "0.8rem" : "2.5rem", // Reduced mobile padding
   borderRadius: "24px",
   border: "1px solid rgba(28,7,0,0.08)",
   flex: isMobile ? "0 0 auto" : "1 1 auto",
   width: isMobile ? "100%" : "auto",
   boxSizing: "border-box",
-  opacity: hasSelection ? 1 : 0,
+  opacity: 1,
   transition: "all 0.6s ease",
 });
 
 export const primaryBtnStyle = (isMobile) => ({
   width: "100%",
-  padding: isMobile ? "1rem" : "1.2rem",
+  padding: isMobile ? "0.8rem" : "1.2rem", // Reduced mobile padding slightly
   backgroundColor: "#9960a8",
   color: "#ffffff",
   border: "none",
   borderRadius: "100px",
   cursor: "pointer",
-  fontWeight: "700",
-  fontSize: isMobile ? "1rem" : "1.1rem",
+  fontWeight: isMobile ? "500" : "700",
+  fontSize: isMobile ? "0.9rem" : "1.1rem",
 });
-
 export const secondaryBtnStyle = (isMobile) => ({
   width: "100%",
   padding: isMobile ? "0.9rem" : "1.1rem",
