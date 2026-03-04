@@ -530,12 +530,25 @@ exports.handleStripeWebhook = onRequest(
                 buyerEmail: email,
                 buyerName: guestName,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                redeemedEventIds: parsedDates.map((d) => d.id), // Log initial dates
               });
               isPackGuest = true;
             }
           }
 
+          let creditsApplied = 0;
           parsedDates.forEach((d) => {
+            let isCreditBooking = false;
+            // Mark as credit if they are using their existing balance
+            if (!isGuest && parsedCreditsToUse > creditsApplied) {
+              isCreditBooking = true;
+              creditsApplied++;
+            }
+            // Mark as credit if they are buying a pack (these dates consume the pack)
+            if (mode === "pack" && !isGuest) {
+              isCreditBooking = true;
+            }
+
             transaction.set(db.collection("bookings").doc(), {
               userId,
               guestName: isGuest ? guestName : null,
@@ -546,6 +559,7 @@ exports.handleStripeWebhook = onRequest(
               selectedAddons: d.selectedAddons || [],
               status: "confirmed",
               lang,
+              usedCredit: isCreditBooking, // Save the flag
               timestamp: admin.firestore.FieldValue.serverTimestamp(),
             });
           });
@@ -656,6 +670,7 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
           selectedAddons: d.selectedAddons || [],
           status: "confirmed",
           lang: currentLang || "en",
+          usedCredit: true, // Save the flag
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
       });
@@ -696,11 +711,19 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
     await db.runTransaction(async (t) => {
       const snap = await t.get(codeRef);
       if (!snap.exists) throw new HttpsError("not-found", "Invalid code.");
-      t.update(codeRef, {
+
+      const updates = {
         remainingCredits: admin.firestore.FieldValue.increment(
           -selectedDates.length,
         ),
-      });
+      };
+      if (selectedDates.length > 0) {
+        updates.redeemedEventIds = admin.firestore.FieldValue.arrayUnion(
+          ...selectedDates.map((d) => d.id),
+        );
+      }
+      t.update(codeRef, updates);
+
       selectedDates.forEach((d) => {
         t.set(db.collection("bookings").doc(), {
           userId: "GUEST_USER",
@@ -712,6 +735,7 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
           selectedAddons: d.selectedAddons || [],
           status: "confirmed",
           lang: currentLang || "en",
+          usedCredit: true, // Save the flag
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
       });

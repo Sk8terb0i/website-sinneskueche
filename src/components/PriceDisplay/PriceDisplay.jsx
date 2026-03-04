@@ -36,6 +36,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   const [availableDates, setAvailableDates] = useState([]);
   const [selectedDates, setSelectedDates] = useState([]);
   const [userBookedIds, setUserBookedIds] = useState([]);
+  const [userCreditBookedIds, setUserCreditBookedIds] = useState([]);
   const [eventBookingCounts, setEventBookingCounts] = useState({});
   const [addonBookingCounts, setAddonBookingCounts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -130,7 +131,15 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
               where("userId", "==", currentUser.uid),
             ),
           );
-          setUserBookedIds(uSnap.docs.map((d) => d.data().eventId));
+          const allUserBookings = uSnap.docs.map((d) => d.data());
+
+          setUserBookedIds(allUserBookings.map((b) => b.eventId));
+          // Filter out ONLY the bookings made with credits
+          setUserCreditBookedIds(
+            allUserBookings
+              .filter((b) => b.usedCredit === true)
+              .map((b) => b.eventId),
+          );
         }
       } catch (err) {
         console.error(err);
@@ -421,6 +430,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           onPayment={handlePayment}
           coursePath={coursePath}
           userBookedIds={userBookedIds}
+          userCreditBookedIds={userCreditBookedIds}
         />
       </div>
     </div>

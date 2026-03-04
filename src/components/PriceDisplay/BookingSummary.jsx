@@ -46,7 +46,8 @@ export default function BookingSummary({
   onBookCredits,
   onPayment,
   coursePath,
-  userBookedIds = [], // NEW PROP EXTRACTED
+  userBookedIds = [],
+  userCreditBookedIds = [],
 }) {
   const [isAuthExpanded, setIsAuthExpanded] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
@@ -144,16 +145,22 @@ export default function BookingSummary({
 
   selectedDates.forEach((d) => {
     const count = d.count || 1;
-    // Check if user already booked this specific event in the past
-    const alreadyBooked = userBookedIds?.includes(d.id);
+
+    // Check if a credit was already used for this specific event
+    let alreadyUsedCredit = false;
+    if (currentUser) {
+      alreadyUsedCredit = userCreditBookedIds?.includes(d.id);
+    } else if (activePackCode) {
+      alreadyUsedCredit = activePackCode.redeemedEventIds?.includes(d.id);
+    }
 
     if (limitOnePerDay) {
-      if (alreadyBooked) {
-        // They already used their 1 allowed credit for this day previously
+      if (alreadyUsedCredit) {
+        // They already used a credit for this day, so it defaults to cash
         eligibleForCredit += 0;
         ineligibleForCredit += count;
       } else {
-        // They haven't booked yet, so 1 goes to credit, remainder goes to cash
+        // They haven't used a credit yet, so 1 goes to credit, remainder goes to cash
         eligibleForCredit += 1;
         ineligibleForCredit += Math.max(0, count - 1);
       }
@@ -337,6 +344,7 @@ export default function BookingSummary({
           setActivePackCode({
             code: upperCode,
             remaining: packData.remainingCredits,
+            redeemedEventIds: packData.redeemedEventIds || [], // Track which events this code was used for
           });
           setCodeStatus({ loading: false, error: "" });
           return;
@@ -603,6 +611,16 @@ export default function BookingSummary({
             const cap = parseInt(pricing?.capacity || 99);
             const canAddMore = !pricing?.hasCapacity || booked + d.count < cap;
 
+            const limitOnePerDay = pricing?.limitOnePerDay ?? true;
+            let alreadyUsedCredit = false;
+            if (currentUser) {
+              alreadyUsedCredit = userCreditBookedIds?.includes(d.id);
+            } else if (activePackCode) {
+              alreadyUsedCredit = activePackCode.redeemedEventIds?.includes(
+                d.id,
+              );
+            }
+
             return (
               <div
                 key={d.id}
@@ -630,6 +648,24 @@ export default function BookingSummary({
                     <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
                       {d.time || ""}
                     </span>
+                    {limitOnePerDay && alreadyUsedCredit && (
+                      <span
+                        style={{
+                          fontSize: "0.65rem",
+                          color: "#e74c3c",
+                          fontWeight: "800",
+                          marginTop: "4px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "3px",
+                        }}
+                      >
+                        <AlertCircle size={10} />
+                        {currentLang === "en"
+                          ? "Credit already used for this date"
+                          : "Guthaben für diesen Tag bereits genutzt"}
+                      </span>
+                    )}
                   </div>
                   <div
                     style={{
