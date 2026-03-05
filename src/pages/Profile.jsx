@@ -18,6 +18,7 @@ import PersonalInfoCard from "../components/Profile/PersonalInfoCard";
 import BookingsCard from "../components/Profile/BookingsCard";
 import BuyPackCard from "../components/Profile/BuyPackCard";
 import RentalBookingsCard from "../components/Profile/RentalBookingsCard";
+import PotteryFiringCard from "../components/Profile/PotteryFiringCard";
 
 import {
   LogOut,
@@ -298,6 +299,12 @@ export default function Profile({ currentLang, setCurrentLang }) {
           )}
 
           <div style={styles.sideColumn}>
+            {(!isMobile || activeTab === "bookings") && (
+              <PotteryFiringCard
+                currentUser={currentUser}
+                currentLang={currentLang}
+              />
+            )}
             {isAdmin && (!isMobile || activeTab === "schedule") && (
               <div style={styles.adminCard}>
                 <h2 style={styles.cardTitle}>

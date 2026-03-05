@@ -22,6 +22,7 @@ import {
   CalendarClock,
   Pin,
   Mail,
+  Flame,
 } from "lucide-react";
 
 // Components & Styles
@@ -36,6 +37,7 @@ import TermsTab from "./TermsTab";
 import RemindersTab from "./RemindersTab";
 import ScheduleTab from "./ScheduleTab";
 import EmailTemplatesTab from "./EmailTemplatesTab";
+import FiringTab from "./FiringTab";
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -81,6 +83,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       rental: "Rental",
       defaultView: "Default View",
       setDefault: "Set as Default",
+      firing: "Firing Schedule",
     },
     de: {
       loginTitle: "Atelier Login",
@@ -103,6 +106,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       rental: "Vermietung",
       defaultView: "Standardansicht",
       setDefault: "Als Standard setzen",
+      firing: "Brennplan",
     },
   }[currentLang || "en"];
 
@@ -525,6 +529,18 @@ export default function Admin({ currentLang, setCurrentLang }) {
                 />
               )}
             </button>
+            <button
+              onClick={() => setActiveTab("firing")}
+              style={{
+                ...tabButtonStyle(activeTab === "firing"),
+                backgroundColor:
+                  activeTab === "firing" ? "#caaff3" : "transparent",
+                borderRadius: "100px",
+                color: "#1c0700",
+              }}
+            >
+              <Flame size={16} /> {labels.firing}
+            </button>
           </div>
         )}
       </div>
@@ -628,6 +644,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
             )}
             {activeTab === "rental" && (
               <RentalTab isMobile={isMobile} currentLang={currentLang} />
+            )}
+            {activeTab === "firing" && (
+              <FiringTab isMobile={isMobile} currentLang={currentLang} />
             )}
           </>
         )}

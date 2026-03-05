@@ -71,6 +71,14 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
       de: "Verfügbarkeitsanfrage",
     },
     instructor_schedule: { en: "Final Schedule", de: "Stundenplan" },
+    firing_registered: { en: "Firing Registered", de: "Brennen Registriert" },
+    firing_bisque_ready: { en: "Bisque Ready", de: "Schrühbrand Fertig" },
+    firing_glaze_ready: {
+      en: "Glaze Ready (Pickup)",
+      de: "Glasurbrand Fertig (Abholen)",
+    },
+    firing_reminder: { en: "Firing Reminder", de: "Brennen Erinnerung" },
+    firing_broken: { en: "Object Broken", de: "Objekt Kaputt" },
   };
 
   const EMAIL_TYPES = [
@@ -161,6 +169,76 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
       defaults: {
         en: { subject: "Work Schedule: {courseKey}", body: "" },
         de: { subject: "Dein Stundenplan: {courseKey}", body: "" },
+      },
+    },
+    {
+      id: "firing_registered",
+      vars: ["{stage}"],
+      defaults: {
+        en: {
+          subject: "Object Registered for {stage} Firing",
+          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">Registration Successful</h2><p>Your object has been successfully registered for the <strong>{stage} firing</strong>.</p><p>We will email you as soon as it is out of the kiln and ready for the next step!</p><br/><p>Warmly,<br/>Atelier Sinnesküche</p></div>`,
+        },
+        de: {
+          subject: "Objekt für {stage} registriert",
+          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">Registrierung erfolgreich</h2><p>Dein Objekt wurde erfolgreich für den <strong>{stage}</strong> registriert.</p><p>Wir schreiben dir eine E-Mail, sobald es fertig aus dem Ofen kommt!</p><br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`,
+        },
+      },
+    },
+    {
+      id: "firing_bisque_ready",
+      vars: [],
+      defaults: {
+        en: {
+          subject: "Ready for Glazing!",
+          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">Your object has been fired!</h2><p>Great news, your creation has successfully passed the bisque firing stage.</p><p>It is now waiting in the studio for you to glaze it. Please make sure to come in and glaze it within the next <strong>8 weeks</strong>.</p><br/><p>Warmly,<br/>Atelier Sinnesküche</p></div>`,
+        },
+        de: {
+          subject: "Bereit zum Glasieren!",
+          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">Dein Objekt wurde gebrannt!</h2><p>Tolle Neuigkeiten: Dein Werk hat den Schrühbrand erfolgreich überstanden.</p><p>Es wartet nun im Studio darauf, von dir glasiert zu werden. Bitte komme innerhalb der nächsten <strong>8 Wochen</strong> vorbei, um es zu glasieren.</p><br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`,
+        },
+      },
+    },
+    {
+      id: "firing_glaze_ready",
+      vars: [],
+      defaults: {
+        en: {
+          subject: "Your pottery is ready for pickup!",
+          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">It's finished!</h2><p>Your object has completed the glaze firing and is fully finished.</p><p>You can now pick it up at the studio. Please collect it within the next <strong>4 weeks</strong>.</p><br/><p>Warmly,<br/>Atelier Sinnesküche</p></div>`,
+        },
+        de: {
+          subject: "Dein Werk ist abholbereit!",
+          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">Es ist vollbracht!</h2><p>Dein Objekt hat den Glasurbrand hinter sich und ist komplett fertig.</p><p>Du kannst es ab sofort im Studio abholen. Bitte hole es innerhalb der nächsten <strong>4 Wochen</strong> ab.</p><br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`,
+        },
+      },
+    },
+    {
+      id: "firing_reminder",
+      vars: ["{action}", "{weeksLeft}"],
+      defaults: {
+        en: {
+          subject: "Reminder: Action required for your pottery",
+          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #f39c12;">Gentle Reminder</h2><p>We wanted to remind you that your object is waiting at the studio.</p><p>Please make sure to <strong>{action}</strong> within the next <strong>{weeksLeft} week(s)</strong>.</p><br/><p>Warmly,<br/>Atelier Sinnesküche</p></div>`,
+        },
+        de: {
+          subject: "Erinnerung: Dein Keramik-Objekt wartet",
+          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #f39c12;">Kleine Erinnerung</h2><p>Wir wollten dich kurz daran erinnern, dass dein Objekt bei uns im Studio auf dich wartet.</p><p>Bitte denke daran, es innerhalb der nächsten <strong>{weeksLeft} Woche(n)</strong> <strong>{action}</strong>.</p><br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`,
+        },
+      },
+    },
+    {
+      id: "firing_broken",
+      vars: [],
+      defaults: {
+        en: {
+          subject: "Update on your pottery",
+          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #ff4d4d;">Oh no!</h2><p>Unfortunately, your object didn't survive the extreme temperatures in the kiln and broke during the firing process.</p><p>This happens to the best of us and is a natural part of the ceramics journey. Please don't be discouraged, and keep creating!</p><br/><p>Warmly,<br/>Atelier Sinnesküche</p></div>`,
+        },
+        de: {
+          subject: "Update zu deinem Keramik-Objekt",
+          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #ff4d4d;">Oh nein!</h2><p>Leider hat dein Objekt die extremen Temperaturen im Ofen nicht überstanden und ist beim Brennen kaputtgegangen.</p><p>Das passiert den Besten und ist ein ganz normaler Teil der Arbeit mit Keramik. Lass dich davon bitte nicht entmutigen und mach weiter so!</p><br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`,
+        },
       },
     },
   ];

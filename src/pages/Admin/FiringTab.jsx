@@ -1,0 +1,770 @@
+import React, { useState, useEffect, useMemo } from "react";
+import { db } from "../../firebase";
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  updateDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import {
+  Flame,
+  CheckCircle,
+  AlertTriangle,
+  Package,
+  Clock,
+  Loader2,
+  Mail,
+  User, // Added User icon
+  Check,
+  ShoppingBag,
+  Brush,
+  ArrowRightLeft,
+  Square,
+  CheckSquare,
+  Send,
+  Calendar,
+} from "lucide-react";
+import { cardStyle, tabContainerStyle, tabButtonStyle } from "./AdminStyles";
+
+export default function FiringTab({ isMobile, currentLang }) {
+  const [firings, setFirings] = useState([]);
+  const [userMap, setUserMap] = useState({}); // New state for Name mapping
+  const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null);
+  const [activeFilter, setActiveFilter] = useState("bisque_pending");
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+
+  const labels = {
+    en: {
+      bisque_pending: "bisque firing",
+      glaze_pending: "glaze firing",
+      ready_glaze: "ready for glaze",
+      ready_pickup: "ready for pickup",
+      completed: "archived",
+      bisque: "bisque",
+      glaze: "glaze",
+      markBisque: "mark ready",
+      markGlaze: "mark ready",
+      markBroken: "broken",
+      markDone: "picked up",
+      adminTools: "internal move",
+      moveToGlaze: "to glaze queue",
+      moveToBisque: "to bisque",
+      moveToQueue: "reset",
+      noItems: "no items found.",
+      confirmAction: "confirm status change?",
+      confirmBatch: "process {count} items?",
+      deselectAll: "deselect",
+      groupSelect: "select all",
+      groupDeselect: "deselect",
+      batch_bisque_pending: "mark ready to glaze",
+      batch_glaze_pending: "mark ready for pickup",
+      batch_ready_glaze: "move to glaze queue",
+      batch_ready_pickup: "mark as picked up",
+      batchAction: "process selection",
+    },
+    de: {
+      bisque_pending: "bisque fire",
+      glaze_pending: "glasurbrand",
+      ready_glaze: "glasierbereit",
+      ready_pickup: "abholbereit",
+      completed: "archiv",
+      bisque: "bisque",
+      glaze: "glasur",
+      markBisque: "fertig",
+      markGlaze: "fertig",
+      markBroken: "kaputt",
+      markDone: "abgeholt",
+      adminTools: "interne korrektur",
+      moveToGlaze: "in glasur-warteschlange",
+      moveToBisque: "zu bisque",
+      moveToQueue: "reset",
+      noItems: "keine objekte gefunden.",
+      confirmAction: "status ändern?",
+      confirmBatch: "{count} objekte verarbeiten? e-mails werden gesendet.",
+      deselectAll: "abwählen",
+      groupSelect: "alle wählen",
+      groupDeselect: "abwählen",
+      batch_bisque_pending: "fertig zum glasieren",
+      batch_glaze_pending: "abholbereit markieren",
+      batch_ready_glaze: "in glasur-warteschlange verschieben",
+      batch_ready_pickup: "als abgeholt markieren",
+      batchAction: "auswahl verarbeiten",
+    },
+  }[currentLang || "en"];
+
+  const formatDate = (ts) => {
+    if (!ts) return "";
+    const d = ts.toDate();
+    return d.toLocaleDateString(currentLang === "en" ? "en-GB" : "de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  // FETCH USERS FOR NAME MAPPING
+  useEffect(() => {
+    const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
+      const map = {};
+      snap.docs.forEach((doc) => {
+        const data = doc.data();
+        if (data.email) {
+          map[data.email.toLowerCase()] = `${data.firstName} ${data.lastName}`;
+        }
+      });
+      setUserMap(map);
+    });
+    return () => unsubUsers();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, "firings"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setFirings(data);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [activeFilter]);
+
+  const tabCounts = useMemo(
+    () => ({
+      bisque_pending: firings.filter(
+        (f) => f.stage === "bisque" && f.status === "pending",
+      ).length,
+      glaze_pending: firings.filter(
+        (f) => f.stage === "glaze" && f.status === "pending",
+      ).length,
+      ready_glaze: firings.filter((f) => f.status === "bisque_ready").length,
+      ready_pickup: firings.filter((f) => f.status === "glaze_ready").length,
+      completed: firings.filter(
+        (f) => f.status === "done" || f.status === "broken",
+      ).length,
+    }),
+    [firings],
+  );
+
+  const groupedItems = useMemo(() => {
+    const filtered = firings.filter((f) => {
+      if (activeFilter === "bisque_pending")
+        return f.stage === "bisque" && f.status === "pending";
+      if (activeFilter === "glaze_pending")
+        return f.stage === "glaze" && f.status === "pending";
+      if (activeFilter === "ready_glaze") return f.status === "bisque_ready";
+      if (activeFilter === "ready_pickup") return f.status === "glaze_ready";
+      if (activeFilter === "completed")
+        return f.status === "done" || f.status === "broken";
+      return false;
+    });
+
+    const groups = {};
+    filtered.forEach((item) => {
+      const dateKey = formatDate(item.createdAt) || "Unknown";
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(item);
+    });
+    return groups;
+  }, [firings, activeFilter, currentLang]);
+
+  const handleUpdateStatus = async (objectId, newStatus, newStage = null) => {
+    if (!window.confirm(labels.confirmAction)) return;
+    setProcessingId(objectId);
+
+    try {
+      if (newStage) {
+        await updateDoc(doc(db, "firings", objectId), {
+          status: newStatus,
+          stage: newStage,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const updateFn = httpsCallable(getFunctions(), "updateFiringStatus");
+        await updateFn({ objectId, newStatus });
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleManualMove = async (
+    objectId,
+    newStage,
+    newStatus = "pending",
+  ) => {
+    setProcessingId(objectId);
+    try {
+      await updateDoc(doc(db, "firings", objectId), {
+        stage: newStage,
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleBatchUpdate = async () => {
+    if (
+      !window.confirm(
+        labels.confirmBatch.replace("{count}", selectedIds.length),
+      )
+    )
+      return;
+    setIsBatchProcessing(true);
+
+    try {
+      await Promise.all(
+        selectedIds.map((id) => {
+          if (activeFilter === "ready_glaze") {
+            return updateDoc(doc(db, "firings", id), {
+              status: "pending",
+              stage: "glaze",
+              updatedAt: serverTimestamp(),
+            });
+          } else {
+            let targetStatus =
+              activeFilter === "bisque_pending"
+                ? "bisque_ready"
+                : activeFilter === "glaze_pending"
+                  ? "glaze_ready"
+                  : "done";
+            const updateFn = httpsCallable(
+              getFunctions(),
+              "updateFiringStatus",
+            );
+            return updateFn({ objectId: id, newStatus: targetStatus });
+          }
+        }),
+      );
+      setSelectedIds([]);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
+  const renderCard = (item) => {
+    const isSelected = selectedIds.includes(item.id);
+    const studentName = userMap[item.email?.toLowerCase()]; // Name lookup
+    let mainActions = [];
+    let internalActions = [];
+
+    if (activeFilter === "bisque_pending") {
+      mainActions = [
+        {
+          label: labels.markBisque,
+          status: "bisque_ready",
+          color: "#9960a8",
+          icon: <Check size={14} />,
+        },
+      ];
+      internalActions = [
+        {
+          label: labels.moveToGlaze,
+          stage: "glaze",
+          status: "pending",
+          icon: <ArrowRightLeft size={12} />,
+        },
+      ];
+    } else if (activeFilter === "glaze_pending") {
+      mainActions = [
+        {
+          label: labels.markGlaze,
+          status: "glaze_ready",
+          color: "#4e5f28",
+          icon: <Check size={14} />,
+        },
+      ];
+      internalActions = [
+        {
+          label: labels.moveToBisque,
+          stage: "bisque",
+          status: "pending",
+          icon: <ArrowRightLeft size={12} />,
+        },
+      ];
+    } else if (activeFilter === "ready_glaze") {
+      mainActions = [
+        {
+          label: labels.moveToGlaze,
+          status: "pending",
+          stage: "glaze",
+          color: "#4e5f28",
+          icon: <Flame size={14} />,
+        },
+      ];
+      internalActions = [
+        {
+          label: labels.moveToQueue,
+          stage: "bisque",
+          status: "pending",
+          icon: <ArrowRightLeft size={12} />,
+        },
+      ];
+    } else if (activeFilter === "ready_pickup") {
+      mainActions = [
+        {
+          label: labels.markDone,
+          status: "done",
+          color: "#1c0700",
+          icon: <CheckCircle size={14} />,
+        },
+      ];
+      internalActions = [
+        {
+          label: labels.moveToQueue,
+          stage: "glaze",
+          status: "pending",
+          icon: <ArrowRightLeft size={12} />,
+        },
+      ];
+    }
+
+    if (activeFilter.includes("pending")) {
+      mainActions.push({
+        label: labels.markBroken,
+        status: "broken",
+        color: "#978672",
+        icon: <AlertTriangle size={14} />,
+      });
+    }
+
+    return (
+      <div
+        key={item.id}
+        onClick={() =>
+          setSelectedIds((prev) =>
+            prev.includes(item.id)
+              ? prev.filter((i) => i !== item.id)
+              : [...prev, item.id],
+          )
+        }
+        style={{
+          ...cardStyle,
+          position: "relative",
+          display: "flex",
+          flexDirection: isMobile ? "column" : "row",
+          gap: isMobile ? "0.8rem" : "1.5rem",
+          backgroundColor: isSelected ? "rgba(202, 175, 243, 0.05)" : "#fdf8e1",
+          padding: isMobile ? "0.6rem" : "1.2rem",
+          border: isSelected
+            ? "2px solid #9960a8"
+            : "1px solid rgba(28,7,0,0.05)",
+          cursor: "pointer",
+          transition: "all 0.2s ease",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            color: isSelected ? "#9960a8" : "#ccc",
+            zIndex: 5,
+          }}
+        >
+          {isSelected ? (
+            <CheckSquare size={20} fill="#fffce3" />
+          ) : (
+            <Square size={20} />
+          )}
+        </div>
+
+        <div
+          style={{
+            width: isMobile ? "100%" : "150px",
+            aspectRatio: "1 / 1",
+            borderRadius: "8px",
+            overflow: "hidden",
+            flexShrink: 0,
+            backgroundColor: "rgba(28,7,0,0.03)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <img
+            src={item.imageUrl}
+            alt="Pottery"
+            style={{ minWidth: "100%", minHeight: "100%", objectFit: "cover" }}
+          />
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            alignItems: isMobile ? "center" : "flex-start",
+            textAlign: isMobile ? "center" : "left",
+          }}
+        >
+          <div>
+            <span
+              style={{
+                display: "inline-block",
+                backgroundColor:
+                  item.stage === "bisque"
+                    ? "rgba(202,175,243,0.15)"
+                    : "rgba(78,95,40,0.1)",
+                color: item.stage === "bisque" ? "#9960a8" : "#4e5f28",
+                padding: "2px 10px",
+                borderRadius: "100px",
+                fontSize: "0.6rem",
+                fontWeight: "900",
+                textTransform: "lowercase", // No uppercase
+                marginBottom: "2px",
+              }}
+            >
+              {item.stage === "bisque" ? labels.bisque : labels.glaze}
+            </span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: isMobile ? "center" : "flex-start",
+                gap: "6px",
+                fontWeight: "700",
+                fontSize: isMobile ? "0.75rem" : "0.9rem",
+                color: "#1c0700",
+              }}
+            >
+              {/* Show Name Icon if registered, else Mail Icon */}
+              {studentName ? (
+                <User size={14} color="#caaff3" />
+              ) : (
+                <Mail size={12} color="#caaff3" />
+              )}
+              {studentName || item.email}
+            </div>
+          </div>
+
+          <div style={{ marginTop: "0.6rem", width: "100%" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "6px",
+                flexWrap: "wrap",
+                justifyContent: isMobile ? "center" : "flex-start",
+              }}
+            >
+              {mainActions.map((act, i) => (
+                <button
+                  key={i}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleUpdateStatus(item.id, act.status, act.stage);
+                  }}
+                  disabled={processingId === item.id}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "100px",
+                    border: "none",
+                    fontSize: "0.7rem",
+                    fontWeight: "800",
+                    cursor: "pointer",
+                    backgroundColor: act.color,
+                    color: "#fff",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                  }}
+                >
+                  {processingId === item.id ? (
+                    <Loader2 size={12} className="spinner" />
+                  ) : (
+                    act.icon
+                  )}{" "}
+                  {act.label}
+                </button>
+              ))}
+            </div>
+
+            {internalActions.length > 0 && (
+              <div
+                style={{
+                  marginTop: "1rem",
+                  paddingTop: "0.6rem",
+                  borderTop: "1px dashed rgba(28,7,0,0.1)",
+                  width: "100%",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: isMobile ? "center" : "flex-start",
+                    gap: "6px",
+                  }}
+                >
+                  {internalActions.map((act, i) => (
+                    <button
+                      key={i}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleManualMove(item.id, act.stage, act.status);
+                      }}
+                      style={{
+                        padding: "4px 12px",
+                        borderRadius: "100px",
+                        border: "1px solid rgba(28,7,0,0.15)",
+                        background: "transparent",
+                        fontSize: "0.65rem",
+                        fontWeight: "600",
+                        color: "rgba(28,7,0,0.4)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                    >
+                      <ArrowRightLeft size={10} /> {act.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (loading)
+    return (
+      <div
+        style={{ display: "flex", justifyContent: "center", padding: "3rem" }}
+      >
+        <Loader2 className="spinner" color="#caaff3" size={30} />
+      </div>
+    );
+
+  const getBatchLabel = () => {
+    if (activeFilter === "bisque_pending") return labels.batch_bisque_pending;
+    if (activeFilter === "glaze_pending") return labels.batch_glaze_pending;
+    if (activeFilter === "ready_glaze") return labels.batch_ready_glaze;
+    if (activeFilter === "ready_pickup") return labels.batch_ready_pickup;
+    return labels.batchAction;
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+      <div style={{ width: "fit-content", maxWidth: "100%" }}>
+        <div
+          style={{
+            ...tabContainerStyle,
+            backgroundColor: "rgba(28, 7, 0, 0.04)",
+            borderRadius: "100px",
+            padding: "4px",
+            display: "flex",
+            overflowX: isMobile ? "auto" : "visible",
+            whiteSpace: "nowrap",
+            gap: "4px",
+          }}
+          className="hide-scrollbar"
+        >
+          {[
+            { id: "bisque_pending", icon: <Flame size={14} /> },
+            { id: "glaze_pending", icon: <Flame size={14} /> },
+            { id: "ready_glaze", icon: <Brush size={14} /> },
+            { id: "ready_pickup", icon: <ShoppingBag size={14} /> },
+            { id: "completed", icon: <CheckCircle size={14} /> },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveFilter(tab.id)}
+              style={{
+                ...tabButtonStyle(activeFilter === tab.id, isMobile),
+                backgroundColor:
+                  activeFilter === tab.id ? "#caaff3" : "transparent",
+                borderRadius: "100px",
+                color: "#1c0700",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: isMobile ? "8px 12px" : "8px 20px",
+              }}
+            >
+              {tab.icon} {labels[tab.id]}
+              <span
+                style={{
+                  backgroundColor:
+                    activeFilter === tab.id ? "#fffce3" : "rgba(28, 7, 0, 0.1)", // Removed plain white
+                  padding: "2px 8px",
+                  borderRadius: "10px",
+                  fontSize: "0.65rem",
+                  fontWeight: "900",
+                }}
+              >
+                {tabCounts[tab.id]}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selectedIds.length > 0 && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: isMobile ? "20px" : "30px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 5000,
+            backgroundColor: "#1c0700",
+            padding: isMobile ? "10px 16px" : "12px 24px",
+            borderRadius: "100px",
+            display: "flex",
+            alignItems: "center",
+            gap: isMobile ? "12px" : "20px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+            color: "white",
+            width: isMobile ? "90%" : "auto",
+            justifyContent: "center",
+          }}
+        >
+          <span
+            style={{
+              fontWeight: "bold",
+              fontSize: isMobile ? "0.75rem" : "0.9rem",
+            }}
+          >
+            {selectedIds.length}
+          </span>
+          <button
+            onClick={handleBatchUpdate}
+            disabled={isBatchProcessing}
+            style={{
+              backgroundColor: "#caaff3",
+              border: "none",
+              padding: isMobile ? "6px 14px" : "8px 20px",
+              borderRadius: "100px",
+              color: "#1c0700",
+              fontWeight: "800",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: isMobile ? "0.7rem" : "0.85rem",
+            }}
+          >
+            {isBatchProcessing ? (
+              <Loader2 className="spinner" size={14} />
+            ) : (
+              <Send size={14} />
+            )}{" "}
+            {getBatchLabel()}
+          </button>
+          <button
+            onClick={() => setSelectedIds([])}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#fff",
+              opacity: 0.6,
+              fontSize: "0.7rem",
+              cursor: "pointer",
+              textDecoration: "underline",
+            }}
+          >
+            {labels.deselectAll}
+          </button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+        {Object.entries(groupedItems).length === 0 ? (
+          <div style={{ textAlign: "center", padding: "3rem", opacity: 0.5 }}>
+            {labels.noItems}
+          </div>
+        ) : (
+          Object.entries(groupedItems).map(([date, items]) => (
+            <section key={date}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: "0.6rem",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    color: "#4e5f28",
+                  }}
+                >
+                  <Calendar size={16} />
+                  <h4
+                    style={{
+                      margin: 0,
+                      fontWeight: "800",
+                      fontSize: isMobile ? "0.85rem" : "1.1rem",
+                      fontFamily: "Harmond-SemiBoldCondensed",
+                    }}
+                  >
+                    {date}
+                  </h4>
+                </div>
+                <button
+                  onClick={() => {
+                    const itemIds = items.map((i) => i.id);
+                    const allInSelected = itemIds.every((id) =>
+                      selectedIds.includes(id),
+                    );
+                    setSelectedIds((prev) =>
+                      allInSelected
+                        ? prev.filter((id) => !itemIds.includes(id))
+                        : [...new Set([...prev, ...itemIds])],
+                    );
+                  }}
+                  style={{
+                    background: "rgba(78, 95, 40, 0.05)",
+                    border: "none",
+                    padding: "4px 10px",
+                    borderRadius: "100px",
+                    fontSize: "0.6rem",
+                    fontWeight: "bold",
+                    color: "#4e5f28",
+                    cursor: "pointer",
+                  }}
+                >
+                  {items
+                    .map((i) => i.id)
+                    .every((id) => selectedIds.includes(id))
+                    ? labels.groupDeselect
+                    : labels.groupSelect}
+                </button>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.6rem",
+                }}
+              >
+                {items.map((item) => renderCard(item))}
+              </div>
+            </section>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}

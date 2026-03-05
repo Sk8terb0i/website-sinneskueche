@@ -21,7 +21,8 @@ import GetInk from "./pages/GetInk";
 // New Auth & Profile imports
 import Profile from "./pages/Profile";
 import Success from "./components/Confirm/Success";
-import RegisterGuest from "./components/Profile/RegisterGuest"; // ADDED IMPORT
+import RegisterGuest from "./components/Profile/RegisterGuest";
+import StudentFiringForm from "./pages/StudentFiringForm";
 
 import PageTransition from "./components/PageTransition";
 import { defaultLang, languages } from "./i18n";
@@ -223,6 +224,15 @@ export default function App() {
                   currentLang={currentLang}
                   setCurrentLang={setCurrentLang}
                 />
+              </PageTransition>
+            }
+          />
+
+          <Route
+            path="/firing-registration"
+            element={
+              <PageTransition>
+                <StudentFiringForm />
               </PageTransition>
             }
           />

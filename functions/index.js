@@ -347,6 +347,18 @@ const sendCancellationEmail = async (
   else await mailRef.set(mailData);
 };
 
+const sendFiringEmail = async (email, templateId, lang, replacements) => {
+  if (!email) return;
+  const template = await getTemplate(null, templateId, lang);
+  await db.collection("mail").add({
+    to: email,
+    message: {
+      subject: replaceVars(template.subject, replacements),
+      html: replaceVars(template.body, replacements),
+    },
+  });
+};
+
 // ============================================================================
 // 1. STRIPE CHECKOUT
 // ============================================================================
@@ -1240,4 +1252,163 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
     logger.error("sendFinalSchedules failed", error);
     throw new HttpsError("internal", error.message);
   }
+});
+
+// ============================================================================
+// 6. FIRING SCHEDULE & OBJECT TRACKING
+// ============================================================================
+
+exports.registerFiringObject = onCall({ cors: true }, async (request) => {
+  try {
+    const { email, stage, imageUrl, currentLang } = request.data;
+    if (!email || !stage || !imageUrl)
+      throw new HttpsError("invalid-argument", "Missing data.");
+
+    // FIX: Trim and lowercase email to prevent matching bugs
+    const cleanEmail = email.trim().toLowerCase();
+
+    const docRef = await db.collection("firings").add({
+      email: cleanEmail,
+      stage, // 'bisque' or 'glaze'
+      imageUrl,
+      status: "pending", // waiting to be fired
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      lang: currentLang || "en",
+    });
+
+    const lang = currentLang || "en";
+    const stageText =
+      stage === "bisque"
+        ? lang === "de"
+          ? "Schrühbrand"
+          : "Bisque"
+        : lang === "de"
+          ? "Glasurbrand"
+          : "Glaze";
+
+    await sendFiringEmail(cleanEmail, "firing_registered", lang, {
+      "{stage}": stageText,
+    });
+    return { success: true, id: docRef.id };
+  } catch (error) {
+    logger.error("registerFiringObject failed", error);
+    throw new HttpsError("internal", error.message);
+  }
+});
+
+exports.updateFiringStatus = onCall({ cors: true }, async (request) => {
+  if (!request.auth)
+    throw new HttpsError("unauthenticated", "Must be logged in.");
+  try {
+    const { objectId, newStatus } = request.data;
+    const docRef = db.collection("firings").doc(objectId);
+    const snap = await docRef.get();
+
+    if (!snap.exists) throw new HttpsError("not-found", "Object not found.");
+    const data = snap.data();
+
+    await docRef.update({
+      status: newStatus,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      reminderSent: false, // reset reminder flag on status change
+    });
+
+    // Send corresponding email
+    const lang = data.lang || "en";
+    if (newStatus === "bisque_ready") {
+      await sendFiringEmail(data.email, "firing_bisque_ready", lang, {});
+    } else if (newStatus === "glaze_ready") {
+      await sendFiringEmail(data.email, "firing_glaze_ready", lang, {});
+    } else if (newStatus === "broken") {
+      await sendFiringEmail(data.email, "firing_broken", lang, {});
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error("updateFiringStatus failed", error);
+    throw new HttpsError("internal", error.message);
+  }
+});
+
+exports.sendFiringReminders = onSchedule("0 9 * * *", async (event) => {
+  // Runs daily at 9:00 AM
+  const today = new Date();
+
+  const firingsSnap = await db
+    .collection("firings")
+    .where("status", "in", ["bisque_ready", "glaze_ready"])
+    .where("reminderSent", "==", false)
+    .get();
+
+  for (const doc of firingsSnap.docs) {
+    const data = doc.data();
+    if (!data.updatedAt) continue;
+
+    const updatedDate = data.updatedAt.toDate();
+    const diffTime = Math.abs(today - updatedDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    const lang = data.lang || "en";
+
+    // Bisque: 8 weeks total. Remind at 7 weeks (49 days)
+    if (data.status === "bisque_ready" && diffDays >= 49) {
+      const actionText = lang === "de" ? "zu glasieren" : "glaze it";
+      await sendFiringEmail(data.email, "firing_reminder", lang, {
+        "{action}": actionText,
+        "{weeksLeft}": "1",
+      });
+      await doc.ref.update({ reminderSent: true });
+    }
+
+    // Glaze: 4 weeks total. Remind at 3 weeks (21 days)
+    if (data.status === "glaze_ready" && diffDays >= 21) {
+      const actionText = lang === "de" ? "abzuholen" : "pick it up";
+      await sendFiringEmail(data.email, "firing_reminder", lang, {
+        "{action}": actionText,
+        "{weeksLeft}": "1",
+      });
+      await doc.ref.update({ reminderSent: true });
+    }
+  }
+});
+
+// Fetch objects for a specific email
+exports.getStudentObjects = onCall({ cors: true }, async (request) => {
+  const { email } = request.data;
+  if (!email) throw new HttpsError("invalid-argument", "Email required.");
+
+  // FIX: Force search email to lowercase to match registration logic safely
+  const searchEmail = email.trim().toLowerCase();
+
+  // FIX: Removed the status filter so all objects (pending, ready, broken, done) are returned
+  const snap = await db
+    .collection("firings")
+    .where("email", "==", searchEmail)
+    .get();
+
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+});
+
+// Move an existing bisque object to the glaze firing queue
+exports.moveToGlazeStage = onCall({ cors: true }, async (request) => {
+  const { objectId, currentLang } = request.data;
+  const docRef = db.collection("firings").doc(objectId);
+  const snap = await docRef.get();
+
+  if (!snap.exists) throw new HttpsError("not-found", "Object not found.");
+  const data = snap.data();
+
+  await docRef.update({
+    stage: "glaze",
+    status: "pending", // Back to queue for the next fire
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    reminderSent: false,
+  });
+
+  const lang = currentLang || "en";
+  await sendFiringEmail(data.email, "firing_registered", lang, {
+    "{stage}": lang === "de" ? "Glasurbrand" : "Glaze",
+  });
+
+  return { success: true };
 });
