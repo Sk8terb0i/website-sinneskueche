@@ -42,7 +42,7 @@ export default function Location({ currentLang, setCurrentLang }) {
   const content = {
     en: {
       title: "location",
-      welcome: "How to find our creative space",
+      welcome: "How to find our studio",
       address: "Sägestrasse 11, 8952 Schlieren",
       entrance: "Rear entrance (blue door)",
       getDirections: "Get Directions",
@@ -64,7 +64,7 @@ export default function Location({ currentLang, setCurrentLang }) {
 
   const openGoogleMaps = () => {
     window.open(
-      "https://maps.google.com/?q=Sägestrasse+11,+8952+Schlieren",
+      "https://maps.google.com/maps?q=Sägestrasse+11,+8952+Schlieren&t=&z=15&ie=UTF8&iwloc=&output=embed",
       "_blank",
     );
   };
@@ -95,6 +95,7 @@ export default function Location({ currentLang, setCurrentLang }) {
       justifyContent: "center",
       alignItems: "center",
       gap: "12px",
+      marginTop: "10px",
       marginBottom: "40px",
       flexWrap: "wrap",
     },
@@ -103,7 +104,7 @@ export default function Location({ currentLang, setCurrentLang }) {
       alignItems: "center",
       gap: "10px",
       padding: "10px 24px",
-      background: "#caaff31e", // Restored original pill color
+      background: "#caaff31e", // Restored your original pill background
       borderRadius: "100px",
       color: "#1c0700",
       whiteSpace: "nowrap",
@@ -121,9 +122,13 @@ export default function Location({ currentLang, setCurrentLang }) {
       boxShadow: "0 20px 40px rgba(0,0,0,0.03)",
       display: "flex",
       flexDirection: "column",
-      alignItems: "center",
-      gap: "1.5rem",
       marginBottom: "60px",
+    },
+    cardToolbar: {
+      display: "flex",
+      justifyContent: "flex-end", // Aligns the button cleanly to the right on desktop
+      width: "100%",
+      marginBottom: "1.2rem",
     },
     mapWrapper: {
       width: "100%",
@@ -131,18 +136,18 @@ export default function Location({ currentLang, setCurrentLang }) {
       borderRadius: "20px",
       border: "1px solid rgba(28, 7, 0, 0.08)",
       overflow: "hidden",
-      backgroundColor: "rgba(202, 175, 243, 0.08)", // No pure white
+      backgroundColor: "rgba(202, 175, 243, 0.08)",
     },
     btnRoute: {
       display: "flex",
       alignItems: "center",
       gap: "8px",
-      padding: "14px 28px",
-      backgroundColor: "#caaff3", // Lavender
-      color: "#1c0700", // Dark text for contrast against lavender
+      padding: "12px 24px",
+      backgroundColor: "#caaff3", // Lavender restored
+      color: "#1c0700",
       border: "none",
       borderRadius: "100px",
-      fontSize: "1rem",
+      fontSize: "0.95rem",
       fontWeight: "bold",
       cursor: "pointer",
       transition: "transform 0.2s, opacity 0.2s",
@@ -195,6 +200,28 @@ export default function Location({ currentLang, setCurrentLang }) {
       <style>
         {`
           @media (max-width: 768px) {
+            .location-card {
+                padding: 1.5rem !important;
+                border-radius: 24px !important;
+                width: 95% !important;
+                display: flex !important;
+                flex-direction: column !important;
+            }
+            .card-toolbar {
+                order: 2 !important; /* Forces button below the map on mobile */
+                margin-bottom: 0px !important;
+                margin-top: 15px !important;
+            }
+            .map-container {
+                order: 1 !important; /* Keeps map on top */
+                height: 300px !important;
+            }
+            .btn-route {
+                width: 100% !important;
+                justify-content: center !important;
+                padding: 14px 24px !important;
+            }
+
             .location-image-section { 
               display: flex !important;
               justify-content: center;
@@ -223,26 +250,14 @@ export default function Location({ currentLang, setCurrentLang }) {
                 width: ${MOBILE_LAYOUT.buildingWidth} !important;
                 max-width: ${MOBILE_LAYOUT.buildingWidth} !important;
                 font-size: 0.95rem !important;
-                padding: 0px 0px 15px 0px !important; /* Removed top padding */
-                margin-top: 0px !important; /* Pulled up against the images */
+                padding: 15px 0px !important;
+                margin-top: 15px !important;
                 box-sizing: border-box;
-            }
-            .location-card {
-                padding: 1.5rem !important;
-                border-radius: 24px !important;
-                width: 95% !important;
             }
             .info-grid {
               flex-direction: column !important;
               gap: 8px !important;
               width: 100%;
-            }
-            .map-container {
-              height: 300px !important;
-            }
-            .btn-route {
-              width: 100%;
-              justify-content: center;
             }
           }
           .google-map-iframe {
@@ -269,7 +284,7 @@ export default function Location({ currentLang, setCurrentLang }) {
 
         <p style={styles.welcomeText}>{current.welcome}</p>
 
-        {/* 1. INFO PILLS (Restored to their original place) */}
+        {/* 1. INFO PILLS (Restored exactly to their original place & color) */}
         <div className="info-grid" style={styles.infoGrid}>
           <div className="info-item" style={styles.infoItem}>
             <div style={{ display: "flex", opacity: 0.7 }}>
@@ -287,6 +302,18 @@ export default function Location({ currentLang, setCurrentLang }) {
 
         {/* 2. MAP & DIRECTIONS FIRST */}
         <div className="location-card" style={styles.locationCard}>
+          {/* Button aligned Right on Desktop, moves to bottom on Mobile */}
+          <div className="card-toolbar" style={styles.cardToolbar}>
+            <button
+              className="btn-route"
+              style={styles.btnRoute}
+              onClick={openGoogleMaps}
+            >
+              <Navigation size={18} />
+              {current.getDirections}
+            </button>
+          </div>
+
           <div className="map-container" style={styles.mapWrapper}>
             <iframe
               title="Studio Map"
@@ -297,15 +324,6 @@ export default function Location({ currentLang, setCurrentLang }) {
               referrerPolicy="no-referrer-when-downgrade"
             ></iframe>
           </div>
-
-          <button
-            className="btn-route"
-            style={styles.btnRoute}
-            onClick={openGoogleMaps}
-          >
-            <Navigation size={18} />
-            {current.getDirections}
-          </button>
         </div>
 
         {/* 3. VISUAL GUIDE BELOW */}
