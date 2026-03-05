@@ -23,6 +23,8 @@ import {
   Pin,
   Mail,
   Flame,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 // Components & Styles
@@ -58,8 +60,14 @@ export default function Admin({ currentLang, setCurrentLang }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+
+  // Logic switch: isMobile for layout, isCompactNav for the tab bar behavior
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const isMobile = windowWidth < 900;
+  const isCompactNav = windowWidth < 1850;
+
   const [hasNewRentalRequests, setHasNewRentalRequests] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const labels = {
     en: {
@@ -84,6 +92,10 @@ export default function Admin({ currentLang, setCurrentLang }) {
       defaultView: "Default View",
       setDefault: "Set as Default",
       firing: "Firing Schedule",
+      group1: "Management",
+      group2: "Tools",
+      group3: "Marketing",
+      group4: "Studio",
     },
     de: {
       loginTitle: "Atelier Login",
@@ -107,6 +119,10 @@ export default function Admin({ currentLang, setCurrentLang }) {
       defaultView: "Standardansicht",
       setDefault: "Als Standard setzen",
       firing: "Brennplan",
+      group1: "Verwaltung",
+      group2: "Tools",
+      group3: "Marketing",
+      group4: "Studio",
     },
   }[currentLang || "en"];
 
@@ -130,7 +146,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
   }, [activeTab]);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 900);
+    const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener("resize", handleResize);
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
@@ -143,16 +159,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
           ) {
             setUser(currentUser);
             setAdminData(data);
-            const isFullAdmin = data.role === "admin";
-            const savedTab = localStorage.getItem("adminActiveTab") || "events";
-            if (
-              !isFullAdmin &&
-              (savedTab === "profiles" ||
-                savedTab === "pack-codes" ||
-                savedTab === "rental")
-            ) {
-              setActiveTab("events");
-            }
           } else {
             setUser(null);
             setAdminData(null);
@@ -226,7 +232,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
             ...loginCardStyle(isMobile),
             backgroundColor: "#fdf8e1",
             border: "1px solid rgba(28, 7, 0, 0.05)",
-            boxShadow: "0 10px 40px rgba(0,0,0,0.03)",
           }}
         >
           <div style={{ textAlign: "center", marginBottom: "2rem" }}>
@@ -310,6 +315,26 @@ export default function Admin({ currentLang, setCurrentLang }) {
     gap: "4px",
   };
 
+  const getActiveTabDetails = () => {
+    const map = {
+      events: { icon: <CalendarIcon size={18} />, label: labels.events },
+      profiles: { icon: <Users size={18} />, label: labels.profiles },
+      "course-management": {
+        icon: <Tag size={18} />,
+        label: labels.courseMgmt,
+      },
+      schedule: { icon: <CalendarClock size={18} />, label: labels.schedule },
+      reminders: { icon: <Bell size={18} />, label: labels.reminders },
+      terms: { icon: <FileText size={18} />, label: labels.terms },
+      emails: { icon: <Mail size={18} />, label: labels.emails },
+      "pack-codes": { icon: <CreditCard size={18} />, label: labels.packCodes },
+      promotions: { icon: <Ticket size={18} />, label: labels.promotions },
+      rental: { icon: <LayoutGrid size={18} />, label: labels.rental },
+      firing: { icon: <Flame size={18} />, label: labels.firing },
+    };
+    return map[activeTab] || map.events;
+  };
+
   return (
     <div
       style={{
@@ -328,12 +353,13 @@ export default function Admin({ currentLang, setCurrentLang }) {
         isMenuOpen={isMenuOpen}
         onMenuToggle={setIsMenuOpen}
       />
+
       <header style={{ ...headerStyle(isMobile), marginBottom: "2rem" }}>
         <div style={{ flex: 1 }}>
           <h1
             style={{
               fontFamily: "Harmond-SemiBoldCondensed",
-              fontSize: isMobile ? "2.2rem" : "3.5rem",
+              fontSize: isMobile ? "2rem" : "3.5rem",
               marginBottom: "0.2rem",
               textTransform: "lowercase",
             }}
@@ -365,219 +391,436 @@ export default function Admin({ currentLang, setCurrentLang }) {
         </button>
       </header>
 
-      {/* HORIZONTAL TAB NAVIGATION WITH GROUPS */}
-      <div
-        style={{
-          width: "100%",
-          overflowX: "auto",
-          paddingBottom: "10px",
-          marginBottom: "1rem",
-          display: "flex",
-          flexWrap: isMobile ? "nowrap" : "wrap",
-          gap: "1.5rem",
-        }}
-        className="hide-scrollbar"
-      >
-        <div style={groupStyle}>
-          <button
-            onClick={() => setActiveTab("events")}
-            style={{
-              ...tabButtonStyle(activeTab === "events"),
-              backgroundColor:
-                activeTab === "events" ? "#caaff3" : "transparent",
-              borderRadius: "100px",
-              color: "#1c0700",
-            }}
-          >
-            <CalendarIcon size={16} /> {labels.events}
-          </button>
-          {isFullAdmin && (
+      {isCompactNav ? (
+        /* --- COMPACT SELECTOR (Dropdown + Pin next to it) --- */
+        <div
+          style={{ marginBottom: "1.5rem", position: "relative", zIndex: 100 }}
+        >
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             <button
-              onClick={() => setActiveTab("profiles")}
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               style={{
-                ...tabButtonStyle(activeTab === "profiles"),
-                backgroundColor:
-                  activeTab === "profiles" ? "#caaff3" : "transparent",
-                borderRadius: "100px",
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "14px 20px",
+                backgroundColor: "#caaff3",
+                borderRadius: "16px",
+                border: "none",
                 color: "#1c0700",
+                fontWeight: "800",
               }}
             >
-              <Users size={16} /> {labels.profiles}
-            </button>
-          )}
-        </div>
-
-        <div style={groupStyle}>
-          <button
-            onClick={() => setActiveTab("course-management")}
-            style={{
-              ...tabButtonStyle(activeTab === "course-management"),
-              backgroundColor:
-                activeTab === "course-management" ? "#caaff3" : "transparent",
-              borderRadius: "100px",
-              color: "#1c0700",
-            }}
-          >
-            <Tag size={16} /> {labels.courseMgmt}
-          </button>
-
-          <button
-            onClick={() => setActiveTab("schedule")}
-            style={{
-              ...tabButtonStyle(activeTab === "schedule"),
-              backgroundColor:
-                activeTab === "schedule" ? "#caaff3" : "transparent",
-              borderRadius: "100px",
-              color: "#1c0700",
-            }}
-          >
-            <CalendarClock size={16} /> {labels.schedule}
-          </button>
-
-          <button
-            onClick={() => setActiveTab("reminders")}
-            style={{
-              ...tabButtonStyle(activeTab === "reminders"),
-              backgroundColor:
-                activeTab === "reminders" ? "#caaff3" : "transparent",
-              borderRadius: "100px",
-              color: "#1c0700",
-            }}
-          >
-            <Bell size={16} /> {labels.reminders}
-          </button>
-          <button
-            onClick={() => setActiveTab("terms")}
-            style={{
-              ...tabButtonStyle(activeTab === "terms"),
-              backgroundColor:
-                activeTab === "terms" ? "#caaff3" : "transparent",
-              borderRadius: "100px",
-              color: "#1c0700",
-            }}
-          >
-            <FileText size={16} /> {labels.terms}
-          </button>
-          <button
-            onClick={() => setActiveTab("emails")}
-            style={{
-              ...tabButtonStyle(activeTab === "emails"),
-              backgroundColor:
-                activeTab === "emails" ? "#caaff3" : "transparent",
-              borderRadius: "100px",
-              color: "#1c0700",
-            }}
-          >
-            <Mail size={16} /> {labels.emails}
-          </button>
-        </div>
-
-        <div style={groupStyle}>
-          {isFullAdmin && (
-            <button
-              onClick={() => setActiveTab("pack-codes")}
-              style={{
-                ...tabButtonStyle(activeTab === "pack-codes"),
-                backgroundColor:
-                  activeTab === "pack-codes" ? "#caaff3" : "transparent",
-                borderRadius: "100px",
-                color: "#1c0700",
-              }}
-            >
-              <CreditCard size={16} /> {labels.packCodes}
-            </button>
-          )}
-          <button
-            onClick={() => setActiveTab("promotions")}
-            style={{
-              ...tabButtonStyle(activeTab === "promotions"),
-              backgroundColor:
-                activeTab === "promotions" ? "#caaff3" : "transparent",
-              borderRadius: "100px",
-              color: "#1c0700",
-            }}
-          >
-            <Ticket size={16} /> {labels.promotions}
-          </button>
-        </div>
-
-        {isFullAdmin && (
-          <div style={groupStyle}>
-            <button
-              onClick={() => setActiveTab("rental")}
-              style={{
-                ...tabButtonStyle(activeTab === "rental"),
-                backgroundColor:
-                  activeTab === "rental" ? "#caaff3" : "transparent",
-                borderRadius: "100px",
-                color: "#1c0700",
-                position: "relative",
-              }}
-            >
-              <LayoutGrid size={16} /> {labels.rental}
-              {hasNewRentalRequests && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: "4px",
-                    right: "4px",
-                    width: "8px",
-                    height: "8px",
-                    backgroundColor: "#9960a8",
-                    borderRadius: "50%",
-                  }}
-                />
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "12px" }}
+              >
+                {getActiveTabDetails().icon}
+                {getActiveTabDetails().label}
+              </div>
+              {isMobileMenuOpen ? (
+                <ChevronUp size={20} />
+              ) : (
+                <ChevronDown size={20} />
               )}
             </button>
             <button
-              onClick={() => setActiveTab("firing")}
+              onClick={handleSetDefaultTab}
               style={{
-                ...tabButtonStyle(activeTab === "firing"),
+                padding: "14px",
+                borderRadius: "16px",
+                border: "1px solid rgba(28, 7, 0, 0.1)",
                 backgroundColor:
-                  activeTab === "firing" ? "#caaff3" : "transparent",
-                borderRadius: "100px",
-                color: "#1c0700",
+                  defaultTab === activeTab
+                    ? "rgba(153, 96, 168, 0.1)"
+                    : "#fdf8e1",
+                color: defaultTab === activeTab ? "#9960a8" : "#1c070040",
+                display: "flex",
+                alignItems: "center",
               }}
             >
-              <Flame size={16} /> {labels.firing}
+              <Pin
+                size={20}
+                fill={defaultTab === activeTab ? "#9960a8" : "none"}
+              />
             </button>
           </div>
-        )}
-      </div>
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          marginBottom: "1.5rem",
-        }}
-      >
-        <button
-          onClick={handleSetDefaultTab}
-          style={{
-            background: "none",
-            border: "none",
-            color: defaultTab === activeTab ? "#9960a8" : "#4e5f28",
-            cursor: "pointer",
-            fontSize: "0.8rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            fontWeight: "700",
-            opacity: defaultTab === activeTab ? 1 : 0.6,
-            padding: "4px 8px",
-            borderRadius: "8px",
-            backgroundColor:
-              defaultTab === activeTab
-                ? "rgba(202, 175, 243, 0.15)"
-                : "transparent",
-            transition: "all 0.2s ease",
-          }}
-        >
-          <Pin size={14} fill={defaultTab === activeTab ? "#9960a8" : "none"} />
-          {defaultTab === activeTab ? labels.defaultView : labels.setDefault}
-        </button>
-      </div>
+          {isMobileMenuOpen && (
+            <div
+              style={{
+                marginTop: "8px",
+                backgroundColor: "#fdf8e1",
+                borderRadius: "24px",
+                padding: "12px",
+                border: "1px solid rgba(28, 7, 0, 0.1)",
+                boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
+                maxHeight: "65vh",
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: "1.5rem",
+              }}
+            >
+              {[
+                {
+                  label: labels.group1,
+                  items: ["events", isFullAdmin && "profiles"].filter(Boolean),
+                },
+                {
+                  label: labels.group2,
+                  items: [
+                    "course-management",
+                    "schedule",
+                    "reminders",
+                    "terms",
+                    "emails",
+                  ],
+                },
+                {
+                  label: labels.group3,
+                  items: [isFullAdmin && "pack-codes", "promotions"].filter(
+                    Boolean,
+                  ),
+                },
+                {
+                  label: labels.group4,
+                  items: [
+                    isFullAdmin && "rental",
+                    isFullAdmin && "firing",
+                  ].filter(Boolean),
+                },
+              ].map((group, idx) => (
+                <div key={idx}>
+                  <p
+                    style={{
+                      fontSize: "0.65rem",
+                      fontWeight: "900",
+                      textTransform: "uppercase",
+                      color: "#4e5f28",
+                      opacity: 0.6,
+                      marginBottom: "8px",
+                      paddingLeft: "8px",
+                    }}
+                  >
+                    {group.label}
+                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                    }}
+                  >
+                    {group.items.map((tabKey) => {
+                      const details = {
+                        events: {
+                          icon: <CalendarIcon size={18} />,
+                          label: labels.events,
+                        },
+                        profiles: {
+                          icon: <Users size={18} />,
+                          label: labels.profiles,
+                        },
+                        "course-management": {
+                          icon: <Tag size={18} />,
+                          label: labels.courseMgmt,
+                        },
+                        schedule: {
+                          icon: <CalendarClock size={18} />,
+                          label: labels.schedule,
+                        },
+                        reminders: {
+                          icon: <Bell size={18} />,
+                          label: labels.reminders,
+                        },
+                        terms: {
+                          icon: <FileText size={18} />,
+                          label: labels.terms,
+                        },
+                        emails: {
+                          icon: <Mail size={18} />,
+                          label: labels.emails,
+                        },
+                        "pack-codes": {
+                          icon: <CreditCard size={18} />,
+                          label: labels.packCodes,
+                        },
+                        promotions: {
+                          icon: <Ticket size={18} />,
+                          label: labels.promotions,
+                        },
+                        rental: {
+                          icon: <LayoutGrid size={18} />,
+                          label: labels.rental,
+                        },
+                        firing: {
+                          icon: <Flame size={18} />,
+                          label: labels.firing,
+                        },
+                      }[tabKey];
+                      return (
+                        <button
+                          key={tabKey}
+                          onClick={() => {
+                            setActiveTab(tabKey);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            width: "100%",
+                            padding: "12px 16px",
+                            borderRadius: "12px",
+                            border: "none",
+                            backgroundColor:
+                              activeTab === tabKey ? "#caaff3" : "transparent",
+                            color: "#1c0700",
+                            fontWeight: activeTab === tabKey ? "800" : "500",
+                            fontSize: "0.95rem",
+                            textAlign: "left",
+                            position: "relative",
+                          }}
+                        >
+                          {details.icon} {details.label}
+                          {tabKey === "rental" && hasNewRentalRequests && (
+                            <span
+                              style={{
+                                position: "absolute",
+                                right: "16px",
+                                width: "8px",
+                                height: "8px",
+                                backgroundColor: "#9960a8",
+                                borderRadius: "50%",
+                              }}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* --- ORIGINAL HORIZONTAL VIEW (RESTORED EXACTLY) --- */
+        <>
+          <div
+            style={{
+              width: "100%",
+              overflowX: "auto",
+              paddingBottom: "10px",
+              marginBottom: "1rem",
+              display: "flex",
+              gap: "1.5rem",
+            }}
+            className="hide-scrollbar"
+          >
+            <div style={groupStyle}>
+              <button
+                onClick={() => setActiveTab("events")}
+                style={{
+                  ...tabButtonStyle(activeTab === "events"),
+                  backgroundColor:
+                    activeTab === "events" ? "#caaff3" : "transparent",
+                  borderRadius: "100px",
+                  color: "#1c0700",
+                }}
+              >
+                <CalendarIcon size={16} /> {labels.events}
+              </button>
+              {isFullAdmin && (
+                <button
+                  onClick={() => setActiveTab("profiles")}
+                  style={{
+                    ...tabButtonStyle(activeTab === "profiles"),
+                    backgroundColor:
+                      activeTab === "profiles" ? "#caaff3" : "transparent",
+                    borderRadius: "100px",
+                    color: "#1c0700",
+                  }}
+                >
+                  <Users size={16} /> {labels.profiles}
+                </button>
+              )}
+            </div>
+            <div style={groupStyle}>
+              <button
+                onClick={() => setActiveTab("course-management")}
+                style={{
+                  ...tabButtonStyle(activeTab === "course-management"),
+                  backgroundColor:
+                    activeTab === "course-management"
+                      ? "#caaff3"
+                      : "transparent",
+                  borderRadius: "100px",
+                  color: "#1c0700",
+                }}
+              >
+                <Tag size={16} /> {labels.courseMgmt}
+              </button>
+              <button
+                onClick={() => setActiveTab("schedule")}
+                style={{
+                  ...tabButtonStyle(activeTab === "schedule"),
+                  backgroundColor:
+                    activeTab === "schedule" ? "#caaff3" : "transparent",
+                  borderRadius: "100px",
+                  color: "#1c0700",
+                }}
+              >
+                <CalendarClock size={16} /> {labels.schedule}
+              </button>
+              <button
+                onClick={() => setActiveTab("reminders")}
+                style={{
+                  ...tabButtonStyle(activeTab === "reminders"),
+                  backgroundColor:
+                    activeTab === "reminders" ? "#caaff3" : "transparent",
+                  borderRadius: "100px",
+                  color: "#1c0700",
+                }}
+              >
+                <Bell size={16} /> {labels.reminders}
+              </button>
+              <button
+                onClick={() => setActiveTab("terms")}
+                style={{
+                  ...tabButtonStyle(activeTab === "terms"),
+                  backgroundColor:
+                    activeTab === "terms" ? "#caaff3" : "transparent",
+                  borderRadius: "100px",
+                  color: "#1c0700",
+                }}
+              >
+                <FileText size={16} /> {labels.terms}
+              </button>
+              <button
+                onClick={() => setActiveTab("emails")}
+                style={{
+                  ...tabButtonStyle(activeTab === "emails"),
+                  backgroundColor:
+                    activeTab === "emails" ? "#caaff3" : "transparent",
+                  borderRadius: "100px",
+                  color: "#1c0700",
+                }}
+              >
+                <Mail size={16} /> {labels.emails}
+              </button>
+            </div>
+            <div style={groupStyle}>
+              {isFullAdmin && (
+                <button
+                  onClick={() => setActiveTab("pack-codes")}
+                  style={{
+                    ...tabButtonStyle(activeTab === "pack-codes"),
+                    backgroundColor:
+                      activeTab === "pack-codes" ? "#caaff3" : "transparent",
+                    borderRadius: "100px",
+                    color: "#1c0700",
+                  }}
+                >
+                  <CreditCard size={16} /> {labels.packCodes}
+                </button>
+              )}
+              <button
+                onClick={() => setActiveTab("promotions")}
+                style={{
+                  ...tabButtonStyle(activeTab === "promotions"),
+                  backgroundColor:
+                    activeTab === "promotions" ? "#caaff3" : "transparent",
+                  borderRadius: "100px",
+                  color: "#1c0700",
+                }}
+              >
+                <Ticket size={16} /> {labels.promotions}
+              </button>
+            </div>
+            {isFullAdmin && (
+              <div style={groupStyle}>
+                <button
+                  onClick={() => setActiveTab("rental")}
+                  style={{
+                    ...tabButtonStyle(activeTab === "rental"),
+                    backgroundColor:
+                      activeTab === "rental" ? "#caaff3" : "transparent",
+                    borderRadius: "100px",
+                    color: "#1c0700",
+                    position: "relative",
+                  }}
+                >
+                  <LayoutGrid size={16} /> {labels.rental}
+                  {hasNewRentalRequests && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "4px",
+                        right: "4px",
+                        width: "8px",
+                        height: "8px",
+                        backgroundColor: "#9960a8",
+                        borderRadius: "50%",
+                      }}
+                    />
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab("firing")}
+                  style={{
+                    ...tabButtonStyle(activeTab === "firing"),
+                    backgroundColor:
+                      activeTab === "firing" ? "#caaff3" : "transparent",
+                    borderRadius: "100px",
+                    color: "#1c0700",
+                  }}
+                >
+                  <Flame size={16} /> {labels.firing}
+                </button>
+              </div>
+            )}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              marginBottom: "1.5rem",
+            }}
+          >
+            <button
+              onClick={handleSetDefaultTab}
+              style={{
+                background: "none",
+                border: "none",
+                color: defaultTab === activeTab ? "#9960a8" : "#4e5f28",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontWeight: "700",
+                opacity: defaultTab === activeTab ? 1 : 0.6,
+                padding: "4px 8px",
+                borderRadius: "8px",
+                backgroundColor:
+                  defaultTab === activeTab
+                    ? "rgba(202, 175, 243, 0.15)"
+                    : "transparent",
+              }}
+            >
+              <Pin
+                size={14}
+                fill={defaultTab === activeTab ? "#9960a8" : "none"}
+              />{" "}
+              {defaultTab === activeTab
+                ? labels.defaultView
+                : labels.setDefault}
+            </button>
+          </div>
+        </>
+      )}
 
       <div style={{ animation: "fadeIn 0.4s ease-out" }}>
         {activeTab === "events" && (

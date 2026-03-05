@@ -27,6 +27,7 @@ import {
   Edit2,
   Clock,
   Loader2,
+  PlusCircle, // Added for mobile toggle
 } from "lucide-react";
 import {
   formCardStyle,
@@ -68,6 +69,9 @@ export default function EventsTab({
   const [showParticipantsFor, setShowParticipantsFor] = useState(null);
   const [participantCache, setParticipantCache] = useState({});
 
+  // New state to handle form collapse on mobile
+  const [isFormExpanded, setIsFormExpanded] = useState(!isMobile);
+
   const isFullAdmin = userRole === "admin";
   const labels = {
     en: {
@@ -84,7 +88,7 @@ export default function EventsTab({
       addBtn: "Add to Calendar",
       updateBtn: "Update Entry",
       courseHeader: "COURSES",
-      eventHeader: "INDIVIDUAL EVENTS",
+      eventHeader: "EVENTS",
       noCourses: "No courses scheduled.",
       noEvents: "No events scheduled.",
       cancelCourse: "CANCEL COURSE",
@@ -109,7 +113,7 @@ export default function EventsTab({
       addBtn: "Hinzufügen",
       updateBtn: "Eintrag aktualisieren",
       courseHeader: "KURSE",
-      eventHeader: "EINZEL-EVENTS",
+      eventHeader: "EVENTS",
       noCourses: "Keine Kurse geplant.",
       noEvents: "Keine Events geplant.",
       cancelCourse: "ABSAGEN",
@@ -211,7 +215,6 @@ export default function EventsTab({
         }),
       );
 
-      // Group identical users to show quantity instead of duplicate rows
       const groupedUsersMap = {};
       userDetails.forEach((u) => {
         const key = `${u.email}_${u.firstName}_${u.lastName}`;
@@ -266,6 +269,8 @@ export default function EventsTab({
       else await addDoc(eventsCollection, eventData);
       resetForm();
       fetchEvents();
+      // On mobile, collapse form after success to see the schedule update
+      if (isMobile) setIsFormExpanded(false);
     } catch (e) {
       alert("Error saving: " + e.message);
     }
@@ -277,6 +282,9 @@ export default function EventsTab({
     setTime(event.time || "");
     setTitleEn(event.title.en);
     setTitleDe(event.title.de);
+    // Ensure form is visible when editing
+    setIsFormExpanded(true);
+
     const type =
       event.type || (event.link?.startsWith("http") ? "event" : "course");
     setLinkType(type);
@@ -342,144 +350,218 @@ export default function EventsTab({
       }}
     >
       <section style={{ width: isMobile ? "100%" : "400px" }}>
-        <div style={formCardStyle}>
-          <div
+        {/* Mobile Toggle Button */}
+        {/* Mobile Toggle Button */}
+        {isMobile && (
+          <button
+            onClick={() => setIsFormExpanded(!isFormExpanded)}
             style={{
+              width: "100%",
+              backgroundColor: isFormExpanded ? "#caaff3" : "#fdf8e1",
+              border: "1px solid rgba(28, 7, 0, 0.05)",
+              borderRadius: isFormExpanded ? "24px 24px 0 0" : "24px",
+              padding: "1.2rem",
               display: "flex",
               justifyContent: "space-between",
-              marginBottom: "1.2rem",
+              alignItems: "center", // Vertically centers the two main sides
+              marginBottom: isFormExpanded ? 0 : "1rem",
+              cursor: "pointer",
+              transition: "all 0.3s ease",
             }}
           >
-            <h3 style={sectionTitleStyle}>
-              {editingId ? labels.editEntry : labels.newEntry}
-            </h3>
-            {editingId && (
-              <button onClick={resetForm} style={cancelBtnStyle}>
-                <XCircle size={14} /> {labels.cancel}
-              </button>
-            )}
-          </div>
-          <form
-            onSubmit={handleSubmit}
-            style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}
-          >
-            <div>
-              <label style={labelStyle}>{labels.source}</label>
-              <div style={toggleContainerStyle}>
-                <div
-                  onClick={() => {
-                    setLinkType("course");
-                    setIsCustomCourseLink(false);
-                  }}
-                  style={{
-                    ...toggleOptionStyle,
-                    backgroundColor:
-                      linkType === "course" ? "#caaff3" : "transparent",
-                  }}
-                >
-                  {labels.course}
-                </div>
-                <div
-                  onClick={() => setLinkType("event")}
-                  style={{
-                    ...toggleOptionStyle,
-                    backgroundColor:
-                      linkType === "event" ? "#caaff3" : "transparent",
-                  }}
-                >
-                  {labels.event}
-                </div>
-              </div>
-            </div>
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                display: "flex",
+                alignItems: "center", // This specifically centers the icon and text together
                 gap: "10px",
+                lineHeight: 1, // Removes extra space from font metrics
               }}
             >
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+              <PlusCircle
+                size={20}
+                color={isFormExpanded ? "#1c0700" : "#9960a8"}
+              />
+              <h3
+                style={{
+                  ...sectionTitleStyle,
+                  marginBottom: 0,
+                  marginTop: 0, // Ensure no top margin is pushing it down
+                  display: "flex",
+                  alignItems: "center", // Added extra insurance for the text itself
+                }}
               >
-                <label style={{ ...labelStyle, opacity: 0.5 }}>
-                  {labels.dateLabel}
-                </label>
+                {editingId ? labels.editEntry : labels.newEntry}
+              </h3>
+            </div>
+            {isFormExpanded ? (
+              <ChevronDown size={20} />
+            ) : (
+              <ChevronRight size={20} />
+            )}
+          </button>
+        )}
+
+        {(!isMobile || isFormExpanded) && (
+          <div
+            style={{
+              ...formCardStyle,
+              borderRadius: isMobile ? "0 0 24px 24px" : "24px",
+              borderTop: isMobile ? "none" : "1px solid rgba(28, 7, 0, 0.05)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "1.2rem",
+              }}
+            >
+              {!isMobile && (
+                <h3 style={sectionTitleStyle}>
+                  {editingId ? labels.editEntry : labels.newEntry}
+                </h3>
+              )}
+              {editingId && (
+                <button onClick={resetForm} style={cancelBtnStyle}>
+                  <XCircle size={14} /> {labels.cancel}
+                </button>
+              )}
+            </div>
+            <form
+              onSubmit={handleSubmit}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "1.2rem",
+              }}
+            >
+              <div>
+                <label style={labelStyle}>{labels.source}</label>
+                <div style={toggleContainerStyle}>
+                  <div
+                    onClick={() => {
+                      setLinkType("course");
+                      setIsCustomCourseLink(false);
+                    }}
+                    style={{
+                      ...toggleOptionStyle,
+                      backgroundColor:
+                        linkType === "course" ? "#caaff3" : "transparent",
+                    }}
+                  >
+                    {labels.course}
+                  </div>
+                  <div
+                    onClick={() => setLinkType("event")}
+                    style={{
+                      ...toggleOptionStyle,
+                      backgroundColor:
+                        linkType === "event" ? "#caaff3" : "transparent",
+                    }}
+                  >
+                    {labels.event}
+                  </div>
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  <label style={{ ...labelStyle, opacity: 0.5 }}>
+                    {labels.dateLabel}
+                  </label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    required
+                    style={inputStyle}
+                  />
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  <label style={{ ...labelStyle, opacity: 0.5 }}>
+                    {labels.timeLabel}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="18:30"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+              {linkType === "course" && !isCustomCourseLink ? (
+                <select
+                  value={link}
+                  onChange={(e) => handleCourseSelection(e.target.value)}
+                  style={inputStyle}
+                  required
+                >
+                  {availableCourses.map((c, i) => (
+                    <option key={i} value={c.link}>
+                      {c.text[currentLang || "en"]}
+                    </option>
+                  ))}
+                </select>
+              ) : (
                 <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  type="url"
+                  placeholder="URL https://..."
+                  value={externalLink}
+                  onChange={(e) => setExternalLink(e.target.value)}
+                  style={inputStyle}
+                  required
+                />
+              )}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder={labels.titleEn}
+                  value={titleEn}
+                  onChange={(e) => setTitleEn(e.target.value)}
+                  required
+                  style={inputStyle}
+                />
+                <input
+                  type="text"
+                  placeholder={labels.titleDe}
+                  value={titleDe}
+                  onChange={(e) => setTitleDe(e.target.value)}
                   required
                   style={inputStyle}
                 />
               </div>
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-              >
-                <label style={{ ...labelStyle, opacity: 0.5 }}>
-                  {labels.timeLabel}
-                </label>
-                <input
-                  type="text"
-                  placeholder="18:30"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  style={inputStyle}
-                />
-              </div>
-            </div>
-            {linkType === "course" && !isCustomCourseLink ? (
-              <select
-                value={link}
-                onChange={(e) => handleCourseSelection(e.target.value)}
-                style={inputStyle}
-                required
-              >
-                {availableCourses.map((c, i) => (
-                  <option key={i} value={c.link}>
-                    {c.text[currentLang || "en"]}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="url"
-                placeholder="URL https://..."
-                value={externalLink}
-                onChange={(e) => setExternalLink(e.target.value)}
-                style={inputStyle}
-                required
-              />
-            )}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "10px",
-              }}
-            >
-              <input
-                type="text"
-                placeholder={labels.titleEn}
-                value={titleEn}
-                onChange={(e) => setTitleEn(e.target.value)}
-                required
-                style={inputStyle}
-              />
-              <input
-                type="text"
-                placeholder={labels.titleDe}
-                value={titleDe}
-                onChange={(e) => setTitleDe(e.target.value)}
-                required
-                style={inputStyle}
-              />
-            </div>
-            <button type="submit" style={btnStyle}>
-              {editingId ? labels.updateBtn : labels.addBtn}
-            </button>
-          </form>
-        </div>
+              <button type="submit" style={btnStyle}>
+                {editingId ? labels.updateBtn : labels.addBtn}
+              </button>
+            </form>
+          </div>
+        )}
       </section>
+
       <section style={{ flex: 1, marginTop: isMobile ? "2rem" : 0 }}>
         <div style={styles.tabNav}>
           <button
@@ -497,15 +579,27 @@ export default function EventsTab({
           </button>
         </div>
         <div style={styles.tabContent}>
-          {Object.values(groupedCourses).map((group) => {
-            const isExpanded = expandedGroups[group.link];
+          {(activeSubTab === "courses"
+            ? Object.values(groupedCourses)
+            : scheduledEvents
+          ).map((item) => {
+            // Logic for Events vs Grouped Courses
+            const isEvent = activeSubTab === "events";
+            const groupKey = isEvent ? item.id : item.link;
+            const title = isEvent
+              ? item.title[currentLang || "en"]
+              : item.title;
+            const dates = isEvent ? [item] : item.dates;
+
+            const isExpanded = expandedGroups[groupKey];
+
             return (
-              <div key={group.link} style={styles.courseGroupWrapper}>
+              <div key={groupKey} style={styles.courseGroupWrapper}>
                 <div
                   onClick={() =>
                     setExpandedGroups((prev) => ({
                       ...prev,
-                      [group.link]: !prev[group.link],
+                      [groupKey]: !prev[groupKey],
                     }))
                   }
                   style={styles.groupHeader}
@@ -516,7 +610,7 @@ export default function EventsTab({
                     ) : (
                       <ChevronRight size={14} />
                     )}
-                    {group.title} ({group.dates.length})
+                    {title} ({dates.length})
                   </div>
                 </div>
                 {isExpanded && (
@@ -524,11 +618,11 @@ export default function EventsTab({
                     className="custom-scrollbar"
                     style={{
                       ...styles.expandedContent,
-                      maxHeight: group.dates.length > 3 ? "400px" : "auto",
-                      overflowY: group.dates.length > 3 ? "auto" : "visible",
+                      maxHeight: dates.length > 3 ? "400px" : "auto",
+                      overflowY: dates.length > 3 ? "auto" : "visible",
                     }}
                   >
-                    {group.dates.map((ev) => (
+                    {dates.map((ev) => (
                       <div key={ev.id} style={styles.eventItemWrapper}>
                         <div
                           style={{
