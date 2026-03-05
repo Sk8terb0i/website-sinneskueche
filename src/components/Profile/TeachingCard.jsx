@@ -48,7 +48,7 @@ const getCleanCourseKey = (path) =>
 
 /**
  * --- INTERNAL TEACHING CARD COMPONENT ---
- * Exact styling match for BookingsCard.jsx
+ * Styled exactly like BookingsCard
  */
 function TeachingCard({ teachingEvents, isScheduleLoading, currentLang, t }) {
   const groupedTeaching = useMemo(() => {
@@ -63,7 +63,7 @@ function TeachingCard({ teachingEvents, isScheduleLoading, currentLang, t }) {
 
   if (isScheduleLoading) {
     return (
-      <section style={styles.card}>
+      <section style={styles.adminCard}>
         <div style={styles.emptyState}>
           <Loader2 className="spinner" size={30} color="#caaff3" />
         </div>
@@ -77,7 +77,7 @@ function TeachingCard({ teachingEvents, isScheduleLoading, currentLang, t }) {
     <section style={styles.card}>
       <h3 style={styles.sectionHeading}>
         <BookOpen size={20} color="#4e5f28" />
-        <span style={{ lineHeight: 1 }}>{t.teachingTitle}</span>
+        {t.teachingTitle}
       </h3>
 
       {Object.entries(groupedTeaching).map(([title, events]) => (
@@ -91,7 +91,6 @@ function TeachingCard({ teachingEvents, isScheduleLoading, currentLang, t }) {
 
               return (
                 <div key={event.id} style={styles.bookingItem}>
-                  {/* Purple Date Box */}
                   <div style={styles.bookingDateBox}>
                     <span style={styles.bookingMonth}>
                       {dateObj.toLocaleString(
@@ -146,6 +145,9 @@ function TeachingCard({ teachingEvents, isScheduleLoading, currentLang, t }) {
   );
 }
 
+/**
+ * --- MAIN PROFILE PAGE ---
+ */
 export default function Profile({ currentLang, setCurrentLang }) {
   const { currentUser, userData, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -216,14 +218,11 @@ export default function Profile({ currentLang, setCurrentLang }) {
         );
 
         const today = new Date().toISOString().split("T")[0];
-
-        // Query Main Events
         const qEvents = query(
           collection(db, "events"),
           where("instructorId", "==", currentUser.uid),
           orderBy("date", "asc"),
         );
-        // Query Work Schedule (Your Shifts)
         const qWork = query(
           collection(db, "work_schedule"),
           where("userId", "==", currentUser.uid),
@@ -240,46 +239,24 @@ export default function Profile({ currentLang, setCurrentLang }) {
           ...workSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
         ];
 
-        // --- THE CO-INSTRUCTOR FIX ---
         const enriched = await Promise.all(
           rawEvents.map(async (ev) => {
-            let coInstructorNames = [];
+            // Detect all instructor IDs from standard fields
+            const instructorList =
+              ev.instructors || (ev.instructorId ? [ev.instructorId] : []);
+            const others = instructorList.filter(
+              (id) => id !== currentUser.uid,
+            );
 
-            if (ev.instructors) {
-              // Case A: Document already has an array of instructor IDs (Schedule Orchestration)
-              const others = ev.instructors.filter(
-                (id) => id !== currentUser.uid,
-              );
-              const names = await Promise.all(
-                others.map(async (id) => {
-                  const uDoc = await getDoc(doc(db, "users", id));
-                  return uDoc.exists() ? uDoc.data().firstName : null;
-                }),
-              );
-              coInstructorNames = names.filter(Boolean);
-            } else {
-              // Case B: Work Schedule shifts (Docs are separate, so we query for others on same date/course)
-              const qOthers = query(
-                collection(db, "work_schedule"),
-                where("date", "==", ev.date),
-                where("coursePath", "==", ev.coursePath || ""),
-              );
-              const othersSnap = await getDocs(qOthers);
-              const otherIds = othersSnap.docs
-                .map((d) => d.data().userId)
-                .filter((id) => id !== currentUser.uid);
-
-              if (otherIds.length > 0) {
-                const names = await Promise.all(
-                  otherIds.map(async (id) => {
-                    const uDoc = await getDoc(doc(db, "users", id));
-                    return uDoc.exists() ? uDoc.data().firstName : null;
-                  }),
-                );
-                coInstructorNames = names.filter(Boolean);
-              }
+            let names = [];
+            if (others.length > 0) {
+              const namePromises = others.map(async (id) => {
+                const uDoc = await getDoc(doc(db, "users", id));
+                return uDoc.exists() ? uDoc.data().firstName : null;
+              });
+              names = (await Promise.all(namePromises)).filter(Boolean);
             }
-            return { ...ev, coInstructorNames };
+            return { ...ev, coInstructorNames: names };
           }),
         );
 
@@ -289,7 +266,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
             .sort((a, b) => a.date.localeCompare(b.date)),
         );
       } catch (err) {
-        console.error("Error:", err);
+        console.error("Error fetching profile data:", err);
       } finally {
         setIsScheduleLoading(false);
       }
@@ -575,7 +552,7 @@ const styles = {
     gap: "1.5rem",
   },
 
-  // SHARED CARD STYLING (Used by TeachingCard)
+  // FIX: Added flexbox to the card header to ensure alignment
   card: {
     backgroundColor: "#fdf8e1",
     padding: window.innerWidth < 768 ? "1.5rem" : "2.5rem",
@@ -593,6 +570,7 @@ const styles = {
     gap: "10px",
     color: "#1c0700",
   },
+
   courseGroup: { marginBottom: "1.5rem" },
   courseGroupTitle: {
     fontFamily: "Harmond-SemiBoldCondensed",

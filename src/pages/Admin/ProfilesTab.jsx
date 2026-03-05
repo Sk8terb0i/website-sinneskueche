@@ -8,7 +8,6 @@ import {
   query,
   where,
   orderBy,
-  writeBatch,
 } from "firebase/firestore";
 import {
   Edit2,
@@ -42,6 +41,7 @@ export default function ProfilesTab({
       first: "First Name",
       role: "Role",
       user: "User",
+      instructor: "Instructor",
       courseAdmin: "Course Admin",
       fullAdmin: "Full Admin",
       permitted: "PERMITTED COURSES",
@@ -54,6 +54,7 @@ export default function ProfilesTab({
       first: "Vorname",
       role: "Rolle",
       user: "Nutzer",
+      instructor: "Lehrer",
       courseAdmin: "Kurs-Admin",
       fullAdmin: "Haupt-Admin",
       permitted: "ERLAUBTE KURSE",
@@ -107,8 +108,11 @@ export default function ProfilesTab({
         firstName: editForm.firstName || "",
         lastName: editForm.lastName || "",
         credits: editForm.credits || {},
+        // Allow instructors and course admins to have permitted courses if needed
         allowedCourses:
-          editForm.role === "course_admin" ? editForm.allowedCourses || [] : [],
+          editForm.role === "course_admin" || editForm.role === "instructor"
+            ? editForm.allowedCourses || []
+            : [],
       };
       await updateDoc(userRef, updateData);
       setEditingId(null);
@@ -143,16 +147,20 @@ export default function ProfilesTab({
         }}
       >
         <div style={{ position: "relative", maxWidth: "400px", flex: 1 }}>
-          <Search
+          {/* FIX: Replaced non-existent S.SearchIconWrapper with standard div styling */}
+          <div
             style={{
               position: "absolute",
               left: "12px",
               top: "50%",
               transform: "translateY(-50%)",
               opacity: 0.3,
+              display: "flex",
+              alignItems: "center",
             }}
-            size={18}
-          />
+          >
+            <Search size={18} />
+          </div>
           <input
             type="text"
             placeholder={labels.search}
@@ -189,6 +197,7 @@ export default function ProfilesTab({
                 padding: "1.5rem",
                 borderRadius: "20px",
                 border: "1px solid rgba(28,7,0,0.05)",
+                position: "relative",
               }}
             >
               {editingId === u.id ? (
@@ -201,7 +210,7 @@ export default function ProfilesTab({
                 >
                   <input
                     style={S.inputStyle}
-                    value={editForm.firstName}
+                    value={editForm.firstName || ""}
                     onChange={(e) =>
                       setEditForm({ ...editForm, firstName: e.target.value })
                     }
@@ -217,11 +226,13 @@ export default function ProfilesTab({
                     }
                   >
                     <option value="user">{labels.user}</option>
+                    <option value="instructor">{labels.instructor}</option>
                     <option value="course_admin">{labels.courseAdmin}</option>
                     <option value="admin">{labels.fullAdmin}</option>
                   </select>
 
-                  {editForm.role === "course_admin" && (
+                  {(editForm.role === "course_admin" ||
+                    editForm.role === "instructor") && (
                     <div style={{ marginTop: "5px" }}>
                       <label style={{ ...S.labelStyle, fontSize: "0.65rem" }}>
                         {labels.permitted}
@@ -313,8 +324,13 @@ export default function ProfilesTab({
                             ? "#caaff3"
                             : u.role === "course_admin"
                               ? "#4e5f28"
-                              : "rgba(28,7,0,0.05)",
-                        color: u.role === "course_admin" ? "white" : "inherit",
+                              : u.role === "instructor"
+                                ? "#9960a8"
+                                : "rgba(28,7,0,0.05)",
+                        color:
+                          u.role === "course_admin" || u.role === "instructor"
+                            ? "white"
+                            : "inherit",
                         padding: "4px 10px",
                         borderRadius: "100px",
                         fontSize: "0.6rem",
@@ -326,10 +342,13 @@ export default function ProfilesTab({
                         ? labels.fullAdmin
                         : u.role === "course_admin"
                           ? labels.courseAdmin
-                          : labels.user}
+                          : u.role === "instructor"
+                            ? labels.instructor
+                            : labels.user}
                     </div>
                   </div>
-                  {u.role === "course_admin" &&
+
+                  {(u.role === "course_admin" || u.role === "instructor") &&
                     u.allowedCourses?.length > 0 && (
                       <div style={{ marginBottom: "10px" }}>
                         <p
@@ -364,9 +383,13 @@ export default function ProfilesTab({
                         </div>
                       </div>
                     )}
+
                   <button
                     onClick={() => handleEdit(u)}
                     style={{
+                      position: "absolute",
+                      bottom: "1.5rem",
+                      right: "1.5rem",
                       background: "none",
                       border: "none",
                       cursor: "pointer",

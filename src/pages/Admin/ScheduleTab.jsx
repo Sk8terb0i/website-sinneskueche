@@ -239,16 +239,52 @@ export default function ScheduleTab({
   };
 
   const saveInstructorList = async () => {
+    setIsProcessing(true);
     const sanitizedId = selectedCourse.replace(/\//g, "");
-    await setDoc(
-      doc(db, "schedules", sanitizedId),
-      {
-        instructors: selectedInstructors,
-        instructorsPerSlot,
-      },
-      { merge: true },
-    );
-    alert(labels.msgUpdated);
+    const batch = writeBatch(db);
+
+    try {
+      // 1. Update the master schedule document
+      batch.set(
+        doc(db, "schedules", sanitizedId),
+        {
+          instructors: selectedInstructors,
+          instructorsPerSlot,
+        },
+        { merge: true },
+      );
+
+      // 2. Automatically sync roles & course permissions for the instructors
+      for (const uid of selectedInstructors) {
+        const userRef = doc(db, "users", uid);
+        const userData = allUsers.find((u) => u.id === uid);
+        if (!userData) continue;
+
+        // Upgrade role to 'instructor' only if they are a standard 'user'
+        const newRole =
+          userData.role === "admin" || userData.role === "course_admin"
+            ? userData.role
+            : "instructor";
+
+        // Add current course to their allowed list if it's not already there
+        const currentAllowed = userData.allowedCourses || [];
+        const updatedAllowed = currentAllowed.includes(selectedCourse)
+          ? currentAllowed
+          : [...currentAllowed, selectedCourse];
+
+        batch.update(userRef, {
+          role: newRole,
+          allowedCourses: updatedAllowed,
+        });
+      }
+
+      await batch.commit();
+      alert(labels.msgUpdated);
+    } catch (err) {
+      console.error(err);
+      alert("Error updating instructors: " + err.message);
+    }
+    setIsProcessing(false);
   };
 
   const saveDraft = async () => {
@@ -354,12 +390,24 @@ export default function ScheduleTab({
     setIsProcessing(true);
     const sanitizedId = selectedCourse.replace(/\//g, "");
     try {
-      // 1. Update the master schedule document with EVERYTHING
-      await setDoc(
+      const batch = writeBatch(db);
+
+      // 1. Delete existing shifts for this course to prevent old coworkers from showing up
+      const oldShiftsQuery = query(
+        collection(db, "work_schedule"),
+        where("coursePath", "==", selectedCourse),
+      );
+      const oldShiftsSnap = await getDocs(oldShiftsQuery);
+      oldShiftsSnap.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      // 2. Update the master schedule document
+      batch.set(
         doc(db, "schedules", sanitizedId),
         {
-          instructors: selectedInstructors, // Sync instructor list
-          instructorsPerSlot, // Sync slot count
+          instructors: selectedInstructors,
+          instructorsPerSlot,
           assignments,
           specialAssignments,
           status: "published",
@@ -367,9 +415,7 @@ export default function ScheduleTab({
         { merge: true },
       );
 
-      // 2. Sync to individual 'work_schedule' docs for Profile.jsx visibility
-      const batch = writeBatch(db);
-
+      // 3. Sync individual 'work_schedule' docs for Profile.jsx visibility
       for (const eventId in assignments) {
         const instructorIds = assignments[eventId];
         for (const uid of instructorIds) {
@@ -388,15 +434,37 @@ export default function ScheduleTab({
           });
         }
       }
+
+      // 4. Sync Instructor Roles & Permissions
+      for (const uid of selectedInstructors) {
+        const userRef = doc(db, "users", uid);
+        const userData = allUsers.find((u) => u.id === uid);
+        if (!userData) continue;
+
+        const newRole =
+          userData.role === "admin" || userData.role === "course_admin"
+            ? userData.role
+            : "instructor";
+
+        const currentAllowed = userData.allowedCourses || [];
+        const updatedAllowed = currentAllowed.includes(selectedCourse)
+          ? currentAllowed
+          : [...currentAllowed, selectedCourse];
+
+        batch.update(userRef, {
+          role: newRole,
+          allowedCourses: updatedAllowed,
+        });
+      }
+
       await batch.commit();
 
-      // 3. Trigger Cloud Function for emails
+      // 5. Trigger Cloud Function for emails
       const sendSchedules = httpsCallable(functions, "sendFinalSchedules");
       await sendSchedules({
         courseId: selectedCourse,
         assignments,
         specialAssignments,
-        // Ensure baseUrl is passed if your backend needs it for {profileUrl}
         baseUrl: window.location.origin,
       });
 
