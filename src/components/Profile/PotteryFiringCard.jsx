@@ -26,7 +26,7 @@ import {
 
 export default function PotteryFiringCard({ currentUser, currentLang }) {
   const [existingObjects, setExistingObjects] = useState([]);
-  const [activeTab, setActiveTab] = useState("active"); // 'active', 'ready', 'done'
+  const [activeTab, setActiveTab] = useState("active");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -121,14 +121,10 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
   const handleMarkPickedUp = async (objectId) => {
     setLoading(true);
     try {
-      // Since it's just a status change to 'done', we can use the cloud function or write directly
-      // Using direct write here as it's allowed for the user's own items by the rules,
-      // but let's use the secure cloud function to be safe if rules are strict.
       const updateFn = httpsCallable(getFunctions(), "updateFiringStatus");
       await updateFn({ objectId, newStatus: "done" });
       await fetchPieces();
     } catch (err) {
-      // Fallback if cloud function requires full admin: direct write.
       try {
         await updateDoc(doc(db, "firings", objectId), {
           status: "done",
@@ -224,7 +220,6 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
     );
   };
 
-  // CATEGORIZE ITEMS FOR TABS
   const categorized = useMemo(() => {
     return {
       active: existingObjects.filter((o) => o.status === "pending"),
@@ -245,7 +240,6 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
         <Flame size={22} color="#9960a8" /> {labels.cardTitle}
       </h2>
 
-      {/* NEW TAB NAVIGATION */}
       <div style={tabNavContainer}>
         {["active", "ready", "done"].map((tab) => (
           <button
@@ -271,11 +265,15 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
       </div>
 
       <div
+        className="custom-scrollbar"
         style={{
           display: "flex",
           flexDirection: "column",
           gap: "12px",
           marginBottom: "1.5rem",
+          maxHeight: activeItems.length > 3 ? "330px" : "auto",
+          overflowY: activeItems.length > 3 ? "auto" : "visible",
+          paddingRight: activeItems.length > 3 ? "10px" : "0",
         }}
       >
         {loading && existingObjects.length === 0 ? (
@@ -397,7 +395,6 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
         </p>
       </div>
 
-      {/* REGISTRATION MODAL */}
       {isModalOpen && (
         <div style={modalOverlay} onClick={() => !loading && resetModal()}>
           <div style={modalContent} onClick={(e) => e.stopPropagation()}>
@@ -507,7 +504,27 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
           </div>
         </div>
       )}
-      <style>{`.spinner { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } .hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
+
+      {/* ADDED CUSTOM SCROLLBAR STYLES */}
+      <style>{`
+        .spinner { animation: spin 1s linear infinite; } 
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } 
+        
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(28, 7, 0, 0.03);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(202, 175, 243, 0.8);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #9960a8;
+        }
+      `}</style>
     </div>
   );
 }
@@ -569,6 +586,7 @@ const objectCardStyle = {
   border: "1px solid rgba(202,175,243,0.15)",
   marginBottom: "4px",
   transition: "all 0.2s ease",
+  flexShrink: 0,
 };
 const imageWrapper = {
   width: "65px",
