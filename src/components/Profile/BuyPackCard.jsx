@@ -3,10 +3,10 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { ShoppingBag, Loader2 } from "lucide-react";
 
 export default function BuyPackCard({ packCourses, currentLang, t }) {
-  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [selectedPackData, setSelectedPackData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Group packs by course name to handle multiple packs per course
+  // Group packs by course name
   const groupedPacks = useMemo(() => {
     return packCourses.reduce((acc, pack) => {
       const name = pack.courseName || "Other";
@@ -17,9 +17,8 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
   }, [packCourses]);
 
   const handleBuy = async () => {
-    if (!selectedCourseId) return;
-    const course = packCourses.find((c) => c.id === selectedCourseId);
-    if (!course) return;
+    if (!selectedPackData) return;
+    const { course, pack } = selectedPackData;
 
     setIsProcessing(true);
     const functions = getFunctions();
@@ -37,11 +36,8 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
 
       const result = await createCheckout({
         mode: "pack",
-        packPrice: parseFloat(course.priceFull),
-        packSize: parseInt(course.packSize),
-        // Uses the specific document ID for this pack
-        // Note: If your system requires a base course path (e.g., /pottery)
-        // instead of /pottery-5-pack, ensure course.courseId is used here.
+        packPrice: parseFloat(pack.price),
+        packSize: parseInt(pack.size),
         coursePath: `/${course.id}`,
         selectedDates: [],
         currentLang: currentLang,
@@ -64,25 +60,50 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
       </h3>
       <div style={styles.row}>
         <select
-          value={selectedCourseId}
-          onChange={(e) => setSelectedCourseId(e.target.value)}
+          // Concatenated ID and size to ensure a unique value for the selection state
+          value={
+            selectedPackData
+              ? `${selectedPackData.course.id}|${selectedPackData.pack.size}`
+              : ""
+          }
+          onChange={(e) => {
+            const val = e.target.value;
+            if (!val) {
+              setSelectedPackData(null);
+              return;
+            }
+            const [courseId, packSize] = val.split("|");
+            const course = packCourses.find((c) => c.id === courseId);
+            const pack = course?.packs?.find((p) => p.size === packSize);
+            setSelectedPackData(course && pack ? { course, pack } : null);
+          }}
           style={styles.select}
         >
-          <option value="">-- {t.selectCourse} --</option>
-          {Object.entries(groupedPacks).map(([courseName, packs]) => (
+          <option value="">{t.selectCourse}</option>
+          {Object.entries(groupedPacks).map(([courseName, courses]) => (
             <optgroup key={courseName} label={courseName}>
-              {packs.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.packSize} {t.remaining} — {p.priceFull} CHF
-                </option>
-              ))}
+              {courses.map((courseDoc) =>
+                // Map through the nested 'packs' array from PricingTab.jsx
+                (courseDoc.packs || []).map((p, idx) => (
+                  <option
+                    key={`${courseDoc.id}-${p.size}-${idx}`}
+                    value={`${courseDoc.id}|${p.size}`}
+                  >
+                    {p.size} {currentLang === "de" ? "Paket" : "Pack"} ·{" "}
+                    {p.price} CHF
+                  </option>
+                )),
+              )}
             </optgroup>
           ))}
         </select>
         <button
           onClick={handleBuy}
-          disabled={!selectedCourseId || isProcessing}
-          style={styles.buyBtn}
+          disabled={!selectedPackData || isProcessing}
+          style={{
+            ...styles.buyBtn,
+            opacity: !selectedPackData || isProcessing ? 0.7 : 1,
+          }}
         >
           {isProcessing ? <Loader2 className="spinner" size={18} /> : t.buyNow}
         </button>
@@ -125,6 +146,7 @@ const styles = {
     fontFamily: "Satoshi",
     width: "100%",
     boxSizing: "border-box",
+    outline: "none",
   },
   buyBtn: {
     padding: "12px 24px",

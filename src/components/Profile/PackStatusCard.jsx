@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { Ticket, PlusCircle, Loader2, Info } from "lucide-react";
+import { Ticket, PlusCircle, Loader2, Info, X } from "lucide-react";
 import CreditHistoryCard from "./CreditHistoryCard";
 import { planets } from "../../data/planets";
 
@@ -13,6 +13,7 @@ export default function PackStatusCard({
 }) {
   const [isToppingUp, setIsToppingUp] = useState(null);
   const [selectedHistoryCourse, setSelectedHistoryCourse] = useState(null);
+  const [showPackPicker, setShowPackPicker] = useState(null);
 
   const getCourseTitle = (link) => {
     for (const planet of planets) {
@@ -22,7 +23,7 @@ export default function PackStatusCard({
     return link?.replace("/", "").replace(/-/g, " ") || "course";
   };
 
-  const handleTopUp = async (courseTitleKey) => {
+  const handleTopUp = async (courseTitleKey, specificPack = null) => {
     let targetDocId = null;
     for (const planet of planets) {
       const found = planet.courses?.find(
@@ -33,16 +34,25 @@ export default function PackStatusCard({
         break;
       }
     }
+
     const coursePricing = packCourses.find((c) => c.id === targetDocId);
     if (!coursePricing) return;
+
+    const packToBuy =
+      specificPack || (coursePricing.packs ? coursePricing.packs[0] : null);
+
     setIsToppingUp(courseTitleKey);
+    setShowPackPicker(null);
+
     try {
       const functions = getFunctions();
       const createCheckout = httpsCallable(functions, "createStripeCheckout");
       const result = await createCheckout({
         mode: "pack",
-        packPrice: parseFloat(coursePricing.priceFull),
-        packSize: parseInt(coursePricing.packSize),
+        packPrice: parseFloat(
+          packToBuy ? packToBuy.price : coursePricing.priceFull,
+        ),
+        packSize: parseInt(packToBuy ? packToBuy.size : coursePricing.packSize),
         coursePath: `/${targetDocId}`,
         selectedDates: [],
         currentLang,
@@ -53,6 +63,26 @@ export default function PackStatusCard({
     } catch (err) {
       console.error(err);
       setIsToppingUp(null);
+    }
+  };
+
+  const onPlusClick = (courseKey) => {
+    let targetDocId = null;
+    for (const planet of planets) {
+      const found = planet.courses?.find(
+        (c) => c.text.en === courseKey || c.text.de === courseKey,
+      );
+      if (found) {
+        targetDocId = found.link.replace(/\//g, "");
+        break;
+      }
+    }
+    const coursePricing = packCourses.find((c) => c.id === targetDocId);
+
+    if (coursePricing?.packs?.length > 1) {
+      setShowPackPicker({ courseKey, packs: coursePricing.packs });
+    } else {
+      handleTopUp(courseKey);
     }
   };
 
@@ -71,40 +101,109 @@ export default function PackStatusCard({
         </div>
       ) : (
         <div style={styles.creditsList}>
-          {Object.entries(userData.credits).map(([courseKey, amount]) => (
-            <div key={courseKey} style={styles.individualCard}>
-              <div style={{ flex: 1 }}>
-                <div style={styles.creditsHeader}>
-                  <Ticket size={16} color="#9960a8" style={{ opacity: 0.6 }} />
-                  <span style={styles.creditsTitle}>{courseKey}</span>
+          {Object.entries(userData.credits).map(([courseKey, amount]) => {
+            const isPlural = amount !== 1;
+            const sessionLabel =
+              currentLang === "de"
+                ? isPlural
+                  ? "Einheiten"
+                  : "Einheit"
+                : isPlural
+                  ? "sessions"
+                  : "session";
+
+            return (
+              <div key={courseKey} style={styles.individualCard}>
+                <div style={styles.contentSide}>
+                  <div style={styles.creditsHeader}>
+                    <span style={styles.creditsTitle}>{courseKey}</span>
+                  </div>
+
+                  <div style={styles.creditsBalanceRow}>
+                    <span style={styles.creditsNumber}>{amount}</span>
+                    <span style={styles.creditsLabel}>
+                      {sessionLabel} {t.remaining}
+                    </span>
+                  </div>
                 </div>
-                <div style={styles.creditsBalanceRow}>
-                  <span style={styles.creditsNumber}>{amount}</span>
-                  <span style={styles.creditsLabel}>{t.remaining}</span>
+
+                <div style={styles.actionPod}>
+                  <button
+                    onClick={() => setSelectedHistoryCourse(courseKey)}
+                    style={styles.infoActionBtn}
+                  >
+                    <Info size={20} />
+                  </button>
+                  <div style={styles.actionDivider} />
+                  <button
+                    onClick={() => onPlusClick(courseKey)}
+                    disabled={isToppingUp !== null}
+                    style={styles.topUpBtn}
+                  >
+                    {isToppingUp === courseKey ? (
+                      <Loader2 size={22} className="spinner" color="#4e5f28" />
+                    ) : (
+                      <PlusCircle size={22} color="#4e5f28" />
+                    )}
+                  </button>
                 </div>
               </div>
-              <div style={styles.actionPod}>
-                <button
-                  onClick={() => setSelectedHistoryCourse(courseKey)}
-                  style={styles.infoActionBtn}
-                >
-                  <Info size={20} />
-                </button>
-                <div style={styles.actionDivider} />
-                <button
-                  onClick={() => handleTopUp(courseKey)}
-                  disabled={isToppingUp !== null}
-                  style={styles.topUpBtn}
-                >
-                  {isToppingUp === courseKey ? (
-                    <Loader2 size={22} className="spinner" color="#4e5f28" />
-                  ) : (
-                    <PlusCircle size={22} color="#4e5f28" />
-                  )}
-                </button>
-              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* PACK PICKER MODAL */}
+      {showPackPicker && (
+        <div
+          style={styles.modalOverlay}
+          onClick={() => setShowPackPicker(null)}
+        >
+          <div
+            style={{ ...styles.modalContent, padding: "1.5rem" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "1.2rem",
+                alignItems: "center",
+              }}
+            >
+              <h3
+                style={{
+                  ...styles.creditsTitle,
+                  fontSize: "1.4rem",
+                  marginBottom: 0,
+                }}
+              >
+                {t.buyPack}
+              </h3>
+              <button
+                onClick={() => setShowPackPicker(null)}
+                style={styles.iconOnlyBtn}
+              >
+                <X size={24} color="#1c0700" />
+              </button>
             </div>
-          ))}
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+            >
+              {showPackPicker.packs.map((p, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleTopUp(showPackPicker.courseKey, p)}
+                  style={styles.packOptionBtn}
+                >
+                  <span style={{ fontWeight: "700" }}>
+                    {p.size} {currentLang === "de" ? "Paket" : "Pack"}
+                  </span>
+                  <span style={{ opacity: 0.8 }}>{p.price} CHF</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -151,8 +250,8 @@ const styles = {
   },
   emptyCard: {
     padding: "2rem",
-    backgroundColor: "rgba(202, 175, 243, 0.05)",
-    borderRadius: "20px",
+    backgroundColor: "rgba(153, 96, 168, 0.05)",
+    borderRadius: "24px",
     border: "1px dashed rgba(153, 96, 168, 0.2)",
     textAlign: "center",
   },
@@ -161,44 +260,54 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "rgba(202, 175, 243, 0.12)",
-    padding: "1.2rem",
-    borderRadius: "20px",
-    border: "1px solid rgba(153, 96, 168, 0.15)",
+    backgroundColor: "rgba(153, 96, 168, 0.08)",
+    padding: "1.2rem 1.5rem",
+    borderRadius: "24px",
+    border: "1px solid rgba(153, 96, 168, 0.12)",
+  },
+  contentSide: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+    flex: 1,
   },
   creditsHeader: {
     display: "flex",
     alignItems: "center",
-    gap: "8px",
-    marginBottom: "4px",
   },
   creditsTitle: {
     fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: "1.1rem",
+    fontSize: "1.2rem",
     color: "#1c0700",
     textTransform: "lowercase",
+    lineHeight: 1.2,
   },
-  creditsBalanceRow: { display: "flex", alignItems: "baseline", gap: "8px" },
+  creditsBalanceRow: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: "6px",
+  },
   creditsNumber: {
     fontFamily: "Satoshi",
     fontWeight: "900",
-    fontSize: "2.2rem",
+    fontSize: "2.4rem",
     color: "#4e5f28",
     lineHeight: 1,
   },
   creditsLabel: {
     fontFamily: "Satoshi",
-    fontSize: "0.8rem",
+    fontSize: "0.85rem",
     color: "#1c0700",
     opacity: 0.6,
     fontWeight: "700",
+    transform: "translateY(-2px)", // Fine-tuned alignment with the big number
   },
   actionPod: {
     display: "flex",
     alignItems: "center",
-    backgroundColor: "rgba(255, 252, 227, 0.5)",
-    borderRadius: "14px",
-    border: "1px solid rgba(28, 7, 0, 0.08)",
+    backgroundColor: "#fdf8e1", // Replaced white
+    borderRadius: "16px",
+    border: "1px solid rgba(28, 7, 0, 0.1)",
     padding: "4px",
     marginLeft: "15px",
   },
@@ -212,7 +321,7 @@ const styles = {
     background: "none",
     border: "none",
     cursor: "pointer",
-    padding: "8px",
+    padding: "10px",
     display: "flex",
     alignItems: "center",
   },
@@ -221,8 +330,8 @@ const styles = {
     border: "none",
     cursor: "pointer",
     color: "#9960a8",
-    opacity: 0.7,
-    padding: "8px",
+    opacity: 0.8,
+    padding: "10px",
     display: "flex",
     alignItems: "center",
   },
@@ -233,7 +342,7 @@ const styles = {
     right: 0,
     bottom: 0,
     backgroundColor: "rgba(28, 7, 0, 0.4)",
-    backdropFilter: "blur(4px)",
+    backdropFilter: "blur(6px)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -241,22 +350,47 @@ const styles = {
     padding: "20px",
   },
   modalContent: {
-    backgroundColor: "#fffce3",
-    borderRadius: "24px",
-    maxWidth: "500px",
+    backgroundColor: "#fffce3", // Replaced white
+    borderRadius: "28px",
+    maxWidth: "420px",
     width: "100%",
-    maxHeight: "80vh",
+    maxHeight: "85vh",
     overflowY: "auto",
     position: "relative",
     display: "flex",
     flexDirection: "column",
+    boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
+  },
+  packOptionBtn: {
+    padding: "16px",
+    borderRadius: "16px",
+    border: "1px solid rgba(153, 96, 168, 0.2)",
+    background: "#fdf8e1", // Replaced white
+    cursor: "pointer",
+    fontFamily: "Satoshi",
+    fontSize: "1rem",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    transition: "transform 0.1s ease",
+    color: "#1c0700",
+  },
+  iconOnlyBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: "4px",
+    display: "flex",
+    alignItems: "center",
   },
   closeBtn: {
-    margin: "0 2rem 2rem 2rem",
-    padding: "12px",
-    borderRadius: "12px",
+    margin: "0 1.5rem 1.5rem 1.5rem",
+    padding: "14px",
+    borderRadius: "14px",
     border: "1px solid rgba(28, 7, 0, 0.1)",
     backgroundColor: "#fdf8e1",
     cursor: "pointer",
+    fontFamily: "Satoshi",
+    fontWeight: "bold",
   },
 };
