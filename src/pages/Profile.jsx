@@ -1,22 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase";
 import { signOut } from "firebase/auth";
 import { useAuth } from "../contexts/AuthContext";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  doc,
-  getDoc,
-} from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
 
 import Header from "../components/Header/Header";
 import PersonalInfoCard from "../components/Profile/PersonalInfoCard";
 import BookingsCard from "../components/Profile/BookingsCard";
 import BuyPackCard from "../components/Profile/BuyPackCard";
+import PackStatusCard from "../components/Profile/PackStatusCard";
 import RentalBookingsCard from "../components/Profile/RentalBookingsCard";
 import PotteryFiringCard from "../components/Profile/PotteryFiringCard";
 
@@ -27,10 +20,7 @@ import {
   User,
   Ticket,
   BookOpen,
-  Clock,
-  Users,
-  Star,
-  MapPin,
+  LayoutDashboard,
 } from "lucide-react";
 
 const courseMapping = {
@@ -53,16 +43,47 @@ export default function Profile({ currentLang, setCurrentLang }) {
   const [packCourses, setPackCourses] = useState([]);
   const [teachingEvents, setTeachingEvents] = useState([]);
   const [isScheduleLoading, setIsScheduleLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("bookings");
+  const [hasPotteryHistory, setHasPotteryHistory] = useState(false);
+
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  const [activeTab, setActiveTab] = useState("dashboard");
 
   const isAdmin =
     userData?.role === "admin" || userData?.role === "course_admin";
 
+  // POTTERY LOGIC: Firing status visible if user has a code or past pottery bookings
   useEffect(() => {
-    if (authLoading) return;
-    if (!currentUser) navigate("/");
-  }, [currentUser, userData, authLoading, navigate]);
+    const checkPottery = async () => {
+      if (!currentUser || !userData) return;
+
+      const hasCode = !!userData.firingCode;
+      const hasCredits =
+        userData.credits &&
+        Object.keys(userData.credits).some((k) =>
+          k.toLowerCase().includes("pottery"),
+        );
+
+      if (hasCode || hasCredits) {
+        setHasPotteryHistory(true);
+        return;
+      }
+
+      try {
+        const q = query(
+          collection(db, "bookings"),
+          where("userId", "==", currentUser.uid),
+        );
+        const snap = await getDocs(q);
+        const bookedPottery = snap.docs.some((doc) =>
+          doc.data().coursePath?.toLowerCase().includes("pottery"),
+        );
+        setHasPotteryHistory(bookedPottery);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    checkPottery();
+  }, [currentUser, userData]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
@@ -71,97 +92,43 @@ export default function Profile({ currentLang, setCurrentLang }) {
   }, []);
 
   useEffect(() => {
-    if (isMobile) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [activeTab, isMobile]);
+    if (!authLoading && !currentUser) navigate("/");
+  }, [currentUser, authLoading, navigate]);
 
   useEffect(() => {
-    const fetchPackSettings = async () => {
+    const fetchProfileData = async () => {
       try {
-        const q = query(
+        const qPacks = query(
           collection(db, "course_settings"),
           where("hasPack", "==", true),
         );
-        const snap = await getDocs(q);
-        setPackCourses(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-      } catch (err) {
-        console.error("Error fetching pack settings:", err);
-      }
-    };
-    if (currentUser) fetchPackSettings();
-  }, [currentUser]);
+        const packSnap = await getDocs(qPacks);
+        setPackCourses(
+          packSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        );
 
-  useEffect(() => {
-    const fetchAssignedSchedule = async () => {
-      if (!userData || !isAdmin || !currentUser) return;
-      setIsScheduleLoading(true);
-      try {
-        const sSnap = await getDocs(collection(db, "work_schedule"));
-        const allData = sSnap.docs.map((d) => d.data());
-        const schSnap = await getDocs(collection(db, "schedules"));
-        const schMap = {};
-        schSnap.docs.forEach((d) => (schMap[d.id] = d.data()));
-        const myIds = allData
-          .filter((d) => d.userId === currentUser.uid)
-          .map((d) => d.eventId);
-        if (myIds.length === 0) {
-          setTeachingEvents([]);
-          return;
+        if (isAdmin) {
+          setIsScheduleLoading(true);
+          const qTeach = query(
+            collection(db, "events"),
+            where("instructorId", "==", currentUser.uid),
+            orderBy("date", "asc"),
+          );
+          const teachSnap = await getDocs(qTeach);
+          const today = new Date().toISOString().split("T")[0];
+          setTeachingEvents(
+            teachSnap.docs
+              .map((d) => ({ id: d.id, ...d.data() }))
+              .filter((e) => e.date >= today),
+          );
+          setIsScheduleLoading(false);
         }
-        const uSnap = await getDocs(collection(db, "users"));
-        const uMap = {};
-        uSnap.docs.forEach(
-          (d) => (uMap[d.id] = `${d.data().firstName} ${d.data().lastName}`),
-        );
-        const today = new Date().toISOString().split("T")[0];
-        const eSnap = await getDocs(
-          query(collection(db, "events"), orderBy("date", "asc")),
-        );
-        const bSnap = await getDocs(collection(db, "bookings"));
-        const allB = bSnap.docs.map((d) => d.data());
-
-        const filtered = await Promise.all(
-          eSnap.docs
-            .map((d) => ({ id: d.id, ...d.data() }))
-            .filter((e) => myIds.includes(e.id) && e.date >= today)
-            .map(async (e) => {
-              const sid = (e.coursePath || e.link || "").replace(/\//g, "");
-              const co = allData
-                .filter(
-                  (d) => d.eventId === e.id && d.userId !== currentUser.uid,
-                )
-                .map((d) => uMap[d.userId] || "Unknown");
-              const config = schMap[sid];
-              const aList = config?.specialAssignments?.[e.id] || [];
-              const rAddons = (Array.isArray(aList) ? aList : [aList])
-                .filter(Boolean)
-                .map((aid) => {
-                  const bCount = allB.filter(
-                    (b) =>
-                      b.eventId === e.id &&
-                      b.selectedAddons?.includes(aid) &&
-                      b.status === "confirmed",
-                  ).length;
-                  return { name: aid, bookedCount: bCount };
-                });
-              return {
-                ...e,
-                displayName: getCleanCourseKey(e.coursePath || e.link),
-                coInstructors: co, // Normalized property name
-                addons: rAddons,
-              };
-            }),
-        );
-        setTeachingEvents(filtered);
       } catch (err) {
         console.error(err);
-      } finally {
-        setIsScheduleLoading(false);
       }
     };
-    fetchAssignedSchedule();
-  }, [userData, isAdmin, currentUser, currentLang]);
+    if (currentUser) fetchProfileData();
+  }, [currentUser, isAdmin]);
 
   if (authLoading || (!currentUser && !userData)) {
     return (
@@ -175,62 +142,44 @@ export default function Profile({ currentLang, setCurrentLang }) {
     en: {
       title: "my profile",
       logout: "log out",
-      edit: "edit info",
-      save: "save",
-      cancel: "cancel",
+      tabDashboard: "Home",
+      tabShop: "Shop",
+      tabMe: "Me",
+      teachingTitle: "teaching schedule",
+      noEvents: "no upcoming classes to teach.",
+      myCourses: "my booked dates",
+      noCourses: "no bookings yet.",
+      rentalTitle: "rental management",
+      buyPack: "buy session pack",
+      selectCourse: "select a course",
+      buyNow: "buy pack",
+      credits: "existing credits",
+      noCredits: "no active sessionpacks yet.",
       firstName: "first name",
       lastName: "last name",
       email: "email address",
       phone: "phone",
-      myCourses: "my booked dates",
-      noCourses: "no bookings yet.",
-      credits: "credits",
-      remaining: "sessions remaining",
-      buyPack: "buy session pack",
-      selectCourse: "select a course",
-      buyNow: "buy pack",
-      topUp: "top up credits",
-      tabBookings: "Bookings",
-      tabProfile: "Info",
-      tabPacks: "Packs",
-      tabSchedule: "Schedule",
-      tabRental: "Rentals",
-      historyTitle: "credit history",
-      teachingTitle: "my teaching schedule",
-      rentalTitle: "my rental bookings",
-      noEvents: "no upcoming classes.",
-      with: "with:",
-      booked: "booked",
     },
     de: {
       title: "mein profil",
       logout: "abmelden",
-      edit: "bearbeiten",
-      save: "speichern",
-      cancel: "abbrechen",
+      tabDashboard: "Home",
+      tabShop: "Shop",
+      tabMe: "Ich",
+      teachingTitle: "stundenplan",
+      noEvents: "keine anstehenden kurse als lehrer.",
+      myCourses: "geplante termine",
+      noCourses: "keine buchungen.",
+      rentalTitle: "gemieteter raum",
+      buyPack: "session-karte kaufen",
+      selectCourse: "kurs auswählen",
+      buyNow: "karte kaufen",
+      credits: "vorhandenes guthaben",
+      noCredits: "noch kein guthaben vorhanden.",
       firstName: "vorname",
       lastName: "nachname",
       email: "e-mail adresse",
       phone: "telefon",
-      myCourses: "geplante termine",
-      noCourses: "keine buchungen.",
-      credits: "guthaben",
-      remaining: "termine übrig",
-      buyPack: "session-karte kaufen",
-      selectCourse: "kurs auswählen",
-      buyNow: "karte kaufen",
-      topUp: "guthaben aufladen",
-      tabBookings: "Termine",
-      tabProfile: "Profil",
-      tabPacks: "Karten",
-      tabSchedule: "Plan",
-      tabRental: "Mieten",
-      historyTitle: "guthaben-verlauf",
-      teachingTitle: "mein stundenplan",
-      rentalTitle: "meine mietbuchungen",
-      noEvents: "keine anstehenden kurse.",
-      with: "mit:",
-      booked: "gebucht",
     },
   }[currentLang];
 
@@ -250,129 +199,144 @@ export default function Profile({ currentLang, setCurrentLang }) {
           </button>
         </div>
 
-        {isMobile && (
-          <div style={styles.tabNav}>
-            {isAdmin && (
+        {isMobile ? (
+          <>
+            <div style={styles.tabNav}>
               <button
-                onClick={() => setActiveTab("schedule")}
-                style={styles.tabBtn(activeTab === "schedule")}
+                onClick={() => setActiveTab("dashboard")}
+                style={styles.tabBtn(activeTab === "dashboard")}
               >
-                <BookOpen size={16} /> {t.tabSchedule}
+                <LayoutDashboard size={18} /> {t.tabDashboard}
               </button>
-            )}
-            <button
-              onClick={() => setActiveTab("bookings")}
-              style={styles.tabBtn(activeTab === "bookings")}
-            >
-              <Calendar size={16} /> {t.tabBookings}
-            </button>
-            <button
-              onClick={() => setActiveTab("rentals")}
-              style={styles.tabBtn(activeTab === "rentals")}
-            >
-              <MapPin size={16} /> {t.tabRental}
-            </button>
-            <button
-              onClick={() => setActiveTab("packs")}
-              style={styles.tabBtn(activeTab === "packs")}
-            >
-              <Ticket size={16} /> {t.tabPacks}
-            </button>
-            <button
-              onClick={() => setActiveTab("info")}
-              style={styles.tabBtn(activeTab === "info")}
-            >
-              <User size={16} /> {t.tabProfile}
-            </button>
-          </div>
-        )}
+              <button
+                onClick={() => setActiveTab("shop")}
+                style={styles.tabBtn(activeTab === "shop")}
+              >
+                <Ticket size={18} /> {t.tabShop}
+              </button>
+              <button
+                onClick={() => setActiveTab("me")}
+                style={styles.tabBtn(activeTab === "me")}
+              >
+                <User size={18} /> {t.tabMe}
+              </button>
+            </div>
+            <div style={styles.mobileContentStack}>
+              {activeTab === "dashboard" && (
+                <>
+                  {/* Priority 1: Pottery Firing moved to the very top */}
+                  {hasPotteryHistory && (
+                    <PotteryFiringCard
+                      currentUser={currentUser}
+                      currentLang={currentLang}
+                    />
+                  )}
 
-        <div style={styles.grid}>
-          {(!isMobile || activeTab === "info") && (
-            <PersonalInfoCard
-              currentUser={currentUser}
-              userData={userData}
-              currentLang={currentLang}
-              packCourses={packCourses}
-              t={t}
-            />
-          )}
+                  {/* Priority 2: Admin/Teaching Schedule */}
+                  {isAdmin && (
+                    <div style={styles.adminCard}>
+                      <h2 style={styles.cardTitle}>
+                        <BookOpen size={20} /> {t.teachingTitle}
+                      </h2>
+                      {isScheduleLoading ? (
+                        <Loader2 className="spinner" />
+                      ) : teachingEvents.length > 0 ? (
+                        teachingEvents.map((e) => (
+                          <div key={e.id} style={styles.miniEvent}>
+                            {e.date} — {getCleanCourseKey(e.link)}
+                          </div>
+                        ))
+                      ) : (
+                        <p style={styles.emptyText}>{t.noEvents}</p>
+                      )}
+                    </div>
+                  )}
 
-          <div style={styles.sideColumn}>
-            {(!isMobile || activeTab === "bookings") && (
-              <PotteryFiringCard
+                  {/* Priority 3: All other date-related items */}
+                  <BookingsCard
+                    userId={currentUser.uid}
+                    currentLang={currentLang}
+                    t={t}
+                  />
+                  <RentalBookingsCard t={t} currentLang={currentLang} />
+                </>
+              )}
+              {activeTab === "shop" && (
+                <>
+                  <PackStatusCard
+                    currentUser={currentUser}
+                    userData={userData}
+                    currentLang={currentLang}
+                    packCourses={packCourses}
+                    t={t}
+                  />
+                  <BuyPackCard
+                    packCourses={packCourses}
+                    currentLang={currentLang}
+                    t={t}
+                  />
+                </>
+              )}
+              {activeTab === "me" && (
+                <PersonalInfoCard
+                  currentUser={currentUser}
+                  userData={userData}
+                  currentLang={currentLang}
+                  t={t}
+                />
+              )}
+            </div>
+          </>
+        ) : (
+          <div style={styles.grid}>
+            <div style={styles.leftColumn}>
+              <PersonalInfoCard
                 currentUser={currentUser}
-                currentLang={currentLang}
-              />
-            )}
-            {isAdmin && (!isMobile || activeTab === "schedule") && (
-              <div style={styles.adminCard}>
-                <h2 style={styles.cardTitle}>
-                  <BookOpen size={20} color="#4e5f28" /> {t.teachingTitle}
-                </h2>
-                {isScheduleLoading ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      padding: "20px",
-                    }}
-                  >
-                    <Loader2 className="spinner" color="#caaff3" />
-                  </div>
-                ) : teachingEvents.length > 0 ? (
-                  <div style={styles.eventList}>
-                    {teachingEvents.map((event) => (
-                      <div key={event.id} style={styles.eventItem}>
-                        <span style={styles.eventCourse}>
-                          {event.displayName}
-                        </span>
-                        <div style={styles.eventMeta}>
-                          <div style={styles.metaItem}>
-                            <Calendar size={12} />{" "}
-                            {event.date.split("-").reverse().join(".")}
-                          </div>
-                          <div style={styles.metaItem}>
-                            <Clock size={12} /> {event.time}
-                          </div>
-                        </div>
-                        {event.coInstructors?.length > 0 && (
-                          <div style={styles.coInstructorRow}>
-                            <Users size={12} />{" "}
-                            <span style={{ fontWeight: 600 }}>{t.with}</span>{" "}
-                            {event.coInstructors.join(", ")}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={styles.emptyText}>{t.noEvents}</p>
-                )}
-              </div>
-            )}
-
-            {(!isMobile || activeTab === "rentals") && (
-              <RentalBookingsCard t={t} currentLang={currentLang} />
-            )}
-
-            {(!isMobile || activeTab === "packs") && (
-              <BuyPackCard
-                packCourses={packCourses}
+                userData={userData}
                 currentLang={currentLang}
                 t={t}
               />
-            )}
-
-            {(!isMobile || activeTab === "bookings") && (
+              <PackStatusCard
+                currentUser={currentUser}
+                userData={userData}
+                currentLang={currentLang}
+                packCourses={packCourses}
+                t={t}
+              />
+            </div>
+            <div style={styles.sideColumn}>
+              {isAdmin && teachingEvents.length > 0 && (
+                <div style={styles.adminCard}>
+                  <h2 style={styles.cardTitle}>
+                    <BookOpen size={20} /> {t.teachingTitle}
+                  </h2>
+                  {teachingEvents.map((e) => (
+                    <div key={e.id} style={styles.miniEvent}>
+                      {e.date} — {getCleanCourseKey(e.link)}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {hasPotteryHistory && (
+                <PotteryFiringCard
+                  currentUser={currentUser}
+                  currentLang={currentLang}
+                />
+              )}
+              <RentalBookingsCard t={t} currentLang={currentLang} />
               <BookingsCard
                 userId={currentUser.uid}
                 currentLang={currentLang}
                 t={t}
               />
-            )}
+              <BuyPackCard
+                packCourses={packCourses}
+                currentLang={currentLang}
+                t={t}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );
@@ -394,22 +358,17 @@ const styles = {
   main: {
     maxWidth: "1200px",
     margin: "0 auto",
-    padding:
-      window.innerWidth < 1024
-        ? "120px 15px 20px 15px"
-        : "140px 20px 20px 20px",
+    padding: "140px 20px 20px 20px",
   },
   headerRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: "2.5rem",
-    flexWrap: "wrap",
-    gap: "1rem",
   },
   title: {
     fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: window.innerWidth < 768 ? "2.5rem" : "3.5rem",
+    fontSize: "3.5rem",
     color: "#1c0700",
     margin: 0,
     textTransform: "lowercase",
@@ -423,75 +382,21 @@ const styles = {
     padding: "10px 20px",
     borderRadius: "100px",
     cursor: "pointer",
-    fontFamily: "Satoshi",
-    fontSize: "0.85rem",
     fontWeight: "bold",
-    color: "#1c0700",
   },
-  grid: {
-    display: "flex",
-    gap: "2rem",
-    flexWrap: "wrap",
-    alignItems: "flex-start",
-  },
-  sideColumn: {
-    flex: "1 1 500px",
+  grid: { display: "flex", gap: "2rem", alignItems: "flex-start" },
+  leftColumn: {
+    flex: "1 1 400px",
     display: "flex",
     flexDirection: "column",
     gap: "2rem",
-    width: "100%",
   },
-  adminCard: {
-    backgroundColor: "#fdf8e1",
-    padding: "2.5rem",
-    borderRadius: "24px",
-    border: "1px solid rgba(78, 95, 40, 0.05)",
-  },
-  cardTitle: {
-    fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: "1.8rem",
-    color: "#1c0700",
-    marginTop: 0,
-    marginBottom: "1.5rem",
+  sideColumn: {
+    flex: "1 1 600px",
     display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    textTransform: "lowercase",
+    flexDirection: "column",
+    gap: "2rem",
   },
-  eventList: { display: "flex", flexDirection: "column", gap: "12px" },
-  eventItem: {
-    background: "rgba(255, 252, 227, 0.5)",
-    padding: "15px 20px",
-    borderRadius: "18px",
-    border: "1px solid rgba(28, 7, 0, 0.05)",
-  },
-  eventCourse: {
-    display: "block",
-    fontWeight: "bold",
-    color: "#1c0700",
-    fontSize: "1rem",
-    marginBottom: "6px",
-  },
-  eventMeta: { display: "flex", gap: "15px" },
-  metaItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "5px",
-    fontSize: "0.8rem",
-    color: "#4e5f28",
-    opacity: 0.8,
-  },
-  coInstructorRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    fontSize: "0.75rem",
-    color: "#9960a8",
-    marginTop: "10px",
-    paddingTop: "8px",
-    borderTop: "1px dashed rgba(153, 96, 168, 0.2)",
-  },
-  emptyText: { opacity: 0.5, fontStyle: "italic", fontSize: "0.9rem" },
   tabNav: {
     display: "flex",
     background: "rgba(202, 175, 243, 0.1)",
@@ -500,26 +405,48 @@ const styles = {
     marginBottom: "2rem",
     gap: "6px",
     border: "1px solid rgba(202, 175, 243, 0.3)",
-    overflowX: "auto",
   },
   tabBtn: (isActive) => ({
     flex: 1,
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
-    justifyContent: "center",
-    gap: "6px",
-    padding: "12px 10px",
+    gap: "4px",
+    padding: "12px 5px",
     border: "none",
     background: isActive ? "#caaff3" : "transparent",
     color: "#1c0700",
     fontWeight: "800",
     borderRadius: "100px",
     cursor: "pointer",
-    fontFamily: "Satoshi",
-    fontSize: "0.75rem",
-    textTransform: "uppercase",
-    letterSpacing: "0.03rem",
-    transition: "all 0.2s ease",
-    whiteSpace: "nowrap",
+    fontSize: "0.7rem",
   }),
+  mobileContentStack: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "1.5rem",
+  },
+  adminCard: {
+    backgroundColor: "#fdf8e1",
+    padding: "2rem",
+    borderRadius: "24px",
+    border: "1px solid rgba(78, 95, 40, 0.1)",
+    marginBottom: "1rem",
+  },
+  cardTitle: {
+    fontFamily: "Harmond-SemiBoldCondensed",
+    fontSize: "1.8rem",
+    color: "#1c0700",
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    marginBottom: "1.5rem",
+  },
+  miniEvent: {
+    padding: "12px",
+    borderBottom: "1px solid rgba(28,7,0,0.05)",
+    fontSize: "0.95rem",
+    fontWeight: "600",
+  },
+  emptyText: { opacity: 0.5, fontStyle: "italic", fontSize: "0.9rem" },
 };
