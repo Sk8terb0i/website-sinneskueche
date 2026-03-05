@@ -1,10 +1,20 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { ShoppingBag, Loader2 } from "lucide-react";
 
 export default function BuyPackCard({ packCourses, currentLang, t }) {
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Group packs by course name to handle multiple packs per course
+  const groupedPacks = useMemo(() => {
+    return packCourses.reduce((acc, pack) => {
+      const name = pack.courseName || "Other";
+      if (!acc[name]) acc[name] = [];
+      acc[name].push(pack);
+      return acc;
+    }, {});
+  }, [packCourses]);
 
   const handleBuy = async () => {
     if (!selectedCourseId) return;
@@ -16,14 +26,11 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
     const createCheckout = httpsCallable(functions, "createStripeCheckout");
 
     try {
-      // Robust URL helper for GitHub Pages and Custom Domains
       const getBaseUrl = () => {
         const origin = window.location.origin;
-        // If on github.io, explicitly add the repository subfolder
         if (origin.includes("github.io")) {
           return `${origin}/website-sinneskueche/`;
         }
-        // Fallback for local development or root custom domains
         const path = window.location.pathname;
         return `${origin}${path}${path.endsWith("/") ? "" : "/"}`;
       };
@@ -32,10 +39,12 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
         mode: "pack",
         packPrice: parseFloat(course.priceFull),
         packSize: parseInt(course.packSize),
+        // Uses the specific document ID for this pack
+        // Note: If your system requires a base course path (e.g., /pottery)
+        // instead of /pottery-5-pack, ensure course.courseId is used here.
         coursePath: `/${course.id}`,
         selectedDates: [],
         currentLang: currentLang,
-        // UPDATED: Now calls the helper to ensure the correct path
         successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: window.location.href,
       });
@@ -60,10 +69,14 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
           style={styles.select}
         >
           <option value="">-- {t.selectCourse} --</option>
-          {packCourses.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.courseName} ({c.packSize} {t.remaining} - {c.priceFull} CHF)
-            </option>
+          {Object.entries(groupedPacks).map(([courseName, packs]) => (
+            <optgroup key={courseName} label={courseName}>
+              {packs.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.packSize} {t.remaining} — {p.priceFull} CHF
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
         <button
@@ -90,6 +103,7 @@ const styles = {
   cardTitle: {
     fontFamily: "Harmond-SemiBoldCondensed",
     fontSize: "1.8rem",
+    marginTop: 0,
     marginBottom: "1.5rem",
     display: "flex",
     alignItems: "center",
@@ -99,7 +113,6 @@ const styles = {
   row: {
     display: "flex",
     gap: "12px",
-    // MODIFIED: Stack button under select on small screens
     flexDirection: window.innerWidth < 480 ? "column" : "row",
     width: "100%",
   },
@@ -121,7 +134,7 @@ const styles = {
     color: "#fff",
     fontWeight: "bold",
     cursor: "pointer",
-    width: window.innerWidth < 480 ? "100%" : "auto", // Full width button on mobile
+    width: window.innerWidth < 480 ? "100%" : "auto",
     transition: "opacity 0.2s",
   },
 };

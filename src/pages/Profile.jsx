@@ -154,7 +154,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
       selectCourse: "select a course",
       buyNow: "buy pack",
       credits: "existing credits",
-      noCredits: "no active sessionpacks yet.",
+      noCredits: "no active session packs yet.",
       firstName: "first name",
       lastName: "last name",
       email: "email address",
@@ -224,15 +224,12 @@ export default function Profile({ currentLang, setCurrentLang }) {
             <div style={styles.mobileContentStack}>
               {activeTab === "dashboard" && (
                 <>
-                  {/* Priority 1: Pottery Firing moved to the very top */}
                   {hasPotteryHistory && (
                     <PotteryFiringCard
                       currentUser={currentUser}
                       currentLang={currentLang}
                     />
                   )}
-
-                  {/* Priority 2: Admin/Teaching Schedule */}
                   {isAdmin && (
                     <div style={styles.adminCard}>
                       <h2 style={styles.cardTitle}>
@@ -251,8 +248,6 @@ export default function Profile({ currentLang, setCurrentLang }) {
                       )}
                     </div>
                   )}
-
-                  {/* Priority 3: All other date-related items */}
                   <BookingsCard
                     userId={currentUser.uid}
                     currentLang={currentLang}
@@ -303,6 +298,12 @@ export default function Profile({ currentLang, setCurrentLang }) {
                 packCourses={packCourses}
                 t={t}
               />
+              {/* BuyPackCard moved here for Desktop view */}
+              <BuyPackCard
+                packCourses={packCourses}
+                currentLang={currentLang}
+                t={t}
+              />
             </div>
             <div style={styles.sideColumn}>
               {isAdmin && teachingEvents.length > 0 && (
@@ -326,11 +327,6 @@ export default function Profile({ currentLang, setCurrentLang }) {
               <RentalBookingsCard t={t} currentLang={currentLang} />
               <BookingsCard
                 userId={currentUser.uid}
-                currentLang={currentLang}
-                t={t}
-              />
-              <BuyPackCard
-                packCourses={packCourses}
                 currentLang={currentLang}
                 t={t}
               />

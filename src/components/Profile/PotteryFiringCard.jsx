@@ -389,7 +389,7 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
     if (obj.status === "broken") {
       key = "status_broken";
       icon = <AlertCircle size={12} />;
-      color = "#ff4d4d";
+      color = "#9960a8";
     } else if (obj.status === "done") {
       key = "status_done";
       icon = <CheckCircle size={12} />;
@@ -397,7 +397,7 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
     } else if (obj.status === "abandoned") {
       key = "status_abandoned";
       icon = <AlertCircle size={12} />;
-      color = "#ff4d4d";
+      color = "#9960a8";
     } else if (obj.status === "bisque_ready") {
       key = "status_bisque_ready";
       icon = <Package size={12} />;
@@ -1164,7 +1164,7 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
         {error && (
           <p
             style={{
-              color: "#ff4d4d",
+              color: "#9960a8",
               textAlign: "center",
               marginTop: "1rem",
               fontWeight: "600",
