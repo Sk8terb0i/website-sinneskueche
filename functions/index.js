@@ -1260,18 +1260,22 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
 
 exports.registerFiringObject = onCall({ cors: true }, async (request) => {
   try {
-    const { email, stage, imageUrl, currentLang } = request.data;
-    if (!email || !stage || !imageUrl)
+    // Now accepting name and userCode
+    const { email, name, userCode, stage, imageUrl, currentLang } =
+      request.data;
+    if (!email || !stage || !imageUrl || !userCode)
       throw new HttpsError("invalid-argument", "Missing data.");
 
-    // FIX: Trim and lowercase email to prevent matching bugs
     const cleanEmail = email.trim().toLowerCase();
+    const cleanCode = userCode.trim().toUpperCase();
 
     const docRef = await db.collection("firings").add({
       email: cleanEmail,
-      stage, // 'bisque' or 'glaze'
+      name: name || "Student",
+      userCode: cleanCode,
+      stage,
       imageUrl,
-      status: "pending", // waiting to be fired
+      status: "pending",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       lang: currentLang || "en",
     });
@@ -1372,18 +1376,16 @@ exports.sendFiringReminders = onSchedule("0 9 * * *", async (event) => {
   }
 });
 
-// Fetch objects for a specific email
+// Fetch objects for a specific code
 exports.getStudentObjects = onCall({ cors: true }, async (request) => {
-  const { email } = request.data;
-  if (!email) throw new HttpsError("invalid-argument", "Email required.");
+  const { userCode } = request.data;
+  if (!userCode) throw new HttpsError("invalid-argument", "Code required.");
 
-  // FIX: Force search email to lowercase to match registration logic safely
-  const searchEmail = email.trim().toLowerCase();
+  const searchCode = userCode.trim().toUpperCase();
 
-  // FIX: Removed the status filter so all objects (pending, ready, broken, done) are returned
   const snap = await db
     .collection("firings")
-    .where("email", "==", searchEmail)
+    .where("userCode", "==", searchCode)
     .get();
 
   return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));

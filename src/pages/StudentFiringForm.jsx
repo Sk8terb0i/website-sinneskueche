@@ -1,7 +1,17 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { storage } from "../firebase";
+import { storage, db } from "../firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  limit,
+} from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import Header from "../components/Header/Header";
@@ -14,7 +24,7 @@ import {
   Search,
   PlusCircle,
   Home,
-  User,
+  User as UserIcon,
   ArrowRight,
   ArrowLeft,
 } from "lucide-react";
@@ -23,8 +33,10 @@ export default function StudentFiringForm() {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
 
-  const [step, setStep] = useState("email");
-  const [email, setEmail] = useState("");
+  const [step, setStep] = useState("email"); // Now acts as 'lookup' step
+  const [userCode, setUserCode] = useState("");
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
   const [existingObjects, setExistingObjects] = useState([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -41,14 +53,14 @@ export default function StudentFiringForm() {
     return savedLang === "de" || savedLang === "en" ? savedLang : "en";
   });
 
-  // --- LOGIC: FETCH PIECES ---
-  const fetchPieces = useCallback(async (targetEmail) => {
-    if (!targetEmail) return;
+  // --- LOGIC: FETCH PIECES BY CODE ---
+  const fetchPieces = useCallback(async (targetCode) => {
+    if (!targetCode) return;
     setLoading(true);
     setError("");
     try {
       const lookupFn = httpsCallable(getFunctions(), "getStudentObjects");
-      const res = await lookupFn({ email: targetEmail });
+      const res = await lookupFn({ userCode: targetCode.toUpperCase() });
       setExistingObjects(res.data);
       setStep("selection");
     } catch (err) {
@@ -60,10 +72,27 @@ export default function StudentFiringForm() {
 
   // --- AUTO-LOOKUP FOR LOGGED IN USERS ---
   useEffect(() => {
-    if (currentUser?.email) {
-      setEmail(currentUser.email);
-      fetchPieces(currentUser.email);
-    }
+    const initUser = async () => {
+      if (currentUser) {
+        try {
+          const userRef = doc(db, "users", currentUser.uid);
+          const snap = await getDoc(userRef);
+          let code = snap.data()?.firingCode;
+
+          // Generate a hidden code for users if they don't have one
+          if (!code) {
+            code = Math.random().toString(36).substring(2, 6).toUpperCase();
+            await updateDoc(userRef, { firingCode: code });
+          }
+
+          setUserCode(code);
+          fetchPieces(code);
+        } catch (err) {
+          console.error("Error fetching user code", err);
+        }
+      }
+    };
+    initUser();
   }, [currentUser, fetchPieces]);
 
   useEffect(() => {
@@ -79,13 +108,16 @@ export default function StudentFiringForm() {
   const labels = {
     en: {
       title: "Firing Registration",
-      emailStep: "Find an object",
-      emailDesc: "Search for pieces already in the bisque stage.",
+      lookupStep: "Enter your code",
+      lookupDesc: "Enter your 4-character code to find your pieces.",
+      codePlaceholder: "4-character code (e.g. A1B2)",
+      namePlaceholder: "Full Name",
+      emailPlaceholder: "Email Address",
       findExisting: "Search my pieces",
       registerDirectly: "Register new object",
       registerDirectlyDesc: "Start a fresh registration (Initial Bisque).",
       noExisting: "No objects found. Register a new one below.",
-      isThisYours: "Is one of these yours?",
+      isThisYours: "Manage your pieces here",
       glazeAction: "Move to Glaze firing",
       orRegisterNew: "None of these / New object",
       takePhoto: "Open Camera",
@@ -99,16 +131,22 @@ export default function StudentFiringForm() {
       processing: "Processing...",
       searching: "Finding your pieces...",
       back: "Back",
+      codeTaken: "This code is already in use. Please choose another.",
+      codeLength: "Code must be exactly 4 characters.",
+      requiredFields: "Please fill out all fields.",
     },
     de: {
       title: "Brenn-Registrierung",
-      emailStep: "Objekt finden",
-      emailDesc: "Suche nach Stücken im Schrühbrand-Stadium.",
+      lookupStep: "Code eingeben",
+      lookupDesc: "Gib deinen 4-stelligen Code ein, um deine Stücke zu finden.",
+      codePlaceholder: "4-stelliger Code (z.B. A1B2)",
+      namePlaceholder: "Vollständiger Name",
+      emailPlaceholder: "E-Mail Adresse",
       findExisting: "Meine Stücke suchen",
       registerDirectly: "Neues Objekt registrieren",
-      registerDirectlyDesc: "Beginne eine neue Registrierung (Schrühbrand).",
+      registerDirectlyDesc: "Beginne eine neue Registrierung (Bisque Fire).",
       noExisting: "Keine Objekte gefunden. Registriere ein neues unten.",
-      isThisYours: "Gehört eines davon dir?",
+      isThisYours: "Verwalte deine Objekte hier",
       glazeAction: "Zum Glasurbrand bewegen",
       orRegisterNew: "Keines davon / Neu registrieren",
       takePhoto: "Kamera öffnen",
@@ -122,12 +160,16 @@ export default function StudentFiringForm() {
       processing: "Verarbeitung...",
       searching: "Suche deine Stücke...",
       back: "Zurück",
+      codeTaken: "Dieser Code ist bereits vergeben. Bitte wähle einen anderen.",
+      codeLength: "Der Code muss genau 4 Zeichen lang sein.",
+      requiredFields: "Bitte fülle alle Felder aus.",
     },
   }[lang];
 
   const handleLookup = (e) => {
     e.preventDefault();
-    fetchPieces(email);
+    if (userCode.length !== 4) return setError(labels.codeLength);
+    fetchPieces(userCode);
   };
 
   const handleMoveStage = async (objectId) => {
@@ -146,16 +188,55 @@ export default function StudentFiringForm() {
   const handleNewRegistration = async (e) => {
     e.preventDefault();
     if (!imageFile) return setError("Photo required.");
-    const finalEmail = currentUser?.email || email;
+    setError("");
+
+    const isFirstTimeGuest = !currentUser && existingObjects.length === 0;
+    const finalCode = userCode.toUpperCase();
+
+    if (isFirstTimeGuest) {
+      if (finalCode.length !== 4) return setError(labels.codeLength);
+      if (!guestName || !guestEmail) return setError(labels.requiredFields);
+
+      // Check if code is truly unique
+      setLoading(true);
+      try {
+        const q = query(
+          collection(db, "firings"),
+          where("userCode", "==", finalCode),
+          limit(1),
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          setLoading(false);
+          return setError(labels.codeTaken);
+        }
+      } catch (err) {
+        setLoading(false);
+        return setError("Database error. Please try again.");
+      }
+    }
+
+    // Determine email and name to attach
+    // If existing objects exist, inherit email/name from the previous piece. Otherwise use form state.
+    const finalEmail =
+      currentUser?.email ||
+      (existingObjects.length > 0 ? existingObjects[0].email : guestEmail);
+    const finalName =
+      currentUser?.displayName ||
+      (existingObjects.length > 0 ? existingObjects[0].name : guestName);
+
     setLoading(true);
     try {
       const fileExt = imageFile.name.split(".").pop() || "jpg";
       const storageRef = ref(storage, `firings/${Date.now()}.${fileExt}`);
       await uploadBytes(storageRef, imageFile);
       const imageUrl = await getDownloadURL(storageRef);
+
       const registerFn = httpsCallable(getFunctions(), "registerFiringObject");
       await registerFn({
-        email: finalEmail,
+        email: finalEmail.toLowerCase(),
+        name: finalName || "Guest",
+        userCode: finalCode,
         stage: "bisque",
         imageUrl,
         currentLang: lang,
@@ -168,25 +249,30 @@ export default function StudentFiringForm() {
     }
   };
 
-  // --- UI COMPONENTS ---
   const renderDivider = () => (
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        margin: "1.5rem 0",
+        margin: "2rem 0",
         color: "rgba(28,7,0,0.25)",
-        fontSize: "0.7rem",
-        fontWeight: "900",
-        letterSpacing: "2px",
       }}
     >
       <div
-        style={{ flex: 1, height: "1px", backgroundColor: "rgba(28,7,0,0.08)" }}
+        style={{ flex: 1, height: "1px", backgroundColor: "rgba(28,7,0,0.1)" }}
       />
-      <span style={{ padding: "0 18px" }}>{labels.or}</span>
+      <span
+        style={{
+          padding: "0 15px",
+          fontSize: "0.75rem",
+          fontWeight: "900",
+          letterSpacing: "1.5px",
+        }}
+      >
+        {labels.or}
+      </span>
       <div
-        style={{ flex: 1, height: "1px", backgroundColor: "rgba(28,7,0,0.08)" }}
+        style={{ flex: 1, height: "1px", backgroundColor: "rgba(28,7,0,0.1)" }}
       />
     </div>
   );
@@ -283,7 +369,7 @@ export default function StudentFiringForm() {
                 onClick={() => navigate("/profile")}
                 style={primaryBtnStyle}
               >
-                <User size={18} /> {labels.goProfile}
+                <UserIcon size={18} /> {labels.goProfile}
               </button>
             )}
           </div>
@@ -310,7 +396,6 @@ export default function StudentFiringForm() {
       >
         <h1 style={titleStyle}>{labels.title}</h1>
 
-        {/* LOADING AUTO-LOOKUP */}
         {loading && currentUser && step === "email" && (
           <div style={{ textAlign: "center", padding: "4rem 0" }}>
             <Loader2
@@ -325,13 +410,13 @@ export default function StudentFiringForm() {
           </div>
         )}
 
-        {/* STEP 1: GUEST VIEW (EMAIL + CARD) */}
+        {/* STEP 1: LOOKUP GUEST VIEW */}
         {step === "email" && (!currentUser || !loading) && (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {!currentUser && (
               <>
                 <div style={sectionStyle}>
-                  <label style={labelStyle}>{labels.emailStep}</label>
+                  <label style={labelStyle}>{labels.lookupStep}</label>
                   <p
                     style={{
                       fontSize: "0.8rem",
@@ -340,7 +425,7 @@ export default function StudentFiringForm() {
                       fontWeight: "400",
                     }}
                   >
-                    {labels.emailDesc}
+                    {labels.lookupDesc}
                   </p>
                   <form
                     onSubmit={handleLookup}
@@ -351,12 +436,15 @@ export default function StudentFiringForm() {
                     }}
                   >
                     <input
-                      type="email"
-                      placeholder="Email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      type="text"
+                      maxLength="4"
+                      placeholder={labels.codePlaceholder}
+                      value={userCode}
+                      onChange={(e) =>
+                        setUserCode(e.target.value.toUpperCase())
+                      }
                       required
-                      style={inputStyle}
+                      style={{ ...inputStyle, textTransform: "uppercase" }}
                     />
                     <button
                       type="submit"
@@ -383,7 +471,7 @@ export default function StudentFiringForm() {
           </div>
         )}
 
-        {/* STEP 2: PIECES LIST + USER CARD */}
+        {/* STEP 2: PIECES LIST */}
         {step === "selection" && (
           <div
             style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
@@ -448,7 +536,6 @@ export default function StudentFiringForm() {
                     </div>
                   ))}
                 </div>
-                {/* For guests, keep the simple button if they want to register new */}
                 {!currentUser && (
                   <button
                     onClick={() => setStep("form")}
@@ -465,8 +552,6 @@ export default function StudentFiringForm() {
                 </p>
               </div>
             )}
-
-            {/* LOGGED IN USER: Show the "Register New" Card directly underneath pieces list */}
             {currentUser && <RegisterNewCard />}
           </div>
         )}
@@ -494,21 +579,67 @@ export default function StudentFiringForm() {
               <ArrowLeft size={16} /> {labels.back}
             </button>
 
+            {/* ONLY SHOW THESE FIELDS IF IT IS A FIRST TIME GUEST */}
+            {!currentUser && existingObjects.length === 0 && (
+              <div
+                style={{
+                  ...sectionStyle,
+                  marginBottom: "1rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <label style={labelStyle}>Guest Information</label>
+                <input
+                  type="text"
+                  maxLength="4"
+                  placeholder={labels.codePlaceholder}
+                  value={userCode}
+                  onChange={(e) => setUserCode(e.target.value.toUpperCase())}
+                  required
+                  style={{ ...inputStyle, textTransform: "uppercase" }}
+                />
+                <input
+                  type="text"
+                  placeholder={labels.namePlaceholder}
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  required
+                  style={inputStyle}
+                />
+                <input
+                  type="email"
+                  placeholder={labels.emailPlaceholder}
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value.toLowerCase())}
+                  required
+                  style={inputStyle}
+                />
+              </div>
+            )}
+
             <div style={sectionStyle}>
-              <label style={labelStyle}>{labels.step1}</label>
+              <label style={labelStyle}>{labels.takePhoto}</label>
               {imagePreview ? (
                 <div
                   style={{
                     position: "relative",
                     borderRadius: "16px",
                     overflow: "hidden",
+                    aspectRatio: "1 / 1",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: "#fdf8e1",
                   }}
                 >
                   <img
                     src={imagePreview}
                     style={{
                       width: "100%",
-                      display: "block",
+                      height: "100%",
+                      objectFit: "cover",
                       opacity: loading ? 0.6 : 1,
                     }}
                     alt="preview"
@@ -546,6 +677,7 @@ export default function StudentFiringForm() {
                 }}
               />
             </div>
+
             <button
               type="submit"
               disabled={loading}

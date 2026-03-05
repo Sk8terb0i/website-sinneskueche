@@ -8,7 +8,7 @@ import React, {
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { storage, db } from "../../firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import {
   Camera,
   UploadCloud,
@@ -26,6 +26,7 @@ import {
 
 export default function PotteryFiringCard({ currentUser, currentLang }) {
   const [existingObjects, setExistingObjects] = useState([]);
+  const [userCode, setUserCode] = useState(""); // Stores the user's generated code
   const [activeTab, setActiveTab] = useState("active");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -83,12 +84,13 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
     },
   }[currentLang];
 
-  const fetchPieces = useCallback(async () => {
-    if (!currentUser?.email) return;
+  // UPDATED: Now fetches using the targetCode instead of email
+  const fetchPieces = useCallback(async (targetCode) => {
+    if (!targetCode) return;
     setLoading(true);
     try {
       const lookupFn = httpsCallable(getFunctions(), "getStudentObjects");
-      const res = await lookupFn({ email: currentUser.email.toLowerCase() });
+      const res = await lookupFn({ userCode: targetCode });
       const sorted = (res.data || []).sort(
         (a, b) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0),
       );
@@ -99,18 +101,42 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
     } finally {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, []);
 
+  // NEW: Initialize User Code and Fetch
   useEffect(() => {
-    fetchPieces();
-  }, [fetchPieces]);
+    const initUser = async () => {
+      if (currentUser?.uid) {
+        try {
+          const userRef = doc(db, "users", currentUser.uid);
+          const snap = await getDoc(userRef);
+
+          if (snap.exists()) {
+            let code = snap.data()?.firingCode;
+
+            // Generate a 4-character code if they don't have one yet
+            if (!code) {
+              code = Math.random().toString(36).substring(2, 6).toUpperCase();
+              await updateDoc(userRef, { firingCode: code });
+            }
+
+            setUserCode(code);
+            fetchPieces(code);
+          }
+        } catch (err) {
+          console.error("Error fetching user code", err);
+        }
+      }
+    };
+    initUser();
+  }, [currentUser, fetchPieces]);
 
   const handleMoveStage = async (objectId) => {
     setLoading(true);
     try {
       const moveFn = httpsCallable(getFunctions(), "moveToGlazeStage");
       await moveFn({ objectId, currentLang });
-      await fetchPieces();
+      await fetchPieces(userCode); // Refresh with code
     } catch (err) {
       setError(err.message);
     } finally {
@@ -123,14 +149,14 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
     try {
       const updateFn = httpsCallable(getFunctions(), "updateFiringStatus");
       await updateFn({ objectId, newStatus: "done" });
-      await fetchPieces();
+      await fetchPieces(userCode); // Refresh with code
     } catch (err) {
       try {
         await updateDoc(doc(db, "firings", objectId), {
           status: "done",
           updatedAt: serverTimestamp(),
         });
-        await fetchPieces();
+        await fetchPieces(userCode); // Refresh with code
       } catch (e) {
         setError(e.message);
       }
@@ -141,7 +167,7 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (!imageFile || !currentUser?.email) return;
+    if (!imageFile || !currentUser?.email || !userCode) return;
     setLoading(true);
     try {
       const fileExt = imageFile.name.split(".").pop() || "jpg";
@@ -152,12 +178,14 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
       const registerFn = httpsCallable(getFunctions(), "registerFiringObject");
       await registerFn({
         email: currentUser.email.toLowerCase(),
+        name: currentUser.displayName || "Student",
+        userCode: userCode, // Attach the user code to the new item!
         stage: "bisque",
         imageUrl,
         currentLang,
       });
 
-      await fetchPieces();
+      await fetchPieces(userCode); // Refresh with code
       setSuccess(true);
     } catch (err) {
       setError(err.message);
@@ -239,6 +267,30 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
       <h2 style={cardTitleStyle}>
         <Flame size={22} color="#9960a8" /> {labels.cardTitle}
       </h2>
+
+      {/* Show generated code on profile so user knows it */}
+      {userCode && (
+        <div
+          style={{
+            marginBottom: "1rem",
+            fontSize: "0.85rem",
+            opacity: 0.6,
+            fontWeight: "600",
+          }}
+        >
+          Your Firing Code:{" "}
+          <span
+            style={{
+              color: "#9960a8",
+              padding: "2px 6px",
+              backgroundColor: "rgba(202, 175, 243, 0.1)",
+              borderRadius: "6px",
+            }}
+          >
+            {userCode}
+          </span>
+        </div>
+      )}
 
       <div style={tabNavContainer}>
         {["active", "ready", "done"].map((tab) => (
@@ -505,7 +557,6 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
         </div>
       )}
 
-      {/* ADDED CUSTOM SCROLLBAR STYLES */}
       <style>{`
         .spinner { animation: spin 1s linear infinite; } 
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } 

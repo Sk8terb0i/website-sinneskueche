@@ -18,7 +18,7 @@ import {
   Clock,
   Loader2,
   Mail,
-  User, // Added User icon
+  User,
   Check,
   ShoppingBag,
   Brush,
@@ -27,12 +27,13 @@ import {
   CheckSquare,
   Send,
   Calendar,
+  AlertOctagon,
 } from "lucide-react";
 import { cardStyle, tabContainerStyle, tabButtonStyle } from "./AdminStyles";
 
 export default function FiringTab({ isMobile, currentLang }) {
   const [firings, setFirings] = useState([]);
-  const [userMap, setUserMap] = useState({}); // New state for Name mapping
+  const [userMap, setUserMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
   const [activeFilter, setActiveFilter] = useState("bisque_pending");
@@ -67,6 +68,9 @@ export default function FiringTab({ isMobile, currentLang }) {
       batch_ready_glaze: "move to glaze queue",
       batch_ready_pickup: "mark as picked up",
       batchAction: "process selection",
+      overdue: "overdue",
+      archiveOverdue: "archive overdue",
+      confirmArchive: "Archive this overdue piece?",
     },
     de: {
       bisque_pending: "bisque fire",
@@ -95,6 +99,9 @@ export default function FiringTab({ isMobile, currentLang }) {
       batch_ready_glaze: "in glasur-warteschlange verschieben",
       batch_ready_pickup: "als abgeholt markieren",
       batchAction: "auswahl verarbeiten",
+      overdue: "überfällig",
+      archiveOverdue: "überfällige archivieren",
+      confirmArchive: "Dieses überfällige Stück archivieren?",
     },
   }[currentLang || "en"];
 
@@ -108,7 +115,6 @@ export default function FiringTab({ isMobile, currentLang }) {
     });
   };
 
-  // FETCH USERS FOR NAME MAPPING
   useEffect(() => {
     const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
       const map = {};
@@ -217,6 +223,21 @@ export default function FiringTab({ isMobile, currentLang }) {
     }
   };
 
+  const handleArchiveOverdue = async (objectId) => {
+    if (!window.confirm(labels.confirmArchive)) return;
+    setProcessingId(objectId);
+    try {
+      await updateDoc(doc(db, "firings", objectId), {
+        status: "done",
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const handleBatchUpdate = async () => {
     if (
       !window.confirm(
@@ -258,9 +279,25 @@ export default function FiringTab({ isMobile, currentLang }) {
     }
   };
 
+  const checkOverdue = (item) => {
+    if (!item.updatedAt) return false;
+    const updatedDate = item.updatedAt.toDate();
+    const today = new Date();
+    const diffTime = Math.abs(today - updatedDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (item.status === "bisque_ready" && diffDays >= 56) return true; // 8 weeks
+    if (item.status === "glaze_ready" && diffDays >= 28) return true; // 4 weeks
+
+    return false;
+  };
+
   const renderCard = (item) => {
     const isSelected = selectedIds.includes(item.id);
-    const studentName = userMap[item.email?.toLowerCase()]; // Name lookup
+    const studentName = userMap[item.email?.toLowerCase()];
+    const displayName = item.name || studentName || item.email;
+    const isOverdue = checkOverdue(item);
+
     let mainActions = [];
     let internalActions = [];
 
@@ -344,6 +381,17 @@ export default function FiringTab({ isMobile, currentLang }) {
       });
     }
 
+    // Add archive option for overdue items
+    if (isOverdue && activeFilter !== "completed") {
+      internalActions.push({
+        label: labels.archiveOverdue,
+        icon: <AlertOctagon size={10} />,
+        color: "#ff4d4d",
+        borderColor: "rgba(255, 77, 77, 0.4)",
+        onClick: () => handleArchiveOverdue(item.id),
+      });
+    }
+
     return (
       <div
         key={item.id}
@@ -360,11 +408,21 @@ export default function FiringTab({ isMobile, currentLang }) {
           display: "flex",
           flexDirection: isMobile ? "column" : "row",
           gap: isMobile ? "0.8rem" : "1.5rem",
-          backgroundColor: isSelected ? "rgba(202, 175, 243, 0.05)" : "#fdf8e1",
+          backgroundColor: isSelected
+            ? "rgba(202, 175, 243, 0.05)"
+            : isOverdue
+              ? "rgba(255, 77, 77, 0.05)"
+              : "#fdf8e1",
           padding: isMobile ? "0.6rem" : "1.2rem",
           border: isSelected
             ? "2px solid #9960a8"
-            : "1px solid rgba(28,7,0,0.05)",
+            : isOverdue
+              ? "1px solid #ff4d4d"
+              : "1px solid rgba(28,7,0,0.05)",
+          boxShadow:
+            isOverdue && !isSelected
+              ? "0 0 10px rgba(255, 77, 77, 0.1)"
+              : "none",
           cursor: "pointer",
           transition: "all 0.2s ease",
         }}
@@ -416,24 +474,54 @@ export default function FiringTab({ isMobile, currentLang }) {
           }}
         >
           <div>
-            <span
+            <div
               style={{
-                display: "inline-block",
-                backgroundColor:
-                  item.stage === "bisque"
-                    ? "rgba(202,175,243,0.15)"
-                    : "rgba(78,95,40,0.1)",
-                color: item.stage === "bisque" ? "#9960a8" : "#4e5f28",
-                padding: "2px 10px",
-                borderRadius: "100px",
-                fontSize: "0.6rem",
-                fontWeight: "900",
-                textTransform: "lowercase", // No uppercase
-                marginBottom: "2px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                flexWrap: "wrap",
+                justifyContent: isMobile ? "center" : "flex-start",
+                marginBottom: "4px",
               }}
             >
-              {item.stage === "bisque" ? labels.bisque : labels.glaze}
-            </span>
+              <span
+                style={{
+                  display: "inline-block",
+                  backgroundColor:
+                    item.stage === "bisque"
+                      ? "rgba(202,175,243,0.15)"
+                      : "rgba(78,95,40,0.1)",
+                  color: item.stage === "bisque" ? "#9960a8" : "#4e5f28",
+                  padding: "2px 10px",
+                  borderRadius: "100px",
+                  fontSize: "0.6rem",
+                  fontWeight: "900",
+                  textTransform: "lowercase",
+                }}
+              >
+                {item.stage === "bisque" ? labels.bisque : labels.glaze}
+              </span>
+
+              {isOverdue && (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    backgroundColor: "#ff4d4d",
+                    color: "#fffce3",
+                    padding: "2px 10px",
+                    borderRadius: "100px",
+                    fontSize: "0.6rem",
+                    fontWeight: "900",
+                    textTransform: "lowercase",
+                  }}
+                >
+                  <AlertOctagon size={10} /> {labels.overdue}
+                </span>
+              )}
+            </div>
+
             <div
               style={{
                 display: "flex",
@@ -445,14 +533,25 @@ export default function FiringTab({ isMobile, currentLang }) {
                 color: "#1c0700",
               }}
             >
-              {/* Show Name Icon if registered, else Mail Icon */}
-              {studentName ? (
+              {displayName !== item.email ? (
                 <User size={14} color="#caaff3" />
               ) : (
                 <Mail size={12} color="#caaff3" />
               )}
-              {studentName || item.email}
+              {displayName}
             </div>
+            {item.userCode && (
+              <div
+                style={{
+                  fontSize: "0.7rem",
+                  color: "#9960a8",
+                  fontWeight: "bold",
+                  marginTop: "2px",
+                }}
+              >
+                Code: {item.userCode}
+              </div>
+            )}
           </div>
 
           <div style={{ marginTop: "0.6rem", width: "100%" }}>
@@ -510,6 +609,7 @@ export default function FiringTab({ isMobile, currentLang }) {
                     display: "flex",
                     justifyContent: isMobile ? "center" : "flex-start",
                     gap: "6px",
+                    flexWrap: "wrap",
                   }}
                 >
                   {internalActions.map((act, i) => (
@@ -517,22 +617,26 @@ export default function FiringTab({ isMobile, currentLang }) {
                       key={i}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleManualMove(item.id, act.stage, act.status);
+                        if (act.onClick) act.onClick();
+                        else handleManualMove(item.id, act.stage, act.status);
                       }}
                       style={{
                         padding: "4px 12px",
                         borderRadius: "100px",
-                        border: "1px solid rgba(28,7,0,0.15)",
+                        border: act.borderColor
+                          ? `1px solid ${act.borderColor}`
+                          : "1px solid rgba(28,7,0,0.15)",
                         background: "transparent",
                         fontSize: "0.65rem",
                         fontWeight: "600",
-                        color: "rgba(28,7,0,0.4)",
+                        color: act.color ? act.color : "rgba(28,7,0,0.4)",
                         display: "inline-flex",
                         alignItems: "center",
                         gap: "5px",
                       }}
                     >
-                      <ArrowRightLeft size={10} /> {act.label}
+                      {act.icon ? act.icon : <ArrowRightLeft size={10} />}{" "}
+                      {act.label}
                     </button>
                   ))}
                 </div>
@@ -603,7 +707,7 @@ export default function FiringTab({ isMobile, currentLang }) {
               <span
                 style={{
                   backgroundColor:
-                    activeFilter === tab.id ? "#fffce3" : "rgba(28, 7, 0, 0.1)", // Removed plain white
+                    activeFilter === tab.id ? "#fffce3" : "rgba(28, 7, 0, 0.1)",
                   padding: "2px 8px",
                   borderRadius: "10px",
                   fontSize: "0.65rem",
