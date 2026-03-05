@@ -47,6 +47,7 @@ export default function FiringTab({ isMobile, currentLang }) {
       ready_glaze: "ready for glaze",
       ready_pickup: "ready for pickup",
       completed: "archived",
+      abandoned: "overdue",
       bisque: "bisque",
       glaze: "glaze",
       markBisque: "mark ready",
@@ -68,9 +69,10 @@ export default function FiringTab({ isMobile, currentLang }) {
       batch_ready_glaze: "move to glaze queue",
       batch_ready_pickup: "mark as picked up",
       batchAction: "process selection",
-      overdue: "overdue",
+      overdueBadge: "overdue",
       archiveOverdue: "archive overdue",
-      confirmArchive: "Archive this overdue piece?",
+      confirmArchive:
+        "Archive this overdue piece? It will be moved to the adoptable pool for users.",
     },
     de: {
       bisque_pending: "bisque fire",
@@ -78,6 +80,7 @@ export default function FiringTab({ isMobile, currentLang }) {
       ready_glaze: "glasierbereit",
       ready_pickup: "abholbereit",
       completed: "archiv",
+      abandoned: "überfällig",
       bisque: "bisque",
       glaze: "glasur",
       markBisque: "fertig",
@@ -90,7 +93,7 @@ export default function FiringTab({ isMobile, currentLang }) {
       moveToQueue: "reset",
       noItems: "keine objekte gefunden.",
       confirmAction: "status ändern?",
-      confirmBatch: "{count} objekte verarbeiten? e-mails werden gesendet.",
+      confirmBatch: "{count} objekte verarbeiten?",
       deselectAll: "abwählen",
       groupSelect: "alle wählen",
       groupDeselect: "abwählen",
@@ -99,9 +102,10 @@ export default function FiringTab({ isMobile, currentLang }) {
       batch_ready_glaze: "in glasur-warteschlange verschieben",
       batch_ready_pickup: "als abgeholt markieren",
       batchAction: "auswahl verarbeiten",
-      overdue: "überfällig",
+      overdueBadge: "überfällig",
       archiveOverdue: "überfällige archivieren",
-      confirmArchive: "Dieses überfällige Stück archivieren?",
+      confirmArchive:
+        "Dieses überfällige Stück archivieren? Es wird zur Adoption freigegeben.",
     },
   }[currentLang || "en"];
 
@@ -120,9 +124,8 @@ export default function FiringTab({ isMobile, currentLang }) {
       const map = {};
       snap.docs.forEach((doc) => {
         const data = doc.data();
-        if (data.email) {
+        if (data.email)
           map[data.email.toLowerCase()] = `${data.firstName} ${data.lastName}`;
-        }
       });
       setUserMap(map);
     });
@@ -153,6 +156,7 @@ export default function FiringTab({ isMobile, currentLang }) {
       ).length,
       ready_glaze: firings.filter((f) => f.status === "bisque_ready").length,
       ready_pickup: firings.filter((f) => f.status === "glaze_ready").length,
+      abandoned: firings.filter((f) => f.status === "abandoned").length,
       completed: firings.filter(
         (f) => f.status === "done" || f.status === "broken",
       ).length,
@@ -168,6 +172,7 @@ export default function FiringTab({ isMobile, currentLang }) {
         return f.stage === "glaze" && f.status === "pending";
       if (activeFilter === "ready_glaze") return f.status === "bisque_ready";
       if (activeFilter === "ready_pickup") return f.status === "glaze_ready";
+      if (activeFilter === "abandoned") return f.status === "abandoned";
       if (activeFilter === "completed")
         return f.status === "done" || f.status === "broken";
       return false;
@@ -185,7 +190,6 @@ export default function FiringTab({ isMobile, currentLang }) {
   const handleUpdateStatus = async (objectId, newStatus, newStage = null) => {
     if (!window.confirm(labels.confirmAction)) return;
     setProcessingId(objectId);
-
     try {
       if (newStage) {
         await updateDoc(doc(db, "firings", objectId), {
@@ -223,12 +227,14 @@ export default function FiringTab({ isMobile, currentLang }) {
     }
   };
 
-  const handleArchiveOverdue = async (objectId) => {
+  const handleArchiveOverdue = async (item) => {
     if (!window.confirm(labels.confirmArchive)) return;
-    setProcessingId(objectId);
+    setProcessingId(item.id);
     try {
-      await updateDoc(doc(db, "firings", objectId), {
-        status: "done",
+      await updateDoc(doc(db, "firings", item.id), {
+        status: "abandoned",
+        previousStatus: item.status,
+        previousStage: item.stage,
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
@@ -246,7 +252,6 @@ export default function FiringTab({ isMobile, currentLang }) {
     )
       return;
     setIsBatchProcessing(true);
-
     try {
       await Promise.all(
         selectedIds.map((id) => {
@@ -279,16 +284,14 @@ export default function FiringTab({ isMobile, currentLang }) {
     }
   };
 
+  // CHECK: 8 weeks (56 days) for Bisque, 4 weeks (28 days) for Glaze
   const checkOverdue = (item) => {
     if (!item.updatedAt) return false;
-    const updatedDate = item.updatedAt.toDate();
-    const today = new Date();
-    const diffTime = Math.abs(today - updatedDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (item.status === "bisque_ready" && diffDays >= 56) return true; // 8 weeks
-    if (item.status === "glaze_ready" && diffDays >= 28) return true; // 4 weeks
-
+    const diffDays = Math.ceil(
+      Math.abs(new Date() - item.updatedAt.toDate()) / (1000 * 60 * 60 * 24),
+    );
+    if (item.status === "bisque_ready" && diffDays >= 56) return true;
+    if (item.status === "glaze_ready" && diffDays >= 28) return true;
     return false;
   };
 
@@ -370,6 +373,18 @@ export default function FiringTab({ isMobile, currentLang }) {
           icon: <ArrowRightLeft size={12} />,
         },
       ];
+    } else if (activeFilter === "abandoned") {
+      internalActions = [
+        {
+          label: "Restore",
+          onClick: () =>
+            handleManualMove(
+              item.id,
+              item.previousStage || item.stage,
+              item.previousStatus || "pending",
+            ),
+        },
+      ];
     }
 
     if (activeFilter.includes("pending")) {
@@ -381,14 +396,18 @@ export default function FiringTab({ isMobile, currentLang }) {
       });
     }
 
-    // Add archive option for overdue items
-    if (isOverdue && activeFilter !== "completed") {
+    // Overdue Archive Button
+    if (
+      isOverdue &&
+      activeFilter !== "completed" &&
+      activeFilter !== "abandoned"
+    ) {
       internalActions.push({
         label: labels.archiveOverdue,
         icon: <AlertOctagon size={10} />,
         color: "#ff4d4d",
         borderColor: "rgba(255, 77, 77, 0.4)",
-        onClick: () => handleArchiveOverdue(item.id),
+        onClick: () => handleArchiveOverdue(item),
       });
     }
 
@@ -427,21 +446,23 @@ export default function FiringTab({ isMobile, currentLang }) {
           transition: "all 0.2s ease",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            top: "10px",
-            right: "10px",
-            color: isSelected ? "#9960a8" : "#ccc",
-            zIndex: 5,
-          }}
-        >
-          {isSelected ? (
-            <CheckSquare size={20} fill="#fffce3" />
-          ) : (
-            <Square size={20} />
-          )}
-        </div>
+        {activeFilter !== "abandoned" && (
+          <div
+            style={{
+              position: "absolute",
+              top: "10px",
+              right: "10px",
+              color: isSelected ? "#9960a8" : "#ccc",
+              zIndex: 5,
+            }}
+          >
+            {isSelected ? (
+              <CheckSquare size={20} fill="#fffce3" />
+            ) : (
+              <Square size={20} />
+            )}
+          </div>
+        )}
 
         <div
           style={{
@@ -501,8 +522,7 @@ export default function FiringTab({ isMobile, currentLang }) {
               >
                 {item.stage === "bisque" ? labels.bisque : labels.glaze}
               </span>
-
-              {isOverdue && (
+              {isOverdue && activeFilter !== "abandoned" && (
                 <span
                   style={{
                     display: "inline-flex",
@@ -517,7 +537,7 @@ export default function FiringTab({ isMobile, currentLang }) {
                     textTransform: "lowercase",
                   }}
                 >
-                  <AlertOctagon size={10} /> {labels.overdue}
+                  <AlertOctagon size={10} /> {labels.overdueBadge}
                 </span>
               )}
             </div>
@@ -617,8 +637,9 @@ export default function FiringTab({ isMobile, currentLang }) {
                       key={i}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (act.onClick) act.onClick();
-                        else handleManualMove(item.id, act.stage, act.status);
+                        act.onClick
+                          ? act.onClick()
+                          : handleManualMove(item.id, act.stage, act.status);
                       }}
                       style={{
                         padding: "4px 12px",
@@ -629,14 +650,14 @@ export default function FiringTab({ isMobile, currentLang }) {
                         background: "transparent",
                         fontSize: "0.65rem",
                         fontWeight: "600",
-                        color: act.color ? act.color : "rgba(28,7,0,0.4)",
+                        color: act.color || "rgba(28,7,0,0.4)",
                         display: "inline-flex",
                         alignItems: "center",
                         gap: "5px",
+                        cursor: "pointer",
                       }}
                     >
-                      {act.icon ? act.icon : <ArrowRightLeft size={10} />}{" "}
-                      {act.label}
+                      {act.icon || <ArrowRightLeft size={10} />} {act.label}
                     </button>
                   ))}
                 </div>
@@ -656,14 +677,6 @@ export default function FiringTab({ isMobile, currentLang }) {
         <Loader2 className="spinner" color="#caaff3" size={30} />
       </div>
     );
-
-  const getBatchLabel = () => {
-    if (activeFilter === "bisque_pending") return labels.batch_bisque_pending;
-    if (activeFilter === "glaze_pending") return labels.batch_glaze_pending;
-    if (activeFilter === "ready_glaze") return labels.batch_ready_glaze;
-    if (activeFilter === "ready_pickup") return labels.batch_ready_pickup;
-    return labels.batchAction;
-  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
@@ -686,6 +699,7 @@ export default function FiringTab({ isMobile, currentLang }) {
             { id: "glaze_pending", icon: <Flame size={14} /> },
             { id: "ready_glaze", icon: <Brush size={14} /> },
             { id: "ready_pickup", icon: <ShoppingBag size={14} /> },
+            { id: "abandoned", icon: <AlertOctagon size={14} /> },
             { id: "completed", icon: <CheckCircle size={14} /> },
           ].map((tab) => (
             <button
@@ -721,7 +735,7 @@ export default function FiringTab({ isMobile, currentLang }) {
         </div>
       </div>
 
-      {selectedIds.length > 0 && (
+      {selectedIds.length > 0 && activeFilter !== "abandoned" && (
         <div
           style={{
             position: "fixed",
@@ -771,7 +785,7 @@ export default function FiringTab({ isMobile, currentLang }) {
             ) : (
               <Send size={14} />
             )}{" "}
-            {getBatchLabel()}
+            Process
           </button>
           <button
             onClick={() => setSelectedIds([])}
@@ -826,35 +840,37 @@ export default function FiringTab({ isMobile, currentLang }) {
                     {date}
                   </h4>
                 </div>
-                <button
-                  onClick={() => {
-                    const itemIds = items.map((i) => i.id);
-                    const allInSelected = itemIds.every((id) =>
-                      selectedIds.includes(id),
-                    );
-                    setSelectedIds((prev) =>
-                      allInSelected
-                        ? prev.filter((id) => !itemIds.includes(id))
-                        : [...new Set([...prev, ...itemIds])],
-                    );
-                  }}
-                  style={{
-                    background: "rgba(78, 95, 40, 0.05)",
-                    border: "none",
-                    padding: "4px 10px",
-                    borderRadius: "100px",
-                    fontSize: "0.6rem",
-                    fontWeight: "bold",
-                    color: "#4e5f28",
-                    cursor: "pointer",
-                  }}
-                >
-                  {items
-                    .map((i) => i.id)
-                    .every((id) => selectedIds.includes(id))
-                    ? labels.groupDeselect
-                    : labels.groupSelect}
-                </button>
+                {activeFilter !== "abandoned" && (
+                  <button
+                    onClick={() => {
+                      const itemIds = items.map((i) => i.id);
+                      const allInSelected = itemIds.every((id) =>
+                        selectedIds.includes(id),
+                      );
+                      setSelectedIds((prev) =>
+                        allInSelected
+                          ? prev.filter((id) => !itemIds.includes(id))
+                          : [...new Set([...prev, ...itemIds])],
+                      );
+                    }}
+                    style={{
+                      background: "rgba(78, 95, 40, 0.05)",
+                      border: "none",
+                      padding: "4px 10px",
+                      borderRadius: "100px",
+                      fontSize: "0.6rem",
+                      fontWeight: "bold",
+                      color: "#4e5f28",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {items
+                      .map((i) => i.id)
+                      .every((id) => selectedIds.includes(id))
+                      ? labels.groupDeselect
+                      : labels.groupSelect}
+                  </button>
+                )}
               </div>
               <div
                 style={{

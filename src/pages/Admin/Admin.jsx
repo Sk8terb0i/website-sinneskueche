@@ -523,7 +523,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
                     right: "4px",
                     width: "8px",
                     height: "8px",
-                    backgroundColor: "#ff4d4d",
+                    backgroundColor: "#9960a8",
                     borderRadius: "50%",
                   }}
                 />

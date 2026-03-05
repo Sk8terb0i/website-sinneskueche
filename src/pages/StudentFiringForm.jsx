@@ -1,4 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { storage, db } from "../firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -11,6 +17,7 @@ import {
   where,
   getDocs,
   limit,
+  serverTimestamp,
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -27,18 +34,30 @@ import {
   User as UserIcon,
   ArrowRight,
   ArrowLeft,
+  Flame,
+  AlertCircle,
+  Clock,
+  Package,
+  User,
 } from "lucide-react";
 
 export default function StudentFiringForm() {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
 
-  const [step, setStep] = useState("email"); // Now acts as 'lookup' step
+  const [step, setStep] = useState("email");
+  const [activeTab, setActiveTab] = useState("active");
   const [userCode, setUserCode] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
+
   const [existingObjects, setExistingObjects] = useState([]);
+  const [abandonedObjects, setAbandonedObjects] = useState([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [claimingPiece, setClaimingPiece] = useState(null);
+
+  const [claimCode, setClaimCode] = useState("");
+  const [claimName, setClaimName] = useState("");
 
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -53,7 +72,19 @@ export default function StudentFiringForm() {
     return savedLang === "de" || savedLang === "en" ? savedLang : "en";
   });
 
-  // --- LOGIC: FETCH PIECES BY CODE ---
+  const fetchAbandoned = useCallback(async () => {
+    try {
+      const q = query(
+        collection(db, "firings"),
+        where("status", "==", "abandoned"),
+      );
+      const snap = await getDocs(q);
+      setAbandonedObjects(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
   const fetchPieces = useCallback(async (targetCode) => {
     if (!targetCode) return;
     setLoading(true);
@@ -61,7 +92,10 @@ export default function StudentFiringForm() {
     try {
       const lookupFn = httpsCallable(getFunctions(), "getStudentObjects");
       const res = await lookupFn({ userCode: targetCode.toUpperCase() });
-      setExistingObjects(res.data);
+      const sorted = (res.data || []).sort(
+        (a, b) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0),
+      );
+      setExistingObjects(sorted);
       setStep("selection");
     } catch (err) {
       setError(err.message);
@@ -70,8 +104,8 @@ export default function StudentFiringForm() {
     }
   }, []);
 
-  // --- AUTO-LOOKUP FOR LOGGED IN USERS ---
   useEffect(() => {
+    fetchAbandoned();
     const initUser = async () => {
       if (currentUser) {
         try {
@@ -79,7 +113,6 @@ export default function StudentFiringForm() {
           const snap = await getDoc(userRef);
           let code = snap.data()?.firingCode;
 
-          // Generate a hidden code for users if they don't have one
           if (!code) {
             code = Math.random().toString(36).substring(2, 6).toUpperCase();
             await updateDoc(userRef, { firingCode: code });
@@ -87,13 +120,11 @@ export default function StudentFiringForm() {
 
           setUserCode(code);
           fetchPieces(code);
-        } catch (err) {
-          console.error("Error fetching user code", err);
-        }
+        } catch (err) {}
       }
     };
     initUser();
-  }, [currentUser, fetchPieces]);
+  }, [currentUser, fetchPieces, fetchAbandoned]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -116,10 +147,11 @@ export default function StudentFiringForm() {
       findExisting: "Search my pieces",
       registerDirectly: "Register new object",
       registerDirectlyDesc: "Start a fresh registration (Initial Bisque).",
-      noExisting: "No objects found. Register a new one below.",
-      isThisYours: "Manage your pieces here",
+      noExisting: "No objects found.",
+      isThisYours: "Manage your pieces",
       glazeAction: "Move to Glaze firing",
-      orRegisterNew: "None of these / New object",
+      pickupAction: "Mark picked up",
+      orRegisterNew: "add new object",
       takePhoto: "Open Camera",
       submit: "Confirm Registration",
       successTitle: "All Set!",
@@ -131,9 +163,20 @@ export default function StudentFiringForm() {
       processing: "Processing...",
       searching: "Finding your pieces...",
       back: "Back",
-      codeTaken: "This code is already in use. Please choose another.",
+      codeTaken: "This code is already in use.",
       codeLength: "Code must be exactly 4 characters.",
       requiredFields: "Please fill out all fields.",
+      tab_active: "active",
+      tab_ready: "ready",
+      tab_done: "done",
+      adoptTitle: "adopt a piece",
+      adoptDesc: "These pieces have been abandoned. Claim one for free!",
+      claimAction: "claim piece",
+      claimTitle: "Claim Piece",
+      claimDesc: "Take ownership of this overdue piece.",
+      claimConfirm: "Are you sure you want to claim this piece?",
+      noAdopt: "No adoptable pieces right now.",
+      emptyTab: "currently no pieces.",
     },
     de: {
       title: "Brenn-Registrierung",
@@ -144,11 +187,12 @@ export default function StudentFiringForm() {
       emailPlaceholder: "E-Mail Adresse",
       findExisting: "Meine Stücke suchen",
       registerDirectly: "Neues Objekt registrieren",
-      registerDirectlyDesc: "Beginne eine neue Registrierung (Bisque Fire).",
-      noExisting: "Keine Objekte gefunden. Registriere ein neues unten.",
-      isThisYours: "Verwalte deine Objekte hier",
+      registerDirectlyDesc: "Beginne eine neue Registrierung (Schrühbrand).",
+      noExisting: "Keine Stücke gefunden.",
+      isThisYours: "Verwalte deine Objekte",
       glazeAction: "Zum Glasurbrand bewegen",
-      orRegisterNew: "Keines davon / Neu registrieren",
+      pickupAction: "Als abgeholt markieren",
+      orRegisterNew: "neues objekt registrieren",
       takePhoto: "Kamera öffnen",
       submit: "Registrierung bestätigen",
       successTitle: "Erledigt!",
@@ -160,9 +204,20 @@ export default function StudentFiringForm() {
       processing: "Verarbeitung...",
       searching: "Suche deine Stücke...",
       back: "Zurück",
-      codeTaken: "Dieser Code ist bereits vergeben. Bitte wähle einen anderen.",
+      codeTaken: "Dieser Code ist bereits vergeben.",
       codeLength: "Der Code muss genau 4 Zeichen lang sein.",
       requiredFields: "Bitte fülle alle Felder aus.",
+      tab_active: "aktiv",
+      tab_ready: "bereit",
+      tab_done: "erledigt",
+      adoptTitle: "stück adoptieren",
+      adoptDesc: "Diese Stücke wurden verlassen. Adoptiere eines kostenlos!",
+      claimAction: "adoptieren",
+      claimTitle: "Stück adoptieren",
+      claimDesc: "Übernimm dieses überfällige Stück.",
+      claimConfirm: "Dieses Stück wirklich als dein eigenes übernehmen?",
+      noAdopt: "Momentan keine adoptierbaren Stücke.",
+      emptyTab: "aktuell keine stücke.",
     },
   }[lang];
 
@@ -185,6 +240,60 @@ export default function StudentFiringForm() {
     }
   };
 
+  const handleMarkPickedUp = async (objectId) => {
+    setLoading(true);
+    try {
+      const updateFn = httpsCallable(getFunctions(), "updateFiringStatus");
+      await updateFn({ objectId, newStatus: "done" });
+      setSuccess(true);
+    } catch (err) {
+      try {
+        await updateDoc(doc(db, "firings", objectId), {
+          status: "done",
+          updatedAt: serverTimestamp(),
+        });
+        setSuccess(true);
+      } catch (e) {
+        setError(e.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClaim = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const finalCode = currentUser ? userCode : claimCode.toUpperCase();
+      const finalName = currentUser?.displayName || claimName || "Guest";
+      // We no longer require or capture an email for claims, so we leave it empty or inherit the current user's
+      const finalEmail = currentUser?.email || "";
+
+      if (!finalCode || finalCode.length !== 4)
+        throw new Error(labels.codeLength);
+
+      await updateDoc(doc(db, "firings", claimingPiece.id), {
+        status: claimingPiece.previousStatus || "pending",
+        stage: claimingPiece.previousStage || claimingPiece.stage,
+        userCode: finalCode,
+        name: finalName,
+        email: finalEmail,
+        updatedAt: serverTimestamp(),
+      });
+
+      setClaimingPiece(null);
+      // Removed setSuccess(true) so it doesn't show the full page checkmark
+      await fetchPieces(finalCode);
+      await fetchAbandoned();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleNewRegistration = async (e) => {
     e.preventDefault();
     if (!imageFile) return setError("Photo required.");
@@ -196,8 +305,6 @@ export default function StudentFiringForm() {
     if (isFirstTimeGuest) {
       if (finalCode.length !== 4) return setError(labels.codeLength);
       if (!guestName || !guestEmail) return setError(labels.requiredFields);
-
-      // Check if code is truly unique
       setLoading(true);
       try {
         const q = query(
@@ -216,8 +323,6 @@ export default function StudentFiringForm() {
       }
     }
 
-    // Determine email and name to attach
-    // If existing objects exist, inherit email/name from the previous piece. Otherwise use form state.
     const finalEmail =
       currentUser?.email ||
       (existingObjects.length > 0 ? existingObjects[0].email : guestEmail);
@@ -249,33 +354,78 @@ export default function StudentFiringForm() {
     }
   };
 
-  const renderDivider = () => (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        margin: "2rem 0",
-        color: "rgba(28,7,0,0.25)",
-      }}
-    >
-      <div
-        style={{ flex: 1, height: "1px", backgroundColor: "rgba(28,7,0,0.1)" }}
-      />
+  const resetModal = () => {
+    setIsModalOpen(false);
+    setClaimingPiece(null);
+    setSuccess(false);
+    setImagePreview(null);
+    setImageFile(null);
+    setError("");
+  };
+
+  const getStatusBadge = (obj) => {
+    let key = "status_bisque_pending";
+    let icon = <Clock size={12} />;
+    let color = "#9960a8";
+
+    if (obj.status === "broken") {
+      key = "status_broken";
+      icon = <AlertCircle size={12} />;
+      color = "#ff4d4d";
+    } else if (obj.status === "done") {
+      key = "status_done";
+      icon = <CheckCircle size={12} />;
+      color = "#1c0700";
+    } else if (obj.status === "abandoned") {
+      key = "status_abandoned";
+      icon = <AlertCircle size={12} />;
+      color = "#ff4d4d";
+    } else if (obj.status === "bisque_ready") {
+      key = "status_bisque_ready";
+      icon = <Package size={12} />;
+      color = "#4e5f28";
+    } else if (obj.status === "glaze_ready") {
+      key = "status_glaze_ready";
+      icon = <CheckCircle size={12} />;
+      color = "#4e5f28";
+    } else if (obj.stage === "glaze" && obj.status === "pending") {
+      key = "status_glaze_pending";
+      icon = <Flame size={12} />;
+      color = "#4e5f28";
+    }
+
+    return (
       <span
         style={{
-          padding: "0 15px",
-          fontSize: "0.75rem",
-          fontWeight: "900",
-          letterSpacing: "1.5px",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "5px",
+          padding: "3px 10px",
+          borderRadius: "100px",
+          fontSize: "0.65rem",
+          fontWeight: "800",
+          backgroundColor: `${color}15`,
+          color: color,
         }}
       >
-        {labels.or}
+        {icon} {labels[key]}
       </span>
-      <div
-        style={{ flex: 1, height: "1px", backgroundColor: "rgba(28,7,0,0.1)" }}
-      />
-    </div>
-  );
+    );
+  };
+
+  const categorized = useMemo(() => {
+    return {
+      active: existingObjects.filter((o) => o.status === "pending"),
+      ready: existingObjects.filter(
+        (o) => o.status === "bisque_ready" || o.status === "glaze_ready",
+      ),
+      done: existingObjects.filter(
+        (o) => o.status === "done" || o.status === "broken",
+      ),
+    };
+  }, [existingObjects]);
+
+  const activeItems = categorized[activeTab] || [];
 
   const RegisterNewCard = () => (
     <div
@@ -321,6 +471,34 @@ export default function StudentFiringForm() {
     </div>
   );
 
+  const renderDivider = () => (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        margin: "2rem 0",
+        color: "rgba(28,7,0,0.25)",
+      }}
+    >
+      <div
+        style={{ flex: 1, height: "1px", backgroundColor: "rgba(28,7,0,0.1)" }}
+      />
+      <span
+        style={{
+          padding: "0 15px",
+          fontSize: "0.75rem",
+          fontWeight: "900",
+          letterSpacing: "1.5px",
+        }}
+      >
+        {labels.or}
+      </span>
+      <div
+        style={{ flex: 1, height: "1px", backgroundColor: "rgba(28,7,0,0.1)" }}
+      />
+    </div>
+  );
+
   if (success) {
     return (
       <div style={containerStyle}>
@@ -355,7 +533,12 @@ export default function StudentFiringForm() {
             style={{ display: "flex", flexDirection: "column", gap: "12px" }}
           >
             <button
-              onClick={() => navigate("/")}
+              onClick={() => {
+                setSuccess(false);
+                setStep("email");
+                fetchPieces(userCode);
+                fetchAbandoned();
+              }}
               style={{
                 ...primaryBtnStyle,
                 backgroundColor: "#caaff3",
@@ -471,94 +654,276 @@ export default function StudentFiringForm() {
           </div>
         )}
 
-        {/* STEP 2: PIECES LIST */}
+        {/* STEP 2: PIECES LIST / TABS */}
         {step === "selection" && (
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-          >
-            {existingObjects.length > 0 ? (
-              <div style={sectionStyle}>
-                <p
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {!currentUser && (
+              <button
+                type="button"
+                onClick={() => setStep("email")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#1c0700",
+                  opacity: 0.5,
+                  marginBottom: "1.5rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  cursor: "pointer",
+                  fontSize: "0.9rem",
+                  fontWeight: "600",
+                }}
+              >
+                <ArrowLeft size={16} /> {labels.back}
+              </button>
+            )}
+
+            <div style={tabNavContainer} className="hide-scrollbar">
+              {["active", "ready", "done"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
                   style={{
-                    fontWeight: isMobile ? "600" : "700",
-                    marginBottom: "1.2rem",
-                    textAlign: "center",
+                    ...tabBtnStyle,
+                    backgroundColor:
+                      activeTab === tab ? "#caaff3" : "transparent",
                   }}
                 >
-                  {labels.isThisYours}
-                </p>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
-                  }}
-                >
-                  {existingObjects.map((obj) => (
-                    <div
-                      key={obj.id}
-                      onClick={() => !loading && handleMoveStage(obj.id)}
-                      style={{ ...objectCardStyle, opacity: loading ? 0.6 : 1 }}
-                    >
+                  {labels[`tab_${tab}`]}
+                  <span
+                    style={{
+                      ...badgeStyle,
+                      backgroundColor:
+                        activeTab === tab ? "#fffce3" : "rgba(28, 7, 0, 0.1)",
+                    }}
+                  >
+                    {categorized[tab].length}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div
+              className="custom-scrollbar"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                marginBottom: "1.5rem",
+                maxHeight: activeItems.length > 3 ? "330px" : "auto",
+                overflowY: activeItems.length > 3 ? "auto" : "visible",
+                paddingRight: activeItems.length > 3 ? "10px" : "0",
+              }}
+            >
+              {!userCode ? (
+                <div style={{ textAlign: "center", padding: "1rem" }}>
+                  <p
+                    style={{
+                      fontSize: "0.9rem",
+                      opacity: 0.5,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Please return to search and enter your code.
+                  </p>
+                </div>
+              ) : activeItems.length > 0 ? (
+                activeItems.map((obj) => (
+                  <div
+                    key={obj.id}
+                    style={{
+                      ...objectCardStyle,
+                      opacity:
+                        obj.status === "done" || obj.status === "broken"
+                          ? 0.6
+                          : 1,
+                    }}
+                  >
+                    <div style={imageWrapper}>
                       <img
                         src={obj.imageUrl}
-                        style={{
-                          width: "50px",
-                          height: "50px",
-                          borderRadius: "8px",
-                          objectFit: "cover",
-                        }}
-                        alt="Pottery"
+                        style={thumbStyle}
+                        alt="pottery"
                       />
-                      <div style={{ flex: 1 }}>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          marginBottom: "6px",
+                        }}
+                      >
                         <div style={{ fontSize: "0.7rem", opacity: 0.5 }}>
                           {new Date(
                             obj.createdAt?._seconds * 1000,
                           ).toLocaleDateString()}
                         </div>
-                        <div
-                          style={{
-                            fontWeight: "600",
-                            color: "#9960a8",
-                            fontSize: "0.85rem",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
+                        {getStatusBadge(obj)}
+                      </div>
+
+                      {obj.status === "bisque_ready" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveStage(obj.id);
                           }}
+                          disabled={loading}
+                          style={actionButtonStyle("#caaff3", "#1c0700")}
                         >
                           {loading ? (
                             <Loader2 size={12} className="spinner" />
                           ) : (
-                            labels.glazeAction
-                          )}
-                        </div>
-                      </div>
+                            <ArrowRight size={12} />
+                          )}{" "}
+                          {labels.glazeAction}
+                        </button>
+                      )}
+
+                      {obj.status === "glaze_ready" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkPickedUp(obj.id);
+                          }}
+                          disabled={loading}
+                          style={actionButtonStyle("#4e5f28", "#fffce3")}
+                        >
+                          {loading ? (
+                            <Loader2 size={12} className="spinner" />
+                          ) : (
+                            <CheckCircle size={12} />
+                          )}{" "}
+                          {labels.pickupAction}
+                        </button>
+                      )}
+
+                      {obj.status !== "bisque_ready" &&
+                        obj.status !== "glaze_ready" && (
+                          <div
+                            style={{
+                              fontSize: "0.8rem",
+                              opacity: 0.4,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                            }}
+                          >
+                            <User size={12} />{" "}
+                            {currentUser?.displayName || obj.email}
+                          </div>
+                        )}
                     </div>
-                  ))}
-                </div>
-                {!currentUser && (
-                  <button
-                    onClick={() => setStep("form")}
-                    style={secondaryBtnStyle}
+                  </div>
+                ))
+              ) : (
+                <div
+                  style={{
+                    ...objectCardStyle,
+                    justifyContent: "center",
+                    padding: "2rem",
+                    borderStyle: "dashed",
+                    opacity: 0.6,
+                    cursor: "default",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.9rem",
+                      fontStyle: "italic",
+                      textAlign: "center",
+                    }}
                   >
-                    {labels.orRegisterNew}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div style={{ ...sectionStyle, textAlign: "center" }}>
-                <p style={{ marginBottom: "0", opacity: 0.7 }}>
-                  {labels.noExisting}
-                </p>
-              </div>
-            )}
+                    {labels.emptyTab}
+                  </p>
+                </div>
+              )}
+            </div>
+
             {currentUser && <RegisterNewCard />}
+            {!currentUser && (
+              <button onClick={() => setStep("form")} style={secondaryBtnStyle}>
+                {labels.orRegisterNew}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* SEPARATE ADOPT SECTION (Always visible below the main content when looking at pieces or form) */}
+        {step !== "email" && abandonedObjects.length > 0 && (
+          <div style={{ marginTop: "3rem" }}>
+            <h3
+              style={{
+                fontFamily: "Harmond-SemiBoldCondensed",
+                fontSize: "1.5rem",
+                color: "#1c0700",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <Flame size={18} color="#caaff3" style={{ marginRight: "8px" }} />{" "}
+              {labels.adoptTitle}
+            </h3>
+            <p
+              style={{ fontSize: "0.8rem", opacity: 0.6, marginBottom: "1rem" }}
+            >
+              {labels.adoptDesc}
+            </p>
+
+            <div
+              className="custom-scrollbar"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                maxHeight: abandonedObjects.length > 3 ? "330px" : "auto",
+                overflowY: abandonedObjects.length > 3 ? "auto" : "visible",
+                paddingRight: abandonedObjects.length > 3 ? "10px" : "0",
+              }}
+            >
+              {abandonedObjects.map((obj) => (
+                <div key={obj.id} style={{ ...objectCardStyle }}>
+                  <div style={imageWrapper}>
+                    <img src={obj.imageUrl} style={thumbStyle} alt="pottery" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      <div style={{ fontSize: "0.7rem", opacity: 0.5 }}>
+                        {new Date(
+                          obj.createdAt?._seconds * 1000,
+                        ).toLocaleDateString()}
+                      </div>
+                      {getStatusBadge(obj)}
+                    </div>
+                    <button
+                      onClick={() => setClaimingPiece(obj)}
+                      disabled={loading}
+                      style={actionButtonStyle("#9960a8", "#fffce3")}
+                    >
+                      {labels.claimAction}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
         {/* STEP 3: REGISTRATION FORM */}
         {step === "form" && (
-          <form onSubmit={handleNewRegistration}>
+          <form
+            onSubmit={handleNewRegistration}
+            style={{ marginTop: "1.5rem" }}
+          >
             <button
               type="button"
               onClick={() => setStep(currentUser ? "selection" : "email")}
@@ -579,7 +944,6 @@ export default function StudentFiringForm() {
               <ArrowLeft size={16} /> {labels.back}
             </button>
 
-            {/* ONLY SHOW THESE FIELDS IF IT IS A FIRST TIME GUEST */}
             {!currentUser && existingObjects.length === 0 && (
               <div
                 style={{
@@ -692,6 +1056,97 @@ export default function StudentFiringForm() {
             </button>
           </form>
         )}
+
+        {/* CLAIM MODAL */}
+        {claimingPiece && (
+          <div style={modalOverlay} onClick={() => !loading && resetModal()}>
+            <div style={modalContent} onClick={(e) => e.stopPropagation()}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                <h3
+                  style={{
+                    margin: 0,
+                    fontFamily: "Harmond-SemiBoldCondensed",
+                    fontSize: "1.8rem",
+                  }}
+                >
+                  {labels.claimTitle}
+                </h3>
+                <button
+                  onClick={resetModal}
+                  style={closeBtn}
+                  disabled={loading}
+                >
+                  <XCircle />
+                </button>
+              </div>
+
+              <form onSubmit={handleClaim}>
+                <p style={{ opacity: 0.7, marginBottom: "1.5rem" }}>
+                  {labels.claimDesc}
+                </p>
+
+                {!currentUser && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                      marginBottom: "1.5rem",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      maxLength="4"
+                      placeholder={labels.codePlaceholder}
+                      value={claimCode}
+                      onChange={(e) =>
+                        setClaimCode(e.target.value.toUpperCase())
+                      }
+                      required
+                      style={{ ...inputStyle, textTransform: "uppercase" }}
+                    />
+                    <input
+                      type="text"
+                      placeholder={labels.namePlaceholder}
+                      value={claimName}
+                      onChange={(e) => setClaimName(e.target.value)}
+                      required
+                      style={inputStyle}
+                    />
+                  </div>
+                )}
+                {currentUser && (
+                  <p
+                    style={{
+                      fontWeight: "bold",
+                      marginBottom: "1.5rem",
+                      color: "#4e5f28",
+                    }}
+                  >
+                    {labels.claimConfirm}
+                  </p>
+                )}
+
+                <button type="submit" disabled={loading} style={submitBtn}>
+                  {loading ? (
+                    <Loader2 className="spinner" size={20} />
+                  ) : (
+                    <CheckCircle size={20} />
+                  )}
+                  {loading ? labels.processing : labels.submit}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
         {error && (
           <p
             style={{
@@ -705,12 +1160,13 @@ export default function StudentFiringForm() {
           </p>
         )}
       </div>
-      <style>{`.spinner { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
+      <style>{`.spinner { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } .hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } .custom-scrollbar::-webkit-scrollbar { width: 6px; } .custom-scrollbar::-webkit-scrollbar-track { background: rgba(28, 7, 0, 0.03); border-radius: 10px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(202, 175, 243, 0.8); border-radius: 10px; } .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9960a8; }`}</style>
     </div>
   );
 }
 
-// --- STYLES (NO PLAIN WHITE) ---
+// --- STYLES ---
 const containerStyle = {
   minHeight: "100vh",
   backgroundColor: "#fffce3",
@@ -796,6 +1252,7 @@ const objectCardStyle = {
   border: "1px solid rgba(202,175,243,0.2)",
   cursor: "pointer",
   transition: "all 0.2s ease",
+  flexShrink: 0,
 };
 const cameraBoxStyle = {
   width: "100%",
@@ -825,4 +1282,105 @@ const removeImgStyle = {
   display: "grid",
   placeItems: "center",
   cursor: "pointer",
+};
+const tabNavContainer = {
+  display: "flex",
+  backgroundColor: "rgba(28, 7, 0, 0.04)",
+  borderRadius: "100px",
+  padding: "4px",
+  gap: "4px",
+  overflowX: "auto",
+  marginBottom: "1.5rem",
+};
+const tabBtnStyle = {
+  borderRadius: "100px",
+  color: "#1c0700",
+  padding: "8px 16px",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  border: "none",
+  cursor: "pointer",
+  fontWeight: "800",
+  fontSize: "0.75rem",
+  transition: "all 0.2s",
+};
+const badgeStyle = {
+  padding: "2px 8px",
+  borderRadius: "10px",
+  fontSize: "0.6rem",
+  fontWeight: "900",
+};
+const imageWrapper = {
+  width: "65px",
+  height: "65px",
+  borderRadius: "10px",
+  overflow: "hidden",
+  flexShrink: 0,
+  backgroundColor: "rgba(28,7,0,0.03)",
+};
+const thumbStyle = { width: "100%", height: "100%", objectFit: "cover" };
+const actionButtonStyle = (bg, text) => ({
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  backgroundColor: bg,
+  color: text,
+  border: "none",
+  borderRadius: "100px",
+  padding: "6px 12px",
+  fontSize: "0.75rem",
+  fontWeight: "800",
+  cursor: "pointer",
+  marginTop: "8px",
+});
+const modalOverlay = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(28,7,0,0.6)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 10000,
+  padding: "20px",
+};
+const modalContent = {
+  backgroundColor: "#fffce3",
+  padding: "2.5rem",
+  borderRadius: "28px",
+  width: "100%",
+  maxWidth: "450px",
+  color: "#1c0700",
+};
+const closeBtn = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  opacity: 0.5,
+};
+const photoBox = { marginBottom: "1.5rem" };
+const previewImg = {
+  width: "100%",
+  aspectRatio: "1/1",
+  borderRadius: "20px",
+  objectFit: "cover",
+};
+const submitBtn = {
+  width: "100%",
+  padding: "16px",
+  backgroundColor: "#9960a8",
+  color: "#fffce3",
+  border: "none",
+  borderRadius: "100px",
+  fontSize: "1rem",
+  fontWeight: "700",
+  cursor: "pointer",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  gap: "10px",
+  marginTop: "1rem",
 };
