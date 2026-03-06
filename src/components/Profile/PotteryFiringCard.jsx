@@ -20,6 +20,8 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext"; // Fixed path based on your Profile.jsx location
+import Cropper from "react-easy-crop";
 import {
   Camera,
   UploadCloud,
@@ -39,8 +41,51 @@ import {
   User,
 } from "lucide-react";
 
-export default function PotteryFiringCard({ currentUser, currentLang }) {
+// --- CROP & COMPRESSION HELPER FUNCTIONS ---
+const createImage = (url) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => resolve(image));
+    image.addEventListener("error", (error) => reject(error));
+    image.src = url;
+  });
+
+async function getCroppedImg(imageSrc, pixelCrop, quality = 0.7) {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height,
+  );
+
+  return new Promise((resolve) => {
+    canvas.toBlob(
+      (blob) => {
+        resolve(blob);
+      },
+      "image/jpeg",
+      quality,
+    );
+  });
+}
+// -------------------------------------------
+
+export default function PotteryFiringCard({ currentLang }) {
   const navigate = useNavigate();
+  // Pulled userData in addition to currentUser
+  const { currentUser, userData } = useAuth();
 
   const [step, setStep] = useState("email");
   const [activeTab, setActiveTab] = useState("active");
@@ -58,6 +103,16 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
 
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+
+  // --- CROPPER STATE ---
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+
+  const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+  // ---------------------
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -142,7 +197,8 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
       glazeAction: "Move to Glaze firing",
       pickupAction: "Mark picked up",
       orRegisterNew: "None of these / New object",
-      takePhoto: "Open Camera",
+      takePhoto: "Open Camera / Select Photo",
+      dragToCrop: "Drag to frame your object",
       submit: "Confirm Registration",
       successTitle: "All Set!",
       successText:
@@ -192,7 +248,8 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
       glazeAction: "Zum Glasurbrand bewegen",
       pickupAction: "Als abgeholt markieren",
       orRegisterNew: "Keines davon / Neu registrieren",
-      takePhoto: "Kamera öffnen",
+      takePhoto: "Kamera öffnen / Foto wählen",
+      dragToCrop: "Ziehe das Bild passend in den Rahmen",
       submit: "Registrierung bestätigen",
       successTitle: "Erledigt!",
       successText:
@@ -314,7 +371,7 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
 
   const handleNewRegistration = async (e) => {
     e.preventDefault();
-    if (!imageFile) return setError("Photo required.");
+    if (!imagePreview || !croppedAreaPixels) return setError("Photo required.");
     setError("");
 
     const isFirstTimeGuest = !currentUser && existingObjects.length === 0;
@@ -344,26 +401,40 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
     const finalEmail =
       currentUser?.email ||
       (existingObjects.length > 0 ? existingObjects[0].email : guestEmail);
+
+    // Fix for "Guest" issue. Use userData if available, else currentUser, else previous, else "Guest"
     const finalName =
-      currentUser?.displayName ||
-      (existingObjects.length > 0 ? existingObjects[0].name : guestName);
+      (userData?.firstName
+        ? `${userData.firstName} ${userData.lastName || ""}`.trim()
+        : currentUser?.displayName) ||
+      (existingObjects.length > 0 ? existingObjects[0].name : guestName) ||
+      "Guest";
 
     setLoading(true);
     try {
-      const fileExt = imageFile.name.split(".").pop() || "jpg";
-      const storageRef = ref(storage, `firings/${Date.now()}.${fileExt}`);
-      await uploadBytes(storageRef, imageFile);
+      // 1. Generate the cropped and compressed Blob
+      const croppedBlob = await getCroppedImg(
+        imagePreview,
+        croppedAreaPixels,
+        0.7,
+      );
+
+      // 2. Upload the compressed Blob
+      const storageRef = ref(storage, `firings/${Date.now()}.jpg`);
+      await uploadBytes(storageRef, croppedBlob);
       const imageUrl = await getDownloadURL(storageRef);
 
+      // 3. Register entry in database
       const registerFn = httpsCallable(getFunctions(), "registerFiringObject");
       await registerFn({
         email: finalEmail.toLowerCase(),
-        name: finalName || "Guest",
+        name: finalName,
         userCode: finalCode,
         stage: "bisque",
         imageUrl,
         currentLang,
       });
+
       setSuccess(true);
     } catch (err) {
       setError(err.message);
@@ -378,6 +449,7 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
     setSuccess(false);
     setImagePreview(null);
     setImageFile(null);
+    setZoom(1);
     setError("");
   };
 
@@ -840,7 +912,7 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
             </div>
 
             <div
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => setStep("form")}
               style={{
                 ...registerTriggerStyle,
                 display: "flex",
@@ -941,134 +1013,162 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
           </div>
         )}
 
-        {/* REGISTRATION MODAL */}
-        {isModalOpen && (
-          <div style={modalOverlay} onClick={() => !loading && resetModal()}>
-            <div style={modalContent} onClick={(e) => e.stopPropagation()}>
+        {/* REGISTRATION MODAL (The Form) */}
+        {step === "form" && (
+          <form
+            onSubmit={handleNewRegistration}
+            style={{ ...cardContainer, marginTop: "1.5rem" }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1.5rem",
+              }}
+            >
+              <h3
+                style={{
+                  margin: 0,
+                  fontFamily: "Harmond-SemiBoldCondensed",
+                  fontSize: "1.8rem",
+                }}
+              >
+                {labels.registerNew}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setStep("selection")}
+                style={closeBtn}
+                disabled={loading}
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+
+            {!currentUser && existingObjects.length === 0 && (
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
+                  flexDirection: "column",
+                  gap: "10px",
                   marginBottom: "1.5rem",
                 }}
               >
-                <h3
+                <input
+                  type="text"
+                  maxLength="4"
+                  placeholder={labels.codePlaceholder}
+                  value={userCode}
+                  onChange={(e) => setUserCode(e.target.value.toUpperCase())}
+                  required
+                  style={{ ...inputStyle, textTransform: "uppercase" }}
+                />
+                <input
+                  type="text"
+                  placeholder={labels.namePlaceholder}
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  required
+                  style={inputStyle}
+                />
+                <input
+                  type="email"
+                  placeholder={labels.emailPlaceholder}
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value.toLowerCase())}
+                  required
+                  style={inputStyle}
+                />
+              </div>
+            )}
+
+            <div style={photoBox}>
+              <label style={labelStyle}>
+                {imagePreview ? labels.dragToCrop : labels.takePhoto}
+              </label>
+
+              {imagePreview ? (
+                <div
                   style={{
-                    margin: 0,
-                    fontFamily: "Harmond-SemiBoldCondensed",
-                    fontSize: "1.8rem",
+                    position: "relative",
+                    borderRadius: "16px",
+                    overflow: "hidden",
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    backgroundColor: "#1c0700",
                   }}
                 >
-                  {labels.registerNew}
-                </h3>
-                <button
-                  onClick={resetModal}
-                  style={closeBtn}
-                  disabled={loading}
-                >
-                  <XCircle />
-                </button>
-              </div>
-
-              <form onSubmit={handleNewRegistration}>
-                {!currentUser && existingObjects.length === 0 && (
-                  <div
+                  <Cropper
+                    image={imagePreview}
+                    crop={crop}
+                    zoom={zoom}
+                    aspect={1}
+                    onCropChange={setCrop}
+                    onCropComplete={onCropComplete}
+                    onZoomChange={setZoom}
                     style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "10px",
-                      marginBottom: "1.5rem",
-                    }}
-                  >
-                    <input
-                      type="text"
-                      maxLength="4"
-                      placeholder={labels.codePlaceholder}
-                      value={userCode}
-                      onChange={(e) =>
-                        setUserCode(e.target.value.toUpperCase())
-                      }
-                      required
-                      style={{ ...inputStyle, textTransform: "uppercase" }}
-                    />
-                    <input
-                      type="text"
-                      placeholder={labels.namePlaceholder}
-                      value={guestName}
-                      onChange={(e) => setGuestName(e.target.value)}
-                      required
-                      style={inputStyle}
-                    />
-                    <input
-                      type="email"
-                      placeholder={labels.emailPlaceholder}
-                      value={guestEmail}
-                      onChange={(e) =>
-                        setGuestEmail(e.target.value.toLowerCase())
-                      }
-                      required
-                      style={inputStyle}
-                    />
-                  </div>
-                )}
-
-                <div style={photoBox}>
-                  {imagePreview ? (
-                    <div style={{ position: "relative" }}>
-                      <img
-                        src={imagePreview}
-                        style={previewImg}
-                        alt="preview"
-                      />
-                      {!loading && (
-                        <button
-                          type="button"
-                          onClick={() => setImagePreview(null)}
-                          style={removeImgStyle}
-                        >
-                          <XCircle size={18} />
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div
-                      onClick={() => fileInputRef.current.click()}
-                      style={cameraBoxStyle}
-                    >
-                      <Camera size={32} /> {labels.takePhoto}
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    ref={fileInputRef}
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const file = e.target.files[0];
-                      if (file) {
-                        setImageFile(file);
-                        setImagePreview(URL.createObjectURL(file));
-                      }
+                      containerStyle: { width: "100%", height: "100%" },
                     }}
                   />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading || !imageFile}
-                  style={submitBtn}
-                >
-                  {loading ? (
-                    <Loader2 className="spinner" size={20} />
-                  ) : (
-                    <UploadCloud size={20} />
+                  {!loading && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreview(null);
+                        setImageFile(null);
+                        setZoom(1);
+                      }}
+                      style={{ ...removeImgStyle, zIndex: 10 }}
+                    >
+                      <XCircle size={18} />
+                    </button>
                   )}
-                  {loading ? labels.processing : labels.submit}
-                </button>
-              </form>
+                </div>
+              ) : (
+                <div
+                  onClick={() => fileInputRef.current.click()}
+                  style={cameraBoxStyle}
+                >
+                  <Camera size={32} /> {labels.takePhoto}
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                ref={fileInputRef}
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    setImageFile(file);
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      setImagePreview(reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
             </div>
-          </div>
+
+            <button
+              type="submit"
+              disabled={loading || !imagePreview}
+              style={{
+                ...submitBtn,
+                opacity: loading || !imagePreview ? 0.8 : 1,
+              }}
+            >
+              {loading ? (
+                <Loader2 className="spinner" size={20} />
+              ) : (
+                <UploadCloud size={20} />
+              )}
+              {loading ? labels.processing : labels.submit}
+            </button>
+          </form>
         )}
 
         {/* CLAIM MODAL */}

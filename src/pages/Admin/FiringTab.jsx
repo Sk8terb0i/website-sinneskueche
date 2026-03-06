@@ -297,8 +297,14 @@ export default function FiringTab({ isMobile, currentLang }) {
 
   const renderCard = (item) => {
     const isSelected = selectedIds.includes(item.id);
+
+    // --- FIX FOR THE "GUEST" BUG ON DISPLAY ---
     const studentName = userMap[item.email?.toLowerCase()];
-    const displayName = item.name || studentName || item.email;
+    // Prioritize the real name from the userMap if the database accidentally saved "Guest"
+    const savedName = item.name === "Guest" ? null : item.name;
+    const displayName = studentName || savedName || item.email || "Guest";
+    // ------------------------------------------
+
     const isOverdue = checkOverdue(item);
 
     let mainActions = [];

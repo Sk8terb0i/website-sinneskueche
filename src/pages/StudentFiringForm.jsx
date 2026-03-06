@@ -22,6 +22,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import Header from "../components/Header/Header";
+import Cropper from "react-easy-crop"; // <-- IMPORTED CROPPER
 import {
   Camera,
   UploadCloud,
@@ -40,6 +41,50 @@ import {
   Package,
   User,
 } from "lucide-react";
+
+// --- CROP & COMPRESSION HELPER FUNCTIONS ---
+const createImage = (url) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => resolve(image));
+    image.addEventListener("error", (error) => reject(error));
+    image.src = url;
+  });
+
+async function getCroppedImg(imageSrc, pixelCrop, quality = 0.7) {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  // Set canvas size to match the cropped area
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+
+  // Draw the cropped area onto the canvas
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height,
+  );
+
+  // Export the canvas as a compressed JPEG Blob
+  return new Promise((resolve) => {
+    canvas.toBlob(
+      (blob) => {
+        resolve(blob);
+      },
+      "image/jpeg",
+      quality, // 0.7 applies 30% compression to keep file sizes very small
+    );
+  });
+}
+// -------------------------------------------
 
 export default function StudentFiringForm() {
   const navigate = useNavigate();
@@ -61,6 +106,16 @@ export default function StudentFiringForm() {
 
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+
+  // --- CROPPER STATE ---
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+
+  const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+  // ---------------------
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -152,7 +207,8 @@ export default function StudentFiringForm() {
       glazeAction: "Move to Glaze firing",
       pickupAction: "Mark picked up",
       orRegisterNew: "add new object",
-      takePhoto: "Open Camera",
+      takePhoto: "Open Camera / Select Photo",
+      dragToCrop: "Drag to frame your object", // New label
       submit: "Confirm Registration",
       successTitle: "All Set!",
       successText:
@@ -193,7 +249,8 @@ export default function StudentFiringForm() {
       glazeAction: "Zum Glasurbrand bewegen",
       pickupAction: "Als abgeholt markieren",
       orRegisterNew: "neues objekt registrieren",
-      takePhoto: "Kamera öffnen",
+      takePhoto: "Kamera öffnen / Foto wählen",
+      dragToCrop: "Ziehe das Bild passend in den Rahmen", // New label
       submit: "Registrierung bestätigen",
       successTitle: "Erledigt!",
       successText:
@@ -268,7 +325,6 @@ export default function StudentFiringForm() {
     try {
       const finalCode = currentUser ? userCode : claimCode.toUpperCase();
       const finalName = currentUser?.displayName || claimName || "Guest";
-      // We no longer require or capture an email for claims, so we leave it empty or inherit the current user's
       const finalEmail = currentUser?.email || "";
 
       if (!finalCode || finalCode.length !== 4)
@@ -284,7 +340,6 @@ export default function StudentFiringForm() {
       });
 
       setClaimingPiece(null);
-      // Removed setSuccess(true) so it doesn't show the full page checkmark
       await fetchPieces(finalCode);
       await fetchAbandoned();
     } catch (err) {
@@ -296,7 +351,7 @@ export default function StudentFiringForm() {
 
   const handleNewRegistration = async (e) => {
     e.preventDefault();
-    if (!imageFile) return setError("Photo required.");
+    if (!imagePreview || !croppedAreaPixels) return setError("Photo required.");
     setError("");
 
     const isFirstTimeGuest = !currentUser && existingObjects.length === 0;
@@ -327,16 +382,27 @@ export default function StudentFiringForm() {
       currentUser?.email ||
       (existingObjects.length > 0 ? existingObjects[0].email : guestEmail);
     const finalName =
-      currentUser?.displayName ||
-      (existingObjects.length > 0 ? existingObjects[0].name : guestName);
+      (userData?.firstName
+        ? `${userData.firstName} ${userData.lastName || ""}`.trim()
+        : currentUser?.displayName) ||
+      (existingObjects.length > 0 ? existingObjects[0].name : guestName) ||
+      "Guest";
 
     setLoading(true);
     try {
-      const fileExt = imageFile.name.split(".").pop() || "jpg";
-      const storageRef = ref(storage, `firings/${Date.now()}.${fileExt}`);
-      await uploadBytes(storageRef, imageFile);
+      // 1. Generate the cropped and compressed Blob
+      const croppedBlob = await getCroppedImg(
+        imagePreview,
+        croppedAreaPixels,
+        0.7,
+      );
+
+      // 2. Upload the compressed Blob
+      const storageRef = ref(storage, `firings/${Date.now()}.jpg`);
+      await uploadBytes(storageRef, croppedBlob);
       const imageUrl = await getDownloadURL(storageRef);
 
+      // 3. Register entry in database
       const registerFn = httpsCallable(getFunctions(), "registerFiringObject");
       await registerFn({
         email: finalEmail.toLowerCase(),
@@ -346,6 +412,7 @@ export default function StudentFiringForm() {
         imageUrl,
         currentLang: lang,
       });
+
       setSuccess(true);
     } catch (err) {
       setError(err.message);
@@ -360,6 +427,7 @@ export default function StudentFiringForm() {
     setSuccess(false);
     setImagePreview(null);
     setImageFile(null);
+    setZoom(1); // Reset zoom
     setError("");
   };
 
@@ -852,7 +920,7 @@ export default function StudentFiringForm() {
           </div>
         )}
 
-        {/* SEPARATE ADOPT SECTION (Always visible below the main content when looking at pieces or form) */}
+        {/* SEPARATE ADOPT SECTION */}
         {step !== "email" && abandonedObjects.length > 0 && (
           <div style={{ marginTop: "3rem" }}>
             <h3
@@ -984,35 +1052,42 @@ export default function StudentFiringForm() {
             )}
 
             <div style={sectionStyle}>
-              <label style={labelStyle}>{labels.takePhoto}</label>
+              <label style={labelStyle}>
+                {imagePreview ? labels.dragToCrop : labels.takePhoto}
+              </label>
+
               {imagePreview ? (
                 <div
                   style={{
                     position: "relative",
                     borderRadius: "16px",
                     overflow: "hidden",
+                    width: "100%",
                     aspectRatio: "1 / 1",
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    backgroundColor: "#fdf8e1",
+                    backgroundColor: "#1c0700",
                   }}
                 >
-                  <img
-                    src={imagePreview}
+                  <Cropper
+                    image={imagePreview}
+                    crop={crop}
+                    zoom={zoom}
+                    aspect={1} // Forces a perfect square crop
+                    onCropChange={setCrop}
+                    onCropComplete={onCropComplete}
+                    onZoomChange={setZoom}
                     style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      opacity: loading ? 0.6 : 1,
+                      containerStyle: { width: "100%", height: "100%" },
                     }}
-                    alt="preview"
                   />
                   {!loading && (
                     <button
                       type="button"
-                      onClick={() => setImagePreview(null)}
-                      style={removeImgStyle}
+                      onClick={() => {
+                        setImagePreview(null);
+                        setImageFile(null);
+                        setZoom(1);
+                      }}
+                      style={{ ...removeImgStyle, zIndex: 10 }}
                     >
                       <XCircle size={18} />
                     </button>
@@ -1036,7 +1111,12 @@ export default function StudentFiringForm() {
                   const file = e.target.files[0];
                   if (file) {
                     setImageFile(file);
-                    setImagePreview(URL.createObjectURL(file));
+                    // Use FileReader to safely get the image data URL for cropping
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      setImagePreview(reader.result);
+                    };
+                    reader.readAsDataURL(file);
                   }
                 }}
               />
@@ -1044,8 +1124,11 @@ export default function StudentFiringForm() {
 
             <button
               type="submit"
-              disabled={loading}
-              style={{ ...primaryBtnStyle, opacity: loading ? 0.8 : 1 }}
+              disabled={loading || !imagePreview}
+              style={{
+                ...primaryBtnStyle,
+                opacity: loading || !imagePreview ? 0.8 : 1,
+              }}
             >
               {loading ? (
                 <Loader2 className="spinner" size={22} />
@@ -1362,12 +1445,6 @@ const closeBtn = {
   opacity: 0.5,
 };
 const photoBox = { marginBottom: "1.5rem" };
-const previewImg = {
-  width: "100%",
-  aspectRatio: "1/1",
-  borderRadius: "20px",
-  objectFit: "cover",
-};
 const submitBtn = {
   width: "100%",
   padding: "16px",
