@@ -17,7 +17,7 @@ export default function BookingsCard({ userId, currentLang, t }) {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
-  const [confirmingId, setConfirmingId] = useState(null); // Use the combined key for this
+  const [confirmingId, setConfirmingId] = useState(null);
 
   const getCourseTitle = (link) => {
     if (!link) return "Course";
@@ -96,7 +96,7 @@ export default function BookingsCard({ userId, currentLang, t }) {
   // Handle bulk cancellation
   const handleCancelGroup = async (bookingIds) => {
     const functions = getFunctions();
-    const cancelBookings = httpsCallable(functions, "cancelBookings"); // Updated to call bulk function
+    const cancelBookings = httpsCallable(functions, "cancelBookings");
 
     try {
       setDataLoading(true);
@@ -129,125 +129,135 @@ export default function BookingsCard({ userId, currentLang, t }) {
         {t.myCourses}
       </h3>
 
-      <div style={styles.policyBox}>
-        <Info size={14} />
-        <span>{labels.policyNote}</span>
-      </div>
-
       {dataLoading ? (
-        <div style={styles.emptyState}>
+        <div
+          style={{
+            ...styles.emptyState,
+            border: "none",
+            backgroundColor: "transparent",
+          }}
+        >
           <Loader2 className="spinner" size={30} color="#caaff3" />
         </div>
       ) : bookings.length === 0 ? (
         <div style={styles.emptyState}>
-          <p style={{ opacity: 0.6 }}>{t.noCourses}</p>
-          <button onClick={() => navigate("/")} style={styles.browseBtn}>
-            {t.browseCourses}
-          </button>
+          <p style={styles.emptyText}>{t.noCourses}</p>
         </div>
       ) : (
-        Object.entries(groupedBookings).map(([title, dateGroups]) => (
-          <div key={title} style={styles.courseGroup}>
-            <h4 style={styles.courseGroupTitle}>{title}</h4>
-            <div style={styles.bookingsList}>
-              {Object.entries(dateGroups).map(([dateKey, groupData]) => {
-                const dateObj = new Date(groupData.date);
-                const daysUntil =
-                  (dateObj - new Date()) / (1000 * 60 * 60 * 24);
-                const canCancel = daysUntil >= 5;
-                const isConfirming = confirmingId === dateKey;
-
-                return (
-                  <div key={dateKey} style={styles.bookingItem}>
-                    <div style={styles.bookingDateBox}>
-                      <span style={styles.bookingMonth}>
-                        {dateObj.toLocaleString(
-                          currentLang === "en" ? "en-US" : "de-DE",
-                          { month: "short" },
-                        )}
-                      </span>
-                      <span style={styles.bookingDay}>{dateObj.getDate()}</span>
-                    </div>
-
-                    <div style={styles.bookingDetails}>
-                      {!isConfirming ? (
-                        <div style={styles.row}>
-                          <div>
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                              }}
-                            >
-                              <p style={styles.bookingTitle}>
-                                {dateObj.toLocaleDateString(
-                                  currentLang === "en" ? "en-US" : "de-DE",
-                                  {
-                                    weekday: "long",
-                                    year: "numeric",
-                                    month: "long",
-                                    day: "numeric",
-                                  },
-                                )}
-                              </p>
-                              {/* Ticket Badge */}
-                              {groupData.count > 1 && (
-                                <span
-                                  style={{
-                                    backgroundColor: "rgba(202, 175, 243, 0.2)",
-                                    color: "#9960a8",
-                                    fontSize: "0.65rem",
-                                    fontWeight: "900",
-                                    padding: "2px 6px",
-                                    borderRadius: "100px",
-                                  }}
-                                >
-                                  {groupData.count} Tickets
-                                </span>
-                              )}
-                            </div>
-                            <div style={styles.timeRow}>
-                              <Clock size={12} /> <span>{groupData.time}</span>
-                            </div>
-                          </div>
-                          {canCancel && (
-                            <button
-                              onClick={() => setConfirmingId(dateKey)}
-                              style={styles.cancelActionBtn}
-                            >
-                              {labels.cancelBtn}
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <div style={styles.confirmView}>
-                          <span style={styles.confirmText}>
-                            {labels.confirm(groupData.count)}
-                          </span>
-                          <div style={styles.confirmActions}>
-                            <button
-                              onClick={() => handleCancelGroup(groupData.ids)}
-                              style={{ ...styles.iconBtn, color: "#4e5f28" }}
-                            >
-                              <Check size={18} />
-                            </button>
-                            <button
-                              onClick={() => setConfirmingId(null)}
-                              style={{ ...styles.iconBtn, color: "#ff4d4d" }}
-                            >
-                              <X size={18} />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        <>
+          {/* Only show the policy note if there are actual bookings */}
+          <div style={styles.policyBox}>
+            <Info size={14} />
+            <span>{labels.policyNote}</span>
           </div>
-        ))
+
+          {Object.entries(groupedBookings).map(([title, dateGroups]) => (
+            <div key={title} style={styles.courseGroup}>
+              <h4 style={styles.courseGroupTitle}>{title}</h4>
+              <div style={styles.bookingsList}>
+                {Object.entries(dateGroups).map(([dateKey, groupData]) => {
+                  const dateObj = new Date(groupData.date);
+                  const daysUntil =
+                    (dateObj - new Date()) / (1000 * 60 * 60 * 24);
+                  const canCancel = daysUntil >= 5;
+                  const isConfirming = confirmingId === dateKey;
+
+                  return (
+                    <div key={dateKey} style={styles.bookingItem}>
+                      <div style={styles.bookingDateBox}>
+                        <span style={styles.bookingMonth}>
+                          {dateObj.toLocaleString(
+                            currentLang === "en" ? "en-US" : "de-DE",
+                            { month: "short" },
+                          )}
+                        </span>
+                        <span style={styles.bookingDay}>
+                          {dateObj.getDate()}
+                        </span>
+                      </div>
+
+                      <div style={styles.bookingDetails}>
+                        {!isConfirming ? (
+                          <div style={styles.row}>
+                            <div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                }}
+                              >
+                                <p style={styles.bookingTitle}>
+                                  {dateObj.toLocaleDateString(
+                                    currentLang === "en" ? "en-US" : "de-DE",
+                                    {
+                                      weekday: "long",
+                                      year: "numeric",
+                                      month: "long",
+                                      day: "numeric",
+                                    },
+                                  )}
+                                </p>
+                                {/* Ticket Badge */}
+                                {groupData.count > 1 && (
+                                  <span
+                                    style={{
+                                      backgroundColor:
+                                        "rgba(202, 175, 243, 0.2)",
+                                      color: "#9960a8",
+                                      fontSize: "0.65rem",
+                                      fontWeight: "900",
+                                      padding: "2px 6px",
+                                      borderRadius: "100px",
+                                    }}
+                                  >
+                                    {groupData.count} Tickets
+                                  </span>
+                                )}
+                              </div>
+                              <div style={styles.timeRow}>
+                                <Clock size={12} />{" "}
+                                <span>{groupData.time}</span>
+                              </div>
+                            </div>
+                            {canCancel && (
+                              <button
+                                onClick={() => setConfirmingId(dateKey)}
+                                style={styles.cancelActionBtn}
+                              >
+                                {labels.cancelBtn}
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={styles.confirmView}>
+                            <span style={styles.confirmText}>
+                              {labels.confirm(groupData.count)}
+                            </span>
+                            <div style={styles.confirmActions}>
+                              <button
+                                onClick={() => handleCancelGroup(groupData.ids)}
+                                style={{ ...styles.iconBtn, color: "#4e5f28" }}
+                              >
+                                <Check size={18} />
+                              </button>
+                              <button
+                                onClick={() => setConfirmingId(null)}
+                                style={{ ...styles.iconBtn, color: "#ff4d4d" }}
+                              >
+                                <X size={18} />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </>
       )}
     </section>
   );
@@ -260,8 +270,8 @@ const styles = {
     borderRadius: "24px",
     border: "1px solid rgba(28, 7, 0, 0.05)",
     boxSizing: "border-box",
-    flex: 2,
     width: "100%",
+    height: "fit-content", // Shrinks to fit content when empty
   },
   sectionHeading: {
     fontFamily: "Harmond-SemiBoldCondensed",
@@ -280,7 +290,7 @@ const styles = {
     fontFamily: "Satoshi",
     color: "#1c0700",
     opacity: 0.5,
-    marginBottom: "2rem",
+    marginBottom: "1.5rem",
     fontStyle: "italic",
     lineHeight: "1.3",
   },
@@ -360,15 +370,24 @@ const styles = {
     cursor: "pointer",
     textTransform: "uppercase",
   },
-  emptyState: { padding: "2rem", textAlign: "center" },
-  browseBtn: {
+  // MATCHED STYLES WITH POTTERY FIRING CARD
+  emptyState: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fffce3",
+    padding: "1rem",
+    borderRadius: "14px",
+    border: "1px dashed rgba(28, 7, 0, 0.1)",
     marginTop: "1rem",
-    padding: "10px 20px",
-    backgroundColor: "#caaff3",
-    borderRadius: "100px",
-    border: "none",
-    fontWeight: "bold",
-    cursor: "pointer",
+    cursor: "default",
+  },
+  emptyText: {
+    margin: 0,
+    fontSize: "0.9rem",
+    fontStyle: "italic",
+    textAlign: "center",
+    opacity: 0.6,
   },
   confirmView: {
     display: "flex",

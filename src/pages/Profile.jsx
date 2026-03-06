@@ -11,6 +11,7 @@ import {
   orderBy,
   doc,
   getDoc,
+  limit,
 } from "firebase/firestore";
 
 import Header from "../components/Header/Header";
@@ -50,7 +51,13 @@ const getCleanCourseKey = (path) =>
  * --- INTERNAL TEACHING CARD COMPONENT ---
  * Exact styling match for BookingsCard.jsx
  */
-function TeachingCard({ teachingEvents, isScheduleLoading, currentLang, t }) {
+function TeachingCard({
+  teachingEvents,
+  isScheduleLoading,
+  currentLang,
+  t,
+  isMobile,
+}) {
   const groupedTeaching = useMemo(() => {
     const grouped = {};
     teachingEvents.forEach((event) => {
@@ -75,14 +82,14 @@ function TeachingCard({ teachingEvents, isScheduleLoading, currentLang, t }) {
 
   return (
     <section style={styles.card}>
-      <h3 style={styles.sectionHeading}>
+      <h3 style={styles.sectionHeading(isMobile)}>
         <BookOpen size={20} color="#4e5f28" />
         <span style={{ lineHeight: 1 }}>{t.teachingTitle}</span>
       </h3>
 
       {Object.entries(groupedTeaching).map(([title, events]) => (
         <div key={title} style={styles.courseGroup}>
-          <h4 style={styles.courseGroupTitle}>{title}</h4>
+          <h4 style={styles.courseGroupTitle(isMobile)}>{title}</h4>
           <div style={styles.bookingsList}>
             {events.map((event) => {
               const dateObj = new Date(event.date);
@@ -104,7 +111,7 @@ function TeachingCard({ teachingEvents, isScheduleLoading, currentLang, t }) {
 
                   <div style={styles.bookingDetails}>
                     <div style={styles.row}>
-                      <p style={styles.bookingTitle}>
+                      <p style={styles.bookingTitle(isMobile)}>
                         {dateObj.toLocaleDateString(
                           currentLang === "en" ? "en-US" : "de-DE",
                           {
@@ -153,14 +160,15 @@ export default function Profile({ currentLang, setCurrentLang }) {
   const [packCourses, setPackCourses] = useState([]);
   const [teachingEvents, setTeachingEvents] = useState([]);
   const [isScheduleLoading, setIsScheduleLoading] = useState(false);
+
+  // Visibility States
   const [hasPotteryHistory, setHasPotteryHistory] = useState(false);
+  const [hasRentalAccess, setHasRentalAccess] = useState(false);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [activeTab, setActiveTab] = useState("dashboard");
 
-  const isAdmin =
-    userData?.role === "admin" || userData?.role === "course_admin";
-
+  // 1. Check for Pottery History
   useEffect(() => {
     const checkPottery = async () => {
       if (!currentUser || !userData) return;
@@ -189,6 +197,37 @@ export default function Profile({ currentLang, setCurrentLang }) {
       }
     };
     checkPottery();
+  }, [currentUser, userData]);
+
+  // 2. Check for Rental Access (Global Admin Override OR Existing Bookings)
+  useEffect(() => {
+    const checkRentalAccess = async () => {
+      if (!currentUser || !userData) return;
+
+      try {
+        // A. Check Global Admin Config
+        const configDoc = await getDoc(doc(db, "settings", "admin_config"));
+        if (configDoc.exists() && configDoc.data().showRentalInProfile) {
+          setHasRentalAccess(true);
+          return; // If globally enabled, no need to check bookings
+        }
+
+        // B. Check for existing rental bookings
+        const q = query(
+          collection(db, "rental_bookings"),
+          where("userId", "==", currentUser.uid),
+          limit(1),
+        );
+        const snap = await getDocs(q);
+
+        if (!snap.empty) {
+          setHasRentalAccess(true);
+        }
+      } catch (e) {
+        console.error("Error checking rental access:", e);
+      }
+    };
+    checkRentalAccess();
   }, [currentUser, userData]);
 
   useEffect(() => {
@@ -364,7 +403,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
       />
       <main style={styles.main}>
         <div style={styles.headerRow}>
-          <h1 style={styles.title}>{t.title}</h1>
+          <h1 style={styles.title(isMobile)}>{t.title}</h1>
           <button onClick={() => signOut(auth)} style={styles.logoutBtn}>
             <LogOut size={16} /> {t.logout}
           </button>
@@ -377,19 +416,19 @@ export default function Profile({ currentLang, setCurrentLang }) {
                 onClick={() => setActiveTab("dashboard")}
                 style={styles.tabBtn(activeTab === "dashboard")}
               >
-                <LayoutDashboard size={18} /> {t.tabDashboard}
+                <LayoutDashboard size={16} /> {t.tabDashboard}
               </button>
               <button
                 onClick={() => setActiveTab("shop")}
                 style={styles.tabBtn(activeTab === "shop")}
               >
-                <Ticket size={18} /> {t.tabShop}
+                <Ticket size={16} /> {t.tabShop}
               </button>
               <button
                 onClick={() => setActiveTab("me")}
                 style={styles.tabBtn(activeTab === "me")}
               >
-                <User size={18} /> {t.tabMe}
+                <User size={16} /> {t.tabMe}
               </button>
             </div>
             <div style={styles.mobileContentStack}>
@@ -406,13 +445,16 @@ export default function Profile({ currentLang, setCurrentLang }) {
                     isScheduleLoading={isScheduleLoading}
                     currentLang={currentLang}
                     t={t}
+                    isMobile={isMobile}
                   />
                   <BookingsCard
                     userId={currentUser.uid}
                     currentLang={currentLang}
                     t={t}
                   />
-                  <RentalBookingsCard t={t} currentLang={currentLang} />
+                  {hasRentalAccess && (
+                    <RentalBookingsCard t={t} currentLang={currentLang} />
+                  )}
                 </>
               )}
               {activeTab === "shop" && (
@@ -469,6 +511,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
                 isScheduleLoading={isScheduleLoading}
                 currentLang={currentLang}
                 t={t}
+                isMobile={isMobile}
               />
               {hasPotteryHistory && (
                 <PotteryFiringCard
@@ -476,7 +519,9 @@ export default function Profile({ currentLang, setCurrentLang }) {
                   currentLang={currentLang}
                 />
               )}
-              <RentalBookingsCard t={t} currentLang={currentLang} />
+              {hasRentalAccess && (
+                <RentalBookingsCard t={t} currentLang={currentLang} />
+              )}
               <BookingsCard
                 userId={currentUser.uid}
                 currentLang={currentLang}
@@ -514,13 +559,14 @@ const styles = {
     alignItems: "center",
     marginBottom: "2.5rem",
   },
-  title: {
+  title: (isMobile) => ({
     fontFamily: "Harmond-SemiBoldCondensed",
     fontSize: "3.5rem",
     color: "#1c0700",
     margin: 0,
     textTransform: "lowercase",
-  },
+    fontWeight: isMobile ? "normal" : undefined,
+  }),
   logoutBtn: {
     display: "flex",
     alignItems: "center",
@@ -557,17 +603,18 @@ const styles = {
   tabBtn: (isActive) => ({
     flex: 1,
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "row", // Changed from column to row
+    justifyContent: "center", // Ensures content stays centered
     alignItems: "center",
-    gap: "4px",
-    padding: "12px 5px",
+    gap: "6px", // Space between icon and text
+    padding: "10px 5px", // Adjusted padding for horizontal layout
     border: "none",
     background: isActive ? "#caaff3" : "transparent",
     color: "#1c0700",
     fontWeight: "800",
     borderRadius: "100px",
     cursor: "pointer",
-    fontSize: "0.7rem",
+    fontSize: "0.75rem",
   }),
   mobileContentStack: {
     display: "flex",
@@ -584,7 +631,7 @@ const styles = {
     width: "100%",
     boxSizing: "border-box",
   },
-  sectionHeading: {
+  sectionHeading: (isMobile) => ({
     fontFamily: "Harmond-SemiBoldCondensed",
     fontSize: "1.8rem",
     margin: "0 0 1.5rem 0",
@@ -592,9 +639,10 @@ const styles = {
     alignItems: "center",
     gap: "10px",
     color: "#1c0700",
-  },
+    fontWeight: isMobile ? "normal" : undefined,
+  }),
   courseGroup: { marginBottom: "1.5rem" },
-  courseGroupTitle: {
+  courseGroupTitle: (isMobile) => ({
     fontFamily: "Harmond-SemiBoldCondensed",
     fontSize: "1.3rem",
     color: "#9960a8",
@@ -602,7 +650,8 @@ const styles = {
     textTransform: "lowercase",
     borderBottom: "1px solid rgba(153, 96, 168, 0.1)",
     paddingBottom: "4px",
-  },
+    fontWeight: isMobile ? "normal" : undefined,
+  }),
   bookingsList: { display: "flex", flexDirection: "column", gap: "0.8rem" },
   bookingItem: {
     display: "flex",
@@ -636,13 +685,13 @@ const styles = {
     lineHeight: "1",
   },
   bookingDetails: { flex: 1 },
-  bookingTitle: {
+  bookingTitle: (isMobile) => ({
     margin: 0,
     fontFamily: "Satoshi",
-    fontWeight: "700",
+    fontWeight: isMobile ? "500" : "700",
     fontSize: "0.95rem",
     color: "#1c0700",
-  },
+  }),
   infoRow: { display: "flex", gap: "12px", marginTop: "2px", flexWrap: "wrap" },
   metaItem: {
     display: "flex",
