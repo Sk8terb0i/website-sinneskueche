@@ -1414,3 +1414,98 @@ exports.moveToGlazeStage = onCall({ cors: true }, async (request) => {
 
   return { success: true };
 });
+
+// ============================================================================
+// 7. CONTACT FORM
+// ============================================================================
+
+exports.onContactMessageCreate = onDocumentCreated(
+  "contact_messages/{messageId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+
+    // Fetch the array of contact emails from the admin settings
+    const settingsSnap = await db
+      .collection("settings")
+      .doc("admin_config")
+      .get();
+    const contactEmails = settingsSnap.exists
+      ? settingsSnap.data().contactEmails || []
+      : [];
+
+    // If no emails are configured, do nothing
+    if (contactEmails.length === 0) return;
+
+    const htmlBody = `
+      <div style="font-family: Arial; padding: 30px; background: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">
+        <h2 style="color: #9960a8; margin-top: 0;">New Contact Form Submission</h2>
+        <p><strong>Name:</strong> ${data.name}</p>
+        <p><strong>Email:</strong> ${data.email}</p>
+        <p><strong>Subject:</strong> ${data.subject}</p>
+        <div style="background: rgba(28, 7, 0, 0.03); padding: 15px; border-radius: 8px; border: 1px dashed rgba(28, 7, 0, 0.1); margin-top: 20px; white-space: pre-wrap;">
+          ${data.message}
+        </div>
+      </div>
+    `;
+
+    // Queue up an email for every recipient in the contactEmails array
+    const emailPromises = contactEmails.map((recipientEmail) => {
+      return db.collection("mail").add({
+        to: recipientEmail,
+        message: {
+          subject: `Contact Form: ${data.subject}`,
+          html: htmlBody,
+        },
+      });
+    });
+
+    await Promise.all(emailPromises);
+  },
+);
+
+exports.replyToContactMessage = onCall({ cors: true }, async (request) => {
+  if (!request.auth)
+    throw new HttpsError("unauthenticated", "Admin login required.");
+
+  const { messageId, replyText } = request.data;
+  const msgRef = db.collection("contact_messages").doc(messageId);
+  const snap = await msgRef.get();
+
+  if (!snap.exists) throw new HttpsError("not-found", "Message not found.");
+  const data = snap.data();
+
+  const htmlBody = `
+    <div style="font-family: Arial; padding: 30px; background: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">
+      <h2 style="color: #9960a8; margin-top: 0;">Response from Atelier Sinnesküche</h2>
+      <p>Hi ${data.name},</p>
+      <div style="margin: 20px 0; line-height: 1.6; white-space: pre-wrap;">
+        ${replyText}
+      </div>
+      <hr style="border: none; border-top: 1px dashed rgba(28, 7, 0, 0.1); margin: 30px 0;" />
+      <p style="font-size: 12px; opacity: 0.6;">You wrote regarding: "${data.subject}"</p>
+      <p style="font-size: 12px; opacity: 0.6; font-style: italic;">"${data.message}"</p>
+      <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>
+    </div>
+  `;
+
+  // 1. Send the email
+  await db.collection("mail").add({
+    to: data.email,
+    message: {
+      subject: `Re: ${data.subject}`,
+      html: htmlBody,
+    },
+  });
+
+  // 2. Update the message record in Firestore
+  await msgRef.update({
+    status: "read",
+    response: replyText,
+    respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+    respondedBy: request.auth.token.email,
+  });
+
+  return { success: true };
+});

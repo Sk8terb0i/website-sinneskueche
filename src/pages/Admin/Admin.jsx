@@ -6,7 +6,14 @@ import {
   signOut,
   sendPasswordResetEmail,
 } from "firebase/auth";
-import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  collection,
+  onSnapshot,
+  query,
+  where,
+} from "firebase/firestore";
 import {
   LogOut,
   Lock,
@@ -25,6 +32,7 @@ import {
   Flame,
   ChevronDown,
   ChevronUp,
+  MessageSquare,
 } from "lucide-react";
 
 // Components & Styles
@@ -40,6 +48,7 @@ import RemindersTab from "./RemindersTab";
 import ScheduleTab from "./ScheduleTab";
 import EmailTemplatesTab from "./EmailTemplatesTab";
 import FiringTab from "./FiringTab";
+import MessagesTab from "./MessagesTab";
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -61,12 +70,14 @@ export default function Admin({ currentLang, setCurrentLang }) {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Logic switch: isMobile for layout, isCompactNav for the tab bar behavior
+  // Pending counts for badges
+  const [pendingRentalCount, setPendingRentalCount] = useState(0);
+  const [pendingMessageCount, setPendingMessageCount] = useState(0);
+
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const isMobile = windowWidth < 900;
   const isCompactNav = windowWidth < 1850;
 
-  const [hasNewRentalRequests, setHasNewRentalRequests] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const labels = {
@@ -92,6 +103,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       defaultView: "Default View",
       setDefault: "Set as Default",
       firing: "Firing Schedule",
+      messages: "Messages",
       group1: "Management",
       group2: "Tools",
       group3: "Marketing",
@@ -119,6 +131,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       defaultView: "Standardansicht",
       setDefault: "Als Standard setzen",
       firing: "Brennplan",
+      messages: "Nachrichten",
       group1: "Verwaltung",
       group2: "Tools",
       group3: "Marketing",
@@ -179,17 +192,31 @@ export default function Admin({ currentLang, setCurrentLang }) {
     };
   }, []);
 
+  // Listen for Pending Rental Requests
   useEffect(() => {
     if (!user || adminData?.role !== "admin") return;
     const unsubscribe = onSnapshot(collection(db, "rent_requests"), (snap) => {
-      const hasPending = snap.docs.some((doc) => {
+      const pending = snap.docs.filter((doc) => {
         const data = doc.data();
         return (
           data.status === "pending" || data.status === "new" || !data.status
         );
       });
-      setHasNewRentalRequests(hasPending);
+      setPendingRentalCount(pending.length);
     });
+    return () => unsubscribe();
+  }, [user, adminData]);
+
+  // Listen for Unread Messages
+  useEffect(() => {
+    if (!user || adminData?.role !== "admin") return;
+    const unsubscribe = onSnapshot(
+      collection(db, "contact_messages"),
+      (snap) => {
+        const unread = snap.docs.filter((doc) => doc.data().status === "new");
+        setPendingMessageCount(unread.length);
+      },
+    );
     return () => unsubscribe();
   }, [user, adminData]);
 
@@ -208,6 +235,32 @@ export default function Admin({ currentLang, setCurrentLang }) {
   const handleSetDefaultTab = () => {
     localStorage.setItem("adminDefaultTab", activeTab);
     setDefaultTab(activeTab);
+  };
+
+  // Badge Component
+  const TabBadge = ({ count }) => {
+    if (count <= 0) return null;
+    return (
+      <span
+        style={{
+          backgroundColor: "#9960a8",
+          color: "white",
+          fontSize: "10px",
+          fontWeight: "bold",
+          padding: "2px 6px",
+          borderRadius: "10px",
+          marginLeft: "6px",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minWidth: "18px",
+          height: "18px",
+          lineHeight: 1,
+        }}
+      >
+        {count}
+      </span>
+    );
   };
 
   if (checkingRole && !user)
@@ -331,6 +384,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       promotions: { icon: <Ticket size={18} />, label: labels.promotions },
       rental: { icon: <LayoutGrid size={18} />, label: labels.rental },
       firing: { icon: <Flame size={18} />, label: labels.firing },
+      messages: { icon: <MessageSquare size={18} />, label: labels.messages },
     };
     return map[activeTab] || map.events;
   };
@@ -392,7 +446,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       </header>
 
       {isCompactNav ? (
-        /* --- COMPACT SELECTOR (Dropdown + Pin next to it) --- */
+        /* --- COMPACT SELECTOR --- */
         <div
           style={{ marginBottom: "1.5rem", position: "relative", zIndex: 100 }}
         >
@@ -417,6 +471,12 @@ export default function Admin({ currentLang, setCurrentLang }) {
               >
                 {getActiveTabDetails().icon}
                 {getActiveTabDetails().label}
+                {activeTab === "rental" && (
+                  <TabBadge count={pendingRentalCount} />
+                )}
+                {activeTab === "messages" && (
+                  <TabBadge count={pendingMessageCount} />
+                )}
               </div>
               {isMobileMenuOpen ? (
                 <ChevronUp size={20} />
@@ -486,8 +546,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
                 {
                   label: labels.group4,
                   items: [
-                    isFullAdmin && "rental",
                     isFullAdmin && "firing",
+                    isFullAdmin && "messages",
+                    isFullAdmin && "rental",
                   ].filter(Boolean),
                 },
               ].map((group, idx) => (
@@ -558,7 +619,12 @@ export default function Admin({ currentLang, setCurrentLang }) {
                           icon: <Flame size={18} />,
                           label: labels.firing,
                         },
+                        messages: {
+                          icon: <MessageSquare size={18} />,
+                          label: labels.messages,
+                        },
                       }[tabKey];
+
                       return (
                         <button
                           key={tabKey}
@@ -583,18 +649,21 @@ export default function Admin({ currentLang, setCurrentLang }) {
                             position: "relative",
                           }}
                         >
-                          {details.icon} {details.label}
-                          {tabKey === "rental" && hasNewRentalRequests && (
-                            <span
-                              style={{
-                                position: "absolute",
-                                right: "16px",
-                                width: "8px",
-                                height: "8px",
-                                backgroundColor: "#9960a8",
-                                borderRadius: "50%",
-                              }}
-                            />
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "12px",
+                              flex: 1,
+                            }}
+                          >
+                            {details.icon} {details.label}
+                          </div>
+                          {tabKey === "rental" && (
+                            <TabBadge count={pendingRentalCount} />
+                          )}
+                          {tabKey === "messages" && (
+                            <TabBadge count={pendingMessageCount} />
                           )}
                         </button>
                       );
@@ -606,7 +675,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
           )}
         </div>
       ) : (
-        /* --- ORIGINAL HORIZONTAL VIEW (RESTORED EXACTLY) --- */
+        /* --- ORIGINAL HORIZONTAL VIEW --- */
         <>
           <div
             style={{
@@ -742,32 +811,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
             {isFullAdmin && (
               <div style={groupStyle}>
                 <button
-                  onClick={() => setActiveTab("rental")}
-                  style={{
-                    ...tabButtonStyle(activeTab === "rental"),
-                    backgroundColor:
-                      activeTab === "rental" ? "#caaff3" : "transparent",
-                    borderRadius: "100px",
-                    color: "#1c0700",
-                    position: "relative",
-                  }}
-                >
-                  <LayoutGrid size={16} /> {labels.rental}
-                  {hasNewRentalRequests && (
-                    <span
-                      style={{
-                        position: "absolute",
-                        top: "4px",
-                        right: "4px",
-                        width: "8px",
-                        height: "8px",
-                        backgroundColor: "#9960a8",
-                        borderRadius: "50%",
-                      }}
-                    />
-                  )}
-                </button>
-                <button
                   onClick={() => setActiveTab("firing")}
                   style={{
                     ...tabButtonStyle(activeTab === "firing"),
@@ -778,6 +821,37 @@ export default function Admin({ currentLang, setCurrentLang }) {
                   }}
                 >
                   <Flame size={16} /> {labels.firing}
+                </button>
+                <button
+                  onClick={() => setActiveTab("messages")}
+                  style={{
+                    ...tabButtonStyle(activeTab === "messages"),
+                    backgroundColor:
+                      activeTab === "messages" ? "#caaff3" : "transparent",
+                    borderRadius: "100px",
+                    color: "#1c0700",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <MessageSquare size={16} /> {labels.messages}
+                  <TabBadge count={pendingMessageCount} />
+                </button>
+                <button
+                  onClick={() => setActiveTab("rental")}
+                  style={{
+                    ...tabButtonStyle(activeTab === "rental"),
+                    backgroundColor:
+                      activeTab === "rental" ? "#caaff3" : "transparent",
+                    borderRadius: "100px",
+                    color: "#1c0700",
+                    position: "relative",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <LayoutGrid size={16} /> {labels.rental}
+                  <TabBadge count={pendingRentalCount} />
                 </button>
               </div>
             )}
@@ -884,6 +958,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
           <>
             {activeTab === "pack-codes" && (
               <PackCodesTab isMobile={isMobile} currentLang={currentLang} />
+            )}
+            {activeTab === "messages" && (
+              <MessagesTab isMobile={isMobile} currentLang={currentLang} />
             )}
             {activeTab === "rental" && (
               <RentalTab isMobile={isMobile} currentLang={currentLang} />
