@@ -43,20 +43,20 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
       let settingsMap = {}; // Stores the entire course setting doc
       let bookingCounts = {};
 
-      // 1. Fetch Course Settings (Isolated try/catch)
+      // 1. Fetch Course Settings
       try {
         const settingsSnap = await getDocs(collection(db, "course_settings"));
         settingsSnap.docs.forEach((doc) => {
           const data = doc.data();
           visibilityMap[doc.id] = data.isVisible !== false;
-          settingsMap[doc.id] = data; // Save full settings for exact PriceDisplay logic
+          settingsMap[doc.id] = data;
         });
         setCourseVisibility(visibilityMap);
       } catch (error) {
         console.warn("Could not fetch course settings:", error);
       }
 
-      // 2. Fetch Booking Counts (Exact matching to PriceDisplay)
+      // 2. Fetch Booking Counts
       try {
         const countsSnap = await getDocs(collection(db, "bookings"));
         countsSnap.docs.forEach((doc) => {
@@ -78,36 +78,57 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         const now = new Date();
         now.setHours(0, 0, 0, 0);
 
-        const endOfSixMonths = new Date(
-          now.getFullYear(),
-          now.getMonth() + 7,
-          0,
-        );
-        endOfSixMonths.setHours(23, 59, 59, 999);
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
 
-        // Filter out past events
+        // Boundary for Events: End of the current year (Dec 31st, 23:59:59)
+        const endOfCurrentYear = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+
+        // Boundary for Courses: End of next month
+        // (Day 0 of currentMonth + 2 gives the last day of currentMonth + 1)
+        const endOfNextMonth = new Date(
+          currentYear,
+          currentMonth + 2,
+          0,
+          23,
+          59,
+          59,
+          999,
+        );
+
+        // Filter out past events and normalize the type for legacy data
         const futureItems = snapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
+          .map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              type:
+                data.type ||
+                (data.link?.startsWith("http") ? "event" : "course"),
+            };
+          })
           .filter((item) => new Date(item.date) >= now);
 
-        // --- FILTER EXACTLY LIKE PRICE DISPLAY ---
+        // Filter out full courses and hidden courses
         const availableItems = futureItems.filter((event) => {
-          // If no link, it's a general event without capacity constraints
           if (!event.link) return true;
 
           const courseId = event.link.replace(/\//g, "");
-          const pricing = settingsMap[courseId];
 
-          // Replicated exact logic from PriceDisplay.jsx:
+          if (event.type === "course" && visibilityMap[courseId] === false) {
+            return false;
+          }
+
+          const pricing = settingsMap[courseId];
           const isFull =
             pricing?.hasCapacity &&
             (bookingCounts[event.id] || 0) >= parseInt(pricing.capacity || 99);
 
-          // If it's full, filter it out!
           return !isFull;
         });
 
-        // Separate remaining items
+        // Separate items
         const rawEvents = availableItems.filter(
           (item) => item.type === "event",
         );
@@ -115,24 +136,18 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           (item) => item.type === "course" || !item.type,
         );
 
+        // 1. Filter Events: Show up to the end of the current year
         const filteredEvents = rawEvents.filter(
-          (item) => item.date && new Date(item.date) <= endOfSixMonths,
+          (item) => item.date && new Date(item.date) <= endOfCurrentYear,
         );
 
-        let filteredCourses = [];
-        if (rawCourses.length > 0) {
-          const firstCourseDate = new Date(rawCourses[0].date);
-          const targetMonth = firstCourseDate.getMonth();
-          const targetYear = firstCourseDate.getFullYear();
+        // 2. Filter Courses: Show up to the end of next month
+        const filteredCourses = rawCourses.filter((course) => {
+          if (!course.date) return false;
+          return new Date(course.date) <= endOfNextMonth;
+        });
 
-          filteredCourses = rawCourses.filter((course) => {
-            const d = new Date(course.date);
-            return (
-              d.getMonth() === targetMonth && d.getFullYear() === targetYear
-            );
-          });
-        }
-
+        // Combine and sort
         const combined = [...filteredCourses, ...filteredEvents].sort(
           (a, b) => new Date(a.date) - new Date(b.date),
         );
@@ -147,6 +162,28 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   }, [isOpen]);
 
   const hasUpcomingEvents = upcomingEvents.length > 0;
+
+  // Group events by Month and Year
+  const groupedEvents = useMemo(() => {
+    const groups = [];
+    upcomingEvents.forEach((ev) => {
+      const d = new Date(ev.date);
+      const monthName = d.toLocaleString(
+        currentLang === "de" ? "de-DE" : "en-US",
+        { month: "long" },
+      );
+      const year = d.getFullYear();
+      const monthYear = `${monthName} ${year}`;
+
+      let lastGroup = groups[groups.length - 1];
+      if (lastGroup && lastGroup.monthYear === monthYear) {
+        lastGroup.events.push(ev);
+      } else {
+        groups.push({ monthYear, events: [ev] });
+      }
+    });
+    return groups;
+  }, [upcomingEvents, currentLang]);
 
   const toggleSense = (senseId) => {
     setActiveSenses((prev) =>
@@ -325,12 +362,19 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
               toggle={() => setIsCalendarOpen(!isCalendarOpen)}
               isMobile={false}
             >
-              <div style={{ paddingTop: "2.5rem" }}>
-                <AtelierCalendar
-                  currentLang={currentLang}
-                  isMobile={false}
-                  events={upcomingEvents}
-                />
+              <div style={{ paddingTop: "1.5rem" }}>
+                {groupedEvents.map((group, idx) => (
+                  <div key={idx} style={{ marginBottom: "1.5rem" }}>
+                    <h4 style={monthHeaderStyle(isMobile)}>
+                      {group.monthYear}
+                    </h4>
+                    <AtelierCalendar
+                      currentLang={currentLang}
+                      isMobile={false}
+                      events={group.events}
+                    />
+                  </div>
+                ))}
               </div>
             </Section>
           </div>
@@ -478,11 +522,18 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
               isMobile={isMobile}
             >
               <div style={{ paddingTop: "0.5rem" }}>
-                <AtelierCalendar
-                  currentLang={currentLang}
-                  isMobile={true}
-                  events={upcomingEvents}
-                />
+                {groupedEvents.map((group, idx) => (
+                  <div key={idx} style={{ marginBottom: "1.5rem" }}>
+                    <h4 style={monthHeaderStyle(isMobile)}>
+                      {group.monthYear}
+                    </h4>
+                    <AtelierCalendar
+                      currentLang={currentLang}
+                      isMobile={true}
+                      events={group.events}
+                    />
+                  </div>
+                ))}
               </div>
             </Section>
           )}
@@ -490,7 +541,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
 
         <div style={footerStyle}>
           <a
-            href="https://instagram.com/sinneskueche/"
+            href="https://www.instagram.com/sinneskueche/"
             target="_blank"
             rel="noreferrer"
             className="footer-link"
@@ -621,6 +672,17 @@ function MenuLink({ item, lang, onNavigate, isMobile }) {
     </div>
   );
 }
+
+const monthHeaderStyle = (isMobile) => ({
+  fontFamily: "Harmond-SemiBoldCondensed",
+  fontWeight: isMobile ? "normal" : "bold", // <-- Lowers weight on mobile
+  fontSize: "1.1rem",
+  color: "#9960a8",
+  margin: "0 0 10px 0",
+  textTransform: "lowercase",
+  borderBottom: "1px solid rgba(153, 96, 168, 0.2)",
+  paddingBottom: "6px",
+});
 
 const filterLabelStyle = {
   fontFamily: "Satoshi",

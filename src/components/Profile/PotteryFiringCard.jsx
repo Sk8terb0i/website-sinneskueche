@@ -208,7 +208,7 @@ export default function PotteryFiringCard({ currentUser, currentLang }) {
       requiredFields: "Bitte fülle alle Felder aus.",
       tab_active: "aktiv",
       tab_ready: "bereit",
-      tab_done: "erledigt",
+      tab_done: "fertig",
       adoptTitle: "stück adoptieren",
       adoptDesc: "Diese Stücke wurden verlassen. Adoptiere eines kostenlos!",
       claimAction: "adoptieren",
