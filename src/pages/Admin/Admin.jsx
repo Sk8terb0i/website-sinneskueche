@@ -95,7 +95,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       password: "Password",
       forgot: "Forgot?",
       signIn: "Sign In",
-      fullAdmin: "Full Admin",
+      fullAdmin: "Admin",
       courseAdmin: "Course Admin",
       logout: "Logout",
       events: "Events",
@@ -125,7 +125,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       password: "Passwort",
       forgot: "Vergessen?",
       signIn: "Anmelden",
-      fullAdmin: "Haupt-Admin",
+      fullAdmin: "Admin",
       courseAdmin: "Kurs-Admin",
       logout: "Abmelden",
       events: "Termine",
@@ -596,12 +596,10 @@ export default function Admin({ currentLang, setCurrentLang }) {
               style={{
                 opacity: 0.5,
                 fontSize: "0.75rem",
-                textTransform: "uppercase",
-                letterSpacing: "1px",
               }}
             >
               {isFullAdmin ? labels.fullAdmin : labels.courseAdmin}:{" "}
-              {user.email}
+              {adminData?.firstName || user.email}
             </p>
             <button
               onClick={() =>
@@ -615,8 +613,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
                 border: "none",
                 borderRadius: "100px",
                 padding: "4px 12px",
-                fontSize: "11px",
-                fontWeight: "900",
+                fontSize: isMobile ? "8px" : "11px",
+                fontWeight: isMobile ? "500" : "600",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -628,18 +626,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
             </button>
           </div>
         </div>
-        <button
-          onClick={() => signOut(auth)}
-          style={{
-            ...logoutBtnStyle,
-            backgroundColor: "#fdf8e1",
-            border: "1px solid rgba(28, 7, 0, 0.1)",
-            borderRadius: "100px",
-            padding: "8px 16px",
-          }}
-        >
-          <LogOut size={16} /> {!isMobile && labels.logout}
-        </button>
       </header>
 
       {isCustomizingNav ? (
