@@ -49,6 +49,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
+  const [hasBookedBefore, setHasBookedBefore] = useState(false);
 
   useEffect(() => {
     if (forceExpand) {
@@ -133,6 +134,9 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           );
           const allUserBookings = uSnap.docs.map((d) => d.data());
 
+          setHasBookedBefore(
+            allUserBookings.some((b) => b.coursePath === coursePath),
+          );
           setUserBookedIds(allUserBookings.map((b) => b.eventId));
           // Filter out ONLY the bookings made with credits
           setUserCreditBookedIds(
@@ -334,15 +338,49 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
               return (
                 <div
                   key={i}
-                  onClick={() =>
-                    event &&
-                    !isFull &&
-                    setSelectedDates((prev) =>
-                      prev.find((x) => x.id === event.id)
-                        ? prev.filter((x) => x.id !== event.id)
-                        : [...prev, { ...event, count: 1 }],
-                    )
-                  }
+                  onClick={() => {
+                    if (!event || isFull) return;
+                    setSelectedDates((prev) => {
+                      if (prev.find((x) => x.id === event.id)) {
+                        return prev.filter((x) => x.id !== event.id);
+                      } else {
+                        let autoAddons = [];
+                        // Check if a mandatory addon is already in the cart somewhere
+                        let hasMandatoryInCart = prev.some((d) =>
+                          d.selectedAddons?.some((aid) => {
+                            const def = pricing?.specialEvents?.find(
+                              (se) => se.id === aid,
+                            );
+                            return def?.isMandatory;
+                          }),
+                        );
+
+                        // If not logged in or hasn't booked before, auto-add mandatory addons
+                        if (!currentUser || !hasBookedBefore) {
+                          const rawAddons =
+                            scheduleData?.specialAssignments?.[event.id];
+                          const activeAddons = Array.isArray(rawAddons)
+                            ? rawAddons
+                            : rawAddons
+                              ? [rawAddons]
+                              : [];
+                          activeAddons.forEach((aid) => {
+                            const def = pricing?.specialEvents?.find(
+                              (se) => se.id === aid,
+                            );
+                            if (def?.isMandatory && !hasMandatoryInCart) {
+                              autoAddons.push(aid);
+                              hasMandatoryInCart = true;
+                            }
+                          });
+                        }
+                        return [
+                          ...prev,
+                          { ...event, count: 1, selectedAddons: autoAddons },
+                        ];
+                      }
+                    });
+                  }}
                   style={S.dayStyle(!!event, !!isSelected, isMobile, isFull)}
                 >
                   {activeAddons.length > 0 && (
@@ -431,6 +469,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           coursePath={coursePath}
           userBookedIds={userBookedIds}
           userCreditBookedIds={userCreditBookedIds}
+          hasBookedBefore={hasBookedBefore}
         />
       </div>
     </div>

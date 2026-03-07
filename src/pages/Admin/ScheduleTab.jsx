@@ -86,6 +86,7 @@ export default function ScheduleTab({
       addonsLabel: "Session Add-ons",
       noAddons: "No add-ons defined",
       saveDraft: "Save Draft",
+      publishSilent: "Publish (No Email)",
       publish: "Publish & Email Schedule",
       noTime: "No time set",
       errAvail: "Select at least one instructor.",
@@ -95,6 +96,7 @@ export default function ScheduleTab({
       msgReq: "Availability requests sent!",
       msgErrReq: "Status updated locally. Cloud Function failed.",
       msgPub: "Schedule published and instructors notified!",
+      msgPubSilent: "Schedule published (no emails sent)!",
       msgErrPub: "Error publishing: ",
       processing: "Processing...",
     },
@@ -121,6 +123,7 @@ export default function ScheduleTab({
       addonsLabel: "Session Extras",
       noAddons: "Keine Extras definiert",
       saveDraft: "Entwurf speichern",
+      publishSilent: "Veröffentlichen (Ohne E-Mail)",
       publish: "Veröffentlichen & E-Mail senden",
       noTime: "Keine Zeit",
       errAvail: "Wähle mindestens einen Kursleiter aus.",
@@ -130,6 +133,7 @@ export default function ScheduleTab({
       msgReq: "Verfügbarkeitsanfragen gesendet!",
       msgErrReq: "Status lokal aktualisiert. Cloud Function fehlgeschlagen.",
       msgPub: "Stundenplan veröffentlicht und Kursleiter benachrichtigt!",
+      msgPubSilent: "Stundenplan veröffentlicht (keine E-Mails)! ",
       msgErrPub: "Fehler beim Veröffentlichen: ",
       processing: "Wird bearbeitet...",
     },
@@ -386,7 +390,7 @@ export default function ScheduleTab({
     setIsProcessing(false);
   };
 
-  const publishSchedule = async () => {
+  const publishSchedule = async (sendEmail = true) => {
     setIsProcessing(true);
     const sanitizedId = selectedCourse.replace(/\//g, "");
     try {
@@ -459,16 +463,19 @@ export default function ScheduleTab({
 
       await batch.commit();
 
-      // 5. Trigger Cloud Function for emails
-      const sendSchedules = httpsCallable(functions, "sendFinalSchedules");
-      await sendSchedules({
-        courseId: selectedCourse,
-        assignments,
-        specialAssignments,
-        baseUrl: window.location.origin,
-      });
-
-      alert(labels.msgPub);
+      if (sendEmail) {
+        // 5. Trigger Cloud Function for emails
+        const sendSchedules = httpsCallable(functions, "sendFinalSchedules");
+        await sendSchedules({
+          courseId: selectedCourse,
+          assignments,
+          specialAssignments,
+          baseUrl: window.location.origin,
+        });
+        alert(labels.msgPub);
+      } else {
+        alert(labels.msgPubSilent);
+      }
     } catch (err) {
       console.error(err);
       alert(labels.msgErrPub + err.message);
@@ -499,10 +506,21 @@ export default function ScheduleTab({
 
   const toggleSpecialAssignment = (eventId, addonId) => {
     setSpecialAssignments((prev) => {
-      const current = Array.isArray(prev[eventId]) ? prev[eventId] : [];
+      // Safely check what is currently stored for this event
+      const existingData = prev[eventId];
+
+      // If it's an array, use it. If it's a string, wrap it in an array. Otherwise, empty array.
+      const current = Array.isArray(existingData)
+        ? existingData
+        : existingData
+          ? [existingData]
+          : [];
+
+      // Toggle the selection
       const updated = current.includes(addonId)
         ? current.filter((id) => id !== addonId)
         : [...current, addonId];
+
       return { ...prev, [eventId]: updated };
     });
   };
@@ -971,7 +989,14 @@ export default function ScheduleTab({
               ))}
             </div>
 
-            <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: isMobile ? "column" : "row",
+                gap: "1rem",
+                marginTop: "1rem",
+              }}
+            >
               <button
                 onClick={saveDraft}
                 disabled={isProcessing}
@@ -989,7 +1014,24 @@ export default function ScheduleTab({
                 )}
               </button>
               <button
-                onClick={publishSchedule}
+                onClick={() => publishSchedule(false)}
+                disabled={isProcessing}
+                style={{
+                  ...btnStyle,
+                  flex: 1.5,
+                  backgroundColor: "rgba(202, 175, 243, 0.15)",
+                  color: "#9960a8",
+                  border: "1px solid #caaff3",
+                }}
+              >
+                {isProcessing ? (
+                  <Loader2 className="spinner" size={18} />
+                ) : (
+                  labels.publishSilent
+                )}
+              </button>
+              <button
+                onClick={() => publishSchedule(true)}
                 disabled={isProcessing}
                 style={{ ...primaryBtnStyle(isMobile), flex: 2 }}
               >

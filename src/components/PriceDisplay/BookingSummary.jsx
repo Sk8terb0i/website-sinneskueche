@@ -48,8 +48,10 @@ export default function BookingSummary({
   coursePath,
   userBookedIds = [],
   userCreditBookedIds = [],
+  hasBookedBefore = false,
 }) {
   const [isAuthExpanded, setIsAuthExpanded] = useState(false);
+  const [uncheckWarning, setUncheckWarning] = useState(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -121,7 +123,20 @@ export default function BookingSummary({
     return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : dateStr;
   };
 
-  const toggleAddon = (eventId, addonId) => {
+  const toggleAddon = (eventId, addonId, isMandatory) => {
+    const dateObj = selectedDates.find((d) => d.id === eventId);
+    const isSelected = dateObj?.selectedAddons?.includes(addonId);
+
+    // If a guest tries to uncheck a mandatory addon, intercept and ask for confirmation
+    if (isMandatory && isSelected && !currentUser) {
+      setUncheckWarning({ eventId, addonId });
+      return;
+    }
+
+    executeToggleAddon(eventId, addonId);
+  };
+
+  const executeToggleAddon = (eventId, addonId) => {
     setSelectedDates((prev) =>
       prev.map((date) => {
         if (date.id === eventId) {
@@ -183,10 +198,25 @@ export default function BookingSummary({
 
   const ticketsToPayCash = remainingEligibleToPay + ineligibleForCredit;
 
-  // Mixed Payment happens if a credit is used but there is still cash owed
-  const isMixedPayment = usableCredits > 0 && ticketsToPayCash > 0;
-  // Full Coverage happens if we have tickets and NO cash is owed
-  const coversEntirely = totalTicketsSelected > 0 && ticketsToPayCash === 0;
+  let addonCashTotal = 0;
+  selectedDates.forEach((d) => {
+    const count = d.count || 1;
+    if (d.selectedAddons && d.selectedAddons.length > 0) {
+      d.selectedAddons.forEach((aid) => {
+        const addonDef = pricing?.specialEvents?.find((se) => se.id === aid);
+        if (addonDef && addonDef.price) {
+          addonCashTotal += parseFloat(addonDef.price) * count;
+        }
+      });
+    }
+  });
+
+  // Mixed Payment happens if a credit is used but there is still cash owed (for tickets OR addons)
+  const isMixedPayment =
+    usableCredits > 0 && (ticketsToPayCash > 0 || addonCashTotal > 0);
+  // Full Coverage happens if we have tickets and NO cash is owed AT ALL
+  const coversEntirely =
+    totalTicketsSelected > 0 && ticketsToPayCash === 0 && addonCashTotal === 0;
 
   // Automatically select the Individual card (index 0) and deselect others
   // if the user needs to pay cash on top of their credits.
@@ -199,7 +229,7 @@ export default function BookingSummary({
   }, [isMixedPayment, coversEntirely]);
 
   let finalTotalPrice =
-    ticketsToPayCash * parseFloat(pricing?.priceSingle || 0);
+    ticketsToPayCash * parseFloat(pricing?.priceSingle || 0) + addonCashTotal;
 
   const packOptions = [
     {
@@ -231,7 +261,8 @@ export default function BookingSummary({
   const extraSessionsCost =
     extraSessionsCount * parseFloat(pricing?.priceSingle || 0);
 
-  let finalPackPrice = parseFloat(currentPack?.price || 0) + extraSessionsCost;
+  let finalPackPrice =
+    parseFloat(currentPack?.price || 0) + extraSessionsCost + addonCashTotal;
 
   const calculateSavings = (pack) => {
     if (pack.isIndividual) return 0;
@@ -765,124 +796,147 @@ export default function BookingSummary({
                   </div>
                 </div>
 
-                {scheduleData?.specialAssignments?.[d.id] && (
-                  <div
-                    style={{
-                      borderTop: "1px dashed rgba(28,7,0,0.1)",
-                      paddingTop: "8px",
-                    }}
-                  >
-                    <p
-                      style={{
-                        fontSize: "0.65rem",
-                        fontWeight: "900",
-                        textTransform: "uppercase",
-                        opacity: 0.5,
-                        marginBottom: "8px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <Star size={10} fill="#9960a8" color="#9960a8" />
-                      {currentLang === "en"
-                        ? "Available Add-ons"
-                        : "Verfügbare Extras"}
-                    </p>
+                {/* --- UPDATED ADD-ONS DISPLAY (SHOW ALL, HIDE HEADER IF EMPTY) --- */}
+                {(() => {
+                  const rawAddons = scheduleData?.specialAssignments?.[d.id];
+                  const assignedAddonIds = Array.isArray(rawAddons)
+                    ? rawAddons
+                    : rawAddons
+                      ? [rawAddons]
+                      : [];
+
+                  // Filter to ensure the addon actually exists in settings
+                  const visibleAddons = assignedAddonIds
+                    .map((addonId) =>
+                      pricing?.specialEvents?.find((se) => se.id === addonId),
+                    )
+                    .filter((addon) => !!addon);
+
+                  // If there are literally no addons for this date, hide the entire section
+                  if (visibleAddons.length === 0) return null;
+
+                  return (
                     <div
                       style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
+                        borderTop: "1px dashed rgba(28,7,0,0.1)",
+                        paddingTop: "8px",
                       }}
                     >
-                      {(Array.isArray(scheduleData.specialAssignments[d.id])
-                        ? scheduleData.specialAssignments[d.id]
-                        : [scheduleData.specialAssignments[d.id]]
-                      ).map((addonId) => {
-                        const addon = pricing?.specialEvents?.find(
-                          (se) => se.id === addonId,
-                        );
-                        if (!addon) return null;
+                      <p
+                        style={{
+                          fontSize: "0.65rem",
+                          fontWeight: "900",
+                          textTransform: "uppercase",
+                          opacity: 0.5,
+                          marginBottom: "8px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <Star size={10} fill="#9960a8" color="#9960a8" />
+                        {currentLang === "en"
+                          ? "Available Add-ons"
+                          : "Verfügbare Extras"}
+                      </p>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "6px",
+                        }}
+                      >
+                        {visibleAddons.map((addon) => {
+                          const isSelected = d.selectedAddons?.includes(
+                            addon.id,
+                          );
+                          const booked =
+                            addonBookingCounts[`${d.id}_${addon.id}`] || 0;
+                          const isFull =
+                            booked >= parseInt(addon.capacity || 999);
+                          const addonColor = getAddonColor(addon.id);
 
-                        const isSelected = d.selectedAddons?.includes(addonId);
-                        const booked =
-                          addonBookingCounts[`${d.id}_${addonId}`] || 0;
-                        const capLimit = parseInt(addon.capacity || 999);
-                        const isFull = booked >= capLimit;
-                        const addonColor = getAddonColor(addonId);
+                          const priceLabel = addon.price
+                            ? ` (+${addon.price} CHF)`
+                            : "";
+                          const displayAddonName =
+                            (currentLang === "en"
+                              ? addon.nameEn
+                              : addon.nameDe) + priceLabel;
 
-                        return (
-                          <div
-                            key={addonId}
-                            onClick={() =>
-                              !isFull && toggleAddon(d.id, addonId)
-                            }
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "10px",
-                              padding: "8px 12px",
-                              borderRadius: "12px",
-                              cursor: isFull ? "not-allowed" : "pointer",
-                              backgroundColor: isSelected
-                                ? "rgba(78, 95, 40, 0.1)"
-                                : "rgba(28,7,0,0.03)",
-                              transition: "all 0.2s",
-                            }}
-                          >
+                          return (
                             <div
+                              key={addon.id}
+                              onClick={() =>
+                                !isFull &&
+                                toggleAddon(d.id, addon.id, addon.isMandatory)
+                              }
                               style={{
-                                width: "18px",
-                                height: "18px",
-                                borderRadius: "6px",
-                                border: `2px solid ${isSelected ? addonColor : "#caaff3"}`,
                                 display: "flex",
                                 alignItems: "center",
-                                justifyContent: "center",
+                                gap: "10px",
+                                padding: "8px 12px",
+                                borderRadius: "12px",
+                                cursor: isFull ? "not-allowed" : "pointer",
                                 backgroundColor: isSelected
-                                  ? addonColor
-                                  : "transparent",
+                                  ? "rgba(78, 95, 40, 0.1)"
+                                  : "rgba(28,7,0,0.03)",
+                                transition: "all 0.2s",
                               }}
                             >
-                              {isSelected && (
-                                <Check
-                                  size={14}
-                                  color="white"
-                                  strokeWidth={4}
-                                />
-                              )}
-                            </div>
-                            <div style={{ flex: 1 }}>
                               <div
                                 style={{
-                                  fontSize: "0.8rem",
-                                  fontWeight: "700",
-                                  color: isFull ? "#ccc" : "#1c0700",
+                                  width: "18px",
+                                  height: "18px",
+                                  borderRadius: "6px",
+                                  border: `2px solid ${isSelected ? addonColor : "#caaff3"}`,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  backgroundColor: isSelected
+                                    ? addonColor
+                                    : "transparent",
                                 }}
                               >
-                                {currentLang === "en"
-                                  ? addon.nameEn
-                                  : addon.nameDe}
+                                {isSelected && (
+                                  <Check
+                                    size={14}
+                                    color="white"
+                                    strokeWidth={4}
+                                  />
+                                )}
                               </div>
-                              {isFull && (
-                                <span
+                              <div style={{ flex: 1 }}>
+                                <div
                                   style={{
-                                    fontSize: "0.6rem",
-                                    color: "#ff4d4d",
-                                    fontWeight: "800",
+                                    fontSize: "0.8rem",
+                                    fontWeight: "700",
+                                    color: isFull ? "#ccc" : "#1c0700",
                                   }}
                                 >
-                                  {currentLang === "en" ? "FULL" : "AUSGEBUCHT"}
-                                </span>
-                              )}
+                                  {displayAddonName}
+                                </div>
+                                {isFull && (
+                                  <span
+                                    style={{
+                                      fontSize: "0.6rem",
+                                      color: "#ff4d4d",
+                                      fontWeight: "800",
+                                    }}
+                                  >
+                                    {currentLang === "en"
+                                      ? "FULL"
+                                      : "AUSGEBUCHT"}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}
@@ -1353,6 +1407,109 @@ export default function BookingSummary({
 
   return (
     <div style={S.bookingCardStyle(isMobile, true)}>
+      {/* LIGHTWEIGHT CONFIRMATION POPUP */}
+      {uncheckWarning && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.1)",
+            zIndex: 20000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            backdropFilter: "blur(2px)",
+          }}
+          onClick={() => setUncheckWarning(null)}
+        >
+          <div
+            style={{
+              backgroundColor: "#fffce3",
+              maxWidth: "350px",
+              width: "100%",
+              borderRadius: "24px",
+              padding: "2rem 1.5rem 1.5rem 1.5rem",
+              boxShadow: "0 20px 40px rgba(28, 7, 0, 0.2)",
+              textAlign: "center",
+              position: "relative",
+              border: "1px solid #caaff3",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* CLOSE BUTTON (X) */}
+            <button
+              onClick={() => setUncheckWarning(null)}
+              style={{
+                position: "absolute",
+                top: "12px",
+                right: "12px",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                opacity: 0.3,
+                padding: "4px",
+              }}
+            >
+              <X size={20} />
+            </button>
+
+            <h3
+              style={{
+                marginTop: 0,
+                color: "#1c0700",
+                fontFamily: "Harmond-SemiBoldCondensed",
+                fontSize: "1.4rem",
+              }}
+            >
+              {currentLang === "en" ? "Check again" : "Kurze Prüfung"}
+            </h3>
+
+            <p
+              style={{
+                fontSize: "0.85rem",
+                color: "#1c0700",
+                marginBottom: "1.5rem",
+                lineHeight: 1.5,
+              }}
+            >
+              <strong>
+                {(() => {
+                  const addon = pricing?.specialEvents?.find(
+                    (se) => se.id === uncheckWarning.addonId,
+                  );
+                  return currentLang === "en" ? addon?.nameEn : addon?.nameDe;
+                })()}
+              </strong>{" "}
+              {currentLang === "en"
+                ? "is mandatory for first-timers. Please confirm you have booked this course before to remove it."
+                : "ist für Erstkunden obligatorisch. Bitte bestätige, dass du diesen Kurs bereits gebucht hast."}
+            </p>
+
+            <button
+              onClick={() => {
+                executeToggleAddon(
+                  uncheckWarning.eventId,
+                  uncheckWarning.addonId,
+                );
+                setUncheckWarning(null);
+              }}
+              style={{
+                ...S.primaryBtnStyle(isMobile),
+                width: "100%",
+                padding: "12px",
+                fontSize: "0.9rem",
+              }}
+            >
+              {currentLang === "en" ? "I confirm" : "Ich bestätige"}
+            </button>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes shake {
           0% { transform: translateX(0); }

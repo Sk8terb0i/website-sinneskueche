@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase";
 import { signOut } from "firebase/auth";
@@ -21,137 +21,9 @@ import BuyPackCard from "../components/Profile/BuyPackCard";
 import PackStatusCard from "../components/Profile/PackStatusCard";
 import RentalBookingsCard from "../components/Profile/RentalBookingsCard";
 import PotteryFiringCard from "../components/Profile/PotteryFiringCard";
+import TeachingCard from "../components/Profile/TeachingCard";
 
-import {
-  LogOut,
-  Loader2,
-  Calendar,
-  User,
-  Ticket,
-  BookOpen,
-  LayoutDashboard,
-  Users,
-  Clock,
-} from "lucide-react";
-
-const courseMapping = {
-  "/pottery": "pottery tuesdays",
-  "/artistic-vision": "artistic vision",
-  "/get-ink": "get ink!",
-  "/singing": "vocal coaching",
-  "/extended-voice-lab": "extended voice lab",
-  "/performing-words": "performing words",
-  "/singing-basics": "singing basics weekend",
-};
-
-const getCleanCourseKey = (path) =>
-  courseMapping[path] || (path ? path.replace(/\//g, "") : "workshop");
-
-/**
- * --- INTERNAL TEACHING CARD COMPONENT ---
- * Exact styling match for BookingsCard.jsx
- */
-function TeachingCard({
-  teachingEvents,
-  isScheduleLoading,
-  currentLang,
-  t,
-  isMobile,
-}) {
-  const groupedTeaching = useMemo(() => {
-    const grouped = {};
-    teachingEvents.forEach((event) => {
-      const title = getCleanCourseKey(event.link || event.coursePath);
-      if (!grouped[title]) grouped[title] = [];
-      grouped[title].push(event);
-    });
-    return grouped;
-  }, [teachingEvents]);
-
-  if (isScheduleLoading) {
-    return (
-      <section style={styles.card}>
-        <div style={styles.emptyState}>
-          <Loader2 className="spinner" size={30} color="#caaff3" />
-        </div>
-      </section>
-    );
-  }
-
-  if (teachingEvents.length === 0) return null;
-
-  return (
-    <section style={styles.card}>
-      <h3 style={styles.sectionHeading(isMobile)}>
-        <BookOpen size={20} color="#4e5f28" />
-        <span style={{ lineHeight: 1 }}>{t.teachingTitle}</span>
-      </h3>
-
-      {Object.entries(groupedTeaching).map(([title, events]) => (
-        <div key={title} style={styles.courseGroup}>
-          <h4 style={styles.courseGroupTitle(isMobile)}>{title}</h4>
-          <div style={styles.bookingsList}>
-            {events.map((event) => {
-              const dateObj = new Date(event.date);
-              const hasCoInstructors =
-                event.coInstructorNames && event.coInstructorNames.length > 0;
-
-              return (
-                <div key={event.id} style={styles.bookingItem}>
-                  {/* Purple Date Box */}
-                  <div style={styles.bookingDateBox}>
-                    <span style={styles.bookingMonth}>
-                      {dateObj.toLocaleString(
-                        currentLang === "en" ? "en-US" : "de-DE",
-                        { month: "short" },
-                      )}
-                    </span>
-                    <span style={styles.bookingDay}>{dateObj.getDate()}</span>
-                  </div>
-
-                  <div style={styles.bookingDetails}>
-                    <div style={styles.row}>
-                      <p style={styles.bookingTitle(isMobile)}>
-                        {dateObj.toLocaleDateString(
-                          currentLang === "en" ? "en-US" : "de-DE",
-                          {
-                            weekday: "long",
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          },
-                        )}
-                      </p>
-                      <div style={styles.infoRow}>
-                        <div style={styles.metaItem}>
-                          <Clock size={12} />{" "}
-                          <span>{event.time || "--:--"}</span>
-                        </div>
-                        <div style={styles.metaItem}>
-                          <Users size={12} />
-                          <span
-                            style={{
-                              fontWeight: hasCoInstructors ? "800" : "500",
-                              color: hasCoInstructors ? "#9960a8" : "inherit",
-                            }}
-                          >
-                            {hasCoInstructors
-                              ? `${t.workingWith} ${event.coInstructorNames.join(", ")}`
-                              : t.workingAlone}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </section>
-  );
-}
+import { LogOut, Loader2, User, Ticket, LayoutDashboard } from "lucide-react";
 
 export default function Profile({ currentLang, setCurrentLang }) {
   const { currentUser, userData, loading: authLoading } = useAuth();
@@ -161,14 +33,12 @@ export default function Profile({ currentLang, setCurrentLang }) {
   const [teachingEvents, setTeachingEvents] = useState([]);
   const [isScheduleLoading, setIsScheduleLoading] = useState(false);
 
-  // Visibility States
   const [hasPotteryHistory, setHasPotteryHistory] = useState(false);
   const [hasRentalAccess, setHasRentalAccess] = useState(false);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [activeTab, setActiveTab] = useState("dashboard");
 
-  // 1. Check for Pottery History
   useEffect(() => {
     const checkPottery = async () => {
       if (!currentUser || !userData) return;
@@ -183,15 +53,17 @@ export default function Profile({ currentLang, setCurrentLang }) {
         return;
       }
       try {
-        const q = query(
-          collection(db, "bookings"),
-          where("userId", "==", currentUser.uid),
+        const snap = await getDocs(
+          query(
+            collection(db, "bookings"),
+            where("userId", "==", currentUser.uid),
+          ),
         );
-        const snap = await getDocs(q);
-        const bookedPottery = snap.docs.some((doc) =>
-          doc.data().coursePath?.toLowerCase().includes("pottery"),
+        setHasPotteryHistory(
+          snap.docs.some((doc) =>
+            doc.data().coursePath?.toLowerCase().includes("pottery"),
+          ),
         );
-        setHasPotteryHistory(bookedPottery);
       } catch (e) {
         console.error(e);
       }
@@ -199,32 +71,25 @@ export default function Profile({ currentLang, setCurrentLang }) {
     checkPottery();
   }, [currentUser, userData]);
 
-  // 2. Check for Rental Access (Global Admin Override OR Existing Bookings)
   useEffect(() => {
     const checkRentalAccess = async () => {
       if (!currentUser || !userData) return;
-
       try {
-        // A. Check Global Admin Config
         const configDoc = await getDoc(doc(db, "settings", "admin_config"));
         if (configDoc.exists() && configDoc.data().showRentalInProfile) {
           setHasRentalAccess(true);
-          return; // If globally enabled, no need to check bookings
+          return;
         }
-
-        // B. Check for existing rental bookings
-        const q = query(
-          collection(db, "rental_bookings"),
-          where("userId", "==", currentUser.uid),
-          limit(1),
+        const snap = await getDocs(
+          query(
+            collection(db, "rental_bookings"),
+            where("userId", "==", currentUser.uid),
+            limit(1),
+          ),
         );
-        const snap = await getDocs(q);
-
-        if (!snap.empty) {
-          setHasRentalAccess(true);
-        }
+        if (!snap.empty) setHasRentalAccess(true);
       } catch (e) {
-        console.error("Error checking rental access:", e);
+        console.error(e);
       }
     };
     checkRentalAccess();
@@ -245,24 +110,22 @@ export default function Profile({ currentLang, setCurrentLang }) {
       if (!currentUser) return;
       setIsScheduleLoading(true);
       try {
-        const qPacks = query(
-          collection(db, "course_settings"),
-          where("hasPack", "==", true),
+        const packSnap = await getDocs(
+          query(
+            collection(db, "course_settings"),
+            where("hasPack", "==", true),
+          ),
         );
-        const packSnap = await getDocs(qPacks);
         setPackCourses(
           packSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
         );
 
         const today = new Date().toISOString().split("T")[0];
-
-        // Query Main Events
         const qEvents = query(
           collection(db, "events"),
           where("instructorId", "==", currentUser.uid),
           orderBy("date", "asc"),
         );
-        // Query Work Schedule (Your Shifts)
         const qWork = query(
           collection(db, "work_schedule"),
           where("userId", "==", currentUser.uid),
@@ -275,17 +138,22 @@ export default function Profile({ currentLang, setCurrentLang }) {
         ]);
 
         const rawEvents = [
-          ...eventsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-          ...workSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+          ...eventsSnap.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+            fromEventsTable: true,
+          })),
+          ...workSnap.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+            fromEventsTable: false,
+          })),
         ];
 
-        // --- THE CO-INSTRUCTOR FIX ---
         const enriched = await Promise.all(
           rawEvents.map(async (ev) => {
             let coInstructorNames = [];
-
             if (ev.instructors) {
-              // Case A: Document already has an array of instructor IDs (Schedule Orchestration)
               const others = ev.instructors.filter(
                 (id) => id !== currentUser.uid,
               );
@@ -297,38 +165,34 @@ export default function Profile({ currentLang, setCurrentLang }) {
               );
               coInstructorNames = names.filter(Boolean);
             } else {
-              // Case B: Work Schedule shifts (Docs are separate, so we query for others on same date/course)
-              const qOthers = query(
-                collection(db, "work_schedule"),
-                where("date", "==", ev.date),
-                where("coursePath", "==", ev.coursePath || ""),
+              const othersSnap = await getDocs(
+                query(
+                  collection(db, "work_schedule"),
+                  where("date", "==", ev.date),
+                  where("coursePath", "==", ev.coursePath || ""),
+                ),
               );
-              const othersSnap = await getDocs(qOthers);
               const otherIds = othersSnap.docs
                 .map((d) => d.data().userId)
                 .filter((id) => id !== currentUser.uid);
-
-              if (otherIds.length > 0) {
-                const names = await Promise.all(
-                  otherIds.map(async (id) => {
-                    const uDoc = await getDoc(doc(db, "users", id));
-                    return uDoc.exists() ? uDoc.data().firstName : null;
-                  }),
-                );
-                coInstructorNames = names.filter(Boolean);
-              }
+              const names = await Promise.all(
+                otherIds.map(async (id) => {
+                  const uDoc = await getDoc(doc(db, "users", id));
+                  return uDoc.exists() ? uDoc.data().firstName : null;
+                }),
+              );
+              coInstructorNames = names.filter(Boolean);
             }
             return { ...ev, coInstructorNames };
           }),
         );
-
         setTeachingEvents(
           enriched
             .filter((e) => e.date >= today)
             .sort((a, b) => a.date.localeCompare(b.date)),
         );
       } catch (err) {
-        console.error("Error:", err);
+        console.error(err);
       } finally {
         setIsScheduleLoading(false);
       }
@@ -352,21 +216,15 @@ export default function Profile({ currentLang, setCurrentLang }) {
       tabShop: "Shop",
       tabMe: "Me",
       teachingTitle: "teaching schedule",
-      noEvents: "no upcoming classes.",
       workingWith: "working with:",
       workingAlone: "working alone",
       myCourses: "my booked dates",
       noCourses: "no bookings yet.",
-      rentalTitle: "rental management",
       buyPack: "buy session pack",
-      selectCourse: "select a course",
-      buyNow: "buy pack",
-      credits: "existing credits",
+      selectCourse: "select a course", // Added missing key
+      buyNow: "buy pack", // Added missing key
       noCredits: "no active session packs yet.",
-      firstName: "first name",
-      lastName: "last name",
-      email: "email address",
-      phone: "phone",
+      rentalTitle: "rental management",
     },
     de: {
       title: "mein profil",
@@ -375,21 +233,15 @@ export default function Profile({ currentLang, setCurrentLang }) {
       tabShop: "Shop",
       tabMe: "Ich",
       teachingTitle: "stundenplan",
-      noEvents: "keine anstehenden kurse.",
       workingWith: "zusammen mit:",
       workingAlone: "alleine",
       myCourses: "geplante termine",
       noCourses: "keine buchungen.",
-      rentalTitle: "gemieteter raum",
       buyPack: "session-karte kaufen",
-      selectCourse: "kurs auswählen",
-      buyNow: "karte kaufen",
-      credits: "vorhandenes guthaben",
+      selectCourse: "kurs auswählen", // Added missing key
+      buyNow: "karte kaufen", // Added missing key
       noCredits: "noch kein guthaben vorhanden.",
-      firstName: "vorname",
-      lastName: "nachname",
-      email: "e-mail adresse",
-      phone: "telefon",
+      rentalTitle: "gemieteter raum",
     },
   }[currentLang];
 
@@ -603,11 +455,11 @@ const styles = {
   tabBtn: (isActive) => ({
     flex: 1,
     display: "flex",
-    flexDirection: "row", // Changed from column to row
-    justifyContent: "center", // Ensures content stays centered
+    flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
-    gap: "6px", // Space between icon and text
-    padding: "10px 5px", // Adjusted padding for horizontal layout
+    gap: "6px",
+    padding: "10px 5px",
     border: "none",
     background: isActive ? "#caaff3" : "transparent",
     color: "#1c0700",
@@ -621,85 +473,4 @@ const styles = {
     flexDirection: "column",
     gap: "1.5rem",
   },
-
-  // SHARED CARD STYLING (Used by TeachingCard)
-  card: {
-    backgroundColor: "#fdf8e1",
-    padding: window.innerWidth < 768 ? "1.5rem" : "2.5rem",
-    borderRadius: "24px",
-    border: "1px solid rgba(28, 7, 0, 0.05)",
-    width: "100%",
-    boxSizing: "border-box",
-  },
-  sectionHeading: (isMobile) => ({
-    fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: "1.8rem",
-    margin: "0 0 1.5rem 0",
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    color: "#1c0700",
-    fontWeight: isMobile ? "normal" : undefined,
-  }),
-  courseGroup: { marginBottom: "1.5rem" },
-  courseGroupTitle: (isMobile) => ({
-    fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: "1.3rem",
-    color: "#9960a8",
-    marginBottom: "0.8rem",
-    textTransform: "lowercase",
-    borderBottom: "1px solid rgba(153, 96, 168, 0.1)",
-    paddingBottom: "4px",
-    fontWeight: isMobile ? "normal" : undefined,
-  }),
-  bookingsList: { display: "flex", flexDirection: "column", gap: "0.8rem" },
-  bookingItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "1rem",
-    padding: "0.8rem",
-    backgroundColor: "#fffce3",
-    borderRadius: "16px",
-    border: "1px solid rgba(28, 7, 0, 0.05)",
-  },
-  bookingDateBox: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#caaff3",
-    borderRadius: "10px",
-    width: "45px",
-    height: "45px",
-    color: "#1c0700",
-    flexShrink: 0,
-  },
-  bookingMonth: {
-    fontSize: "0.55rem",
-    fontWeight: "800",
-    textTransform: "uppercase",
-  },
-  bookingDay: {
-    fontSize: "1.1rem",
-    fontFamily: "Harmond-SemiBoldCondensed",
-    lineHeight: "1",
-  },
-  bookingDetails: { flex: 1 },
-  bookingTitle: (isMobile) => ({
-    margin: 0,
-    fontFamily: "Satoshi",
-    fontWeight: isMobile ? "500" : "700",
-    fontSize: "0.95rem",
-    color: "#1c0700",
-  }),
-  infoRow: { display: "flex", gap: "12px", marginTop: "2px", flexWrap: "wrap" },
-  metaItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "4px",
-    fontSize: "0.8rem",
-    opacity: 0.6,
-  },
-  emptyState: { padding: "1rem", textAlign: "center" },
-  emptyText: { opacity: 0.5, fontStyle: "italic", fontSize: "0.9rem" },
 };

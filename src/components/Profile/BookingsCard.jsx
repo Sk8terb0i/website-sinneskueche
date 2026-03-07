@@ -10,12 +10,13 @@ import {
   getDoc,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { Calendar, Loader2, Clock, X, Check, Info } from "lucide-react";
+import { Calendar, Loader2, Clock, X, Check, Info, Star } from "lucide-react";
 import { planets } from "../../data/planets";
 
 export default function BookingsCard({ userId, currentLang, t }) {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
+  const [courseSettings, setCourseSettings] = useState({}); // Stores addon names per course
   const [dataLoading, setDataLoading] = useState(true);
   const [confirmingId, setConfirmingId] = useState(null);
 
@@ -38,16 +39,33 @@ export default function BookingsCard({ userId, currentLang, t }) {
         );
         const querySnapshot = await getDocs(q);
 
+        const settingsMap = {}; // Local cache for the current fetch operation
+
         const bookingsWithEventData = await Promise.all(
           querySnapshot.docs.map(async (bookingDoc) => {
             const bookingData = bookingDoc.data();
             let eventData = {};
+
+            // 1. Fetch Event Data for Time/Link
             if (bookingData.eventId) {
               const eventRef = doc(db, "events", bookingData.eventId);
               const eventSnap = await getDoc(eventRef);
               if (eventSnap.exists()) eventData = eventSnap.data();
             }
+
             const coursePath = eventData.link || bookingData.coursePath;
+            const sanitizedId = coursePath.replace(/\//g, "");
+
+            // 2. Fetch Course Settings for Add-on Labels if not already cached
+            if (sanitizedId && !settingsMap[sanitizedId]) {
+              const sSnap = await getDoc(
+                doc(db, "course_settings", sanitizedId),
+              );
+              if (sSnap.exists()) {
+                settingsMap[sanitizedId] = sSnap.data().specialEvents || [];
+              }
+            }
+
             return {
               id: bookingDoc.id,
               ...bookingData,
@@ -57,6 +75,8 @@ export default function BookingsCard({ userId, currentLang, t }) {
             };
           }),
         );
+
+        setCourseSettings(settingsMap);
         bookingsWithEventData.sort(
           (a, b) => new Date(a.date) - new Date(b.date),
         );
@@ -75,8 +95,8 @@ export default function BookingsCard({ userId, currentLang, t }) {
     const grouped = {};
     bookings.forEach((booking) => {
       const title = booking.courseTitle;
-      // Use date+time to uniquely identify a session slot
       const dateKey = `${booking.date}_${booking.time}`;
+      const sanitizedId = booking.coursePath?.replace(/\//g, "");
 
       if (!grouped[title]) grouped[title] = {};
       if (!grouped[title][dateKey]) {
@@ -84,14 +104,29 @@ export default function BookingsCard({ userId, currentLang, t }) {
           date: booking.date,
           time: booking.time,
           count: 0,
-          ids: [], // Store all IDs for this slot
+          ids: [],
+          addons: [], // Store unique names of add-ons for this slot
         };
       }
+
       grouped[title][dateKey].count += 1;
       grouped[title][dateKey].ids.push(booking.id);
+
+      // Collect add-on names for this grouping
+      if (booking.selectedAddons && Array.isArray(booking.selectedAddons)) {
+        booking.selectedAddons.forEach((aid) => {
+          const meta = courseSettings[sanitizedId]?.find((s) => s.id === aid);
+          if (meta) {
+            const name = currentLang === "de" ? meta.nameDe : meta.nameEn;
+            if (!grouped[title][dateKey].addons.includes(name)) {
+              grouped[title][dateKey].addons.push(name);
+            }
+          }
+        });
+      }
     });
     return grouped;
-  }, [bookings]);
+  }, [bookings, courseSettings, currentLang]);
 
   // Handle bulk cancellation
   const handleCancelGroup = async (bookingIds) => {
@@ -145,7 +180,6 @@ export default function BookingsCard({ userId, currentLang, t }) {
         </div>
       ) : (
         <>
-          {/* Only show the policy note if there are actual bookings */}
           <div style={styles.policyBox}>
             <Info size={14} />
             <span>{labels.policyNote}</span>
@@ -185,6 +219,7 @@ export default function BookingsCard({ userId, currentLang, t }) {
                                   display: "flex",
                                   alignItems: "center",
                                   gap: "8px",
+                                  flexWrap: "wrap",
                                 }}
                               >
                                 <p style={styles.bookingTitle}>
@@ -198,19 +233,8 @@ export default function BookingsCard({ userId, currentLang, t }) {
                                     },
                                   )}
                                 </p>
-                                {/* Ticket Badge */}
                                 {groupData.count > 1 && (
-                                  <span
-                                    style={{
-                                      backgroundColor:
-                                        "rgba(202, 175, 243, 0.2)",
-                                      color: "#9960a8",
-                                      fontSize: "0.65rem",
-                                      fontWeight: "900",
-                                      padding: "2px 6px",
-                                      borderRadius: "100px",
-                                    }}
-                                  >
+                                  <span style={styles.ticketBadge}>
                                     {groupData.count} Tickets
                                   </span>
                                 )}
@@ -219,6 +243,22 @@ export default function BookingsCard({ userId, currentLang, t }) {
                                 <Clock size={12} />{" "}
                                 <span>{groupData.time}</span>
                               </div>
+
+                              {/* ADD-ONS BADGES */}
+                              {groupData.addons.length > 0 && (
+                                <div style={styles.addonsWrapper}>
+                                  {groupData.addons.map((name, idx) => (
+                                    <span key={idx} style={styles.addonBadge}>
+                                      <Star
+                                        size={10}
+                                        fill="#9960a8"
+                                        color="#9960a8"
+                                      />
+                                      {name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             {canCancel && (
                               <button
@@ -271,7 +311,7 @@ const styles = {
     border: "1px solid rgba(28, 7, 0, 0.05)",
     boxSizing: "border-box",
     width: "100%",
-    height: "fit-content", // Shrinks to fit content when empty
+    height: "fit-content",
   },
   sectionHeading: {
     fontFamily: "Harmond-SemiBoldCondensed",
@@ -351,6 +391,14 @@ const styles = {
     color: "#1c0700",
     lineHeight: "1.2",
   },
+  ticketBadge: {
+    backgroundColor: "rgba(202, 175, 243, 0.2)",
+    color: "#9960a8",
+    fontSize: "0.65rem",
+    fontWeight: "900",
+    padding: "2px 6px",
+    borderRadius: "100px",
+  },
   timeRow: {
     display: "flex",
     alignItems: "center",
@@ -358,6 +406,24 @@ const styles = {
     fontSize: "0.8rem",
     opacity: 0.6,
     marginTop: "4px",
+  },
+  addonsWrapper: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "6px",
+    marginTop: "8px",
+  },
+  addonBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px",
+    backgroundColor: "rgba(78, 95, 40, 0.05)",
+    color: "#4e5f28",
+    fontSize: "0.7rem",
+    fontWeight: "700",
+    padding: "3px 8px",
+    borderRadius: "6px",
+    border: "1px solid rgba(78, 95, 40, 0.1)",
   },
   cancelActionBtn: {
     background: "rgba(255, 77, 77, 0.1)",
@@ -370,7 +436,6 @@ const styles = {
     cursor: "pointer",
     textTransform: "uppercase",
   },
-  // MATCHED STYLES WITH POTTERY FIRING CARD
   emptyState: {
     display: "flex",
     justifyContent: "center",

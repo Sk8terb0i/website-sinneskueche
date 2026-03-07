@@ -36,6 +36,8 @@ export default function PricingTab({
   const [newEventEn, setNewEventEn] = useState("");
   const [newEventDe, setNewEventDe] = useState("");
   const [newEventCap, setNewEventCap] = useState("");
+  const [newEventPrice, setNewEventPrice] = useState("");
+  const [newEventMandatory, setNewEventMandatory] = useState(false);
 
   const isFullAdmin = userRole === "admin";
   const courseSettingsCollection = collection(db, "course_settings");
@@ -65,6 +67,10 @@ export default function PricingTab({
       nameEn: "Name (EN)",
       nameDe: "Name (DE)",
       cap: "Cap",
+      addonPrice: "+ CHF",
+      newAddonEn: "New Add-on (EN)",
+      newAddonDe: "New Add-on (DE)",
+      mandatoryFirstTimers: "Mandatory for first-timers",
       addAddon: "Add Add-on",
       saving: "Saving Updates...",
       save: "Save Course Settings",
@@ -94,6 +100,10 @@ export default function PricingTab({
       nameEn: "Name (EN)",
       nameDe: "Name (DE)",
       cap: "Max",
+      addonPrice: "+ CHF",
+      newAddonEn: "Neues Extra (EN)",
+      newAddonDe: "Neues Extra (DE)",
+      mandatoryFirstTimers: "Obligatorisch für Erstkunden",
       addAddon: "Extra hinzufügen",
       saving: "Speichern...",
       save: "Kurseinstellungen speichern",
@@ -172,11 +182,15 @@ export default function PricingTab({
         nameEn: newEventEn.trim(),
         nameDe: newEventDe.trim(),
         capacity: newEventCap || null,
+        price: newEventPrice || null,
+        isMandatory: newEventMandatory,
       },
     ]);
     setNewEventEn("");
     setNewEventDe("");
     setNewEventCap("");
+    setNewEventPrice("");
+    setNewEventMandatory(false);
   };
 
   const updateSpecialEvent = (courseId, eventId, field, value) => {
@@ -260,6 +274,8 @@ export default function PricingTab({
               setNewEventEn("");
               setNewEventDe("");
               setNewEventCap("");
+              setNewEventPrice("");
+              setNewEventMandatory(false);
             }}
             style={{
               ...inputStyle,
@@ -757,77 +773,249 @@ export default function PricingTab({
                     key={ev.id}
                     style={{
                       display: "flex",
-                      flexDirection: isMobile ? "column" : "row",
-                      justifyContent: "space-between",
-                      alignItems: isMobile ? "stretch" : "center",
+                      flexDirection: "column",
                       backgroundColor: "rgba(202, 175, 243, 0.08)",
                       padding: "10px",
                       borderRadius: "12px",
                       border: "1px dashed rgba(202, 175, 243, 0.3)",
+                      gap: "8px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: isMobile ? "column" : "row",
+                        justifyContent: "space-between",
+                        alignItems: isMobile ? "stretch" : "center",
+                        gap: "10px",
+                      }}
+                    >
+                      <input
+                        value={ev.nameEn || ""}
+                        onChange={(e) =>
+                          updateSpecialEvent(
+                            selectedCourse,
+                            ev.id,
+                            "nameEn",
+                            e.target.value,
+                          )
+                        }
+                        placeholder={labels.nameEn}
+                        style={{
+                          ...inputStyle,
+                          padding: "8px 12px",
+                          flex: 2,
+                          marginBottom: 0,
+                          fontSize: "0.85rem",
+                        }}
+                      />
+                      <input
+                        value={ev.nameDe || ""}
+                        onChange={(e) =>
+                          updateSpecialEvent(
+                            selectedCourse,
+                            ev.id,
+                            "nameDe",
+                            e.target.value,
+                          )
+                        }
+                        placeholder={labels.nameDe}
+                        style={{
+                          ...inputStyle,
+                          padding: "8px 12px",
+                          flex: 2,
+                          marginBottom: 0,
+                          fontSize: "0.85rem",
+                        }}
+                      />
+                      <div style={{ position: "relative", flex: 1 }}>
+                        <input
+                          type="number"
+                          value={ev.capacity || ""}
+                          onChange={(e) =>
+                            updateSpecialEvent(
+                              selectedCourse,
+                              ev.id,
+                              "capacity",
+                              e.target.value,
+                            )
+                          }
+                          placeholder={labels.cap}
+                          style={{
+                            ...inputStyle,
+                            padding: "8px 8px 8px 30px",
+                            marginBottom: 0,
+                            fontSize: "0.85rem",
+                          }}
+                          title="Capacity limit for this add-on"
+                        />
+                        <Users
+                          size={12}
+                          style={{
+                            position: "absolute",
+                            left: "10px",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            opacity: 0.4,
+                          }}
+                        />
+                      </div>
+                      <div style={{ position: "relative", flex: 1 }}>
+                        <input
+                          type="number"
+                          value={ev.price || ""}
+                          onChange={(e) =>
+                            updateSpecialEvent(
+                              selectedCourse,
+                              ev.id,
+                              "price",
+                              e.target.value,
+                            )
+                          }
+                          placeholder={labels.addonPrice}
+                          style={{
+                            ...inputStyle,
+                            padding: "8px 8px 8px 30px",
+                            marginBottom: 0,
+                            fontSize: "0.85rem",
+                          }}
+                          title="Additional price for this add-on"
+                        />
+                        <CreditCard
+                          size={12}
+                          style={{
+                            position: "absolute",
+                            left: "10px",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            opacity: 0.4,
+                          }}
+                        />
+                      </div>
+                      <button
+                        onClick={() =>
+                          removeSpecialEvent(selectedCourse, ev.id)
+                        }
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#ff4d4d",
+                          cursor: "pointer",
+                          padding: isMobile ? "8px" : "4px",
+                          display: "flex",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    <label
+                      style={{
+                        ...labelStyle,
+                        fontSize: "0.75rem",
+                        margin: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        cursor: "pointer",
+                        opacity: 0.8,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={ev.isMandatory || false}
+                        onChange={(e) =>
+                          updateSpecialEvent(
+                            selectedCourse,
+                            ev.id,
+                            "isMandatory",
+                            e.target.checked,
+                          )
+                        }
+                      />
+                      {labels.mandatoryFirstTimers}
+                    </label>
+                  </div>
+                ))}
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    marginTop: "8px",
+                    paddingTop: "12px",
+                    borderTop: "1px solid rgba(28, 7, 0, 0.05)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: isMobile ? "column" : "row",
                       gap: "10px",
                     }}
                   >
                     <input
-                      value={ev.nameEn || ""}
-                      onChange={(e) =>
-                        updateSpecialEvent(
-                          selectedCourse,
-                          ev.id,
-                          "nameEn",
-                          e.target.value,
-                        )
-                      }
-                      placeholder={labels.nameEn}
+                      value={newEventEn}
+                      onChange={(e) => setNewEventEn(e.target.value)}
+                      placeholder={labels.newAddonEn}
                       style={{
                         ...inputStyle,
-                        padding: "8px 12px",
+                        padding: "10px 12px",
                         flex: 2,
                         marginBottom: 0,
-                        fontSize: "0.85rem",
                       }}
                     />
                     <input
-                      value={ev.nameDe || ""}
-                      onChange={(e) =>
-                        updateSpecialEvent(
-                          selectedCourse,
-                          ev.id,
-                          "nameDe",
-                          e.target.value,
-                        )
-                      }
-                      placeholder={labels.nameDe}
+                      value={newEventDe}
+                      onChange={(e) => setNewEventDe(e.target.value)}
+                      placeholder={labels.newAddonDe}
                       style={{
                         ...inputStyle,
-                        padding: "8px 12px",
+                        padding: "10px 12px",
                         flex: 2,
                         marginBottom: 0,
-                        fontSize: "0.85rem",
                       }}
                     />
                     <div style={{ position: "relative", flex: 1 }}>
                       <input
                         type="number"
-                        value={ev.capacity || ""}
-                        onChange={(e) =>
-                          updateSpecialEvent(
-                            selectedCourse,
-                            ev.id,
-                            "capacity",
-                            e.target.value,
-                          )
-                        }
+                        value={newEventCap}
+                        onChange={(e) => setNewEventCap(e.target.value)}
                         placeholder={labels.cap}
                         style={{
                           ...inputStyle,
-                          padding: "8px 8px 8px 30px",
+                          padding: "10px 10px 10px 32px",
                           marginBottom: 0,
-                          fontSize: "0.85rem",
                         }}
-                        title="Capacity limit for this add-on"
+                        title="Capacity limit"
                       />
                       <Users
-                        size={12}
+                        size={14}
+                        style={{
+                          position: "absolute",
+                          left: "10px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          opacity: 0.4,
+                        }}
+                      />
+                    </div>
+                    <div style={{ position: "relative", flex: 1 }}>
+                      <input
+                        type="number"
+                        value={newEventPrice}
+                        onChange={(e) => setNewEventPrice(e.target.value)}
+                        placeholder={labels.addonPrice}
+                        style={{
+                          ...inputStyle,
+                          padding: "10px 10px 10px 32px",
+                          marginBottom: 0,
+                        }}
+                        title="Additional price"
+                      />
+                      <CreditCard
+                        size={14}
                         style={{
                           position: "absolute",
                           left: "10px",
@@ -838,92 +1026,40 @@ export default function PricingTab({
                       />
                     </div>
                     <button
-                      onClick={() => removeSpecialEvent(selectedCourse, ev.id)}
+                      onClick={() => addSpecialEvent(selectedCourse)}
                       style={{
-                        background: "none",
-                        border: "none",
-                        color: "#ff4d4d",
-                        cursor: "pointer",
-                        padding: isMobile ? "8px" : "4px",
+                        ...btnStyle,
+                        width: isMobile ? "100%" : "auto",
+                        padding: "0 18px",
+                        marginTop: 0,
                         display: "flex",
+                        alignItems: "center",
                         justifyContent: "center",
+                        gap: "6px",
                       }}
                     >
-                      <Trash2 size={16} />
+                      <Plus size={16} /> {isMobile && labels.addAddon}
                     </button>
                   </div>
-                ))}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: isMobile ? "column" : "row",
-                    gap: "10px",
-                    marginTop: "8px",
-                    paddingTop: "12px",
-                    borderTop: "1px solid rgba(28, 7, 0, 0.05)",
-                  }}
-                >
-                  <input
-                    value={newEventEn}
-                    onChange={(e) => setNewEventEn(e.target.value)}
-                    placeholder={labels.newAddonEn}
+                  <label
                     style={{
-                      ...inputStyle,
-                      padding: "10px 12px",
-                      flex: 2,
-                      marginBottom: 0,
-                    }}
-                  />
-                  <input
-                    value={newEventDe}
-                    onChange={(e) => setNewEventDe(e.target.value)}
-                    placeholder={labels.newAddonDe}
-                    style={{
-                      ...inputStyle,
-                      padding: "10px 12px",
-                      flex: 2,
-                      marginBottom: 0,
-                    }}
-                  />
-                  <div style={{ position: "relative", flex: 1 }}>
-                    <input
-                      type="number"
-                      value={newEventCap}
-                      onChange={(e) => setNewEventCap(e.target.value)}
-                      placeholder={labels.cap}
-                      style={{
-                        ...inputStyle,
-                        padding: "10px 10px 10px 32px",
-                        marginBottom: 0,
-                      }}
-                      title="Capacity limit"
-                    />
-                    <Users
-                      size={14}
-                      style={{
-                        position: "absolute",
-                        left: "10px",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        opacity: 0.4,
-                      }}
-                    />
-                  </div>
-                  <button
-                    onClick={() => addSpecialEvent(selectedCourse)}
-                    style={{
-                      ...btnStyle,
-                      width: isMobile ? "100%" : "auto",
-                      padding: "0 18px",
-                      marginTop: 0,
+                      ...labelStyle,
+                      fontSize: "0.75rem",
+                      margin: 0,
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
                       gap: "6px",
+                      cursor: "pointer",
+                      opacity: 0.8,
                     }}
                   >
-                    <Plus size={16} /> {isMobile && labels.addAddon}
-                  </button>
+                    <input
+                      type="checkbox"
+                      checked={newEventMandatory}
+                      onChange={(e) => setNewEventMandatory(e.target.checked)}
+                    />
+                    {labels.mandatoryFirstTimers}
+                  </label>
                 </div>
               </div>
             </div>
