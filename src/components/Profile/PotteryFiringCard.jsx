@@ -103,6 +103,7 @@ export default function PotteryFiringCard({ currentLang }) {
 
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [viewingImage, setViewingImage] = useState(null);
 
   // --- CROPPER STATE ---
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -807,7 +808,13 @@ export default function PotteryFiringCard({ currentLang }) {
                           : 1,
                     }}
                   >
-                    <div style={imageWrapper}>
+                    <div
+                      style={{ ...imageWrapper, cursor: "zoom-in" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingImage(obj.imageUrl);
+                      }}
+                    >
                       <img
                         src={obj.imageUrl}
                         style={thumbStyle}
@@ -980,7 +987,13 @@ export default function PotteryFiringCard({ currentLang }) {
             >
               {abandonedObjects.map((obj) => (
                 <div key={obj.id} style={{ ...objectCardStyle }}>
-                  <div style={imageWrapper}>
+                  <div
+                    style={{ ...imageWrapper, cursor: "zoom-in" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewingImage(obj.imageUrl);
+                    }}
+                  >
                     <img src={obj.imageUrl} style={thumbStyle} alt="pottery" />
                   </div>
                   <div style={{ flex: 1 }}>
@@ -1257,6 +1270,71 @@ export default function PotteryFiringCard({ currentLang }) {
                   {loading ? labels.processing : labels.submit}
                 </button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* FULLSCREEN IMAGE MODAL */}
+        {viewingImage && (
+          <div
+            onClick={() => setViewingImage(null)}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(28,7,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 10000,
+              padding: "20px",
+              cursor: "zoom-out",
+            }}
+          >
+            <div
+              style={{
+                position: "relative",
+                maxWidth: "100%",
+                maxHeight: "90vh",
+              }}
+            >
+              <img
+                src={viewingImage}
+                alt="Enlarged Pottery"
+                onClick={(e) => e.stopPropagation()} // Prevents closing when clicking the image itself
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "90vh",
+                  borderRadius: "16px",
+                  objectFit: "contain",
+                  boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+                  cursor: "default",
+                }}
+              />
+              <button
+                onClick={() => setViewingImage(null)}
+                style={{
+                  position: "absolute",
+                  top: "-15px",
+                  right: "-15px",
+                  background: "#fffce3",
+                  border: "none",
+                  color: "#1c0700",
+                  borderRadius: "50%",
+                  width: "36px",
+                  height: "36px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                  fontWeight: "bold",
+                }}
+              >
+                ✕
+              </button>
             </div>
           </div>
         )}

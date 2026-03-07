@@ -39,6 +39,7 @@ export default function FiringTab({ isMobile, currentLang }) {
   const [activeFilter, setActiveFilter] = useState("bisque_pending");
   const [selectedIds, setSelectedIds] = useState([]);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [viewingImage, setViewingImage] = useState(null);
 
   const labels = {
     en: {
@@ -428,28 +429,29 @@ export default function FiringTab({ isMobile, currentLang }) {
           )
         }
         style={{
-          ...cardStyle,
-          position: "relative",
           display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          gap: isMobile ? "0.8rem" : "1.5rem",
+          alignItems: "center",
+          gap: "12px",
+          padding: "10px",
           backgroundColor: isSelected
-            ? "rgba(202, 175, 243, 0.05)"
+            ? "rgba(202, 175, 243, 0.15)"
             : isOverdue
               ? "rgba(255, 77, 77, 0.05)"
-              : "#fdf8e1",
-          padding: isMobile ? "0.6rem" : "1.2rem",
+              : "#fffce3",
+          borderRadius: "14px",
           border: isSelected
             ? "2px solid #9960a8"
             : isOverdue
               ? "1px solid #ff4d4d"
-              : "1px solid rgba(28,7,0,0.05)",
+              : "1px solid rgba(202,175,243,0.2)",
           boxShadow:
             isOverdue && !isSelected
               ? "0 0 10px rgba(255, 77, 77, 0.1)"
               : "none",
           cursor: "pointer",
           transition: "all 0.2s ease",
+          position: "relative",
+          flexShrink: 0,
         }}
       >
         {activeFilter !== "abandoned" && (
@@ -458,135 +460,131 @@ export default function FiringTab({ isMobile, currentLang }) {
               position: "absolute",
               top: "10px",
               right: "10px",
-              color: isSelected ? "#9960a8" : "#ccc",
+              color: isSelected ? "#9960a8" : "rgba(28,7,0,0.15)",
               zIndex: 5,
             }}
           >
             {isSelected ? (
-              <CheckSquare size={20} fill="#fffce3" />
+              <CheckSquare size={16} fill="#caaff3" />
             ) : (
-              <Square size={20} />
+              <Square size={16} />
             )}
           </div>
         )}
 
         <div
+          onClick={(e) => {
+            e.stopPropagation(); // Prevents the card from being selected
+            setViewingImage(item.imageUrl);
+          }}
           style={{
-            width: isMobile ? "100%" : "150px",
-            aspectRatio: "1 / 1",
-            borderRadius: "8px",
+            width: "65px",
+            height: "65px",
+            borderRadius: "10px",
             overflow: "hidden",
             flexShrink: 0,
             backgroundColor: "rgba(28,7,0,0.03)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
+            cursor: "zoom-in", // Shows the user it is clickable
           }}
         >
           <img
             src={item.imageUrl}
             alt="Pottery"
-            style={{ minWidth: "100%", minHeight: "100%", objectFit: "cover" }}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
         </div>
 
         <div
           style={{
             flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            alignItems: isMobile ? "center" : "flex-start",
-            textAlign: isMobile ? "center" : "left",
+            paddingRight: activeFilter !== "abandoned" ? "20px" : "0",
           }}
         >
-          <div>
-            <div
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              flexWrap: "wrap",
+              marginBottom: "4px",
+            }}
+          >
+            <span
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                flexWrap: "wrap",
-                justifyContent: isMobile ? "center" : "flex-start",
-                marginBottom: "4px",
+                display: "inline-block",
+                backgroundColor:
+                  item.stage === "bisque"
+                    ? "rgba(202,175,243,0.15)"
+                    : "rgba(78,95,40,0.1)",
+                color: item.stage === "bisque" ? "#9960a8" : "#4e5f28",
+                padding: "2px 8px",
+                borderRadius: "100px",
+                fontSize: "0.6rem",
+                fontWeight: "900",
+                textTransform: "lowercase",
               }}
             >
+              {item.stage === "bisque" ? labels.bisque : labels.glaze}
+            </span>
+            {isOverdue && activeFilter !== "abandoned" && (
               <span
                 style={{
-                  display: "inline-block",
-                  backgroundColor:
-                    item.stage === "bisque"
-                      ? "rgba(202,175,243,0.15)"
-                      : "rgba(78,95,40,0.1)",
-                  color: item.stage === "bisque" ? "#9960a8" : "#4e5f28",
-                  padding: "2px 10px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  backgroundColor: "#ff4d4d",
+                  color: "#fffce3",
+                  padding: "2px 8px",
                   borderRadius: "100px",
                   fontSize: "0.6rem",
                   fontWeight: "900",
                   textTransform: "lowercase",
                 }}
               >
-                {item.stage === "bisque" ? labels.bisque : labels.glaze}
+                <AlertOctagon size={10} /> {labels.overdueBadge}
               </span>
-              {isOverdue && activeFilter !== "abandoned" && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    backgroundColor: "#ff4d4d",
-                    color: "#fffce3",
-                    padding: "2px 10px",
-                    borderRadius: "100px",
-                    fontSize: "0.6rem",
-                    fontWeight: "900",
-                    textTransform: "lowercase",
-                  }}
-                >
-                  <AlertOctagon size={10} /> {labels.overdueBadge}
-                </span>
-              )}
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: isMobile ? "center" : "flex-start",
-                gap: "6px",
-                fontWeight: "700",
-                fontSize: isMobile ? "0.75rem" : "0.9rem",
-                color: "#1c0700",
-              }}
-            >
-              {displayName !== item.email ? (
-                <User size={14} color="#caaff3" />
-              ) : (
-                <Mail size={12} color="#caaff3" />
-              )}
-              {displayName}
-            </div>
-            {item.userCode && (
-              <div
-                style={{
-                  fontSize: "0.7rem",
-                  color: "#9960a8",
-                  fontWeight: "bold",
-                  marginTop: "2px",
-                }}
-              >
-                Code: {item.userCode}
-              </div>
             )}
           </div>
 
-          <div style={{ marginTop: "0.6rem", width: "100%" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              fontWeight: "700",
+              fontSize: "0.85rem",
+              color: "#1c0700",
+            }}
+          >
+            {displayName !== item.email ? (
+              <User size={12} color="#caaff3" />
+            ) : (
+              <Mail size={12} color="#caaff3" />
+            )}
+            {displayName}
+          </div>
+          {item.userCode && (
+            <div
+              style={{
+                fontSize: "0.65rem",
+                color: "#9960a8",
+                fontWeight: "bold",
+                marginTop: "2px",
+              }}
+            >
+              Code: {item.userCode}
+            </div>
+          )}
+
+          <div style={{ marginTop: "6px", width: "100%" }}>
             <div
               style={{
                 display: "flex",
                 gap: "6px",
                 flexWrap: "wrap",
-                justifyContent: isMobile ? "center" : "flex-start",
               }}
             >
               {mainActions.map((act, i) => (
@@ -598,23 +596,23 @@ export default function FiringTab({ isMobile, currentLang }) {
                   }}
                   disabled={processingId === item.id}
                   style={{
-                    padding: "8px 14px",
+                    padding: "4px 10px",
                     borderRadius: "100px",
                     border: "none",
-                    fontSize: "0.7rem",
+                    fontSize: "0.65rem",
                     fontWeight: "800",
                     cursor: "pointer",
                     backgroundColor: act.color,
                     color: "#fff",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "5px",
+                    gap: "4px",
                   }}
                 >
                   {processingId === item.id ? (
-                    <Loader2 size={12} className="spinner" />
+                    <Loader2 size={10} className="spinner" />
                   ) : (
-                    act.icon
+                    React.cloneElement(act.icon, { size: 10 })
                   )}{" "}
                   {act.label}
                 </button>
@@ -624,49 +622,45 @@ export default function FiringTab({ isMobile, currentLang }) {
             {internalActions.length > 0 && (
               <div
                 style={{
-                  marginTop: "1rem",
-                  paddingTop: "0.6rem",
-                  borderTop: "1px dashed rgba(28,7,0,0.1)",
-                  width: "100%",
+                  marginTop: "6px",
+                  display: "flex",
+                  gap: "6px",
+                  flexWrap: "wrap",
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: isMobile ? "center" : "flex-start",
-                    gap: "6px",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {internalActions.map((act, i) => (
-                    <button
-                      key={i}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        act.onClick
-                          ? act.onClick()
-                          : handleManualMove(item.id, act.stage, act.status);
-                      }}
-                      style={{
-                        padding: "4px 12px",
-                        borderRadius: "100px",
-                        border: act.borderColor
-                          ? `1px solid ${act.borderColor}`
-                          : "1px solid rgba(28,7,0,0.15)",
-                        background: "transparent",
-                        fontSize: "0.65rem",
-                        fontWeight: "600",
-                        color: act.color || "rgba(28,7,0,0.4)",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "5px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {act.icon || <ArrowRightLeft size={10} />} {act.label}
-                    </button>
-                  ))}
-                </div>
+                {internalActions.map((act, i) => (
+                  <button
+                    key={i}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      act.onClick
+                        ? act.onClick()
+                        : handleManualMove(item.id, act.stage, act.status);
+                    }}
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: "100px",
+                      border: act.borderColor
+                        ? `1px solid ${act.borderColor}`
+                        : "1px solid rgba(28,7,0,0.15)",
+                      background: "transparent",
+                      fontSize: "0.6rem",
+                      fontWeight: "600",
+                      color: act.color || "rgba(28,7,0,0.4)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {act.icon ? (
+                      React.cloneElement(act.icon, { size: 8 })
+                    ) : (
+                      <ArrowRightLeft size={8} />
+                    )}{" "}
+                    {act.label}
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -891,6 +885,71 @@ export default function FiringTab({ isMobile, currentLang }) {
           ))
         )}
       </div>
+
+      {/* FULLSCREEN IMAGE MODAL */}
+      {viewingImage && (
+        <div
+          onClick={() => setViewingImage(null)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(28,7,0,0.8)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 10000,
+            padding: "20px",
+            cursor: "zoom-out",
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              maxWidth: "100%",
+              maxHeight: "90vh",
+            }}
+          >
+            <img
+              src={viewingImage}
+              alt="Enlarged Pottery"
+              onClick={(e) => e.stopPropagation()} // Prevents closing when clicking the image itself
+              style={{
+                maxWidth: "100%",
+                maxHeight: "90vh",
+                borderRadius: "16px",
+                objectFit: "contain",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+                cursor: "default",
+              }}
+            />
+            <button
+              onClick={() => setViewingImage(null)}
+              style={{
+                position: "absolute",
+                top: "-15px",
+                right: "-15px",
+                background: "#fffce3",
+                border: "none",
+                color: "#1c0700",
+                borderRadius: "50%",
+                width: "36px",
+                height: "36px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                fontWeight: "bold",
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
