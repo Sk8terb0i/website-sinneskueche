@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { auth, db } from "../../firebase";
 import {
   signInWithEmailAndPassword,
@@ -9,10 +9,9 @@ import {
 import {
   doc,
   getDoc,
+  updateDoc,
   collection,
   onSnapshot,
-  query,
-  where,
 } from "firebase/firestore";
 import {
   LogOut,
@@ -33,6 +32,14 @@ import {
   ChevronDown,
   ChevronUp,
   MessageSquare,
+  Settings,
+  Check,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  PlusCircle,
+  Trash2,
+  Paintbrush,
 } from "lucide-react";
 
 // Components & Styles
@@ -69,8 +76,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isCustomizingNav, setIsCustomizingNav] = useState(false);
 
-  // Pending counts for badges
+  const [navConfig, setNavConfig] = useState(null);
   const [pendingRentalCount, setPendingRentalCount] = useState(0);
   const [pendingMessageCount, setPendingMessageCount] = useState(0);
 
@@ -104,10 +112,12 @@ export default function Admin({ currentLang, setCurrentLang }) {
       setDefault: "Set as Default",
       firing: "Firing Schedule",
       messages: "Messages",
-      group1: "Management",
-      group2: "Tools",
-      group3: "Marketing",
-      group4: "Studio",
+      customize: "Customize Nav",
+      save: "Save Layout",
+      addGroup: "Add Group",
+      deleteGroup: "Delete Group",
+      groupName: "Group Name",
+      setGroupColor: "Set Group Color",
     },
     de: {
       loginTitle: "Atelier Login",
@@ -132,12 +142,109 @@ export default function Admin({ currentLang, setCurrentLang }) {
       setDefault: "Als Standard setzen",
       firing: "Brennplan",
       messages: "Nachrichten",
-      group1: "Verwaltung",
-      group2: "Tools",
-      group3: "Marketing",
-      group4: "Studio",
+      customize: "Nav anpassen",
+      save: "Layout speichern",
+      addGroup: "Gruppe hinzufügen",
+      deleteGroup: "Gruppe löschen",
+      groupName: "Gruppenname",
+      setGroupColor: "Gruppenfarbe setzen",
     },
   }[currentLang || "en"];
+
+  const DEFAULT_NAV = {
+    groups: [
+      {
+        id: "g1",
+        name: { en: "Management", de: "Verwaltung" },
+        items: ["events", "profiles"],
+      },
+      {
+        id: "g2",
+        name: { en: "Tools", de: "Werkzeuge" },
+        items: [
+          "course-management",
+          "schedule",
+          "reminders",
+          "terms",
+          "emails",
+        ],
+      },
+      {
+        id: "g3",
+        name: { en: "Marketing", de: "Marketing" },
+        items: ["pack-codes", "promotions"],
+      },
+      {
+        id: "g4",
+        name: { en: "Studio", de: "Studio" },
+        items: ["firing", "messages", "rental"],
+      },
+    ],
+    tabSettings: {},
+  };
+
+  const TAB_META = {
+    events: {
+      icon: <CalendarIcon size={18} />,
+      label: labels.events,
+      adminOnly: false,
+    },
+    profiles: {
+      icon: <Users size={18} />,
+      label: labels.profiles,
+      adminOnly: true,
+    },
+    "course-management": {
+      icon: <Tag size={18} />,
+      label: labels.courseMgmt,
+      adminOnly: false,
+    },
+    schedule: {
+      icon: <CalendarClock size={18} />,
+      label: labels.schedule,
+      adminOnly: false,
+    },
+    reminders: {
+      icon: <Bell size={18} />,
+      label: labels.reminders,
+      adminOnly: false,
+    },
+    terms: {
+      icon: <FileText size={18} />,
+      label: labels.terms,
+      adminOnly: false,
+    },
+    emails: {
+      icon: <Mail size={18} />,
+      label: labels.emails,
+      adminOnly: false,
+    },
+    "pack-codes": {
+      icon: <CreditCard size={18} />,
+      label: labels.packCodes,
+      adminOnly: true,
+    },
+    promotions: {
+      icon: <Ticket size={18} />,
+      label: labels.promotions,
+      adminOnly: false,
+    },
+    rental: {
+      icon: <LayoutGrid size={18} />,
+      label: labels.rental,
+      adminOnly: true,
+    },
+    firing: {
+      icon: <Flame size={18} />,
+      label: labels.firing,
+      adminOnly: true,
+    },
+    messages: {
+      icon: <MessageSquare size={18} />,
+      label: labels.messages,
+      adminOnly: true,
+    },
+  };
 
   const [activeTab, setActiveTab] = useState(() => {
     const hash = window.location.hash;
@@ -172,6 +279,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
           ) {
             setUser(currentUser);
             setAdminData(data);
+            setNavConfig(data.navConfig || DEFAULT_NAV);
           } else {
             setUser(null);
             setAdminData(null);
@@ -192,7 +300,91 @@ export default function Admin({ currentLang, setCurrentLang }) {
     };
   }, []);
 
-  // Listen for Pending Rental Requests
+  const handleSaveNav = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      await updateDoc(doc(db, "users", user.uid), { navConfig: navConfig });
+      setIsCustomizingNav(false);
+    } catch (e) {
+      alert("Error saving layout: " + e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addGroup = () => {
+    setNavConfig((prev) => ({
+      ...prev,
+      groups: [
+        ...prev.groups,
+        {
+          id: Date.now().toString(),
+          name: { en: "New Group", de: "Neue Gruppe" },
+          items: [],
+        },
+      ],
+    }));
+  };
+
+  const deleteGroup = (groupIdx) => {
+    if (navConfig.groups.length <= 1)
+      return alert("You must have at least one group.");
+    const newConfig = { ...navConfig };
+    const itemsToMove = newConfig.groups[groupIdx].items;
+    newConfig.groups.splice(groupIdx, 1);
+    newConfig.groups[0].items = [...newConfig.groups[0].items, ...itemsToMove];
+    setNavConfig(newConfig);
+  };
+
+  const moveItem = (groupIdx, itemIdx, direction) => {
+    const newConfig = { ...navConfig };
+    const items = [...newConfig.groups[groupIdx].items];
+    const targetIdx = direction === "up" ? itemIdx - 1 : itemIdx + 1;
+    if (targetIdx < 0 || targetIdx >= items.length) return;
+    [items[itemIdx], items[targetIdx]] = [items[targetIdx], items[itemIdx]];
+    newConfig.groups[groupIdx].items = items;
+    setNavConfig(newConfig);
+  };
+
+  const updateGroupName = (groupIdx, lang, val) => {
+    const newConfig = { ...navConfig };
+    newConfig.groups[groupIdx].name[lang] = val;
+    setNavConfig(newConfig);
+  };
+
+  const updateTabColor = (tabKey, color) => {
+    setNavConfig((prev) => ({
+      ...prev,
+      tabSettings: {
+        ...prev.tabSettings,
+        [tabKey]: { ...prev.tabSettings[tabKey], color },
+      },
+    }));
+  };
+
+  const updateGroupColor = (groupIdx, color) => {
+    const newConfig = { ...navConfig };
+    const items = newConfig.groups[groupIdx].items;
+    items.forEach((tabKey) => {
+      newConfig.tabSettings[tabKey] = {
+        ...newConfig.tabSettings[tabKey],
+        color,
+      };
+    });
+    setNavConfig(newConfig);
+  };
+
+  // Logic to determine if a group has a uniform color
+  const getGroupUniformColor = (items) => {
+    if (items.length === 0) return null;
+    const colors = items.map(
+      (id) => navConfig?.tabSettings?.[id]?.color || "#caaff3",
+    );
+    const firstColor = colors[0];
+    return colors.every((c) => c === firstColor) ? firstColor : null;
+  };
+
   useEffect(() => {
     if (!user || adminData?.role !== "admin") return;
     const unsubscribe = onSnapshot(collection(db, "rent_requests"), (snap) => {
@@ -207,7 +399,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
     return () => unsubscribe();
   }, [user, adminData]);
 
-  // Listen for Unread Messages
   useEffect(() => {
     if (!user || adminData?.role !== "admin") return;
     const unsubscribe = onSnapshot(
@@ -237,7 +428,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
     setDefaultTab(activeTab);
   };
 
-  // Badge Component
   const TabBadge = ({ count }) => {
     if (count <= 0) return null;
     return (
@@ -358,36 +548,17 @@ export default function Admin({ currentLang, setCurrentLang }) {
 
   const isFullAdmin = adminData.role === "admin";
 
-  const groupStyle = {
-    ...tabContainerStyle,
-    backgroundColor: "rgba(28, 7, 0, 0.04)",
-    borderRadius: "100px",
-    padding: "4px",
-    display: "flex",
-    flexShrink: 0,
-    gap: "4px",
-  };
-
-  const getActiveTabDetails = () => {
-    const map = {
-      events: { icon: <CalendarIcon size={18} />, label: labels.events },
-      profiles: { icon: <Users size={18} />, label: labels.profiles },
-      "course-management": {
-        icon: <Tag size={18} />,
-        label: labels.courseMgmt,
-      },
-      schedule: { icon: <CalendarClock size={18} />, label: labels.schedule },
-      reminders: { icon: <Bell size={18} />, label: labels.reminders },
-      terms: { icon: <FileText size={18} />, label: labels.terms },
-      emails: { icon: <Mail size={18} />, label: labels.emails },
-      "pack-codes": { icon: <CreditCard size={18} />, label: labels.packCodes },
-      promotions: { icon: <Ticket size={18} />, label: labels.promotions },
-      rental: { icon: <LayoutGrid size={18} />, label: labels.rental },
-      firing: { icon: <Flame size={18} />, label: labels.firing },
-      messages: { icon: <MessageSquare size={18} />, label: labels.messages },
-    };
-    return map[activeTab] || map.events;
-  };
+  const visibleGroups =
+    navConfig?.groups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((itemKey) => {
+          const meta = TAB_META[itemKey];
+          if (!meta) return false;
+          return meta.adminOnly ? isFullAdmin : true;
+        }),
+      }))
+      .filter((g) => g.items.length > 0) || [];
 
   return (
     <div
@@ -420,16 +591,42 @@ export default function Admin({ currentLang, setCurrentLang }) {
           >
             atelier management
           </h1>
-          <p
-            style={{
-              opacity: 0.5,
-              fontSize: "0.75rem",
-              textTransform: "uppercase",
-              letterSpacing: "1px",
-            }}
-          >
-            {isFullAdmin ? labels.fullAdmin : labels.courseAdmin}: {user.email}
-          </p>
+          <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
+            <p
+              style={{
+                opacity: 0.5,
+                fontSize: "0.75rem",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+              }}
+            >
+              {isFullAdmin ? labels.fullAdmin : labels.courseAdmin}:{" "}
+              {user.email}
+            </p>
+            <button
+              onClick={() =>
+                isCustomizingNav ? handleSaveNav() : setIsCustomizingNav(true)
+              }
+              style={{
+                background: isCustomizingNav
+                  ? "#4e5f28"
+                  : "rgba(202, 175, 243, 0.2)",
+                color: isCustomizingNav ? "white" : "#9960a8",
+                border: "none",
+                borderRadius: "100px",
+                padding: "4px 12px",
+                fontSize: "11px",
+                fontWeight: "900",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              {isCustomizingNav ? <Check size={14} /> : <Settings size={14} />}
+              {isCustomizingNav ? labels.save : labels.customize}
+            </button>
+          </div>
         </div>
         <button
           onClick={() => signOut(auth)}
@@ -445,7 +642,241 @@ export default function Admin({ currentLang, setCurrentLang }) {
         </button>
       </header>
 
-      {isCompactNav ? (
+      {isCustomizingNav ? (
+        /* --- CUSTOMIZATION UI --- */
+        <div
+          style={{
+            backgroundColor: "rgba(28, 7, 0, 0.03)",
+            padding: "2rem",
+            borderRadius: "24px",
+            animation: "fadeIn 0.3s ease",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+              gap: "2rem",
+            }}
+          >
+            {navConfig.groups.map((group, gIdx) => {
+              const uniformColor = getGroupUniformColor(group.items);
+              return (
+                <div
+                  key={group.id}
+                  style={{
+                    backgroundColor: "white",
+                    padding: "1.5rem",
+                    borderRadius: "16px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      marginBottom: "1rem",
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <label
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: "900",
+                          opacity: 0.5,
+                        }}
+                      >
+                        {labels.groupName} (EN / DE)
+                      </label>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "5px",
+                          marginTop: "5px",
+                        }}
+                      >
+                        <input
+                          style={{ ...inputStyle, padding: "8px" }}
+                          value={group.name.en}
+                          onChange={(e) =>
+                            updateGroupName(gIdx, "en", e.target.value)
+                          }
+                        />
+                        <input
+                          style={{ ...inputStyle, padding: "8px" }}
+                          value={group.name.de}
+                          onChange={(e) =>
+                            updateGroupName(gIdx, "de", e.target.value)
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: "5px",
+                        marginLeft: "10px",
+                      }}
+                    >
+                      <label
+                        style={{
+                          fontSize: "8px",
+                          fontWeight: "900",
+                          opacity: 0.5,
+                        }}
+                      >
+                        {labels.setGroupColor}
+                      </label>
+                      <div style={{ position: "relative" }}>
+                        <Paintbrush
+                          size={14}
+                          style={{
+                            position: "absolute",
+                            pointerEvents: "none",
+                            top: "5px",
+                            left: "5px",
+                            opacity: 0.5,
+                          }}
+                        />
+                        <input
+                          type="color"
+                          value={uniformColor || "#caaff3"}
+                          onChange={(e) =>
+                            updateGroupColor(gIdx, e.target.value)
+                          }
+                          style={{
+                            width: "24px",
+                            height: "24px",
+                            border: "none",
+                            background: "none",
+                            cursor: "pointer",
+                          }}
+                        />
+                      </div>
+                      <button
+                        onClick={() => deleteGroup(gIdx)}
+                        style={{
+                          border: "none",
+                          background: "rgba(255, 77, 77, 0.1)",
+                          color: "#ff4d4d",
+                          padding: "5px",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      border: uniformColor
+                        ? `2px solid ${uniformColor}`
+                        : "none",
+                      padding: uniformColor ? "10px" : "0",
+                      borderRadius: "12px",
+                    }}
+                  >
+                    {group.items.map((item, iIdx) => {
+                      const meta = TAB_META[item];
+                      const settings = navConfig.tabSettings?.[item] || {};
+                      return (
+                        <div
+                          key={item}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            padding: "10px",
+                            border: uniformColor
+                              ? "1px solid rgba(0,0,0,0.05)"
+                              : `2px solid ${settings.color || "#caaff3"}`,
+                            borderRadius: "10px",
+                          }}
+                        >
+                          <GripVertical size={16} style={{ opacity: 0.3 }} />
+                          <div
+                            style={{
+                              flex: 1,
+                              fontWeight: "700",
+                              fontSize: "14px",
+                            }}
+                          >
+                            {meta?.label}
+                          </div>
+                          <div style={{ display: "flex", gap: "4px" }}>
+                            <input
+                              type="color"
+                              value={settings.color || "#caaff3"}
+                              onChange={(e) =>
+                                updateTabColor(item, e.target.value)
+                              }
+                              style={{
+                                width: "20px",
+                                height: "20px",
+                                border: "none",
+                                background: "none",
+                                cursor: "pointer",
+                              }}
+                            />
+                            <button
+                              onClick={() => moveItem(gIdx, iIdx, "up")}
+                              style={{
+                                border: "none",
+                                background: "#f5f5f5",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <ArrowUp size={12} />
+                            </button>
+                            <button
+                              onClick={() => moveItem(gIdx, iIdx, "down")}
+                              style={{
+                                border: "none",
+                                background: "#f5f5f5",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <ArrowDown size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <button
+              onClick={addGroup}
+              style={{
+                height: "fit-content",
+                border: "2px dashed rgba(78, 95, 40, 0.2)",
+                color: "#4e5f28",
+                padding: "2rem",
+                borderRadius: "16px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "10px",
+                background: "none",
+                cursor: "pointer",
+              }}
+            >
+              <PlusCircle size={32} /> {labels.addGroup}
+            </button>
+          </div>
+        </div>
+      ) : isCompactNav ? (
         /* --- COMPACT SELECTOR --- */
         <div
           style={{ marginBottom: "1.5rem", position: "relative", zIndex: 100 }}
@@ -459,7 +890,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "14px 20px",
-                backgroundColor: "#caaff3",
+                backgroundColor:
+                  navConfig?.tabSettings?.[activeTab]?.color || "#caaff3",
                 borderRadius: "16px",
                 border: "none",
                 color: "#1c0700",
@@ -469,8 +901,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
               <div
                 style={{ display: "flex", alignItems: "center", gap: "12px" }}
               >
-                {getActiveTabDetails().icon}
-                {getActiveTabDetails().label}
+                {TAB_META[activeTab]?.icon} {TAB_META[activeTab]?.label}
                 {activeTab === "rental" && (
                   <TabBadge count={pendingRentalCount} />
                 )}
@@ -522,160 +953,95 @@ export default function Admin({ currentLang, setCurrentLang }) {
                 gap: "1.5rem",
               }}
             >
-              {[
-                {
-                  label: labels.group1,
-                  items: ["events", isFullAdmin && "profiles"].filter(Boolean),
-                },
-                {
-                  label: labels.group2,
-                  items: [
-                    "course-management",
-                    "schedule",
-                    "reminders",
-                    "terms",
-                    "emails",
-                  ],
-                },
-                {
-                  label: labels.group3,
-                  items: [isFullAdmin && "pack-codes", "promotions"].filter(
-                    Boolean,
-                  ),
-                },
-                {
-                  label: labels.group4,
-                  items: [
-                    isFullAdmin && "firing",
-                    isFullAdmin && "messages",
-                    isFullAdmin && "rental",
-                  ].filter(Boolean),
-                },
-              ].map((group, idx) => (
-                <div key={idx}>
-                  <p
-                    style={{
-                      fontSize: "0.65rem",
-                      fontWeight: "900",
-                      textTransform: "uppercase",
-                      color: "#4e5f28",
-                      opacity: 0.6,
-                      marginBottom: "8px",
-                      paddingLeft: "8px",
-                    }}
-                  >
-                    {group.label}
-                  </p>
+              {visibleGroups.map((group) => {
+                const uniformColor = getGroupUniformColor(group.items);
+                return (
                   <div
+                    key={group.id}
                     style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
+                      border: uniformColor
+                        ? `2px solid ${uniformColor}`
+                        : "none",
+                      borderRadius: "16px",
+                      padding: uniformColor ? "8px" : "0",
                     }}
                   >
-                    {group.items.map((tabKey) => {
-                      const details = {
-                        events: {
-                          icon: <CalendarIcon size={18} />,
-                          label: labels.events,
-                        },
-                        profiles: {
-                          icon: <Users size={18} />,
-                          label: labels.profiles,
-                        },
-                        "course-management": {
-                          icon: <Tag size={18} />,
-                          label: labels.courseMgmt,
-                        },
-                        schedule: {
-                          icon: <CalendarClock size={18} />,
-                          label: labels.schedule,
-                        },
-                        reminders: {
-                          icon: <Bell size={18} />,
-                          label: labels.reminders,
-                        },
-                        terms: {
-                          icon: <FileText size={18} />,
-                          label: labels.terms,
-                        },
-                        emails: {
-                          icon: <Mail size={18} />,
-                          label: labels.emails,
-                        },
-                        "pack-codes": {
-                          icon: <CreditCard size={18} />,
-                          label: labels.packCodes,
-                        },
-                        promotions: {
-                          icon: <Ticket size={18} />,
-                          label: labels.promotions,
-                        },
-                        rental: {
-                          icon: <LayoutGrid size={18} />,
-                          label: labels.rental,
-                        },
-                        firing: {
-                          icon: <Flame size={18} />,
-                          label: labels.firing,
-                        },
-                        messages: {
-                          icon: <MessageSquare size={18} />,
-                          label: labels.messages,
-                        },
-                      }[tabKey];
-
-                      return (
-                        <button
-                          key={tabKey}
-                          onClick={() => {
-                            setActiveTab(tabKey);
-                            setIsMobileMenuOpen(false);
-                          }}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "12px",
-                            width: "100%",
-                            padding: "12px 16px",
-                            borderRadius: "12px",
-                            border: "none",
-                            backgroundColor:
-                              activeTab === tabKey ? "#caaff3" : "transparent",
-                            color: "#1c0700",
-                            fontWeight: activeTab === tabKey ? "800" : "500",
-                            fontSize: "0.95rem",
-                            textAlign: "left",
-                            position: "relative",
-                          }}
-                        >
-                          <div
+                    <p
+                      style={{
+                        fontSize: "0.65rem",
+                        fontWeight: "900",
+                        textTransform: "uppercase",
+                        color: "#4e5f28",
+                        opacity: 0.6,
+                        marginBottom: "8px",
+                        paddingLeft: "8px",
+                      }}
+                    >
+                      {group.name[currentLang || "en"]}
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "4px",
+                      }}
+                    >
+                      {group.items.map((tabKey) => {
+                        const tabColor =
+                          navConfig?.tabSettings?.[tabKey]?.color || "#caaff3";
+                        return (
+                          <button
+                            key={tabKey}
+                            onClick={() => {
+                              setActiveTab(tabKey);
+                              setIsMobileMenuOpen(false);
+                            }}
                             style={{
                               display: "flex",
                               alignItems: "center",
                               gap: "12px",
-                              flex: 1,
+                              width: "100%",
+                              padding: "12px 16px",
+                              borderRadius: "12px",
+                              border: uniformColor
+                                ? "none"
+                                : `2px solid ${tabColor}`,
+                              backgroundColor:
+                                activeTab === tabKey ? tabColor : "transparent",
+                              color: "#1c0700",
+                              fontWeight: activeTab === tabKey ? "800" : "500",
+                              fontSize: "0.95rem",
+                              textAlign: "left",
                             }}
                           >
-                            {details.icon} {details.label}
-                          </div>
-                          {tabKey === "rental" && (
-                            <TabBadge count={pendingRentalCount} />
-                          )}
-                          {tabKey === "messages" && (
-                            <TabBadge count={pendingMessageCount} />
-                          )}
-                        </button>
-                      );
-                    })}
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "12px",
+                                flex: 1,
+                              }}
+                            >
+                              {TAB_META[tabKey].icon} {TAB_META[tabKey].label}
+                            </div>
+                            {tabKey === "rental" && (
+                              <TabBadge count={pendingRentalCount} />
+                            )}
+                            {tabKey === "messages" && (
+                              <TabBadge count={pendingMessageCount} />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       ) : (
-        /* --- ORIGINAL HORIZONTAL VIEW --- */
+        /* --- HORIZONTAL NAV --- */
         <>
           <div
             style={{
@@ -688,173 +1054,76 @@ export default function Admin({ currentLang, setCurrentLang }) {
             }}
             className="hide-scrollbar"
           >
-            <div style={groupStyle}>
-              <button
-                onClick={() => setActiveTab("events")}
-                style={{
-                  ...tabButtonStyle(activeTab === "events"),
-                  backgroundColor:
-                    activeTab === "events" ? "#caaff3" : "transparent",
-                  borderRadius: "100px",
-                  color: "#1c0700",
-                }}
-              >
-                <CalendarIcon size={16} /> {labels.events}
-              </button>
-              {isFullAdmin && (
-                <button
-                  onClick={() => setActiveTab("profiles")}
+            {visibleGroups.map((group) => {
+              const uniformColor = getGroupUniformColor(group.items);
+              return (
+                <div
+                  key={group.id}
                   style={{
-                    ...tabButtonStyle(activeTab === "profiles"),
-                    backgroundColor:
-                      activeTab === "profiles" ? "#caaff3" : "transparent",
-                    borderRadius: "100px",
-                    color: "#1c0700",
-                  }}
-                >
-                  <Users size={16} /> {labels.profiles}
-                </button>
-              )}
-            </div>
-            <div style={groupStyle}>
-              <button
-                onClick={() => setActiveTab("course-management")}
-                style={{
-                  ...tabButtonStyle(activeTab === "course-management"),
-                  backgroundColor:
-                    activeTab === "course-management"
-                      ? "#caaff3"
-                      : "transparent",
-                  borderRadius: "100px",
-                  color: "#1c0700",
-                }}
-              >
-                <Tag size={16} /> {labels.courseMgmt}
-              </button>
-              <button
-                onClick={() => setActiveTab("schedule")}
-                style={{
-                  ...tabButtonStyle(activeTab === "schedule"),
-                  backgroundColor:
-                    activeTab === "schedule" ? "#caaff3" : "transparent",
-                  borderRadius: "100px",
-                  color: "#1c0700",
-                }}
-              >
-                <CalendarClock size={16} /> {labels.schedule}
-              </button>
-              <button
-                onClick={() => setActiveTab("reminders")}
-                style={{
-                  ...tabButtonStyle(activeTab === "reminders"),
-                  backgroundColor:
-                    activeTab === "reminders" ? "#caaff3" : "transparent",
-                  borderRadius: "100px",
-                  color: "#1c0700",
-                }}
-              >
-                <Bell size={16} /> {labels.reminders}
-              </button>
-              <button
-                onClick={() => setActiveTab("terms")}
-                style={{
-                  ...tabButtonStyle(activeTab === "terms"),
-                  backgroundColor:
-                    activeTab === "terms" ? "#caaff3" : "transparent",
-                  borderRadius: "100px",
-                  color: "#1c0700",
-                }}
-              >
-                <FileText size={16} /> {labels.terms}
-              </button>
-              <button
-                onClick={() => setActiveTab("emails")}
-                style={{
-                  ...tabButtonStyle(activeTab === "emails"),
-                  backgroundColor:
-                    activeTab === "emails" ? "#caaff3" : "transparent",
-                  borderRadius: "100px",
-                  color: "#1c0700",
-                }}
-              >
-                <Mail size={16} /> {labels.emails}
-              </button>
-            </div>
-            <div style={groupStyle}>
-              {isFullAdmin && (
-                <button
-                  onClick={() => setActiveTab("pack-codes")}
-                  style={{
-                    ...tabButtonStyle(activeTab === "pack-codes"),
-                    backgroundColor:
-                      activeTab === "pack-codes" ? "#caaff3" : "transparent",
-                    borderRadius: "100px",
-                    color: "#1c0700",
-                  }}
-                >
-                  <CreditCard size={16} /> {labels.packCodes}
-                </button>
-              )}
-              <button
-                onClick={() => setActiveTab("promotions")}
-                style={{
-                  ...tabButtonStyle(activeTab === "promotions"),
-                  backgroundColor:
-                    activeTab === "promotions" ? "#caaff3" : "transparent",
-                  borderRadius: "100px",
-                  color: "#1c0700",
-                }}
-              >
-                <Ticket size={16} /> {labels.promotions}
-              </button>
-            </div>
-            {isFullAdmin && (
-              <div style={groupStyle}>
-                <button
-                  onClick={() => setActiveTab("firing")}
-                  style={{
-                    ...tabButtonStyle(activeTab === "firing"),
-                    backgroundColor:
-                      activeTab === "firing" ? "#caaff3" : "transparent",
-                    borderRadius: "100px",
-                    color: "#1c0700",
-                  }}
-                >
-                  <Flame size={16} /> {labels.firing}
-                </button>
-                <button
-                  onClick={() => setActiveTab("messages")}
-                  style={{
-                    ...tabButtonStyle(activeTab === "messages"),
-                    backgroundColor:
-                      activeTab === "messages" ? "#caaff3" : "transparent",
-                    borderRadius: "100px",
-                    color: "#1c0700",
                     display: "flex",
-                    alignItems: "center",
+                    flexDirection: "column",
+                    gap: "8px",
                   }}
                 >
-                  <MessageSquare size={16} /> {labels.messages}
-                  <TabBadge count={pendingMessageCount} />
-                </button>
-                <button
-                  onClick={() => setActiveTab("rental")}
-                  style={{
-                    ...tabButtonStyle(activeTab === "rental"),
-                    backgroundColor:
-                      activeTab === "rental" ? "#caaff3" : "transparent",
-                    borderRadius: "100px",
-                    color: "#1c0700",
-                    position: "relative",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                >
-                  <LayoutGrid size={16} /> {labels.rental}
-                  <TabBadge count={pendingRentalCount} />
-                </button>
-              </div>
-            )}
+                  <span
+                    style={{
+                      fontSize: "9px",
+                      fontWeight: "900",
+                      textTransform: "uppercase",
+                      opacity: 0.4,
+                      marginLeft: "12px",
+                    }}
+                  >
+                    {group.name[currentLang || "en"]}
+                  </span>
+                  <div
+                    style={{
+                      ...tabContainerStyle,
+                      backgroundColor: "rgba(28, 7, 0, 0.04)",
+                      borderRadius: "100px",
+                      padding: "4px",
+                      display: "flex",
+                      gap: "4px",
+                      border: uniformColor
+                        ? `2px solid ${uniformColor}`
+                        : "none",
+                    }}
+                  >
+                    {group.items.map((tabKey) => {
+                      const tabColor =
+                        navConfig?.tabSettings?.[tabKey]?.color || "#caaff3";
+                      return (
+                        <button
+                          key={tabKey}
+                          onClick={() => setActiveTab(tabKey)}
+                          style={{
+                            ...tabButtonStyle(activeTab === tabKey),
+                            backgroundColor:
+                              activeTab === tabKey ? tabColor : "transparent",
+                            border: uniformColor
+                              ? "none"
+                              : `2px solid ${tabColor}`,
+                            borderRadius: "100px",
+                            color: "#1c0700",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          {TAB_META[tabKey].icon} {TAB_META[tabKey].label}
+                          {tabKey === "rental" && (
+                            <TabBadge count={pendingRentalCount} />
+                          )}
+                          {tabKey === "messages" && (
+                            <TabBadge count={pendingMessageCount} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <div
             style={{
@@ -896,6 +1165,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
         </>
       )}
 
+      {/* --- TAB CONTENT AREA --- */}
       <div style={{ animation: "fadeIn 0.4s ease-out" }}>
         {activeTab === "events" && (
           <EventsTab
