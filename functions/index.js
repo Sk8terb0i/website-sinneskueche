@@ -1509,3 +1509,47 @@ exports.replyToContactMessage = onCall({ cors: true }, async (request) => {
 
   return { success: true };
 });
+
+exports.replyToRentalRequest = onCall({ cors: true }, async (request) => {
+  if (!request.auth)
+    throw new HttpsError("unauthenticated", "Admin login required.");
+
+  const { requestId, replyText } = request.data;
+  const docRef = db.collection("rent_requests").doc(requestId);
+  const snap = await docRef.get();
+
+  if (!snap.exists)
+    throw new HttpsError("not-found", "Rental request not found.");
+  const data = snap.data();
+
+  const htmlBody = `
+    <div style="font-family: Arial; padding: 30px; background: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">
+      <h2 style="color: #9960a8; margin-top: 0;">Update regarding your Rental Request</h2>
+      <p>Hi ${data.name},</p>
+      <div style="margin: 20px 0; line-height: 1.6; white-space: pre-wrap;">
+        ${replyText}
+      </div>
+      <hr style="border: none; border-top: 1px dashed rgba(28, 7, 0, 0.1); margin: 30px 0;" />
+      <p style="font-size: 12px; opacity: 0.6;">Original Request Date: ${data.date}</p>
+      <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche Team</p>
+    </div>
+  `;
+
+  // 1. Send the email
+  await db.collection("mail").add({
+    to: data.email,
+    message: {
+      subject: `Rental Inquiry: Atelier Sinnesküche`,
+      html: htmlBody,
+    },
+  });
+
+  // 2. Update document
+  await docRef.update({
+    response: replyText,
+    respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+    respondedBy: request.auth.token.email,
+  });
+
+  return { success: true };
+});

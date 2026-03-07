@@ -12,6 +12,7 @@ import {
   updateDoc,
   onSnapshot,
 } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   PlusCircle,
   Trash2,
@@ -28,7 +29,10 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-} from "lucide-react"; // Fixed: Added Check to imports
+  Send,
+  CornerDownRight,
+  ExternalLink,
+} from "lucide-react";
 import {
   formCardStyle,
   sectionTitleStyle,
@@ -49,6 +53,9 @@ export default function RentalTab({ isMobile, currentLang }) {
   const [requestFilter, setRequestFilter] = useState("avail");
   const [loading, setLoading] = useState(true);
   const [viewingRequest, setViewingRequest] = useState(null);
+
+  const [replyText, setReplyText] = useState({});
+  const [isSendingReply, setIsSendingReply] = useState(null);
 
   const labels = {
     en: {
@@ -75,6 +82,11 @@ export default function RentalTab({ isMobile, currentLang }) {
       statusBooked: "booked",
       detailsTitle: "request details",
       close: "close",
+      replyLabel: "Write a response...",
+      sendReply: "Send Response",
+      responded: "Responded on",
+      external: "Open in Mail App",
+      successMsg: "Reply sent successfully!",
     },
     de: {
       setAvail: "verfügbarkeit einstellen",
@@ -100,6 +112,11 @@ export default function RentalTab({ isMobile, currentLang }) {
       statusBooked: "gebucht",
       detailsTitle: "details zur anfrage",
       close: "schließen",
+      replyLabel: "Antwort schreiben...",
+      sendReply: "Antwort senden",
+      responded: "Beantwortet am",
+      external: "In Mail-App öffnen",
+      successMsg: "Antwort erfolgreich gesendet!",
     },
   }[currentLang || "en"];
 
@@ -167,6 +184,21 @@ export default function RentalTab({ isMobile, currentLang }) {
     alert("notification email saved!");
   };
 
+  const handleSendReply = async (requestId) => {
+    if (!replyText[requestId]) return;
+    setIsSendingReply(requestId);
+    try {
+      const replyFn = httpsCallable(getFunctions(), "replyToRentalRequest");
+      await replyFn({ requestId, replyText: replyText[requestId] });
+      setReplyText((prev) => ({ ...prev, [requestId]: "" }));
+      alert(labels.successMsg); // Feedback provided here
+    } catch (err) {
+      console.error("Reply error:", err);
+    } finally {
+      setIsSendingReply(null);
+    }
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
     return dateStr.split("-").reverse().join(".");
@@ -209,7 +241,6 @@ export default function RentalTab({ isMobile, currentLang }) {
           <h3 style={{ ...sectionTitleStyle, textTransform: "none" }}>
             <PlusCircle size={18} /> {labels.setAvail}
           </h3>
-
           <div
             style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
           >
@@ -249,7 +280,6 @@ export default function RentalTab({ isMobile, currentLang }) {
               {labels.pubDate}
             </button>
           </div>
-
           <div
             style={{
               marginTop: "2.5rem",
@@ -257,7 +287,6 @@ export default function RentalTab({ isMobile, currentLang }) {
               borderTop: "1px dashed rgba(28,7,0,0.1)",
             }}
           >
-            {/* POSITIONED ABOVE EMAIL */}
             <div
               style={{
                 display: "flex",
@@ -298,7 +327,6 @@ export default function RentalTab({ isMobile, currentLang }) {
                 {showInProfile ? labels.on : labels.off}
               </button>
             </div>
-
             <h4
               style={{
                 ...labelStyle,
@@ -407,7 +435,6 @@ export default function RentalTab({ isMobile, currentLang }) {
               const relevantRequest = isBooked
                 ? rel.find((r) => r.status === "approved")
                 : rel.find((r) => r.status === "pending");
-
               return (
                 <div
                   key={a.id}
@@ -467,7 +494,7 @@ export default function RentalTab({ isMobile, currentLang }) {
                     </div>
                   </div>
                   <Trash2
-                    size={18}
+                    size={22}
                     color="rgba(28,7,0,0.2)"
                     onClick={async (e) => {
                       e.stopPropagation();
@@ -528,7 +555,7 @@ export default function RentalTab({ isMobile, currentLang }) {
                     <div
                       style={{
                         display: "flex",
-                        gap: "12px",
+                        gap: "14px",
                         alignItems: "center",
                       }}
                     >
@@ -567,14 +594,20 @@ export default function RentalTab({ isMobile, currentLang }) {
                           />
                         </>
                       )}
-                      <a
-                        href={`mailto:${req.email}`}
-                        style={{ color: "#caaff3" }}
-                      >
-                        <Mail size={22} />
-                      </a>
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <a
+                          href={`mailto:${req.email}`}
+                          style={{
+                            color: "#caaff3",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Mail size={22} />
+                        </a>
+                      </div>
                       <Trash2
-                        size={20}
+                        size={22}
                         color="rgba(28,7,0,0.15)"
                         onClick={async (e) => {
                           e.stopPropagation();
@@ -648,6 +681,123 @@ export default function RentalTab({ isMobile, currentLang }) {
                       </p>
                     </div>
                   )}
+                  {/* RESPONSE HISTORY - Visible in the card */}
+                  {req.response && (
+                    <div
+                      style={{
+                        width: "100%",
+                        backgroundColor: "rgba(78, 95, 40, 0.05)",
+                        padding: "1rem",
+                        borderRadius: "12px",
+                        borderLeft: "4px solid #4e5f28",
+                        fontSize: "0.9rem",
+                        marginTop: "1rem",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: "0 0 8px 0",
+                          fontSize: "0.65rem",
+                          fontWeight: "900",
+                          textTransform: "uppercase",
+                          color: "#4e5f28",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <CornerDownRight size={12} /> {labels.responded}{" "}
+                        {req.respondedAt
+                          ? new Date(
+                              req.respondedAt.toDate(),
+                            ).toLocaleDateString()
+                          : ""}
+                      </p>
+                      <div
+                        style={{ whiteSpace: "pre-wrap", fontStyle: "italic" }}
+                      >
+                        {req.response}
+                      </div>
+                    </div>
+                  )}
+                  {/* DIRECT REPLY AREA - Inside the card */}
+                  <div
+                    style={{
+                      marginTop: "1.5rem",
+                      borderTop: "1px solid rgba(28,7,0,0.05)",
+                      paddingTop: "1rem",
+                      width: "100%",
+                    }}
+                  >
+                    <textarea
+                      placeholder={labels.replyLabel}
+                      value={replyText[req.id] || ""}
+                      onChange={(e) =>
+                        setReplyText({ ...replyText, [req.id]: e.target.value })
+                      }
+                      style={{
+                        ...inputStyle,
+                        width: "100%",
+                        minHeight: "100px",
+                        backgroundColor: "#fffce3",
+                        resize: "vertical",
+                        marginBottom: "10px",
+                        fontSize: "0.9rem",
+                        padding: "12px",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "10px",
+                      }}
+                    >
+                      <a
+                        href={`mailto:${req.email}?subject=Rental Inquiry`}
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#caaff3",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          textDecoration: "none",
+                          fontWeight: "700",
+                        }}
+                      >
+                        <ExternalLink size={14} /> {labels.external}
+                      </a>
+                      <button
+                        onClick={() => handleSendReply(req.id)}
+                        disabled={
+                          isSendingReply === req.id || !replyText[req.id]
+                        }
+                        style={{
+                          ...btnStyle,
+                          width: "auto",
+                          padding: "8px 24px",
+                          backgroundColor: "#9960a8",
+                          color: "#fffce3",
+                          fontSize: "0.8rem",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          border: "none",
+                        }}
+                      >
+                        {isSendingReply === req.id ? (
+                          <Loader2 size={16} className="spinner" />
+                        ) : (
+                          <Send size={16} />
+                        )}
+                        {labels.sendReply}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))}
           </div>
@@ -655,134 +805,238 @@ export default function RentalTab({ isMobile, currentLang }) {
       </section>
 
       {/* REQUEST DETAIL POPUP */}
-      {viewingRequest && (
-        <div style={modalOverlay} onClick={() => setViewingRequest(null)}>
-          <div style={modalContent} onClick={(e) => e.stopPropagation()}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "2rem",
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontFamily: "Harmond-SemiBoldCondensed",
-                  fontSize: "2rem",
-                  textTransform: "none",
-                }}
-              >
-                {labels.detailsTitle}
-              </h3>
-              <button
-                onClick={() => setViewingRequest(null)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  opacity: 0.5,
-                }}
-              >
-                <X />
-              </button>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "1.5rem",
-              }}
-            >
-              <div>
-                <span style={{ ...labelSub, textTransform: "none" }}>name</span>
-                <div style={{ fontSize: "1.2rem", fontWeight: "800" }}>
-                  {viewingRequest.name}
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "10px",
-                }}
-              >
-                <div>
-                  <span style={{ ...labelSub, textTransform: "none" }}>
-                    {labels.email}
-                  </span>
-                  <div style={dataText}>{viewingRequest.email}</div>
-                </div>
-                <div>
-                  <span style={{ ...labelSub, textTransform: "none" }}>
-                    {labels.phone}
-                  </span>
-                  <div style={dataText}>{viewingRequest.phone}</div>
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "10px",
-                }}
-              >
-                <div>
-                  <span style={{ ...labelSub, textTransform: "none" }}>
-                    {labels.reqDate}
-                  </span>
-                  <div style={dataText}>{formatDate(viewingRequest.date)}</div>
-                </div>
-                <div>
-                  <span style={{ ...labelSub, textTransform: "none" }}>
-                    {labels.received}
-                  </span>
-                  <div style={dataText}>
-                    {new Date(viewingRequest.createdAt).toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
-              {viewingRequest.message && (
+      {viewingRequest &&
+        (() => {
+          // Find the "live" version of this request from our state array
+          const liveRequest =
+            rentRequests.find((r) => r.id === viewingRequest.id) ||
+            viewingRequest;
+
+          return (
+            <div style={modalOverlay} onClick={() => setViewingRequest(null)}>
+              <div style={modalContent} onClick={(e) => e.stopPropagation()}>
                 <div
                   style={{
-                    backgroundColor: "rgba(28, 7, 0, 0.03)",
-                    padding: "1.5rem",
-                    borderRadius: "16px",
-                    border: "1px dashed rgba(28, 7, 0, 0.1)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "2rem",
                   }}
                 >
-                  <span style={{ ...labelSub, textTransform: "none" }}>
-                    {labels.msg}
-                  </span>
-                  <div
+                  <h3
                     style={{
-                      marginTop: "8px",
-                      fontStyle: "italic",
-                      lineHeight: 1.5,
+                      margin: 0,
+                      fontFamily: "Harmond-SemiBoldCondensed",
+                      fontSize: "2rem",
+                      textTransform: "none",
                     }}
                   >
-                    "{viewingRequest.message}"
-                  </div>
+                    {labels.detailsTitle}
+                  </h3>
+                  <button
+                    onClick={() => setViewingRequest(null)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      opacity: 0.5,
+                    }}
+                  >
+                    <X />
+                  </button>
                 </div>
-              )}
-              <button
-                onClick={() => setViewingRequest(null)}
-                style={{
-                  ...btnStyle,
-                  backgroundColor: "#caaff3",
-                  color: "#1c0700",
-                  marginTop: "1rem",
-                  fontWeight: "800",
-                  textTransform: "none",
-                }}
-              >
-                {labels.close}
-              </button>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "1.5rem",
+                  }}
+                >
+                  <div>
+                    <span style={{ ...labelSub, textTransform: "none" }}>
+                      name
+                    </span>
+                    <div style={{ fontSize: "1.2rem", fontWeight: "800" }}>
+                      {liveRequest.name}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "10px",
+                    }}
+                  >
+                    <div>
+                      <span style={{ ...labelSub, textTransform: "none" }}>
+                        {labels.email}
+                      </span>
+                      <div style={dataText}>{liveRequest.email}</div>
+                    </div>
+                    <div>
+                      <span style={{ ...labelSub, textTransform: "none" }}>
+                        {labels.phone}
+                      </span>
+                      <div style={dataText}>{liveRequest.phone}</div>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "10px",
+                    }}
+                  >
+                    <div>
+                      <span style={{ ...labelSub, textTransform: "none" }}>
+                        {labels.reqDate}
+                      </span>
+                      <div style={dataText}>{formatDate(liveRequest.date)}</div>
+                    </div>
+                    <div>
+                      <span style={{ ...labelSub, textTransform: "none" }}>
+                        {labels.received}
+                      </span>
+                      <div style={dataText}>
+                        {liveRequest.createdAt
+                          ? new Date(liveRequest.createdAt).toLocaleDateString()
+                          : ""}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ORIGINAL MESSAGE */}
+                  {liveRequest.message && (
+                    <div
+                      style={{
+                        backgroundColor: "rgba(28, 7, 0, 0.03)",
+                        padding: "1.5rem",
+                        borderRadius: "16px",
+                        border: "1px dashed rgba(28, 7, 0, 0.1)",
+                      }}
+                    >
+                      <span style={{ ...labelSub, textTransform: "none" }}>
+                        {labels.msg}
+                      </span>
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          fontStyle: "italic",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        "{liveRequest.message}"
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RESPONSE HISTORY - Now visible in popup when updated */}
+                  {liveRequest.response && (
+                    <div
+                      style={{
+                        backgroundColor: "rgba(78, 95, 40, 0.05)",
+                        padding: "1.2rem",
+                        borderRadius: "16px",
+                        borderLeft: "4px solid #4e5f28",
+                      }}
+                    >
+                      <span
+                        style={{
+                          ...labelSub,
+                          color: "#4e5f28",
+                          textTransform: "none",
+                        }}
+                      >
+                        {labels.responded}{" "}
+                        {liveRequest.respondedAt?.toDate
+                          ? liveRequest.respondedAt
+                              .toDate()
+                              .toLocaleDateString()
+                          : new Date().toLocaleDateString()}
+                      </span>
+                      <div style={{ marginTop: "4px", fontWeight: "600" }}>
+                        {liveRequest.response}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* MODAL REPLY UI */}
+                  <div
+                    style={{
+                      borderTop: "1px solid rgba(28,7,0,0.1)",
+                      paddingTop: "1.5rem",
+                    }}
+                  >
+                    <textarea
+                      placeholder={labels.replyLabel}
+                      value={replyText[liveRequest.id] || ""}
+                      onChange={(e) =>
+                        setReplyText({
+                          ...replyText,
+                          [liveRequest.id]: e.target.value,
+                        })
+                      }
+                      style={{
+                        ...inputStyle,
+                        width: "100%",
+                        minHeight: "100px",
+                        backgroundColor: "#fffce3",
+                        resize: "vertical",
+                        marginBottom: "10px",
+                        fontSize: "0.9rem",
+                        padding: "12px",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                    <button
+                      onClick={() => handleSendReply(liveRequest.id)}
+                      disabled={
+                        isSendingReply === liveRequest.id ||
+                        !replyText[liveRequest.id]
+                      }
+                      style={{
+                        ...btnStyle,
+                        width: "100%",
+                        backgroundColor: "#9960a8",
+                        color: "#fffce3",
+                        fontWeight: "800",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "10px",
+                        border: "none",
+                      }}
+                    >
+                      {isSendingReply === liveRequest.id ? (
+                        <Loader2 size={16} className="spinner" />
+                      ) : (
+                        <Send size={16} />
+                      )}
+                      {labels.sendReply}
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setViewingRequest(null)}
+                    style={{
+                      ...btnStyle,
+                      backgroundColor: "#caaff3",
+                      color: "#1c0700",
+                      marginTop: "0.5rem",
+                      fontWeight: "800",
+                      textTransform: "none",
+                    }}
+                  >
+                    {labels.close}
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
       <style>{`.spinner { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
