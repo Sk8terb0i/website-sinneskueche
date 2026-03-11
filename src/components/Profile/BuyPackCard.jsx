@@ -41,7 +41,7 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
         coursePath: `/${course.id}`,
         selectedDates: [],
         currentLang: currentLang,
-        successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}`,
+        successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}&mode=pack&booked=false`,
         cancelUrl: window.location.href,
       });
 
@@ -74,12 +74,14 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
             }
             const [courseId, packSize] = val.split("|");
             const course = packCourses.find((c) => c.id === courseId);
-            const pack = course?.packs?.find((p) => p.size === packSize);
+            const pack = course?.packs?.find(
+              (p) => String(p.size) === String(packSize),
+            );
             setSelectedPackData(course && pack ? { course, pack } : null);
           }}
           style={styles.select}
         >
-          <option value="">{t.selectCourse}</option>
+          <option value="">{t.selectCourse || "Select a course"}</option>
           {Object.entries(groupedPacks).map(([courseName, courses]) => (
             <optgroup key={courseName} label={courseName}>
               {courses.map((courseDoc) =>
@@ -105,7 +107,11 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
             opacity: !selectedPackData || isProcessing ? 0.7 : 1,
           }}
         >
-          {isProcessing ? <Loader2 className="spinner" size={18} /> : t.buyNow}
+          {isProcessing ? (
+            <Loader2 className="spinner" size={18} />
+          ) : (
+            t.buyNow || "Buy Now"
+          )}
         </button>
       </div>
     </div>

@@ -181,7 +181,8 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         currentLang,
         baseUrl, // PASS TO BACKEND
       });
-      navigate("/success?type=credit");
+      // Credits always mean dates were booked
+      navigate("/success?type=credit&booked=true");
     } catch (err) {
       console.error(err);
       setIsProcessing(false);
@@ -215,10 +216,13 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           currentLang,
           baseUrl, // PASS TO BACKEND
         });
-        navigate(`/success?type=credit&mode=redeem&code=${code}`);
+        // Redeeming a code always involves booking a date
+        navigate(`/success?type=credit&mode=redeem&code=${code}&booked=true`);
         setIsProcessing(false);
         return;
       }
+
+      const bookedStatus = expandedDates.length > 0 ? "true" : "false";
 
       const stripe = httpsCallable(functions, "createStripeCheckout");
       const res = await stripe({
@@ -232,7 +236,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         currentLang,
         creditsToUse,
         baseUrl, // PASS TO BACKEND
-        successUrl: `${baseUrl}#/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}`,
+        successUrl: `${baseUrl}#/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=${bookedStatus}`,
         cancelUrl: window.location.href,
       });
       if (res.data?.url) window.location.assign(res.data.url);
