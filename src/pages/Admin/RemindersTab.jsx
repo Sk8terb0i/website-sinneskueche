@@ -210,13 +210,17 @@ export default function RemindersTab({
     }));
   };
 
+  // Check if course has a mandatory intro add-on
+  const hasMandatoryIntro = courseAddons.some((addon) => addon.isMandatory);
+
   const generatePreview = (lang) => {
     const data = reminderData[lang];
     let combined = `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">`;
 
     combined += `<p style="white-space: pre-wrap;">${data.text || ""}</p>`;
 
-    if (data.firstTimerText) {
+    // Only show first timer text in preview if there's no mandatory intro add-on
+    if (!hasMandatoryIntro && data.firstTimerText) {
       combined += `<div style="margin-top: 20px; padding: 15px; background-color: rgba(202, 175, 243, 0.2); border-radius: 8px;">`;
       combined += `<p style="margin: 0; font-size: 0.9em; white-space: pre-wrap;"><strong>${labels.first}:</strong><br/>${data.firstTimerText}</p></div>`;
     }
@@ -606,32 +610,36 @@ export default function RemindersTab({
                         }
                       />
                     </div>
-                    <div>
-                      <label
-                        style={{
-                          fontSize: "0.7rem",
-                          opacity: 0.6,
-                          color: "#9960a8",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {labels.first}
-                      </label>
-                      <textarea
-                        style={{
-                          ...inputStyle,
-                          minHeight: "80px",
-                          resize: "vertical",
-                          backgroundColor: "rgba(202, 175, 243, 0.05)",
-                          border: "1px dashed #caaff3",
-                        }}
-                        placeholder={labels.firstPlace}
-                        value={reminderData.de.firstTimerText}
-                        onChange={(e) =>
-                          updateField("de", "firstTimerText", e.target.value)
-                        }
-                      />
-                    </div>
+
+                    {!hasMandatoryIntro && (
+                      <div>
+                        <label
+                          style={{
+                            fontSize: "0.7rem",
+                            opacity: 0.6,
+                            color: "#9960a8",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {labels.first}
+                        </label>
+                        <textarea
+                          style={{
+                            ...inputStyle,
+                            minHeight: "80px",
+                            resize: "vertical",
+                            backgroundColor: "rgba(202, 175, 243, 0.05)",
+                            border: "1px dashed #caaff3",
+                          }}
+                          placeholder={labels.firstPlace}
+                          value={reminderData.de.firstTimerText}
+                          onChange={(e) =>
+                            updateField("de", "firstTimerText", e.target.value)
+                          }
+                        />
+                      </div>
+                    )}
+
                     {courseAddons.length > 0 && (
                       <div
                         style={{
@@ -757,32 +765,36 @@ export default function RemindersTab({
                         }
                       />
                     </div>
-                    <div>
-                      <label
-                        style={{
-                          fontSize: "0.7rem",
-                          opacity: 0.6,
-                          color: "#9960a8",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {labels.first}
-                      </label>
-                      <textarea
-                        style={{
-                          ...inputStyle,
-                          minHeight: "80px",
-                          resize: "vertical",
-                          backgroundColor: "rgba(202, 175, 243, 0.05)",
-                          border: "1px dashed #caaff3",
-                        }}
-                        placeholder={labels.firstPlace}
-                        value={reminderData.en.firstTimerText}
-                        onChange={(e) =>
-                          updateField("en", "firstTimerText", e.target.value)
-                        }
-                      />
-                    </div>
+
+                    {!hasMandatoryIntro && (
+                      <div>
+                        <label
+                          style={{
+                            fontSize: "0.7rem",
+                            opacity: 0.6,
+                            color: "#9960a8",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {labels.first}
+                        </label>
+                        <textarea
+                          style={{
+                            ...inputStyle,
+                            minHeight: "80px",
+                            resize: "vertical",
+                            backgroundColor: "rgba(202, 175, 243, 0.05)",
+                            border: "1px dashed #caaff3",
+                          }}
+                          placeholder={labels.firstPlace}
+                          value={reminderData.en.firstTimerText}
+                          onChange={(e) =>
+                            updateField("en", "firstTimerText", e.target.value)
+                          }
+                        />
+                      </div>
+                    )}
+
                     {courseAddons.length > 0 && (
                       <div
                         style={{
