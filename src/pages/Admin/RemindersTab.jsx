@@ -7,13 +7,16 @@ import {
   Loader2,
   Info,
   Mail,
-  Star,
+  Code,
+  Eye,
+  Globe,
   RefreshCcw,
+  Clock,
   PlusCircle,
 } from "lucide-react";
 import {
   sectionTitleStyle,
-  cardStyle,
+  formCardStyle,
   labelStyle,
   inputStyle,
   btnStyle,
@@ -26,16 +29,19 @@ export default function RemindersTab({
   currentLang,
 }) {
   const [selectedCourse, setSelectedCourse] = useState("");
-  const [activeLangTab, setActiveLangTab] = useState("en");
   const [courseAddons, setCourseAddons] = useState([]);
   const [reminderData, setReminderData] = useState({
     daysBefore: 3,
     en: { subject: "", text: "", firstTimerText: "", addonTexts: {} },
     de: { subject: "", text: "", firstTimerText: "", addonTexts: {} },
   });
+
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+
+  const [viewMode, setViewMode] = useState("code");
+  const [mobileLang, setMobileLang] = useState("de");
 
   const isFullAdmin = userRole === "admin";
 
@@ -44,37 +50,41 @@ export default function RemindersTab({
       title: "Course Reminders",
       select: "Selected Course",
       days: "Days Before",
-      en: "English",
-      de: "Deutsch",
-      reset: "Reset to Generic Draft",
+      enTab: "English (EN)",
+      deTab: "German (DE)",
+      reset: "Reset to Default",
       subject: "Subject Line",
       main: "Main Message",
-      first: "First-Timer Additional Text",
+      first: "First-Timer Text",
       firstPlace: "Optional: Appended for first-time bookings.",
       addonInfo: "Add-on Specific Information",
-      vars: "Variables:",
+      vars: "Available Variables:",
       saving: "Saving...",
-      save: "Save Reminder",
+      save: "Save",
       success: "Saved successfully!",
       resetConfirm: "Reset to generic draft?",
+      code: "Code",
+      preview: "Preview",
     },
     de: {
       title: "Kurserinnerungen",
       select: "Ausgewählter Kurs",
       days: "Tage vorher",
-      en: "Englisch",
-      de: "Deutsch",
-      reset: "Auf Standard zurücksetzen",
+      enTab: "Englisch (EN)",
+      deTab: "Deutsch (DE)",
+      reset: "Zurücksetzen",
       subject: "Betreff",
       main: "Hauptnachricht",
       first: "Zusatztext für Neukunden",
       firstPlace: "Optional: Wird bei Erstbuchungen angehängt.",
       addonInfo: "Infos zu Extras",
-      vars: "Variablen:",
+      vars: "Verfügbare Variablen:",
       saving: "Speichern...",
-      save: "Erinnerung speichern",
+      save: "Speichern",
       success: "Erfolgreich gespeichert!",
       resetConfirm: "Auf Standard zurücksetzen?",
+      code: "Code",
+      preview: "Vorschau",
     },
   }[currentLang || "en"];
 
@@ -150,7 +160,8 @@ export default function RemindersTab({
     if (window.confirm(labels.resetConfirm)) {
       setReminderData((prev) => ({
         ...prev,
-        [activeLangTab]: { ...templates[activeLangTab] },
+        en: { ...templates.en },
+        de: { ...templates.de },
       }));
     }
   };
@@ -176,17 +187,63 @@ export default function RemindersTab({
     }
   };
 
-  const handleAddonTextChange = (addonId, val) => {
+  const updateField = (lang, field, value) => {
     setReminderData((p) => ({
       ...p,
-      [activeLangTab]: {
-        ...p[activeLangTab],
+      [lang]: {
+        ...p[lang],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleAddonTextChange = (lang, addonId, val) => {
+    setReminderData((p) => ({
+      ...p,
+      [lang]: {
+        ...p[lang],
         addonTexts: {
-          ...(p[activeLangTab].addonTexts || {}),
+          ...(p[lang].addonTexts || {}),
           [addonId]: val,
         },
       },
     }));
+  };
+
+  const generatePreview = (lang) => {
+    const data = reminderData[lang];
+    let combined = `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">`;
+
+    combined += `<p style="white-space: pre-wrap;">${data.text || ""}</p>`;
+
+    if (data.firstTimerText) {
+      combined += `<div style="margin-top: 20px; padding: 15px; background-color: rgba(202, 175, 243, 0.2); border-radius: 8px;">`;
+      combined += `<p style="margin: 0; font-size: 0.9em; white-space: pre-wrap;"><strong>${labels.first}:</strong><br/>${data.firstTimerText}</p></div>`;
+    }
+
+    courseAddons.forEach((addon) => {
+      if (data.addonTexts?.[addon.id]) {
+        const addonName = lang === "de" ? addon.nameDe : addon.nameEn;
+        combined += `<div style="margin-top: 15px; padding: 15px; background-color: rgba(78, 95, 40, 0.1); border-radius: 8px;">`;
+        combined += `<p style="margin: 0; font-size: 0.9em; white-space: pre-wrap;"><strong>Extra - ${addonName}:</strong><br/>${data.addonTexts[addon.id]}</p></div>`;
+      }
+    });
+
+    combined += `</div>`;
+
+    const sampleData = {
+      "{userName}": "Jane Doe",
+      "{courseName}": "Pottery Tuesdays",
+      "{courseDate}": "15.05.2025",
+      "{courseTime}": "18:00",
+    };
+
+    let previewStr = combined;
+    Object.keys(sampleData).forEach((key) => {
+      previewStr = previewStr.split(key).join(sampleData[key]);
+    });
+
+    return previewStr;
   };
 
   const wideInputStyle = {
@@ -200,351 +257,605 @@ export default function RemindersTab({
     color: "#1c0700",
   };
 
+  if (isLoading)
+    return <Loader2 className="spinner" size={30} color="#caaff3" />;
+
   return (
-    <section
-      style={{ maxWidth: "900px", margin: "0 auto", paddingBottom: "5rem" }}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        gap: "2rem",
+      }}
     >
-      <h3 style={sectionTitleStyle}>
-        <Mail size={18} /> {labels.title}
-      </h3>
+      {/* SIDEBAR (Course & Timing Selection) */}
+      <section style={{ width: isMobile ? "100%" : "300px" }}>
+        {!isMobile && <h3 style={labelStyle}>{labels.title}</h3>}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr",
-          gap: "1.5rem",
-          marginBottom: "2rem",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <label style={labelStyle}>{labels.select}</label>
-          <select
-            value={selectedCourse}
-            onChange={(e) => setSelectedCourse(e.target.value)}
-            style={wideInputStyle}
-          >
-            {availableCourses.map((c) => (
-              <option key={c.link} value={c.link.replace(/\//g, "")}>
-                {c.text[currentLang || "en"]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <label style={labelStyle}>{labels.days}</label>
-          <input
-            type="number"
-            value={reminderData.daysBefore}
-            onChange={(e) =>
-              setReminderData((p) => ({
-                ...p,
-                daysBefore: parseInt(e.target.value) || 1,
-              }))
-            }
-            style={wideInputStyle}
-          />
-        </div>
-      </div>
-
-      <div
-        style={{
-          ...cardStyle,
-          backgroundColor: "#fdf8e1",
-          padding: isMobile ? "1.5rem" : "2.5rem",
-          borderRadius: "24px",
-          border: "1px solid rgba(28, 7, 0, 0.05)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1.5rem",
-        }}
-      >
         <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            borderBottom: "1px solid rgba(28, 7, 0, 0.05)",
-            paddingBottom: "1rem",
-          }}
+          style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
         >
-          <div
-            style={{
-              display: "flex",
-              backgroundColor: "rgba(28, 7, 0, 0.04)",
-              padding: "4px",
-              borderRadius: "100px",
-            }}
-          >
-            {["en", "de"].map((l) => (
-              <button
-                key={l}
-                onClick={() => setActiveLangTab(l)}
-                style={{
-                  border: "none",
-                  padding: "8px 24px",
-                  borderRadius: "100px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: 600,
-                  backgroundColor:
-                    activeLangTab === l ? "#caaff3" : "transparent",
-                  color: "#1c0700",
-                  transition: "all 0.2s",
-                }}
-              >
-                {l === "en" ? labels.en : labels.de}
-              </button>
-            ))}
+          <div>
+            <label style={{ ...labelStyle, opacity: 0.6 }}>
+              {labels.select}
+            </label>
+            <select
+              value={selectedCourse}
+              onChange={(e) => setSelectedCourse(e.target.value)}
+              style={wideInputStyle}
+            >
+              {availableCourses.map((c) => (
+                <option key={c.link} value={c.link.replace(/\//g, "")}>
+                  {c.text[currentLang || "en"]}
+                </option>
+              ))}
+            </select>
           </div>
-          <button
-            onClick={handleResetToDefault}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#4e5f28",
-              cursor: "pointer",
-              fontSize: "0.7rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              opacity: 0.6,
-            }}
-          >
-            <RefreshCcw size={12} /> {labels.reset}
-          </button>
-        </div>
 
-        {isLoading ? (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              padding: "4rem",
-            }}
-          >
-            <Loader2 className="spinner" size={30} color="#caaff3" />
-          </div>
-        ) : (
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
-          >
-            <div>
-              <label style={labelStyle}>{labels.subject}</label>
-              <input
-                type="text"
-                value={reminderData[activeLangTab].subject}
-                onChange={(e) =>
-                  setReminderData((p) => ({
-                    ...p,
-                    [activeLangTab]: {
-                      ...p[activeLangTab],
-                      subject: e.target.value,
-                    },
-                  }))
-                }
-                style={wideInputStyle}
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>{labels.main}</label>
-              <textarea
-                value={reminderData[activeLangTab].text}
-                onChange={(e) =>
-                  setReminderData((p) => ({
-                    ...p,
-                    [activeLangTab]: {
-                      ...p[activeLangTab],
-                      text: e.target.value,
-                    },
-                  }))
-                }
-                style={{
-                  ...wideInputStyle,
-                  minHeight: "180px",
-                  resize: "vertical",
-                }}
-              />
-            </div>
-
-            <div
+          <div>
+            <label
               style={{
-                backgroundColor: "rgba(202, 175, 243, 0.06)",
-                padding: "20px",
-                borderRadius: "16px",
-                border: "1px dashed #caaff3",
+                ...labelStyle,
+                opacity: 0.6,
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  marginBottom: "1rem",
-                }}
-              >
-                <Star size={14} color="#caaff3" fill="#caaff3" />
-                <span
-                  style={{
-                    fontWeight: 700,
-                    fontSize: "0.8rem",
-                    color: "#1c0700",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                  }}
-                >
-                  {labels.first}
-                </span>
-              </div>
-              <textarea
-                value={reminderData[activeLangTab].firstTimerText}
-                onChange={(e) =>
-                  setReminderData((p) => ({
-                    ...p,
-                    [activeLangTab]: {
-                      ...p[activeLangTab],
-                      firstTimerText: e.target.value,
-                    },
-                  }))
-                }
-                style={{
-                  ...wideInputStyle,
-                  minHeight: "80px",
-                  backgroundColor: "rgba(255,255,255,0.4)",
-                }}
-                placeholder={labels.firstPlace}
-              />
-            </div>
+              <Clock size={14} /> {labels.days}
+            </label>
+            <input
+              type="number"
+              value={reminderData.daysBefore}
+              onChange={(e) =>
+                setReminderData((p) => ({
+                  ...p,
+                  daysBefore: parseInt(e.target.value) || 1,
+                }))
+              }
+              style={wideInputStyle}
+            />
+          </div>
+        </div>
+      </section>
 
-            {courseAddons.length > 0 && (
-              <div
-                style={{
-                  backgroundColor: "rgba(78, 95, 40, 0.06)",
-                  padding: "20px",
-                  borderRadius: "16px",
-                  border: "1px dashed #4e5f28",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    marginBottom: "1rem",
-                  }}
-                >
-                  <PlusCircle size={14} color="#4e5f28" />
-                  <span
-                    style={{
-                      fontWeight: 700,
-                      fontSize: "0.8rem",
-                      color: "#1c0700",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    {labels.addonInfo}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "1rem",
-                  }}
-                >
-                  {courseAddons.map((addon) => (
-                    <div key={addon.id}>
-                      <label
-                        style={{
-                          ...labelStyle,
-                          fontSize: "0.75rem",
-                          marginBottom: "4px",
-                          display: "block",
-                        }}
-                      >
-                        {activeLangTab === "de" ? addon.nameDe : addon.nameEn}
-                      </label>
-                      <textarea
-                        value={
-                          reminderData[activeLangTab].addonTexts?.[addon.id] ||
-                          ""
-                        }
-                        onChange={(e) =>
-                          handleAddonTextChange(addon.id, e.target.value)
-                        }
-                        style={{
-                          ...wideInputStyle,
-                          minHeight: "60px",
-                          backgroundColor: "rgba(255,255,255,0.4)",
-                        }}
-                        placeholder={`Optional: Text to include if ${currentLang === "de" ? addon.nameDe : addon.nameEn} is selected.`}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+      {/* MAIN CONTENT (Editor) */}
+      <section style={{ flex: 1 }}>
+        <div style={formCardStyle}>
+          {/* HEADER ROW */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: isMobile ? "column" : "row",
+              justifyContent: "space-between",
+              alignItems: isMobile ? "flex-start" : "center",
+              marginBottom: "1.5rem",
+              gap: "1rem",
+            }}
+          >
+            <h3
+              style={{
+                ...sectionTitleStyle,
+                margin: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <Mail size={18} />
+              {labels.title}
+            </h3>
 
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "10px",
-                backgroundColor: "rgba(78, 95, 40, 0.04)",
-                padding: "12px 20px",
-                borderRadius: "100px",
-                border: "1px solid rgba(78, 95, 40, 0.1)",
+                gap: "1rem",
+                width: isMobile ? "100%" : "auto",
+                justifyContent: isMobile ? "space-between" : "flex-end",
+                flexWrap: "wrap",
               }}
             >
-              <Info size={16} color="#4e5f28" />
-              <span
-                style={{ fontSize: "0.8rem", color: "#4e5f28", opacity: 0.8 }}
+              {/* Code / Preview Toggle */}
+              <div
+                style={{
+                  display: "flex",
+                  background: "rgba(28, 7, 0, 0.05)",
+                  borderRadius: "100px",
+                  padding: "4px",
+                }}
               >
-                {labels.vars} <strong>{"{userName}"}</strong>,{" "}
-                <strong>{"{courseName}"}</strong>,{" "}
-                <strong>{"{courseDate}"}</strong>,{" "}
-                <strong>{"{courseTime}"}</strong>
-              </span>
+                <button
+                  onClick={() => setViewMode("code")}
+                  style={{
+                    border: "none",
+                    background: viewMode === "code" ? "#fffce3" : "transparent",
+                    padding: "6px 12px",
+                    borderRadius: "100px",
+                    fontSize: "0.8rem",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    boxShadow:
+                      viewMode === "code"
+                        ? "0 2px 5px rgba(0,0,0,0.05)"
+                        : "none",
+                    color: "#1c0700",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <Code size={14} /> {labels.code}
+                </button>
+                <button
+                  onClick={() => setViewMode("preview")}
+                  style={{
+                    border: "none",
+                    background:
+                      viewMode === "preview" ? "#fffce3" : "transparent",
+                    padding: "6px 12px",
+                    borderRadius: "100px",
+                    fontSize: "0.8rem",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    boxShadow:
+                      viewMode === "preview"
+                        ? "0 2px 5px rgba(0,0,0,0.05)"
+                        : "none",
+                    color: "#1c0700",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <Eye size={14} /> {labels.preview}
+                </button>
+              </div>
+
+              {/* Action Buttons */}
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "1rem" }}
+              >
+                {!isMobile && (
+                  <button
+                    onClick={handleResetToDefault}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#4e5f28",
+                      cursor: "pointer",
+                      fontSize: "0.7rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      opacity: 0.6,
+                    }}
+                  >
+                    <RefreshCcw size={12} /> {labels.reset}
+                  </button>
+                )}
+
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  style={{
+                    ...btnStyle,
+                    width: "auto",
+                    padding: "8px 20px",
+                    margin: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                  }}
+                >
+                  {isSaving ? (
+                    <Loader2 className="spinner" size={16} />
+                  ) : (
+                    <Save size={16} />
+                  )}
+                  {labels.save}
+                </button>
+              </div>
             </div>
           </div>
-        )}
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "20px",
-            marginTop: "1rem",
-            borderTop: "1px solid rgba(28, 7, 0, 0.05)",
-            paddingTop: "1.5rem",
-          }}
-        >
-          <button
-            onClick={handleSave}
-            disabled={isSaving || isLoading}
-            style={{ ...btnStyle, width: isMobile ? "100%" : "200px" }}
-          >
-            {isSaving ? (
-              <Loader2 className="spinner" size={18} />
-            ) : (
-              <Save size={18} />
-            )}
-            {isSaving ? labels.saving : labels.save}
-          </button>
           {saveMessage && (
-            <span
+            <p
               style={{
                 color: "#4e5f28",
                 fontWeight: "700",
                 fontSize: "0.85rem",
+                textAlign: "right",
+                marginTop: "-10px",
               }}
             >
               {saveMessage}
-            </span>
+            </p>
           )}
+
+          {/* VARIABLES INFO */}
+          <div
+            style={{
+              marginBottom: "1.5rem",
+              padding: "12px",
+              background: "rgba(78, 95, 40, 0.05)",
+              borderRadius: "8px",
+              fontSize: "0.8rem",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontWeight: "bold",
+                color: "#4e5f28",
+                marginBottom: "5px",
+              }}
+            >
+              <Info size={14} /> {labels.vars}
+            </div>
+            <code style={{ color: "#9960a8", lineBreak: "anywhere" }}>
+              {"{userName}"} , {"{courseName}"} , {"{courseDate}"} ,{" "}
+              {"{courseTime}"}
+            </code>
+          </div>
+
+          {/* MOBILE LANG TOGGLE */}
+          {isMobile && (
+            <div style={{ display: "flex", gap: "10px", marginBottom: "1rem" }}>
+              <button
+                onClick={() => setMobileLang("de")}
+                style={{
+                  flex: 1,
+                  padding: "8px",
+                  borderRadius: "8px",
+                  border: "none",
+                  fontWeight: "bold",
+                  backgroundColor:
+                    mobileLang === "de" ? "#9960a8" : "rgba(153, 96, 168, 0.1)",
+                  color: mobileLang === "de" ? "white" : "#9960a8",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {labels.deTab}
+              </button>
+              <button
+                onClick={() => setMobileLang("en")}
+                style={{
+                  flex: 1,
+                  padding: "8px",
+                  borderRadius: "8px",
+                  border: "none",
+                  fontWeight: "bold",
+                  backgroundColor:
+                    mobileLang === "en" ? "#9960a8" : "rgba(153, 96, 168, 0.1)",
+                  color: mobileLang === "en" ? "white" : "#9960a8",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {labels.enTab}
+              </button>
+            </div>
+          )}
+
+          {/* EDITOR GRID */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+              gap: "2rem",
+            }}
+          >
+            {/* GERMAN COLUMN */}
+            {(!isMobile || mobileLang === "de") && (
+              <div>
+                {!isMobile && (
+                  <h4
+                    style={{
+                      ...labelStyle,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <Globe size={14} /> {labels.deTab}
+                  </h4>
+                )}
+                <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                  {labels.subject}
+                </label>
+                <input
+                  style={{
+                    ...inputStyle,
+                    marginBottom: "1rem",
+                    backgroundColor: "rgba(255, 252, 227, 0.6)",
+                  }}
+                  value={reminderData.de.subject}
+                  onChange={(e) => updateField("de", "subject", e.target.value)}
+                />
+
+                {viewMode === "code" ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1rem",
+                    }}
+                  >
+                    <div>
+                      <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                        {labels.main}
+                      </label>
+                      <textarea
+                        style={{
+                          ...inputStyle,
+                          minHeight: "180px",
+                          resize: "vertical",
+                          backgroundColor: "rgba(255, 252, 227, 0.6)",
+                          lineHeight: "1.5",
+                        }}
+                        value={reminderData.de.text}
+                        onChange={(e) =>
+                          updateField("de", "text", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          fontSize: "0.7rem",
+                          opacity: 0.6,
+                          color: "#9960a8",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {labels.first}
+                      </label>
+                      <textarea
+                        style={{
+                          ...inputStyle,
+                          minHeight: "80px",
+                          resize: "vertical",
+                          backgroundColor: "rgba(202, 175, 243, 0.05)",
+                          border: "1px dashed #caaff3",
+                        }}
+                        placeholder={labels.firstPlace}
+                        value={reminderData.de.firstTimerText}
+                        onChange={(e) =>
+                          updateField("de", "firstTimerText", e.target.value)
+                        }
+                      />
+                    </div>
+                    {courseAddons.length > 0 && (
+                      <div
+                        style={{
+                          padding: "10px",
+                          backgroundColor: "rgba(78, 95, 40, 0.05)",
+                          borderRadius: "8px",
+                          border: "1px dashed #4e5f28",
+                        }}
+                      >
+                        <label
+                          style={{
+                            fontSize: "0.7rem",
+                            opacity: 0.8,
+                            color: "#4e5f28",
+                            fontWeight: "bold",
+                            marginBottom: "10px",
+                            display: "block",
+                          }}
+                        >
+                          {labels.addonInfo}
+                        </label>
+                        {courseAddons.map((addon) => (
+                          <div key={addon.id} style={{ marginBottom: "10px" }}>
+                            <label
+                              style={{
+                                fontSize: "0.65rem",
+                                display: "block",
+                                marginBottom: "4px",
+                              }}
+                            >
+                              Extra: {addon.nameDe}
+                            </label>
+                            <textarea
+                              style={{
+                                ...inputStyle,
+                                minHeight: "60px",
+                                resize: "vertical",
+                                backgroundColor: "rgba(255,255,255,0.6)",
+                              }}
+                              value={
+                                reminderData.de.addonTexts?.[addon.id] || ""
+                              }
+                              onChange={(e) =>
+                                handleAddonTextChange(
+                                  "de",
+                                  addon.id,
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      ...inputStyle,
+                      minHeight: "400px",
+                      padding: "0",
+                      background: "#f9f9f9",
+                      border: "1px solid #ddd",
+                      overflowY: "auto",
+                    }}
+                    dangerouslySetInnerHTML={{ __html: generatePreview("de") }}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* ENGLISH COLUMN */}
+            {(!isMobile || mobileLang === "en") && (
+              <div>
+                {!isMobile && (
+                  <h4
+                    style={{
+                      ...labelStyle,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <Globe size={14} /> {labels.enTab}
+                  </h4>
+                )}
+                <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                  {labels.subject}
+                </label>
+                <input
+                  style={{
+                    ...inputStyle,
+                    marginBottom: "1rem",
+                    backgroundColor: "rgba(255, 252, 227, 0.6)",
+                  }}
+                  value={reminderData.en.subject}
+                  onChange={(e) => updateField("en", "subject", e.target.value)}
+                />
+
+                {viewMode === "code" ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1rem",
+                    }}
+                  >
+                    <div>
+                      <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                        {labels.main}
+                      </label>
+                      <textarea
+                        style={{
+                          ...inputStyle,
+                          minHeight: "180px",
+                          resize: "vertical",
+                          backgroundColor: "rgba(255, 252, 227, 0.6)",
+                          lineHeight: "1.5",
+                        }}
+                        value={reminderData.en.text}
+                        onChange={(e) =>
+                          updateField("en", "text", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          fontSize: "0.7rem",
+                          opacity: 0.6,
+                          color: "#9960a8",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {labels.first}
+                      </label>
+                      <textarea
+                        style={{
+                          ...inputStyle,
+                          minHeight: "80px",
+                          resize: "vertical",
+                          backgroundColor: "rgba(202, 175, 243, 0.05)",
+                          border: "1px dashed #caaff3",
+                        }}
+                        placeholder={labels.firstPlace}
+                        value={reminderData.en.firstTimerText}
+                        onChange={(e) =>
+                          updateField("en", "firstTimerText", e.target.value)
+                        }
+                      />
+                    </div>
+                    {courseAddons.length > 0 && (
+                      <div
+                        style={{
+                          padding: "10px",
+                          backgroundColor: "rgba(78, 95, 40, 0.05)",
+                          borderRadius: "8px",
+                          border: "1px dashed #4e5f28",
+                        }}
+                      >
+                        <label
+                          style={{
+                            fontSize: "0.7rem",
+                            opacity: 0.8,
+                            color: "#4e5f28",
+                            fontWeight: "bold",
+                            marginBottom: "10px",
+                            display: "block",
+                          }}
+                        >
+                          {labels.addonInfo}
+                        </label>
+                        {courseAddons.map((addon) => (
+                          <div key={addon.id} style={{ marginBottom: "10px" }}>
+                            <label
+                              style={{
+                                fontSize: "0.65rem",
+                                display: "block",
+                                marginBottom: "4px",
+                              }}
+                            >
+                              Extra: {addon.nameEn}
+                            </label>
+                            <textarea
+                              style={{
+                                ...inputStyle,
+                                minHeight: "60px",
+                                resize: "vertical",
+                                backgroundColor: "rgba(255,255,255,0.6)",
+                              }}
+                              value={
+                                reminderData.en.addonTexts?.[addon.id] || ""
+                              }
+                              onChange={(e) =>
+                                handleAddonTextChange(
+                                  "en",
+                                  addon.id,
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      ...inputStyle,
+                      minHeight: "400px",
+                      padding: "0",
+                      background: "#f9f9f9",
+                      border: "1px solid #ddd",
+                      overflowY: "auto",
+                    }}
+                    dangerouslySetInnerHTML={{ __html: generatePreview("en") }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }

@@ -340,6 +340,7 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
         gap: "2rem",
       }}
     >
+      {/* SIDEBAR (Type Selection) */}
       <section style={{ width: isMobile ? "100%" : "300px" }}>
         {!isMobile && <h3 style={labelStyle}>{uiLabels.type}</h3>}
 
@@ -406,36 +407,44 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
         )}
       </section>
 
+      {/* MAIN CONTENT (Editor) */}
       <section style={{ flex: 1 }}>
         <div style={formCardStyle}>
+          {/* HEADER ROW */}
           <div
             style={{
               display: "flex",
+              flexDirection: isMobile ? "column" : "row",
               justifyContent: "space-between",
-              alignItems: "center",
+              alignItems: isMobile ? "flex-start" : "center",
               marginBottom: "1.5rem",
-              flexWrap: "wrap",
               gap: "1rem",
             }}
           >
-            <h3 style={{ ...sectionTitleStyle, margin: 0, flex: "1 1 auto" }}>
-              <MailOpen
-                size={18}
-                style={{ marginRight: "8px", verticalAlign: "text-bottom" }}
-              />
+            <h3
+              style={{
+                ...sectionTitleStyle,
+                margin: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <MailOpen size={18} />
               {typeLabels[selectedType.id][currentLang || "en"]}
             </h3>
 
             <div
               style={{
                 display: "flex",
-                gap: "1rem",
                 alignItems: "center",
-                flexWrap: "wrap",
-                justifyContent: isMobile ? "space-between" : "flex-end",
+                gap: "1rem",
                 width: isMobile ? "100%" : "auto",
+                justifyContent: isMobile ? "space-between" : "flex-end",
+                flexWrap: "wrap",
               }}
             >
+              {/* Code / Preview Toggle */}
               <div
                 style={{
                   display: "flex",
@@ -459,6 +468,9 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
                         ? "0 2px 5px rgba(0,0,0,0.05)"
                         : "none",
                     color: "#1c0700",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
                   }}
                 >
                   <Code size={14} /> {uiLabels.code}
@@ -479,33 +491,45 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
                         ? "0 2px 5px rgba(0,0,0,0.05)"
                         : "none",
                     color: "#1c0700",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
                   }}
                 >
                   <Eye size={14} /> {uiLabels.preview}
                 </button>
               </div>
 
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                style={{
-                  ...btnStyle,
-                  width: "auto",
-                  padding: "8px 20px",
-                  margin: 0,
-                }}
+              {/* Save Button */}
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "1rem" }}
               >
-                {saving ? (
-                  <Loader2 className="spinner" size={16} />
-                ) : (
-                  <>
-                    <Save size={16} /> {uiLabels.save}
-                  </>
-                )}
-              </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  style={{
+                    ...btnStyle,
+                    width: "auto",
+                    padding: "8px 20px",
+                    margin: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                  }}
+                >
+                  {saving ? (
+                    <Loader2 className="spinner" size={16} />
+                  ) : (
+                    <Save size={16} />
+                  )}
+                  {uiLabels.save}
+                </button>
+              </div>
             </div>
           </div>
 
+          {/* VARIABLES INFO */}
           <div
             style={{
               marginBottom: "1.5rem",
@@ -532,6 +556,7 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
             </code>
           </div>
 
+          {/* MOBILE LANG TOGGLE */}
           {isMobile && (
             <div style={{ display: "flex", gap: "10px", marginBottom: "1rem" }}>
               <button
@@ -545,6 +570,9 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
                   backgroundColor:
                     mobileLang === "de" ? "#9960a8" : "rgba(153, 96, 168, 0.1)",
                   color: mobileLang === "de" ? "white" : "#9960a8",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 {uiLabels.deTab}
@@ -560,6 +588,9 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
                   backgroundColor:
                     mobileLang === "en" ? "#9960a8" : "rgba(153, 96, 168, 0.1)",
                   color: mobileLang === "en" ? "white" : "#9960a8",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 {uiLabels.enTab}
@@ -567,6 +598,7 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
             </div>
           )}
 
+          {/* EDITOR GRID */}
           <div
             style={{
               display: "grid",
@@ -574,15 +606,19 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
               gap: "2rem",
             }}
           >
+            {/* GERMAN COLUMN */}
             {(!isMobile || mobileLang === "de") && (
               <div>
                 {!isMobile && (
-                  <h4 style={labelStyle}>
-                    <Globe
-                      size={14}
-                      style={{ display: "inline", verticalAlign: "middle" }}
-                    />{" "}
-                    {uiLabels.deTab}
+                  <h4
+                    style={{
+                      ...labelStyle,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <Globe size={14} /> {uiLabels.deTab}
                   </h4>
                 )}
                 <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
@@ -628,15 +664,19 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
               </div>
             )}
 
+            {/* ENGLISH COLUMN */}
             {(!isMobile || mobileLang === "en") && (
               <div>
                 {!isMobile && (
-                  <h4 style={labelStyle}>
-                    <Globe
-                      size={14}
-                      style={{ display: "inline", verticalAlign: "middle" }}
-                    />{" "}
-                    {uiLabels.enTab}
+                  <h4
+                    style={{
+                      ...labelStyle,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <Globe size={14} /> {uiLabels.enTab}
                   </h4>
                 )}
                 <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
