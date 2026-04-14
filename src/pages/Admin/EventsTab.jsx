@@ -22,12 +22,12 @@ import {
   ChevronRight,
   Users,
   User,
-  Phone,
   Mail,
   Edit2,
   Clock,
   Loader2,
-  PlusCircle, // Added for mobile toggle
+  PlusCircle,
+  MapPin,
 } from "lucide-react";
 import {
   formCardStyle,
@@ -56,6 +56,9 @@ export default function EventsTab({
   const [events, setEvents] = useState([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [location, setLocation] = useState("");
+  const [festivalName, setFestivalName] = useState("");
+  const [eventGroup, setEventGroup] = useState("");
   const [titleEn, setTitleEn] = useState("");
   const [titleDe, setTitleDe] = useState("");
   const [linkType, setLinkType] = useState("course");
@@ -63,13 +66,12 @@ export default function EventsTab({
   const [link, setLink] = useState("");
   const [externalLink, setExternalLink] = useState("");
   const [editingId, setEditingId] = useState(null);
-  const [isCancellingId, setIsCancellingId] = useState(null);
+
+  const [isProcessingId, setIsProcessingId] = useState(null);
   const [activeSubTab, setActiveSubTab] = useState("courses");
   const [expandedGroups, setExpandedGroups] = useState({});
   const [showParticipantsFor, setShowParticipantsFor] = useState(null);
   const [participantCache, setParticipantCache] = useState({});
-
-  // New state to handle form collapse on mobile
   const [isFormExpanded, setIsFormExpanded] = useState(!isMobile);
 
   const isFullAdmin = userRole === "admin";
@@ -83,6 +85,9 @@ export default function EventsTab({
       event: "Event",
       dateLabel: "Date",
       timeLabel: "Time",
+      locationLabel: "Location",
+      festivalNameLabel: "Festival Name (Optional)",
+      groupNameLabel: "Tab Group Name (Optional)",
       titleEn: "Title EN",
       titleDe: "Title DE",
       addBtn: "Add to Calendar",
@@ -92,9 +97,12 @@ export default function EventsTab({
       noCourses: "No courses scheduled.",
       noEvents: "No events scheduled.",
       cancelCourse: "CANCEL COURSE",
-      deleteConfirm:
-        "Are you sure? This will refund all participants and delete the event.",
-      cancelSuccess: "Event successfully cancelled and participants refunded.",
+      cancelConfirm:
+        "Are you sure? This will refund all participants and delete the course.",
+      cancelSuccess: "Course successfully cancelled and participants refunded.",
+      deleteEvent: "DELETE EVENT",
+      deleteConfirm: "Are you sure? This will delete the event.",
+      deleteSuccess: "Event successfully deleted.",
       participants: "Participants",
       noParticipants: "No bookings yet.",
       addons: "Add-ons:",
@@ -108,6 +116,9 @@ export default function EventsTab({
       event: "Event",
       dateLabel: "Datum",
       timeLabel: "Uhrzeit",
+      locationLabel: "Ort",
+      festivalNameLabel: "Festival Name (Optional)",
+      groupNameLabel: "Tab-Gruppenname (Optional)",
       titleEn: "Titel EN",
       titleDe: "Titel DE",
       addBtn: "Hinzufügen",
@@ -116,10 +127,13 @@ export default function EventsTab({
       eventHeader: "EVENTS",
       noCourses: "Keine Kurse geplant.",
       noEvents: "Keine Events geplant.",
-      cancelCourse: "ABSAGEN",
-      deleteConfirm:
+      cancelCourse: "KURS ABSAGEN",
+      cancelConfirm:
         "Bist du sicher? Alle Teilnehmer erhalten eine Rückerstattung und der Termin wird gelöscht.",
-      cancelSuccess: "Event erfolgreich abgesagt und Teilnehmer erstattet.",
+      cancelSuccess: "Kurs erfolgreich abgesagt und Teilnehmer erstattet.",
+      deleteEvent: "EVENT LÖSCHEN",
+      deleteConfirm: "Bist du sicher? Das Event wird unwiderruflich gelöscht.",
+      deleteSuccess: "Event erfolgreich gelöscht.",
       participants: "Teilnehmer",
       noParticipants: "Noch keine Buchungen.",
       addons: "Extras:",
@@ -150,11 +164,14 @@ export default function EventsTab({
     const allFetchedEvents = await Promise.all(
       querySnapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
+        let bSnap = { size: 0, docs: [] };
+
         const bQuery = query(
           collection(db, "bookings"),
           where("eventId", "==", docSnap.id),
         );
-        const bSnap = await getDocs(bQuery);
+        bSnap = await getDocs(bQuery);
+
         return {
           ...data,
           id: docSnap.id,
@@ -265,11 +282,18 @@ export default function EventsTab({
         link: finalLink,
         type: linkType,
       };
+
+      if (linkType === "event") {
+        if (location) eventData.location = location;
+        if (eventGroup) eventData.eventGroup = eventGroup;
+        if (festivalName) eventData.festivalName = festivalName;
+      }
+
       if (editingId) await setDoc(doc(db, "events", editingId), eventData);
       else await addDoc(eventsCollection, eventData);
+
       resetForm();
       fetchEvents();
-      // On mobile, collapse form after success to see the schedule update
       if (isMobile) setIsFormExpanded(false);
     } catch (e) {
       alert("Error saving: " + e.message);
@@ -280,9 +304,11 @@ export default function EventsTab({
     setEditingId(event.id);
     setDate(event.date);
     setTime(event.time || "");
+    setLocation(event.location || "");
+    setFestivalName(event.festivalName || "");
+    setEventGroup(event.eventGroup || "");
     setTitleEn(event.title.en);
     setTitleDe(event.title.de);
-    // Ensure form is visible when editing
     setIsFormExpanded(true);
 
     const type =
@@ -304,6 +330,9 @@ export default function EventsTab({
     setEditingId(null);
     setDate("");
     setTime("");
+    setLocation("");
+    setFestivalName("");
+    setEventGroup("");
     setExternalLink("");
     setTitleEn("");
     setTitleDe("");
@@ -311,28 +340,49 @@ export default function EventsTab({
     if (linkType === "course") autoFillFirstCourse();
   };
 
-  const handleCancelEvent = async (e, ev) => {
+  const handleAction = async (e, ev, isEvent) => {
     e.stopPropagation();
-    if (!window.confirm(labels.deleteConfirm)) return;
-    setIsCancellingId(ev.id);
-    const adminCancelFn = httpsCallable(getFunctions(), "adminCancelEvent");
-    try {
-      await adminCancelFn({ eventId: ev.id, currentLang: currentLang || "en" });
-      await fetchEvents();
-      alert(labels.cancelSuccess);
-    } catch (err) {
-      alert("Error cancelling event: " + err.message);
-    } finally {
-      setIsCancellingId(null);
+
+    if (isEvent) {
+      if (!window.confirm(labels.deleteConfirm)) return;
+      setIsProcessingId(ev.id);
+      try {
+        await deleteDoc(doc(db, "events", ev.id));
+        await fetchEvents();
+        alert(labels.deleteSuccess);
+      } catch (err) {
+        alert("Error deleting event: " + err.message);
+      } finally {
+        setIsProcessingId(null);
+      }
+    } else {
+      if (!window.confirm(labels.cancelConfirm)) return;
+      setIsProcessingId(ev.id);
+      const adminCancelFn = httpsCallable(getFunctions(), "adminCancelEvent");
+      try {
+        await adminCancelFn({
+          eventId: ev.id,
+          currentLang: currentLang || "en",
+        });
+        await fetchEvents();
+        alert(labels.cancelSuccess);
+      } catch (err) {
+        alert("Error cancelling course: " + err.message);
+      } finally {
+        setIsProcessingId(null);
+      }
     }
   };
 
   const scheduledCourses = events.filter((ev) => ev.type === "course");
   const scheduledEvents = events.filter((ev) => ev.type === "event");
+
+  // Group Courses
   const groupedCourses = scheduledCourses.reduce((acc, course) => {
     const key = course.link;
     if (!acc[key])
       acc[key] = {
+        isGroup: true,
         title: course.title[currentLang || "en"],
         link: course.link,
         dates: [],
@@ -340,6 +390,273 @@ export default function EventsTab({
     acc[key].dates.push(course);
     return acc;
   }, {});
+
+  // Group Events (By Custom Tab Group Name, otherwise they remain standalone)
+  const groupedEvents = [];
+  const eventGroupsMap = {};
+
+  scheduledEvents.forEach((ev) => {
+    if (ev.eventGroup && ev.eventGroup.trim() !== "") {
+      const groupName = ev.eventGroup.trim();
+      if (!eventGroupsMap[groupName]) {
+        eventGroupsMap[groupName] = {
+          isGroup: true,
+          title: groupName,
+          id: groupName, // Using the group name as the unique ID for the wrapper
+          dates: [],
+        };
+        groupedEvents.push(eventGroupsMap[groupName]);
+      }
+      eventGroupsMap[groupName].dates.push(ev);
+    } else {
+      groupedEvents.push({
+        isGroup: false,
+        id: ev.id,
+        title: ev.title[currentLang || "en"],
+        dates: [ev],
+      });
+    }
+  });
+
+  // Reusable function to render the inner card logic, preventing massive duplication
+  const renderEventCard = (ev, isEvent) => (
+    <div key={ev.id} style={styles.eventItemWrapper}>
+      <div
+        style={{
+          ...cardStyle,
+          padding: isMobile ? "1rem" : "1rem 1.2rem",
+          backgroundColor: "#fdf8e1",
+          flexDirection: isMobile ? "column" : "row",
+          alignItems: isMobile ? "flex-start" : "center",
+          gap: isMobile ? "16px" : "16px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            flex: 1,
+            width: "100%",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "12px",
+            }}
+          >
+            {!isMobile && (
+              <button
+                onClick={() => startEdit(ev)}
+                style={{ ...styles.editBtnIcon, marginTop: "2px" }}
+              >
+                <Edit2 size={16} />
+              </button>
+            )}
+
+            {/* TEXT INFO CONTAINER */}
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "6px" }}
+            >
+              {/* TITLE & FESTIVAL ROW */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
+                  style={{
+                    fontWeight: "800",
+                    color: "#1c0700",
+                    fontSize: isMobile ? "1.05rem" : "1.1rem",
+                    lineHeight: "1.2",
+                  }}
+                >
+                  {typeof ev.title === "object"
+                    ? ev.title[currentLang || "en"]
+                    : ev.title}
+                </span>
+
+                {ev.festivalName && (
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: "800",
+                      color: "#9960a8", // Matches your theme purple
+                      backgroundColor: "rgba(202, 175, 243, 0.15)",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.02rem",
+                    }}
+                  >
+                    {ev.festivalName}
+                  </span>
+                )}
+              </div>
+
+              {/* METADATA ROW */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
+                  style={{
+                    ...styles.dateLabel,
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  {formatDisplayDate(ev.date)}
+                </span>
+
+                {ev.time && (
+                  <span style={{ ...styles.timeLabel, fontSize: "0.85rem" }}>
+                    <Clock size={14} /> {ev.time}
+                  </span>
+                )}
+
+                {isEvent && ev.location && (
+                  <span style={{ ...styles.timeLabel, fontSize: "0.85rem" }}>
+                    <MapPin size={14} /> {ev.location}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* MOBILE EDIT BUTTON */}
+          {isMobile && (
+            <button
+              onClick={() => startEdit(ev)}
+              style={{
+                background: "rgba(202, 175, 243, 0.15)",
+                border: "none",
+                padding: "8px",
+                borderRadius: "8px",
+                color: "#9960a8",
+                display: "flex",
+                alignItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Edit2 size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* ACTION BUTTONS ROW */}
+        <div
+          style={{
+            ...styles.actionRow,
+            width: isMobile ? "100%" : "auto",
+            justifyContent: isMobile ? "space-between" : "flex-end",
+            borderTop: isMobile ? "1px solid rgba(28, 7, 0, 0.08)" : "none",
+            paddingTop: isMobile ? "12px" : "0",
+            marginTop: isMobile ? "4px" : "0",
+          }}
+        >
+          {!isEvent ? (
+            <button
+              onClick={() => handleShowParticipants(ev)}
+              style={{
+                ...styles.participantBadge,
+                opacity: ev.bookedCount > 0 ? 1 : 0.3,
+              }}
+            >
+              <Users size={18} color="#4e5f28" />
+              <span
+                style={{
+                  fontWeight: "800",
+                  fontSize: "1rem",
+                  color: "#1c0700",
+                }}
+              >
+                {ev.bookedCount}
+              </span>
+            </button>
+          ) : (
+            <div />
+          )}
+
+          <button
+            onClick={(e) => handleAction(e, ev, isEvent)}
+            style={styles.cancelBtn}
+            disabled={isProcessingId === ev.id}
+          >
+            {isProcessingId === ev.id ? (
+              <Loader2 size={14} className="spinner" />
+            ) : isEvent ? (
+              labels.deleteEvent
+            ) : (
+              labels.cancelCourse
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* PARTICIPANTS PANEL (COURSES ONLY) */}
+      {!isEvent && showParticipantsFor === ev.id && participantCache[ev.id] && (
+        <div style={styles.participantPanel}>
+          {participantCache[ev.id].map((u, i) => (
+            <div key={i} style={styles.userRow}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <User size={12} />
+                  <strong
+                    style={{
+                      color: u.isGuest ? "#9960a8" : "inherit",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    {u.firstName} {u.lastName}{" "}
+                    {u.ticketCount > 1 && `(${u.ticketCount})`}
+                  </strong>
+                </div>
+                {u.addons?.length > 0 && (
+                  <div style={styles.addonList}>
+                    {u.addons.map((an, ai) => (
+                      <span key={ai} style={styles.addonBadge}>
+                        <Star size={10} fill="#caaff3" color="#caaff3" /> {an}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <span style={styles.contactText}>
+                <Mail size={10} /> {u.email}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const itemsToRender =
+    activeSubTab === "courses" ? Object.values(groupedCourses) : groupedEvents;
 
   return (
     <div
@@ -350,8 +667,6 @@ export default function EventsTab({
       }}
     >
       <section style={{ width: isMobile ? "100%" : "400px" }}>
-        {/* Mobile Toggle Button */}
-        {/* Mobile Toggle Button */}
         {isMobile && (
           <button
             onClick={() => setIsFormExpanded(!isFormExpanded)}
@@ -363,7 +678,7 @@ export default function EventsTab({
               padding: "1.2rem",
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "center", // Vertically centers the two main sides
+              alignItems: "center",
               marginBottom: isFormExpanded ? 0 : "1rem",
               cursor: "pointer",
               transition: "all 0.3s ease",
@@ -372,9 +687,9 @@ export default function EventsTab({
             <div
               style={{
                 display: "flex",
-                alignItems: "center", // This specifically centers the icon and text together
+                alignItems: "center",
                 gap: "10px",
-                lineHeight: 1, // Removes extra space from font metrics
+                lineHeight: 1,
               }}
             >
               <PlusCircle
@@ -385,9 +700,9 @@ export default function EventsTab({
                 style={{
                   ...sectionTitleStyle,
                   marginBottom: 0,
-                  marginTop: 0, // Ensure no top margin is pushing it down
+                  marginTop: 0,
                   display: "flex",
-                  alignItems: "center", // Added extra insurance for the text itself
+                  alignItems: "center",
                 }}
               >
                 {editingId ? labels.editEntry : labels.newEntry}
@@ -507,6 +822,84 @@ export default function EventsTab({
                   />
                 </div>
               </div>
+
+              {linkType === "event" && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "10px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                    }}
+                  >
+                    <label style={{ ...labelStyle, opacity: 0.5 }}>
+                      {labels.locationLabel}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={
+                        currentLang === "de"
+                          ? "Zürich, Schweiz"
+                          : "Zurich, Switzerland"
+                      }
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                    }}
+                  >
+                    <label style={{ ...labelStyle, opacity: 0.5 }}>
+                      {labels.groupNameLabel}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={
+                        currentLang === "de"
+                          ? "z.B. Sommer-Workshops"
+                          : "e.g. Summer Workshops"
+                      }
+                      value={eventGroup}
+                      onChange={(e) => setEventGroup(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                    }}
+                  >
+                    <label style={{ ...labelStyle, opacity: 0.5 }}>
+                      {labels.festivalNameLabel}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={
+                        currentLang === "de"
+                          ? "z.B. Zürich Openair"
+                          : "e.g. Zurich Openair"
+                      }
+                      value={festivalName}
+                      onChange={(e) => setFestivalName(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+              )}
+
               {linkType === "course" && !isCustomCourseLink ? (
                 <select
                   value={link}
@@ -578,19 +971,22 @@ export default function EventsTab({
             <Star size={16} /> {labels.eventHeader} ({scheduledEvents.length})
           </button>
         </div>
-        <div style={styles.tabContent}>
-          {(activeSubTab === "courses"
-            ? Object.values(groupedCourses)
-            : scheduledEvents
-          ).map((item) => {
-            // Logic for Events vs Grouped Courses
-            const isEvent = activeSubTab === "events";
-            const groupKey = isEvent ? item.id : item.link;
-            const title = isEvent
-              ? item.title[currentLang || "en"]
-              : item.title;
-            const dates = isEvent ? [item] : item.dates;
 
+        <div style={styles.tabContent}>
+          {itemsToRender.map((item) => {
+            const isEvent = activeSubTab === "events";
+
+            // If the item doesn't have a tab group wrapper, simply render it as a standalone card
+            if (!item.isGroup) {
+              return (
+                <div key={item.id} style={{ marginBottom: "0.5rem" }}>
+                  {renderEventCard(item.dates[0], isEvent)}
+                </div>
+              );
+            }
+
+            // Render it as a collapsible tab group
+            const groupKey = isEvent ? item.id : item.link;
             const isExpanded = expandedGroups[groupKey];
 
             return (
@@ -610,7 +1006,7 @@ export default function EventsTab({
                     ) : (
                       <ChevronRight size={14} />
                     )}
-                    {title} ({dates.length})
+                    {item.title} ({item.dates.length})
                   </div>
                 </div>
                 {isExpanded && (
@@ -618,182 +1014,11 @@ export default function EventsTab({
                     className="custom-scrollbar"
                     style={{
                       ...styles.expandedContent,
-                      maxHeight: dates.length > 3 ? "400px" : "auto",
-                      overflowY: dates.length > 3 ? "auto" : "visible",
+                      maxHeight: item.dates.length > 3 ? "400px" : "auto",
+                      overflowY: item.dates.length > 3 ? "auto" : "visible",
                     }}
                   >
-                    {dates.map((ev) => (
-                      <div key={ev.id} style={styles.eventItemWrapper}>
-                        <div
-                          style={{
-                            ...cardStyle,
-                            padding: isMobile ? "1rem" : "0.8rem 1.2rem",
-                            backgroundColor: "#fdf8e1",
-                            flexDirection: isMobile ? "column" : "row",
-                            alignItems: isMobile ? "stretch" : "center",
-                            gap: isMobile ? "12px" : "16px",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              flex: 1,
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "10px",
-                              }}
-                            >
-                              {!isMobile && (
-                                <button
-                                  onClick={() => startEdit(ev)}
-                                  style={styles.editBtnIcon}
-                                >
-                                  <Edit2 size={16} />
-                                </button>
-                              )}
-                              <span
-                                style={{
-                                  ...styles.dateLabel,
-                                  fontSize: isMobile ? "1rem" : "0.9rem",
-                                }}
-                              >
-                                {formatDisplayDate(ev.date)}
-                              </span>
-                              {ev.time && (
-                                <span style={styles.timeLabel}>
-                                  <Clock size={14} /> {ev.time}
-                                </span>
-                              )}
-                            </div>
-                            {isMobile && (
-                              <button
-                                onClick={() => startEdit(ev)}
-                                style={{
-                                  background: "rgba(202, 175, 243, 0.15)",
-                                  border: "none",
-                                  padding: "8px",
-                                  borderRadius: "8px",
-                                  color: "#9960a8",
-                                  display: "flex",
-                                  alignItems: "center",
-                                }}
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                            )}
-                          </div>
-                          <div
-                            style={{
-                              ...styles.actionRow,
-                              width: isMobile ? "100%" : "auto",
-                              justifyContent: isMobile
-                                ? "space-between"
-                                : "flex-end",
-                              borderTop: isMobile
-                                ? "1px solid rgba(28, 7, 0, 0.08)"
-                                : "none",
-                              paddingTop: isMobile ? "12px" : "0",
-                            }}
-                          >
-                            <button
-                              onClick={() => handleShowParticipants(ev)}
-                              style={{
-                                ...styles.participantBadge,
-                                opacity: ev.bookedCount > 0 ? 1 : 0.3,
-                              }}
-                            >
-                              <Users size={18} color="#4e5f28" />
-                              <span
-                                style={{
-                                  fontWeight: "800",
-                                  fontSize: "1rem",
-                                  color: "#1c0700",
-                                }}
-                              >
-                                {ev.bookedCount}
-                              </span>
-                            </button>
-                            <button
-                              onClick={(e) => handleCancelEvent(e, ev)}
-                              style={styles.cancelCourseBtn}
-                              disabled={isCancellingId === ev.id}
-                            >
-                              {isCancellingId === ev.id ? (
-                                <Loader2 size={14} className="spinner" />
-                              ) : (
-                                labels.cancelCourse
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                        {showParticipantsFor === ev.id &&
-                          participantCache[ev.id] && (
-                            <div style={styles.participantPanel}>
-                              {participantCache[ev.id].map((u, i) => (
-                                <div key={i} style={styles.userRow}>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "flex-start",
-                                      flexWrap: "wrap",
-                                      gap: "8px",
-                                    }}
-                                  >
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                      }}
-                                    >
-                                      <User size={12} />
-                                      <strong
-                                        style={{
-                                          color: u.isGuest
-                                            ? "#9960a8"
-                                            : "inherit",
-                                          fontSize: "0.85rem",
-                                        }}
-                                      >
-                                        {u.firstName} {u.lastName}{" "}
-                                        {u.ticketCount > 1 &&
-                                          `(${u.ticketCount})`}
-                                      </strong>
-                                    </div>
-                                    {u.addons?.length > 0 && (
-                                      <div style={styles.addonList}>
-                                        {u.addons.map((an, ai) => (
-                                          <span
-                                            key={ai}
-                                            style={styles.addonBadge}
-                                          >
-                                            <Star
-                                              size={10}
-                                              fill="#caaff3"
-                                              color="#caaff3"
-                                            />{" "}
-                                            {an}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <span style={styles.contactText}>
-                                    <Mail size={10} /> {u.email}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                      </div>
-                    ))}
+                    {item.dates.map((ev) => renderEventCard(ev, isEvent))}
                   </div>
                 )}
               </div>
@@ -896,7 +1121,7 @@ const styles = {
     cursor: "pointer",
     padding: "4px 0",
   },
-  cancelCourseBtn: {
+  cancelBtn: {
     background: "rgba(255, 77, 77, 0.1)",
     border: "none",
     color: "#ff4d4d",

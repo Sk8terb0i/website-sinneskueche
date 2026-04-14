@@ -78,7 +78,8 @@ export default function Landing({ currentLang, setCurrentLang }) {
 
             if (p.id === "events" && fetchedEvents.length > 0) {
               updatedCourses = fetchedEvents.map((e) => ({
-                text: e.title,
+                ...e, // This passes your new date, time, location, and festivalName fields
+                text: e.title, // Preserves 'text' so it doesn't break your existing Moon component
                 link: e.link,
               }));
             }

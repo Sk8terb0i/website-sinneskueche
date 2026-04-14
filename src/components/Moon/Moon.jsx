@@ -79,6 +79,13 @@ export default function Moon({
   const moonY = Math.sin(animatedAngle) * moonOrbitRadius;
   const isOnRight = moonX >= 0;
 
+  // Added format helper for the Event Date
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleDateString(currentLang === "en" ? "en-GB" : "de-DE");
+  };
+
   return (
     <div
       className="moon-container"
@@ -91,7 +98,6 @@ export default function Moon({
         zIndex: 4002,
         pointerEvents: "auto",
         cursor: href ? "pointer" : "default",
-        /* ADDED: A larger padding makes the label part of the hoverable area */
         padding: "10px 20px",
       }}
       onClick={() => {
@@ -143,33 +149,114 @@ export default function Moon({
         />
 
         {/* Moon Label */}
-        <span
+        <div
           style={{
             position: "absolute",
             top: "50%",
-            /* Keep the label offset, but it's now inside the parent's hit area */
             transform: `translateY(-50%) translateX(${isOnRight ? "20px" : "-20px"})`,
             left: isOnRight ? "50%" : "auto",
             right: !isOnRight ? "50%" : "auto",
             whiteSpace: "nowrap",
             fontSize: isHovered ? "14px" : "12px",
-            lineHeight: "1",
+            lineHeight: planetId === "events" ? "1.4" : "1",
             fontStyle: href ? "normal" : "italic",
             color: "#1c0700",
-            textDecoration: href && isHovered ? "underline" : "none",
-            /* CHANGE: pointerEvents is now auto so the text itself triggers the hover */
+            // Only underline the whole block if it's NOT an event (events have custom underlining)
+            textDecoration:
+              href && isHovered && planetId !== "events" ? "underline" : "none",
             pointerEvents: "auto",
             zIndex: 4004,
             transition:
               "font-size 0.2s ease, text-decoration 0.2s ease, color 0.2s ease",
             textAlign: isOnRight ? "left" : "right",
-            /* Optional: subtle background to make text more readable if overlapping orbits */
             padding: "2px 4px",
             borderRadius: "4px",
           }}
         >
-          {content}
-        </span>
+          {planetId === "events" ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: isOnRight ? "flex-start" : "flex-end",
+                gap: "4px",
+              }}
+            >
+              {/* Title (Always visible) */}
+              <span
+                style={{
+                  fontWeight: 700,
+                  textDecoration: href && isHovered ? "underline" : "none",
+                }}
+              >
+                {content}
+              </span>
+
+              {/* Minimal Info (Visible when NOT hovered to tell events apart) */}
+              {!isHovered && (moon.date || moon.location) && (
+                <span
+                  style={{ fontSize: "10px", opacity: 0.6, fontWeight: 600 }}
+                >
+                  {moon.date ? formatDate(moon.date) : ""}
+                  {moon.date && moon.location ? " • " : ""}
+                  {moon.location ? moon.location : ""}
+                </span>
+              )}
+
+              {/* Extra Details (Visible ONLY on hover) */}
+              {isHovered && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: isOnRight ? "flex-start" : "flex-end",
+                    gap: "4px",
+                    animation: "fadeIn 0.2s ease-in-out",
+                  }}
+                >
+                  {/* Optional Festival Name */}
+                  {moon.festivalName && (
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        color: "#9960a8",
+                        fontWeight: 800,
+                        backgroundColor: "rgba(202, 175, 243, 0.15)",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        letterSpacing: "0.02rem",
+                      }}
+                    >
+                      {moon.festivalName}
+                    </span>
+                  )}
+
+                  {/* Full Metadata Row */}
+                  {(moon.date || moon.time || moon.location) && (
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        opacity: 0.8,
+                        display: "flex",
+                        gap: "4px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {moon.date && <span>{formatDate(moon.date)}</span>}
+                      {moon.time && <span>• {moon.time}</span>}
+                      {moon.location && <span>• {moon.location}</span>}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            // ==========================================
+            // ORIGINAL: LAYOUT FOR ALL OTHER MOONS
+            // ==========================================
+            content
+          )}
+        </div>
       </div>
     </div>
   );

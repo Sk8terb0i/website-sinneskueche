@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { X } from "lucide-react";
+import { X, ChevronDown, ChevronRight } from "lucide-react";
 import { planets, planetIcons } from "../../data/planets";
 import { db } from "../../firebase";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
@@ -14,6 +14,10 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const [isCoursesOpen, setIsCoursesOpen] = useState(true);
   const [isStudioOpen, setIsStudioOpen] = useState(true);
   const [isCalendarOpen, setIsCalendarOpen] = useState(true);
+
+  // State to track which months are expanded
+  const [expandedMonths, setExpandedMonths] = useState({});
+
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [closeActive, setCloseActive] = useState(false);
   const [courseVisibility, setCourseVisibility] = useState({});
@@ -28,9 +32,11 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
 
   const isMobile = window.innerWidth < 768;
 
-  // Reset the accordion states whenever the menu is opened
+  // Reset the states whenever the menu is closed
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
+      setExpandedMonths({});
+    } else {
       setIsCoursesOpen(true);
       setIsStudioOpen(true);
       setIsCalendarOpen(true);
@@ -40,10 +46,9 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   useEffect(() => {
     const fetchData = async () => {
       let visibilityMap = {};
-      let settingsMap = {}; // Stores the entire course setting doc
+      let settingsMap = {};
       let bookingCounts = {};
 
-      // 1. Fetch Course Settings
       try {
         const settingsSnap = await getDocs(collection(db, "course_settings"));
         settingsSnap.docs.forEach((doc) => {
@@ -56,7 +61,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         console.warn("Could not fetch course settings:", error);
       }
 
-      // 2. Fetch Booking Counts
       try {
         const countsSnap = await getDocs(collection(db, "bookings"));
         countsSnap.docs.forEach((doc) => {
@@ -69,7 +73,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         console.warn("Could not fetch bookings:", error);
       }
 
-      // 3. Fetch Events
       try {
         const eventsCollection = collection(db, "events");
         const q = query(eventsCollection, orderBy("date", "asc"));
@@ -81,11 +84,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth();
 
-        // Boundary for Events: End of the current year (Dec 31st, 23:59:59)
         const endOfCurrentYear = new Date(currentYear, 11, 31, 23, 59, 59, 999);
-
-        // Boundary for Courses: End of next month
-        // (Day 0 of currentMonth + 2 gives the last day of currentMonth + 1)
         const endOfNextMonth = new Date(
           currentYear,
           currentMonth + 2,
@@ -96,7 +95,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           999,
         );
 
-        // Filter out past events and normalize the type for legacy data
         const futureItems = snapshot.docs
           .map((doc) => {
             const data = doc.data();
@@ -110,7 +108,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           })
           .filter((item) => new Date(item.date) >= now);
 
-        // Filter out full courses and hidden courses
         const availableItems = futureItems.filter((event) => {
           if (!event.link) return true;
 
@@ -128,7 +125,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           return !isFull;
         });
 
-        // Separate items
         const rawEvents = availableItems.filter(
           (item) => item.type === "event",
         );
@@ -136,18 +132,15 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           (item) => item.type === "course" || !item.type,
         );
 
-        // 1. Filter Events: Show up to the end of the current year
         const filteredEvents = rawEvents.filter(
           (item) => item.date && new Date(item.date) <= endOfCurrentYear,
         );
 
-        // 2. Filter Courses: Show up to the end of next month
         const filteredCourses = rawCourses.filter((course) => {
           if (!course.date) return false;
           return new Date(course.date) <= endOfNextMonth;
         });
 
-        // Combine and sort
         const combined = [...filteredCourses, ...filteredEvents].sort(
           (a, b) => new Date(a.date) - new Date(b.date),
         );
@@ -163,7 +156,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
 
   const hasUpcomingEvents = upcomingEvents.length > 0;
 
-  // Group events by Month and Year
   const groupedEvents = useMemo(() => {
     const groups = [];
     upcomingEvents.forEach((ev) => {
@@ -184,6 +176,29 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
     });
     return groups;
   }, [upcomingEvents, currentLang]);
+
+  // Initialize the first 3 months to be open by default
+  useEffect(() => {
+    if (isOpen && groupedEvents.length > 0) {
+      setExpandedMonths((prev) => {
+        if (Object.keys(prev).length === 0) {
+          const initial = {};
+          groupedEvents.forEach((g, idx) => {
+            initial[g.monthYear] = idx < 3;
+          });
+          return initial;
+        }
+        return prev;
+      });
+    }
+  }, [isOpen, groupedEvents]);
+
+  const toggleMonth = (monthYear) => {
+    setExpandedMonths((prev) => ({
+      ...prev,
+      [monthYear]: !prev[monthYear],
+    }));
+  };
 
   const toggleSense = (senseId) => {
     setActiveSenses((prev) =>
@@ -306,8 +321,13 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
     return [];
   }, [activeSenses, courseVisibility, menuData.courses]);
 
+  // Restored clean standard overflow locking
   useEffect(() => {
-    document.body.style.overflow = isOpen ? "hidden" : "unset";
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
     return () => {
       document.body.style.overflow = "unset";
     };
@@ -340,13 +360,15 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         }}
         onClick={onClose}
       >
+        {/* DESKTOP CALENDAR PANEL */}
         {!isMobile && isOpen && hasUpcomingEvents && (
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
               width: "360px",
               height: "100dvh",
-              padding: "5.85rem 3rem 3rem 3rem",
+              // 1. CHANGED: Removed top and bottom padding from the outer wrapper
+              padding: "0 0 0 3rem",
               backgroundColor: "rgba(255, 252, 227, 0.85)",
               borderRight: "1px solid rgba(28, 7, 0, 0.05)",
               boxShadow: "10px 0 30px rgba(28, 7, 0, 0.03)",
@@ -356,27 +378,70 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
               boxSizing: "border-box",
             }}
           >
-            <Section
-              title={currentLang === "en" ? "upcoming" : "termine"}
-              isOpen={isCalendarOpen}
-              toggle={() => setIsCalendarOpen(!isCalendarOpen)}
-              isMobile={false}
+            {/* 2. CHANGED: Moved the top and bottom padding here so the container spans 100vh */}
+            <div
+              className="menu-scroll-container"
+              style={{
+                flexGrow: 1,
+                overflowY: "auto",
+                paddingTop: "5.85rem",
+                paddingBottom: "3rem",
+                paddingRight: "3rem",
+              }}
             >
-              <div style={{ paddingTop: "1.5rem" }}>
-                {groupedEvents.map((group, idx) => (
-                  <div key={idx} style={{ marginBottom: "1.5rem" }}>
-                    <h4 style={monthHeaderStyle(isMobile)}>
-                      {group.monthYear}
-                    </h4>
-                    <AtelierCalendar
-                      currentLang={currentLang}
-                      isMobile={false}
-                      events={group.events}
-                    />
-                  </div>
-                ))}
-              </div>
-            </Section>
+              <Section
+                title={currentLang === "en" ? "upcoming" : "termine"}
+                isOpen={isCalendarOpen}
+                toggle={() => setIsCalendarOpen(!isCalendarOpen)}
+                isMobile={false}
+              >
+                <div style={{ paddingTop: "1.5rem" }}>
+                  {groupedEvents.map((group, idx) => {
+                    const isExpanded = expandedMonths[group.monthYear];
+                    return (
+                      <div key={idx} style={{ marginBottom: "1rem" }}>
+                        <div
+                          onClick={() => toggleMonth(group.monthYear)}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            cursor: "pointer",
+                            borderBottom: "1px solid rgba(153, 96, 168, 0.2)",
+                            paddingBottom: "6px",
+                            marginBottom: "10px",
+                          }}
+                        >
+                          <h4 style={monthHeaderStyle(isMobile)}>
+                            {group.monthYear}
+                          </h4>
+                          {isExpanded ? (
+                            <ChevronDown size={16} color="#9960a8" />
+                          ) : (
+                            <ChevronRight size={16} color="#9960a8" />
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateRows: isExpanded ? "1fr" : "0fr",
+                            transition: "grid-template-rows 0.3s ease",
+                          }}
+                        >
+                          <div style={{ overflow: "hidden" }}>
+                            <AtelierCalendar
+                              currentLang={currentLang}
+                              isMobile={false}
+                              events={group.events}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Section>
+            </div>
           </div>
         )}
       </div>
@@ -396,7 +461,6 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           flexDirection: "column",
           padding: isMobile ? "1rem 1.5rem" : "3rem 4rem",
           boxSizing: "border-box",
-          overflow: "hidden",
         }}
       >
         <div
@@ -422,6 +486,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           </button>
         </div>
 
+        {/* RIGHT DRAWER SCROLL CONTAINER */}
         <div
           className="menu-scroll-container"
           style={{
@@ -522,18 +587,49 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
               isMobile={isMobile}
             >
               <div style={{ paddingTop: "0.5rem" }}>
-                {groupedEvents.map((group, idx) => (
-                  <div key={idx} style={{ marginBottom: "1.5rem" }}>
-                    <h4 style={monthHeaderStyle(isMobile)}>
-                      {group.monthYear}
-                    </h4>
-                    <AtelierCalendar
-                      currentLang={currentLang}
-                      isMobile={true}
-                      events={group.events}
-                    />
-                  </div>
-                ))}
+                {groupedEvents.map((group, idx) => {
+                  const isExpanded = expandedMonths[group.monthYear];
+                  return (
+                    <div key={idx} style={{ marginBottom: "1rem" }}>
+                      <div
+                        onClick={() => toggleMonth(group.monthYear)}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          cursor: "pointer",
+                          borderBottom: "1px solid rgba(153, 96, 168, 0.2)",
+                          paddingBottom: "6px",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        <h4 style={monthHeaderStyle(isMobile)}>
+                          {group.monthYear}
+                        </h4>
+                        {isExpanded ? (
+                          <ChevronDown size={16} color="#9960a8" />
+                        ) : (
+                          <ChevronRight size={16} color="#9960a8" />
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateRows: isExpanded ? "1fr" : "0fr",
+                          transition: "grid-template-rows 0.3s ease",
+                        }}
+                      >
+                        <div style={{ overflow: "hidden" }}>
+                          <AtelierCalendar
+                            currentLang={currentLang}
+                            isMobile={true}
+                            events={group.events}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </Section>
           )}
@@ -555,8 +651,23 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
       </div>
 
       <style>{`
-        .menu-scroll-container::-webkit-scrollbar { display: none; }
-        .menu-scroll-container { -ms-overflow-style: none; scrollbar-width: none; }
+        /* Proper overscroll containment applied purely through CSS */
+        .menu-scroll-container { 
+          scrollbar-width: thin; 
+          scrollbar-color: #caaff3 rgba(28, 7, 0, 0.05); 
+          overscroll-behavior: contain; 
+          -webkit-overflow-scrolling: touch; 
+        }
+        .menu-scroll-container::-webkit-scrollbar { width: 4px; }
+        .menu-scroll-container::-webkit-scrollbar-track { 
+          background: rgba(28, 7, 0, 0.05); 
+          border-radius: 10px; 
+        }
+        .menu-scroll-container::-webkit-scrollbar-thumb { 
+          background: #caaff3; 
+          border-radius: 10px; 
+        }
+
         .footer-link { color: #caaff3; text-decoration: none; font-family: Satoshi; font-size: 0.9rem; transition: color 0.3s; width: fit-content; }
         .footer-link:hover { color: #9960a8; }
         @keyframes fadeInBlur { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
@@ -675,13 +786,11 @@ function MenuLink({ item, lang, onNavigate, isMobile }) {
 
 const monthHeaderStyle = (isMobile) => ({
   fontFamily: "Harmond-SemiBoldCondensed",
-  fontWeight: isMobile ? "normal" : "bold", // <-- Lowers weight on mobile
+  fontWeight: isMobile ? "normal" : "bold",
   fontSize: "1.1rem",
   color: "#9960a8",
-  margin: "0 0 10px 0",
+  margin: 0,
   textTransform: "lowercase",
-  borderBottom: "1px solid rgba(153, 96, 168, 0.2)",
-  paddingBottom: "6px",
 });
 
 const filterLabelStyle = {
@@ -692,6 +801,7 @@ const filterLabelStyle = {
   marginBottom: "8px",
   letterSpacing: "1px",
 };
+
 const closeBtnStyle = {
   background: "none",
   border: "none",
@@ -702,6 +812,7 @@ const closeBtnStyle = {
   fontSize: "0.75rem",
   cursor: "pointer",
 };
+
 const footerStyle = {
   display: "flex",
   flexDirection: "column",
