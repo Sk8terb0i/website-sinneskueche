@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
-import { MapPin, Info, Navigation } from "lucide-react";
+import { MapPin, Info, Navigation, AlertCircle } from "lucide-react";
 
 // Local Assets
 import buildingImg from "../assets/location/building.png";
@@ -45,18 +45,20 @@ export default function Location({ currentLang, setCurrentLang }) {
       welcome: "How to find our studio",
       address: "Sägestrasse 11, 8952 Schlieren",
       entrance: "Rear entrance (blue door)",
+      accessibility: "Top floor (not wheelchair accessible)",
       getDirections: "Get Directions",
       description:
-        "When you arrive at the building, walk around it to the back and enter the blue door.",
+        "When you arrive at the building, walk around it to the back and enter the blue door. The Sinnesküche is located on the top floor and is therefore unfortunately not wheelchair accessible.",
     },
     de: {
       title: "standort",
       welcome: "So findest du zu unserem Studio",
       address: "Sägestrasse 11, 8952 Schlieren",
       entrance: "Hintereingang (blaue Tür)",
+      accessibility: "Dachgeschoss (nicht rollstuhlgängig)",
       getDirections: "Route planen",
       description:
-        "Wenn du am Gebäude ankommst, laufe bitte einmal hinten herum und benutze die blaue Tür als Eingang.",
+        "Wenn du am Gebäude ankommst, laufe bitte einmal hinten herum und benutze die blaue Tür als Eingang. Die Sinnesküche ist im Dachgeschoss und deshalb leider nicht rollstuhlgängig.",
     },
   };
 
@@ -104,7 +106,7 @@ export default function Location({ currentLang, setCurrentLang }) {
       alignItems: "center",
       gap: "10px",
       padding: "10px 24px",
-      background: "#caaff31e", // Restored your original pill background
+      background: "#caaff31e",
       borderRadius: "100px",
       color: "#1c0700",
       whiteSpace: "nowrap",
@@ -126,7 +128,7 @@ export default function Location({ currentLang, setCurrentLang }) {
     },
     cardToolbar: {
       display: "flex",
-      justifyContent: "flex-end", // Aligns the button cleanly to the right on desktop
+      justifyContent: "flex-end",
       width: "100%",
       marginBottom: "1.2rem",
     },
@@ -143,7 +145,7 @@ export default function Location({ currentLang, setCurrentLang }) {
       alignItems: "center",
       gap: "8px",
       padding: "12px 24px",
-      backgroundColor: "#caaff3", // Lavender restored
+      backgroundColor: "#caaff3",
       color: "#1c0700",
       border: "none",
       borderRadius: "100px",
@@ -284,7 +286,7 @@ export default function Location({ currentLang, setCurrentLang }) {
 
         <p style={styles.welcomeText}>{current.welcome}</p>
 
-        {/* 1. INFO PILLS (Restored exactly to their original place & color) */}
+        {/* 1. INFO PILLS */}
         <div className="info-grid" style={styles.infoGrid}>
           <div className="info-item" style={styles.infoItem}>
             <div style={{ display: "flex", opacity: 0.7 }}>
@@ -297,6 +299,12 @@ export default function Location({ currentLang, setCurrentLang }) {
               <Info size={18} />
             </div>
             <span style={styles.infoLabel}>{current.entrance}</span>
+          </div>
+          <div className="info-item" style={styles.infoItem}>
+            <div style={{ display: "flex", opacity: 0.7 }}>
+              <AlertCircle size={18} />
+            </div>
+            <span style={styles.infoLabel}>{current.accessibility}</span>
           </div>
         </div>
 
