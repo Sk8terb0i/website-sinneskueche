@@ -15,56 +15,56 @@ const routes = [
   },
   {
     path: "/singing",
-    title: "Vocal Coaching | Sinnesküche",
+    title: "Vocal Coaching",
     description:
       "Discover your voice with our Vocal Coaching sessions in Schlieren.",
   },
   {
     path: "/artistic-vision",
-    title: "Artistic Vision | Sinnesküche",
+    title: "Artistic Vision",
     description:
       "Explore and expand your creative horizons with our Artistic Vision workshops.",
   },
   {
     path: "/get-ink",
-    title: "Get Ink! | Sinnesküche",
+    title: "Get Ink!",
     description:
       "Dive into the world of drawing and inking at the Sinnesküche.",
   },
   {
     path: "/extended-voice-lab",
-    title: "Extended Voice Lab | Sinnesküche",
+    title: "Extended Voice Lab",
     description: "Push your vocal boundaries in our Extended Voice Lab.",
   },
   {
     path: "/performing-words",
-    title: "Performing Words | Sinnesküche",
+    title: "Performing Words",
     description: "Creative writing and spoken word workshops in Schlieren.",
   },
   {
     path: "/singing-basics",
-    title: "Singing Basics Weekend | Sinnesküche",
+    title: "Singing Basics Weekend",
     description: "A weekend workshop dedicated to the fundamentals of singing.",
   },
   {
     path: "/team",
-    title: "Team | Sinnesküche",
+    title: "Team",
     description:
       "Meet the creative minds behind the Sinnesküche community space.",
   },
   {
     path: "/location",
-    title: "Location | Sinnesküche",
+    title: "Location",
     description: "How to find the Sinnesküche studio in Schlieren, Zurich.",
   },
   {
     path: "/contact",
-    title: "Contact | Sinnesküche",
+    title: "Contact",
     description: "Get in touch with the Sinnesküche team.",
   },
   {
     path: "/rent",
-    title: "Rent our Space | Sinnesküche",
+    title: "Rent our Space",
     description:
       "Rent our creative community space in Schlieren for your next event or workshop.",
   },
