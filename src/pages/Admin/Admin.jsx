@@ -247,11 +247,12 @@ export default function Admin({ currentLang, setCurrentLang }) {
   };
 
   const [activeTab, setActiveTab] = useState(() => {
-    const hash = window.location.hash;
-    if (hash.includes("?tab=")) {
-      const tabFromUrl = new URLSearchParams(hash.split("?")[1]).get("tab");
-      if (tabFromUrl) return tabFromUrl;
-    }
+    // Look at the normal URL search parameters instead of the hash
+    const searchParams = new URLSearchParams(window.location.search);
+    const tabFromUrl = searchParams.get("tab");
+
+    if (tabFromUrl) return tabFromUrl;
+
     return localStorage.getItem("adminActiveTab") || "events";
   });
 

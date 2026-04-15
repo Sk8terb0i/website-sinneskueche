@@ -28,8 +28,9 @@ import RegisterGuest from "./components/Profile/RegisterGuest";
 import StudentFiringForm from "./pages/StudentFiringForm";
 
 import PageTransition from "./components/PageTransition";
-import Footer from "./components/Footer/Footer"; // Import your new Footer component
+import Footer from "./components/Footer/Footer";
 import { defaultLang, languages } from "./i18n";
+import { planets } from "./data/planets";
 
 // dynamic import for admin
 const Admin = lazy(() => import("./pages/Admin/Admin"));
@@ -46,6 +47,42 @@ export default function App() {
   }, [currentLang]);
 
   const location = useLocation();
+
+  useEffect(() => {
+    // 1. Get the current path (e.g., '/pottery')
+    const path = location.pathname;
+
+    // 2. Find if this path matches a course in your planets data
+    const allCourses = planets
+      .filter((p) => p.type === "courses")
+      .flatMap((p) => p.courses || []);
+    const activeCourse = allCourses.find((c) => c.link === path);
+
+    // 3. Select the <meta name="description"> tag
+    const metaDescription = document.querySelector('meta[name="description"]');
+
+    if (activeCourse) {
+      // If it's a course page, set specific title and description
+      document.title = `${activeCourse.text[currentLang]} | Sinnesküche`;
+      if (metaDescription) {
+        // You can add a specific 'seoDesc' to your planets data later,
+        // or just use a generic one for now:
+        metaDescription.content =
+          currentLang === "en"
+            ? `Join our ${activeCourse.text.en} course at Sinnesküche Schlieren. Creative community space.`
+            : `Besuche ${activeCourse.text.de} in der Sinnesküche Schlieren. Kreativer Gemeinschaftsort.`;
+      }
+    } else if (path === "/") {
+      // Reset for the homepage
+      document.title = "Sinnesküche";
+      if (metaDescription) {
+        metaDescription.content =
+          currentLang === "en"
+            ? "The Sinnesküche is a creative community space offering multisensory courses."
+            : "Die Sinnesküche ist ein kreativer Gemeinschaftsort in Schlieren.";
+      }
+    }
+  }, [location.pathname, currentLang]);
 
   return (
     <div style={layoutStyle}>

@@ -343,10 +343,11 @@ export default function BookingSummary({
 
       if (!promoSnap.empty) {
         const promoData = promoSnap.docs[0].data();
-        const activePath = (coursePath || window.location.hash || "").replace(
-          /\//g,
-          "",
-        );
+        const activePath = (
+          coursePath ||
+          window.location.pathname ||
+          ""
+        ).replace(/\//g, "");
         if (
           promoData.coursePath &&
           promoData.coursePath !== "all" &&

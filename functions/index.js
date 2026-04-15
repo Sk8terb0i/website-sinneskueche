@@ -155,7 +155,7 @@ const replaceVars = (str, replacements) => {
 
 const getRegistrationCTA = (lang, email, origin) => {
   if (!origin || !email) return "";
-  const regUrl = `${origin}/#/register-guest?email=${encodeURIComponent(email)}`;
+  const regUrl = `${origin}/register-guest?email=${encodeURIComponent(email)}`;
   const text =
     lang === "de"
       ? "Möchtest du deine Buchungen und Guthaben an einem Ort verwalten? Erstelle jetzt ein Profil und verknüpfe diesen Kauf automatisch."
@@ -294,7 +294,7 @@ const sendBookingEmail = async (
     "{courseKey}": courseKey,
     "{datesHtml}": datesHtml,
     "{registrationCTA}": isGuest ? getRegistrationCTA(lang, email, origin) : "",
-    "{profileUrl}": `${origin}/#/profile`,
+    "{profileUrl}": `${origin}/profile`,
   };
 
   const mailRef = db.collection("mail").doc();
@@ -1128,7 +1128,7 @@ exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
       const replacements = {
         "{firstName}": firstName || "Instructor",
         "{courseKey}": courseKey,
-        "{adminUrl}": `${origin}/#/admin-sinneskueche?tab=schedule`,
+        "{adminUrl}": `${origin}/admin-sinneskueche?tab=schedule`,
       };
 
       await db.collection("mail").add({
@@ -1234,7 +1234,7 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
         "{firstName}": firstName || "Instructor",
         "{courseKey}": courseKey,
         "{scheduleList}": listHtml,
-        "{profileUrl}": `${origin}/#/profile`,
+        "{profileUrl}": `${origin}/profile`,
       };
 
       await db.collection("mail").add({

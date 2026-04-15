@@ -173,7 +173,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
       const functions = getFunctions();
       const bookCredits = httpsCallable(functions, "bookWithCredits");
 
-      const baseUrl = window.location.href.split("#")[0]; // DYNAMIC BASE URL
+      const baseUrl = window.location.origin;
 
       await bookCredits({
         coursePath,
@@ -203,7 +203,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           })),
       );
       const functions = getFunctions();
-      const baseUrl = window.location.href.split("#")[0]; // DYNAMIC BASE URL
+      const baseUrl = window.location.origin;
 
       // INTERCEPT REDEEM MODE AND ROUTE TO CORRECT BACKEND FUNCTION
       if (mode === "redeem") {
@@ -236,7 +236,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         currentLang,
         creditsToUse,
         baseUrl, // PASS TO BACKEND
-        successUrl: `${baseUrl}#/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=${bookedStatus}`,
+        successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=${bookedStatus}`,
         cancelUrl: window.location.href,
       });
       if (res.data?.url) window.location.assign(res.data.url);
