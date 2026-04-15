@@ -59,4 +59,23 @@ export const planets = [
       },
     ],
   },
+  {
+    id: "gini",
+    type: "courses",
+    get icon() {
+      return {
+        en: getImage("gni_name.png"),
+        de: getImage("gini_name.png"),
+        base: getImage("gini.png"),
+      };
+    },
+    courses: [
+      {
+        text: {
+          en: "out galloping",
+          de: "suche sonnenuntergang für abendgallop",
+        },
+      },
+    ],
+  },
 ];

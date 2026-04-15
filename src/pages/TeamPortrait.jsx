@@ -10,8 +10,8 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
   const navigate = useNavigate();
   const [activeIndex, setActiveIndex] = useState(null);
   const [previousIndex, setPreviousIndex] = useState(null);
-  const [planetSize] = useState(80);
-  const [sunSize] = useState(150);
+  const [planetSize] = useState(70);
+  const [sunSize] = useState(120);
   const [hasShiftedLeft, setHasShiftedLeft] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [scrollDirection, setScrollDirection] = useState("down");
@@ -137,14 +137,23 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
     return distance * 2;
   };
 
+  const idleTotalHeight =
+    displayPlanets.length * planetSize +
+    (displayPlanets.length - 1) * normalGap +
+    sunSize;
+
+  // 🎛️ TWEAK THIS NUMBER:
+  // Increase it (e.g., 80, 150) to pull the planets and sun further UP.
+  // Decrease it (e.g., 0, -50) to push them further DOWN.
+  const verticalOffset = 100;
+
+  const idleTranslateY =
+    viewport.height - (idleTotalHeight - sunSize / 2) - verticalOffset;
+
   const computeTranslateY = () => {
     const vh = viewport.height;
     if (activeIndex === null) {
-      const totalHeight =
-        displayPlanets.reduce((sum, _, i) => sum + getPlanetSize(i), 0) +
-        (displayPlanets.length - 1) * normalGap +
-        sunSize;
-      return Math.max(vh / 2 - totalHeight / 2, vh * 0.07);
+      return idleTranslateY;
     }
     const getAccumulatedHeight = (idx) => {
       let h = 0;
@@ -161,16 +170,6 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
   };
 
   const translateY = computeTranslateY();
-
-  const idleTotalHeight =
-    displayPlanets.length * planetSize +
-    (displayPlanets.length - 1) * normalGap +
-    sunSize;
-
-  const idleTranslateY = Math.max(
-    viewport.height / 2 - idleTotalHeight / 2,
-    viewport.height * 0.07,
-  );
 
   const sunTopPosition =
     idleTranslateY +
@@ -441,6 +440,35 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
             planetCenter={targetCenter}
           />
         ))}
+      {/* PORTRAIT INTRO TEXT OVERLAY */}
+      <div
+        style={{
+          position: "absolute",
+          top: "100px", // Sits nicely below the header
+          left: "20px",
+          right: "20px",
+          fontFamily: "Satoshi",
+          fontSize: "0.75rem",
+          lineHeight: "1.4",
+          color: "#1c0700",
+          opacity: activeIndex === null && isLoaded && !isMenuOpen ? 0.8 : 0,
+          transition: "opacity 0.4s ease",
+          pointerEvents: "none",
+          zIndex: 1,
+          textAlign: "center",
+        }}
+      >
+        <p style={{ margin: "0 0 10px 0" }}>
+          {currentLang === "de"
+            ? "Die Sinnesküche ist ein kreativer Gemeinschaftsort. Wir nehmen wahr über unsere Sinne und gehen in Kontakt miteinander. Hier wollen wir unsere Sinne bewusst füttern und uns mit Eindrücken, Erfahrungen und Fähigkeiten bereichern. Vokalist*in und Künstler*in Luca Koch hat die Sinnesküche im Februar 2024 gegründet und gestaltet seither mit Freunden ein breites, multisensuelles Kurs- und Eventangebot. Lerne hier unsere Facilitator kennen."
+            : "The Sinnesküche is a creative community space. We perceive through our senses and connect with one another. Here, we want to consciously feed our senses and enrich ourselves with impressions, experiences, and skills. Vocalist and artist Luca Koch founded the Sinnesküche in February 2024 and has since been shaping a broad, multisensory range of courses and events with friends. Get to know our facilitators here."}
+        </p>
+        <p style={{ margin: 0 }}>
+          {currentLang === "de"
+            ? "Um zu erfahren und zu lernen, schaffen wir einen Safe Space, in dem keine Form von Diskriminierung geduldet wird. Die Sinnesküche ist im Dachgeschoss und deshalb leider nicht rollstuhlgängig."
+            : "To experience and learn, we create a safe space where no form of discrimination is tolerated. The Sinnesküche is located on the top floor and is therefore unfortunately not wheelchair accessible."}
+        </p>
+      </div>
     </div>
   );
 }

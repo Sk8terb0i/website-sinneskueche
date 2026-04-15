@@ -428,6 +428,35 @@ export default function Teams({ currentLang, setCurrentLang }) {
           </React.Fragment>
         );
       })}
+      {/* DESKTOP INTRO TEXT OVERLAY */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "40px",
+          left: "40px",
+          width: "350px",
+          fontFamily: "Satoshi",
+          fontSize: "0.85rem",
+          lineHeight: "1.4",
+          color: "#1c0700",
+          opacity: focusedPlanet || isMenuOpen ? 0 : 0.8,
+          transition: "opacity 0.4s ease",
+          pointerEvents: "none",
+          zIndex: 1,
+          textAlign: "left",
+        }}
+      >
+        <p style={{ margin: "0 0 10px 0" }}>
+          {currentLang === "de"
+            ? "Die Sinnesküche ist ein kreativer Gemeinschaftsort. Wir nehmen wahr über unsere Sinne und gehen in Kontakt miteinander. Hier wollen wir unsere Sinne bewusst füttern und uns mit Eindrücken, Erfahrungen und Fähigkeiten bereichern. Vokalist*in und Künstler*in Luca Koch hat die Sinnesküche im Februar 2024 gegründet und gestaltet seither mit Freunden ein breites, multisensuelles Kurs- und Eventangebot. Lerne hier unsere Facilitator kennen."
+            : "The Sinnesküche is a creative community space. We perceive through our senses and connect with one another. Here, we want to consciously feed our senses and enrich ourselves with impressions, experiences, and skills. Vocalist and artist Luca Koch founded the Sinnesküche in February 2024 and has since been shaping a broad, multisensory range of courses and events with friends. Get to know our facilitators here."}
+        </p>
+        <p style={{ margin: 0 }}>
+          {currentLang === "de"
+            ? "Um zu erfahren und zu lernen, schaffen wir einen Safe Space, in dem keine Form von Diskriminierung geduldet wird. Die Sinnesküche ist im Dachgeschoss und deshalb leider nicht rollstuhlgängig."
+            : "To experience and learn, we create a safe space where no form of discrimination is tolerated. The Sinnesküche is located on the top floor and is therefore unfortunately not wheelchair accessible."}
+        </p>
+      </div>
     </div>
   );
 }
