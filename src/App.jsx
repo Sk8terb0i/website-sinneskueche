@@ -44,215 +44,207 @@ export default function App() {
   const location = useLocation();
 
   return (
-    <AuthProvider>
-      <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
-          <Route
-            path="/"
-            element={
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route
+          path="/"
+          element={
+            <PageTransition>
+              <Landing
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <PageTransition>
+              <Profile
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/pottery"
+          element={
+            <PageTransition>
+              <Pottery
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/singing"
+          element={
+            <PageTransition>
+              <Singing
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/artistic-vision"
+          element={
+            <PageTransition>
+              <ArtisticVision
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/extended-voice-lab"
+          element={
+            <PageTransition>
+              <ExtendedVoiceLab
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/performing-words"
+          element={
+            <PageTransition>
+              <PerformingWords
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/singing-basics"
+          element={
+            <PageTransition>
+              <SingingBasics
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/get-ink"
+          element={
+            <PageTransition>
+              <GetInk
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/team"
+          element={
+            <PageTransition>
+              <Team currentLang={currentLang} setCurrentLang={setCurrentLang} />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/location"
+          element={
+            <PageTransition>
+              <Location
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/contact"
+          element={
+            <PageTransition>
+              <Contact
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/rent"
+          element={
+            <PageTransition>
+              <Rent currentLang={currentLang} setCurrentLang={setCurrentLang} />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/success"
+          element={
+            <PageTransition>
+              <Success
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        {/* NEW: Route for guest registration from email link */}
+        <Route
+          path="/register-guest"
+          element={
+            <PageTransition>
+              <RegisterGuest
+                currentLang={currentLang}
+                setCurrentLang={setCurrentLang}
+              />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/firing-registration"
+          element={
+            <PageTransition>
+              <StudentFiringForm />
+            </PageTransition>
+          }
+        />
+
+        <Route
+          path="/admin-sinneskueche"
+          element={
+            <Suspense fallback={<div style={loadingContainerStyle} />}>
               <PageTransition>
-                <Landing
+                <Admin
                   currentLang={currentLang}
                   setCurrentLang={setCurrentLang}
                 />
               </PageTransition>
-            }
-          />
-
-          <Route
-            path="/profile"
-            element={
-              <PageTransition>
-                <Profile
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/pottery"
-            element={
-              <PageTransition>
-                <Pottery
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/singing"
-            element={
-              <PageTransition>
-                <Singing
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/artistic-vision"
-            element={
-              <PageTransition>
-                <ArtisticVision
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/extended-voice-lab"
-            element={
-              <PageTransition>
-                <ExtendedVoiceLab
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/performing-words"
-            element={
-              <PageTransition>
-                <PerformingWords
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/singing-basics"
-            element={
-              <PageTransition>
-                <SingingBasics
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/get-ink"
-            element={
-              <PageTransition>
-                <GetInk
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/team"
-            element={
-              <PageTransition>
-                <Team
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/location"
-            element={
-              <PageTransition>
-                <Location
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/contact"
-            element={
-              <PageTransition>
-                <Contact
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/rent"
-            element={
-              <PageTransition>
-                <Rent
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/success"
-            element={
-              <PageTransition>
-                <Success
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          {/* NEW: Route for guest registration from email link */}
-          <Route
-            path="/register-guest"
-            element={
-              <PageTransition>
-                <RegisterGuest
-                  currentLang={currentLang}
-                  setCurrentLang={setCurrentLang}
-                />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/firing-registration"
-            element={
-              <PageTransition>
-                <StudentFiringForm />
-              </PageTransition>
-            }
-          />
-
-          <Route
-            path="/admin-sinneskueche"
-            element={
-              <Suspense fallback={<div style={loadingContainerStyle} />}>
-                <PageTransition>
-                  <Admin
-                    currentLang={currentLang}
-                    setCurrentLang={setCurrentLang}
-                  />
-                </PageTransition>
-              </Suspense>
-            }
-          />
-        </Routes>
-      </AnimatePresence>
-    </AuthProvider>
+            </Suspense>
+          }
+        />
+      </Routes>
+    </AnimatePresence>
   );
 }
 
