@@ -274,18 +274,36 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           justifyContent: "space-between",
           alignItems: "center",
           cursor: isMobile ? "pointer" : "default",
+          marginBottom: isMobile ? "1.5rem" : "2.5rem", // slightly tighter on mobile
+
+          // --- NEW: Mobile Tab Styling ---
+          ...(isMobile && {
+            backgroundColor: isMobileExpanded
+              ? "transparent"
+              : "rgba(202, 175, 243, 0.15)",
+            padding: isMobileExpanded ? "0" : "0.8rem 0.8rem",
+            borderRadius: "16px",
+            border: isMobileExpanded
+              ? "1px solid transparent"
+              : "1px solid rgba(202, 175, 243, 0.3)",
+            transition: "all 0.3s ease",
+          }),
         }}
       >
         <h2 style={S.overarchingTitleStyle(isMobile)}>
-          {currentLang === "en"
-            ? "Available Dates & Session Packs"
-            : "Termine & Kurspakete"}
+          {isMobile
+            ? currentLang === "en"
+              ? "Available Dates & Packs"
+              : "Termine & Kurspakete"
+            : currentLang === "en"
+              ? "Available Dates & Session Packs"
+              : "Termine & Kurspakete"}
         </h2>
         {isMobile &&
           (isMobileExpanded ? (
-            <ChevronDown size={28} />
+            <ChevronDown size={28} color="#9960a8" />
           ) : (
-            <ChevronRight size={28} />
+            <ChevronRight size={28} color="#9960a8" />
           ))}
       </div>
       <div

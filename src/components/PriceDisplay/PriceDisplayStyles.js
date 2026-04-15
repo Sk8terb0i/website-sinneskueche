@@ -8,15 +8,12 @@ export const initialLoaderStyle = {
 
 export const overarchingTitleStyle = (isMobile) => ({
   fontFamily: "Harmond-SemiBoldCondensed",
-  fontSize: isMobile ? "2.5rem" : "3.5rem",
+  fontSize: isMobile ? "1.8rem" : "3.5rem",
   fontWeight: isMobile ? "400" : "bold",
   color: "#1c0700",
   textAlign: "center",
   textTransform: "lowercase",
-  marginTop: "0",
-  marginLeft: "0",
-  marginRight: "0",
-  marginBottom: isMobile ? "2rem" : "2.5rem",
+  margin: 0,
 });
 
 export const outerWrapperStyle = {

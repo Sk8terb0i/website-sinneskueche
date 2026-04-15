@@ -497,7 +497,8 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           style={{
             flexGrow: 1,
             overflowY: "auto",
-            paddingRight: "5px",
+            marginRight: isMobile ? "-1.5rem" : "0", // Schiebt den Scroll-Container ganz nach rechts an den Rand
+            paddingRight: isMobile ? "1.5rem" : "5px", // Hält die Inhalte weiterhin an der korrekten Position
             display: "flex",
             flexDirection: "column",
             gap: isMobile ? "1rem" : "2rem",

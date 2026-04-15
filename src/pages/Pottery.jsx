@@ -1,10 +1,11 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
 import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
 import CourseDescription from "../components/CourseDescription/CourseDescription";
 import RegisterShortcut from "../components/RegisterShortcut/RegisterShortcut";
 import { Clock, Users, Coffee } from "lucide-react";
+import { motion } from "framer-motion";
 
 const planetImages = import.meta.glob("../assets/planets/*.png", {
   eager: true,
@@ -14,8 +15,16 @@ const getImage = (filename) =>
 
 export default function Pottery({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isBookingExpanded, setIsBookingExpanded] = useState(false); // ADDED STATE
+  const [isBookingExpanded, setIsBookingExpanded] = useState(false);
   const bookingRef = useRef(null);
+
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const config = {
     desktop: {
@@ -40,8 +49,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         { icon: <Users size={18} />, text: "All skill levels" },
         { icon: <Coffee size={18} />, text: "Small, cozy groups" },
       ],
-      description:
-        "Discover the art of hand-building pottery in our inspiring studio! In a relaxed atmosphere, you can practice the fundamentals of traditional hand-forming techniques, from kneading and shaping to refining your own ceramic pieces.\n\nWhether you want to create bowls, vases, or unique decorative objects – this workshop lets your creativity flow freely. No prior experience is needed. All materials are provided, and at the end, you'll take home your own handmade masterpiece.",
+      description: `A little piece of earth for your home! Clay, minerals, and glass. At our Pottery Tuesdays, you can try your hand at pottery in a welcoming atmosphere and hone your skills. It doesn’t matter how much experience you have, everyone is welcome. Unlike other pottery classes, you can visit us on Tuesdays whenever it suits you, without committing to the next few months.\n\nWe have everything here, from pottery wheels to rollers, tools, and glazes.\nThe clay and firing are also included in your ticket.\n\nCome knead the clay, and we promise that with the leftover clay on your hands, you’ll wash away some of your worries by the end.`,
     },
     de: {
       title: "pottery tuesdays",
@@ -52,13 +60,30 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         { icon: <Users size={18} />, text: "Alle Level willkommen" },
         { icon: <Coffee size={18} />, text: "Kleine, gemütliche Gruppen" },
       ],
-      description:
-        "Entdecke die Kunst des Töpferns von Hand in unserem inspirierenden Studio! In entspannter Atmosphäre kannst du die Grundlagen traditioneller Aufbautechniken üben, vom Kneten und Formen bis hin zum Verfeinern deiner eigenen Keramikstücke.\n\nOb du Schalen, Vasen oder einzigartige Deko-Objekte kreieren möchtest – in diesem Workshop kann deine Kreativität frei fließen. Es sind keine Vorkenntnisse erforderlich. Alle Materialien werden gestellt, und am Ende nimmst du dein eigenes, handgefertigtes Meisterwerk mit nach Hause.",
+      description: `Ein Stückchen Erde für Zuhause! Ton, Mineralien und Glas. An unseren Pottery Tuesdays kannst du dich in vertrauter Atmosphäre im Töpfern versuchen und deine Fähigkeiten schärfen. Es spielt keine Rolle wieviel Erfahrung du mitbringst, jede*r ist willkommen. Anders als in sonstigen Töpfer-Kursen kannst du uns an den Dienstagen besuchen, an denen es dir passt ohne dich für die nächsten Monate zu verpflichten.\n\nWir haben alles hier von Drehscheiben, über Walzen, Werkzeuge und Glasuren. Auch der Ton und das Brennen sind in deinem Ticket inklusive.\n\nKomm Kneten und versprochen mit dem Restton an den Händen, wäschst du dir am Ende auch etwas Kummer vom Leib.`,
     },
   };
 
   const icons = [getImage("touch.png"), getImage("sight.png")];
   const current = content[currentLang];
+
+  // --- ANIMATION VARIANTS ---
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.15, delayChildren: 0.1 },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: { type: "spring", stiffness: 50, damping: 15 },
+    },
+  };
 
   const styles = {
     main: {
@@ -70,14 +95,15 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       alignItems: "center",
       textAlign: "center",
       position: "relative",
+      zIndex: 2,
     },
     welcomeText: {
-      fontSize: "0.9rem",
+      fontSize: "0.95rem",
       fontStyle: "italic",
       textTransform: "lowercase",
       letterSpacing: "0.15em",
       color: "#1c0700",
-      opacity: 0.6,
+      opacity: 0.7,
       marginBottom: "12px",
       fontWeight: "500",
     },
@@ -85,25 +111,32 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       display: "flex",
       justifyContent: "center",
       alignItems: "center",
-      gap: "12px",
-      marginTop: "20px",
+      gap: "16px",
+      marginTop: "25px",
+      marginBottom: "40px",
       flexWrap: "wrap",
     },
     infoItem: {
       display: "flex",
       alignItems: "center",
       gap: "10px",
-      padding: "10px 24px",
-      background: "#caaff31e",
+      padding: "12px 28px",
+      background: "rgba(202, 175, 243, 0.15)", // A bit more of the Sinnesküche purple
+      border: "1px solid rgba(202, 175, 243, 0.3)", // Subtle border for definition
       borderRadius: "100px",
       color: "#1c0700",
       whiteSpace: "nowrap",
+      cursor: "default",
+      boxShadow: "0 4px 20px rgba(0,0,0,0.02)",
     },
-    infoLabel: { fontSize: "0.85rem", lineHeight: "1.4", fontWeight: "500" },
+    infoLabel: { fontSize: "0.85rem", lineHeight: "1.4", fontWeight: "600" },
   };
 
   return (
-    <div className="course-container">
+    <div
+      className="course-container"
+      style={{ position: "relative", overflow: "hidden", minHeight: "100vh" }}
+    >
       <Header
         currentLang={currentLang}
         setCurrentLang={setCurrentLang}
@@ -115,7 +148,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         bookingRef={bookingRef}
         ctaText={current.ctaFloating}
         planetImage={getImage("pottery_register.png")}
-        onClick={() => setIsBookingExpanded(true)} // TRIGGER EXPANSION
+        onClick={() => setIsBookingExpanded(true)}
       />
 
       <style>
@@ -126,65 +159,113 @@ export default function Pottery({ currentLang, setCurrentLang }) {
               display: flex !important; 
               flex-direction: column !important; 
               align-items: center; 
-              padding-top: 100px !important; 
+              padding-top: 120px !important; 
               padding-bottom: 40px !important;
             }
             .course-title-wrapper { 
               order: -1; 
-              margin-bottom: 10px;
+              margin-bottom: 15px;
               font-weight: 500 !important; 
             }
             .welcome-text { 
               margin-bottom: 25px !important; 
               font-size: 0.85rem !important; 
-              width: 80vw !important; 
+              width: 85vw !important; 
+              line-height: 1.5;
             }
             .info-grid { 
               flex-direction: column !important; 
-              gap: 8px !important; 
+              gap: 12px !important; 
               width: 100%; 
               margin-top: 10px !important;
+              margin-bottom: 30px !important;
             }
             .info-item {
-              padding: 8px 20px !important;
+              padding: 12px 24px !important;
+              width: 80%;
+              justify-content: center;
+            }
+            /* Breaking up the "wall of text" on mobile and forcing left-alignment */
+            .desc-wrapper {
+              padding: 0 5px;
+            }
+            .desc-wrapper, .desc-wrapper * {
+              text-align: left !important;
+              line-height: 1.65 !important;
             }
           }
         `}
       </style>
 
-      <main style={styles.main} className="main-content">
-        <div className="course-title-wrapper">
+      <motion.main
+        style={styles.main}
+        className="main-content"
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+      >
+        <motion.div variants={itemVariants} className="course-title-wrapper">
           <CourseTitle title={current.title} config={config} icons={icons} />
-        </div>
+        </motion.div>
 
-        <p className="welcome-text" style={styles.welcomeText}>
+        <motion.p
+          variants={itemVariants}
+          className="welcome-text"
+          style={styles.welcomeText}
+        >
           {current.welcome}
-        </p>
+        </motion.p>
 
-        <div className="info-grid" style={styles.infoGrid}>
+        <motion.div
+          variants={itemVariants}
+          className="info-grid"
+          style={styles.infoGrid}
+        >
           {current.details.map((item, index) => (
-            <div key={index} className="info-item" style={styles.infoItem}>
-              <div style={{ display: "flex", opacity: 0.7 }}>{item.icon}</div>
+            <motion.div
+              key={index}
+              className="info-item"
+              style={styles.infoItem}
+              whileHover={{
+                scale: 1.03,
+                backgroundColor: "rgba(202, 175, 243, 0.25)",
+              }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <div style={{ display: "flex", color: "#caaff3" }}>
+                {item.icon}
+              </div>
               <span style={styles.infoLabel}>{item.text}</span>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
 
-        {/* Restore Description Component */}
-        <CourseDescription text={current.description} />
+        <motion.div
+          variants={itemVariants}
+          className="desc-wrapper"
+          style={{
+            width: "100%",
+            maxWidth: "800px", // Constrains the width to force better paragraph shapes
+            margin: "0 auto",
+            textWrap: "pretty", // Prevents awkward "orphans" (single words) on the bottom line
+          }}
+        >
+          <CourseDescription text={current.description} />
+        </motion.div>
 
-        <div
+        <motion.div
+          variants={itemVariants}
           ref={bookingRef}
           className="booking-section"
-          style={{ width: "100%", marginTop: "40px" }}
+          style={{ width: "100%", marginTop: isMobile ? "0px" : "20px" }}
         >
           <PriceDisplay
             coursePath="/pottery"
             currentLang={currentLang}
-            forceExpand={isBookingExpanded} // PASS STATE
+            forceExpand={isBookingExpanded}
           />
-        </div>
-      </main>
+        </motion.div>
+      </motion.main>
     </div>
   );
 }

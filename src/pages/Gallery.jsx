@@ -16,8 +16,8 @@ const planetIcons = import.meta.glob("../assets/planets/*.png", {
 });
 // Make sure these filenames match exactly what you have in your planets folder
 const titleIcons = [
-  planetIcons["../assets/planets/touch.png"]?.default,
   planetIcons["../assets/planets/sight.png"]?.default,
+  planetIcons["../assets/planets/touch.png"]?.default,
 ];
 
 const atelierImages = import.meta.glob(
@@ -53,7 +53,7 @@ export default function Gallery({ currentLang, setCurrentLang }) {
   const titleConfig = {
     desktop: {
       topIcon: { top: "-35px", left: "-80px" },
-      bottomIcon: { top: "60px", left: "200px" }, // Adjusted slightly for the shorter word "gallery"
+      bottomIcon: { top: "60px", left: "190px" },
       titleSize: "4.5rem",
     },
     mobile: {
