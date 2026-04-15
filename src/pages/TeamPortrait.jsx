@@ -10,8 +10,6 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
   const navigate = useNavigate();
   const [activeIndex, setActiveIndex] = useState(null);
   const [previousIndex, setPreviousIndex] = useState(null);
-  const [planetSize] = useState(70);
-  const [sunSize] = useState(120);
   const [hasShiftedLeft, setHasShiftedLeft] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [scrollDirection, setScrollDirection] = useState("down");
@@ -23,6 +21,17 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
     width: window.innerWidth,
     height: window.innerHeight,
   });
+
+  // --- DYNAMIC SIZING ---
+  // Mobile check (typical breakpoint)
+  const isMobile = viewport.width <= 768;
+
+  // Exact original sizing for desktop, reduced for mobile
+  const planetSize = isMobile ? 70 : 80;
+  const sunSize = isMobile ? 120 : 150;
+
+  // Custom offset to push/pull the system
+  const verticalOffset = isMobile ? 100 : 0;
 
   useEffect(() => {
     const handleResize = () => {
@@ -142,13 +151,12 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
     (displayPlanets.length - 1) * normalGap +
     sunSize;
 
-  // 🎛️ TWEAK THIS NUMBER:
-  // Increase it (e.g., 80, 150) to pull the planets and sun further UP.
-  // Decrease it (e.g., 0, -50) to push them further DOWN.
-  const verticalOffset = 100;
-
-  const idleTranslateY =
-    viewport.height - (idleTotalHeight - sunSize / 2) - verticalOffset;
+  const idleTranslateY = isMobile
+    ? viewport.height - (idleTotalHeight - sunSize / 2) - verticalOffset
+    : Math.max(
+        viewport.height / 2 - idleTotalHeight / 2,
+        viewport.height * 0.07,
+      );
 
   const computeTranslateY = () => {
     const vh = viewport.height;
@@ -440,15 +448,18 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
             planetCenter={targetCenter}
           />
         ))}
+
       {/* PORTRAIT INTRO TEXT OVERLAY */}
       <div
         style={{
           position: "absolute",
-          top: "100px", // Sits nicely below the header
-          left: "20px",
-          right: "20px",
+          top: isMobile ? "100px" : "120px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "calc(100% - 40px)",
+          maxWidth: "600px",
           fontFamily: "Satoshi",
-          fontSize: "0.75rem",
+          fontSize: isMobile ? "0.75rem" : "0.85rem",
           lineHeight: "1.4",
           color: "#1c0700",
           opacity: activeIndex === null && isLoaded && !isMenuOpen ? 0.8 : 0,
