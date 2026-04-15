@@ -65,7 +65,6 @@ export default function Rent({ currentLang, setCurrentLang }) {
     };
   };
 
-  // Planet Animation Effects
   useEffect(() => {
     let timeoutId;
     const swapLeft = () => {
@@ -191,7 +190,7 @@ export default function Rent({ currentLang, setCurrentLang }) {
       display: "flex",
       justifyContent: "center",
       gap: "10px",
-      marginBottom: "40px",
+      marginBottom: "30px",
       flexWrap: "wrap",
     },
     infoItem: {
@@ -203,6 +202,20 @@ export default function Rent({ currentLang, setCurrentLang }) {
       borderRadius: "100px",
       fontSize: "0.8rem",
       color: "#1c0700",
+    },
+    descriptionText: {
+      fontSize: "0.95rem",
+      lineHeight: "1.6",
+      color: "#1c0700",
+      maxWidth: "600px",
+      margin: "0 auto 40px auto",
+      opacity: 0.8,
+    },
+    pdfLink: {
+      color: "#1c0700",
+      textDecoration: "underline",
+      fontWeight: "bold",
+      cursor: "pointer",
     },
     formContainer: {
       width: "100%",
@@ -257,10 +270,16 @@ export default function Rent({ currentLang, setCurrentLang }) {
               gap: 12px !important;
               width: 100% !important;
               max-width: 170px !important;
-              margin: 0 auto 40px auto !important;
+              margin: 0 auto 30px auto !important;
             }
             .info-item { width: fit-content !important; }
             .info-item:nth-child(even) { align-self: flex-end !important; }
+            
+            .description-text {
+              width: 90% !important;
+              font-size: 0.9rem !important;
+              margin-bottom: 30px !important;
+            }
           }
         `}
       </style>
@@ -295,6 +314,43 @@ export default function Rent({ currentLang, setCurrentLang }) {
               <span style={{ fontWeight: "500" }}>{item.text}</span>
             </div>
           ))}
+        </div>
+
+        {/* NEW DESCRIPTION TEXT */}
+        <div className="description-text" style={styles.descriptionText}>
+          {currentLang === "de" ? (
+            <p>
+              Wir möchten teilen und stellen die Sinnesküche für kreative
+              Projekte, Kurse, Proben und kleine Gatherings zur Verfügung. Eine
+              Liste unserer Ausstattung und Preise findest du{" "}
+              <a
+                href="#"
+                style={styles.pdfLink}
+                target="_blank"
+                rel="noreferrer"
+              >
+                hier
+              </a>{" "}
+              als PDF zum Herunterladen. Komm gerne auf uns zu, wenn du Fragen
+              hast!
+            </p>
+          ) : (
+            <p>
+              We want to share and make the Sinnesküche available for creative
+              projects, courses, rehearsals, and small gatherings. You can find
+              a list of our equipment and prices{" "}
+              <a
+                href="#"
+                style={styles.pdfLink}
+                target="_blank"
+                rel="noreferrer"
+              >
+                here
+              </a>{" "}
+              as a PDF for download. Feel free to contact us if you have any
+              questions!
+            </p>
+          )}
         </div>
 
         <div style={styles.formContainer}>

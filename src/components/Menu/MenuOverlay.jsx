@@ -277,6 +277,11 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           link: "/contact",
           icon: dotIconObj,
         },
+        {
+          text: { en: "gallery", de: "galerie" },
+          link: "/gallery",
+          icon: dotIconObj,
+        },
       ],
     }),
     [currentLang],

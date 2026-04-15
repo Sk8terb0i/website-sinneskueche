@@ -11,6 +11,7 @@ import Team from "./pages/Team";
 import Location from "./pages/Location";
 import Contact from "./pages/Contact";
 import Rent from "./pages/Rent";
+const Gallery = lazy(() => import("./pages/Gallery"));
 
 import ArtisticVision from "./pages/ArtisticVision";
 import ExtendedVoiceLab from "./pages/ExtendedVoiceLab";
@@ -205,6 +206,19 @@ export default function App() {
                 setCurrentLang={setCurrentLang}
               />
             </PageTransition>
+          }
+        />
+        <Route
+          path="/gallery"
+          element={
+            <Suspense fallback={<div style={loadingContainerStyle} />}>
+              <PageTransition>
+                <Gallery
+                  currentLang={currentLang}
+                  setCurrentLang={setCurrentLang}
+                />
+              </PageTransition>
+            </Suspense>
           }
         />
 
