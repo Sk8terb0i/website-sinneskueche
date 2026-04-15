@@ -1,14 +1,24 @@
 import { useState, useEffect, useMemo } from "react";
 import Header from "../components/Header/Header";
+import CourseTitle from "../components/CourseTitle/CourseTitle";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 
 /**
  * TWEAK THESE NUMBERS TO CHANGE COLUMN DISTRIBUTION
- * Current: Column 1 (10 images), Column 2 (12 images), Column 3 (12 images)
  */
 const DESKTOP_COUNTS = [10, 12, 12];
 const MOBILE_COUNTS = [18, 16];
+
+// --- ASSETS ---
+const planetIcons = import.meta.glob("../assets/planets/*.png", {
+  eager: true,
+});
+// Make sure these filenames match exactly what you have in your planets folder
+const titleIcons = [
+  planetIcons["../assets/planets/touch.png"]?.default,
+  planetIcons["../assets/planets/sight.png"]?.default,
+];
 
 const atelierImages = import.meta.glob(
   "../assets/atelier-images/*.{png,jpg,jpeg,webp}",
@@ -39,17 +49,26 @@ export default function Gallery({ currentLang, setCurrentLang }) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // 1. DISTRIBUTION ENGINE
+  // Title configuration matching your other pages
+  const titleConfig = {
+    desktop: {
+      topIcon: { top: "-35px", left: "-80px" },
+      bottomIcon: { top: "60px", left: "200px" }, // Adjusted slightly for the shorter word "gallery"
+      titleSize: "4.5rem",
+    },
+    mobile: {
+      topIcon: { top: "-50px", left: "-50px" },
+      bottomIcon: { top: "15px", left: "calc(100% - 15px)" },
+      titleSize: "2.8rem",
+    },
+  };
+
   const columns = useMemo(() => {
     const counts = isMobile ? MOBILE_COUNTS : DESKTOP_COUNTS;
     const cols = counts.map(() => []);
 
     sortedImages.forEach((img, i) => {
-      // Step A: Determine the "Natural" horizontal column (0, 1, or 2)
       let targetCol = i % counts.length;
-
-      // Step B: Check if that column is full based on your DESKTOP_COUNTS.
-      // If it's full, move to the next available column to prevent a "trail."
       let safetyCheck = 0;
       while (
         cols[targetCol].length >= counts[targetCol] &&
@@ -58,15 +77,14 @@ export default function Gallery({ currentLang, setCurrentLang }) {
         targetCol = (targetCol + 1) % counts.length;
         safetyCheck++;
       }
-
       cols[targetCol].push({ img, index: i });
     });
     return cols;
   }, [isMobile, sortedImages]);
 
   const content = {
-    en: { title: "gallery", subtitle: "impressions of the atelier" },
-    de: { title: "galerie", subtitle: "einblicke in das atelier" },
+    en: { title: "gallery", subtitle: "impressions of our creative space" },
+    de: { title: "galerie", subtitle: "einblicke in unseren kreativen ort" },
   };
 
   return (
@@ -84,44 +102,52 @@ export default function Gallery({ currentLang, setCurrentLang }) {
         onMenuToggle={setIsMenuOpen}
       />
 
+      {/* Main container mirrors the centered flex layout of Pottery.jsx */}
       <main
         style={{
-          padding: "140px 20px 80px 20px",
           maxWidth: "1400px",
           margin: "0 auto",
+          padding: "160px 20px 80px 20px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          position: "relative",
         }}
       >
-        <header style={{ textAlign: "center", marginBottom: "60px" }}>
-          <h1
-            style={{
-              fontSize: isMobile ? "2.5rem" : "3.5rem",
-              color: "#1c0700",
-              margin: 0,
-              fontFamily: "Harmond-SemiBoldCondensed",
-              textTransform: "lowercase",
-            }}
-          >
-            {content[currentLang].title}
-          </h1>
-          <p
-            style={{
-              opacity: 0.6,
-              fontStyle: "italic",
-              marginTop: "10px",
-              fontFamily: "Satoshi",
-            }}
-          >
-            {content[currentLang].subtitle}
-          </p>
-        </header>
+        <div
+          className="course-title-wrapper"
+          style={{ textAlign: "center", marginBottom: "10px" }}
+        >
+          <CourseTitle
+            title={content[currentLang].title}
+            config={titleConfig}
+            icons={titleIcons}
+          />
+        </div>
 
-        {/* MASONRY FLEX:
-            Columns share the width (no trail) and stack naturally (no gaps).
-        */}
+        {/* Subtitle explicitly matches the welcome-text style from other pages */}
+        <p
+          className="welcome-text"
+          style={{
+            fontSize: "0.9rem",
+            fontStyle: "italic",
+            textTransform: "lowercase",
+            letterSpacing: "0.15em",
+            color: "#1c0700",
+            opacity: 0.6,
+            marginBottom: "60px",
+            fontWeight: "500",
+            textAlign: "center",
+          }}
+        >
+          {content[currentLang].subtitle}
+        </p>
+
+        {/* Gallery Grid */}
         <div
           style={{
             display: "flex",
-            gap: isMobile ? "12px" : "24px",
+            gap: isMobile ? "12px" : "30px",
             width: "100%",
             alignItems: "flex-start",
           }}
@@ -133,45 +159,43 @@ export default function Gallery({ currentLang, setCurrentLang }) {
                 flex: 1,
                 display: "flex",
                 flexDirection: "column",
-                gap: isMobile ? "12px" : "24px",
+                gap: isMobile ? "12px" : "30px",
               }}
             >
               {column.map(({ img, index }) => (
-                <div
+                <motion.div
                   key={index}
-                  onClick={() => setSelectedImg(img)}
-                  style={{
-                    cursor: "pointer",
-                    borderRadius: "8px",
-                    overflow: "hidden",
+                  // Mobile stays at 0 (straight), Desktop uses the alternating slight tilt
+                  initial={{
+                    rotate: isMobile ? 0 : index % 2 === 0 ? -0.5 : 0.5,
                   }}
+                  whileHover={{ rotate: 0, scale: 1.02 }}
+                  onClick={() => setSelectedImg(img)}
+                  className="gallery-item"
                 >
                   <img
                     src={img}
-                    alt={`Atelier ${index + 1}`}
+                    alt=""
                     loading={index < 9 ? "eager" : "lazy"}
                     fetchpriority={index < 9 ? "high" : "low"}
-                    decoding="async"
                     style={{
                       width: "100%",
                       height: "auto",
                       display: "block",
-                      transition: "transform 0.4s ease",
+                      transition: "filter 0.4s ease",
                     }}
-                    onMouseEnter={(e) =>
-                      !isMobile && (e.target.style.transform = "scale(1.02)")
-                    }
-                    onMouseLeave={(e) =>
-                      !isMobile && (e.target.style.transform = "scale(1)")
-                    }
                   />
-                </div>
+                  <div className="item-number">
+                    {(index + 1).toString().padStart(2, "0")}
+                  </div>
+                </motion.div>
               ))}
             </div>
           ))}
         </div>
       </main>
 
+      {/* Lightbox */}
       <AnimatePresence>
         {selectedImg && (
           <motion.div
@@ -179,22 +203,23 @@ export default function Gallery({ currentLang, setCurrentLang }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setSelectedImg(null)}
-            className="lightbox-overlay"
+            className="lb-overlay"
           >
-            <button className="close-btn" onClick={() => setSelectedImg(null)}>
+            <button className="lb-close" onClick={() => setSelectedImg(null)}>
               <X size={32} />
             </button>
             <motion.div
-              className="lightbox-content"
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
+              className="lb-content"
+              initial={{ scale: 0.9, opacity: 0, rotate: -2 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 20, stiffness: 100 }}
             >
               <img
                 src={selectedImg}
-                alt="Full view"
+                alt=""
                 onClick={(e) => e.stopPropagation()}
-                className="lightbox-img"
+                className="lb-img"
               />
             </motion.div>
           </motion.div>
@@ -202,21 +227,90 @@ export default function Gallery({ currentLang, setCurrentLang }) {
       </AnimatePresence>
 
       <style>{`
-        .lightbox-overlay {
-          position: fixed; inset: 0; background-color: rgba(28, 7, 0, 0.98); 
+        .gallery-item {
+          position: relative;
+          cursor: pointer;
+          border-radius: 4px;
+          overflow: hidden;
+          background-color: rgba(28, 7, 0, 0.02);
+          transition: box-shadow 0.4s ease;
+        }
+
+        .gallery-item img {
+          filter: saturate(0.8) contrast(1.05);
+        }
+
+        .gallery-item:hover {
+          box-shadow: 0 20px 40px rgba(202, 175, 243, 0.3);
+          z-index: 10;
+        }
+
+        .gallery-item:hover img {
+          filter: saturate(1) contrast(1);
+        }
+
+        .item-number {
+          position: absolute;
+          bottom: 12px;
+          right: 12px;
+          font-family: Satoshi;
+          font-size: 0.65rem;
+          color: white;
+          background: #1c0700;
+          padding: 2px 6px;
+          border-radius: 2px;
+          opacity: 0;
+          transition: all 0.3s ease;
+          letter-spacing: 1px;
+        }
+
+        .gallery-item:hover .item-number {
+          opacity: 1;
+          box-shadow: 0 0 10px #caaff3;
+        }
+
+        .lb-overlay {
+          position: fixed; inset: 0;
+          background-color: rgba(28, 7, 0, 0.98); 
           z-index: 9999; display: flex; align-items: center; 
           justify-content: center; padding: 20px; box-sizing: border-box;
-          backdrop-filter: blur(10px);
+          backdrop-filter: blur(15px);
         }
-        .close-btn {
+
+        .lb-close {
           position: absolute; top: 30px; right: 30px;
-          background: none; border: none; color: white; cursor: pointer;
+          background: none; border: none; color: #caaff3; cursor: pointer;
+          transition: transform 0.2s ease;
         }
-        .lightbox-img {
+
+        .lb-close:hover {
+            transform: rotate(90deg) scale(1.1);
+        }
+
+        .lb-content {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 100%;
+        }
+
+        .lb-img {
           max-height: 82vh; 
           max-width: 92vw;
           object-fit: contain; 
-          border-radius: 4px;
+          border: 1px solid rgba(202, 175, 243, 0.3);
+          border-radius: 2px;
+          box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+        }
+
+        @media (max-width: 768px) {
+          .course-title-wrapper { 
+            order: -1; 
+            margin-bottom: 10px;
+          }
+          .welcome-text {
+            margin-bottom: 30px !important;
+            font-size: 0.85rem !important;
+            width: 80vw !important;
+          }
         }
       `}</style>
     </div>
