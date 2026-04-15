@@ -64,7 +64,7 @@ export const planets = [
     type: "courses",
     get icon() {
       return {
-        en: getImage("gni_name.png"),
+        en: getImage("gini_name.png"),
         de: getImage("gini_name.png"),
         base: getImage("gini.png"),
       };
