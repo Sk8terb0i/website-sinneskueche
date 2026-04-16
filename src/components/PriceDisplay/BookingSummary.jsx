@@ -825,62 +825,64 @@ export default function BookingSummary({
                 </div>
 
                 {/* Attendee Names List */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                    marginTop: "10px",
-                    marginBottom: "15px",
-                  }}
-                >
-                  {d.names.map((name, nameIdx) => (
-                    <div key={nameIdx}>
-                      <label
-                        style={{
-                          fontSize: "0.65rem",
-                          opacity: 0.5,
-                          fontWeight: "900",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {currentLang === "en"
-                          ? `Attendee ${nameIdx + 1}`
-                          : `Teilnehmer ${nameIdx + 1}`}
-                      </label>
-                      <input
-                        type="text"
-                        placeholder={
-                          nameIdx === 0
-                            ? currentLang === "en"
-                              ? "Your Name"
-                              : "Dein Name"
-                            : currentLang === "en"
-                              ? "Guest Name"
-                              : "Name des Gastes"
-                        }
-                        value={name}
-                        onChange={(e) => {
-                          const updatedNames = [...d.names];
-                          updatedNames[nameIdx] = e.target.value;
-                          setSelectedDates((prev) =>
-                            prev.map((item) =>
-                              item.id === d.id
-                                ? { ...item, names: updatedNames }
-                                : item,
-                            ),
-                          );
-                        }}
-                        style={{
-                          ...S.guestInputStyle,
-                          padding: "8px 12px",
-                          fontSize: "0.85rem",
-                          backgroundColor: "rgba(255, 252, 227, 0.6)",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
+                {d.count > 1 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      marginTop: "10px",
+                      marginBottom: "15px",
+                    }}
+                  >
+                    {d.names.map((name, nameIdx) => (
+                      <div key={nameIdx}>
+                        <label
+                          style={{
+                            fontSize: "0.65rem",
+                            opacity: 0.5,
+                            fontWeight: "900",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          {currentLang === "en"
+                            ? `Attendee ${nameIdx + 1}`
+                            : `Teilnehmer ${nameIdx + 1}`}
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={
+                            nameIdx === 0
+                              ? currentLang === "en"
+                                ? "Your Name"
+                                : "Dein Name"
+                              : currentLang === "en"
+                                ? "Guest Name"
+                                : "Name des Gastes"
+                          }
+                          value={name}
+                          onChange={(e) => {
+                            const updatedNames = [...d.names];
+                            updatedNames[nameIdx] = e.target.value;
+                            setSelectedDates((prev) =>
+                              prev.map((item) =>
+                                item.id === d.id
+                                  ? { ...item, names: updatedNames }
+                                  : item,
+                              ),
+                            );
+                          }}
+                          style={{
+                            ...S.guestInputStyle,
+                            padding: "8px 12px",
+                            fontSize: "0.85rem",
+                            backgroundColor: "rgba(255, 252, 227, 0.6)",
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* --- UPDATED ADD-ONS DISPLAY (SHOW ALL, HIDE HEADER IF EMPTY) --- */}
                 {(() => {

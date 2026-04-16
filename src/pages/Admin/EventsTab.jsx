@@ -771,21 +771,24 @@ export default function EventsTab({
                         fontSize: "0.85rem",
                       }}
                     >
-                      {u.firstName} {u.lastName} ({u.ticketCount})
+                      {u.firstName} {u.lastName}{" "}
+                      {u.ticketCount > 1 ? `(${u.ticketCount})` : ""}
                     </strong>
 
-                    {/* List of individual attendee names provided during booking */}
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        opacity: 0.7,
-                        fontStyle: "italic",
-                        marginTop: "2px",
-                        color: "#1c0700",
-                      }}
-                    >
-                      {u.attendeeNames.join(", ")}
-                    </div>
+                    {/* ONLY show list of attendee names if they booked more than 1 ticket */}
+                    {u.ticketCount > 1 && (
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          opacity: 0.7,
+                          fontStyle: "italic",
+                          marginTop: "2px",
+                          color: "#1c0700",
+                        }}
+                      >
+                        {u.attendeeNames.join(", ")}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {u.addons?.length > 0 && (
