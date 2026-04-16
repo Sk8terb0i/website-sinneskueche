@@ -14,8 +14,9 @@ export default function Success({ currentLang, setCurrentLang }) {
   const redeemedCode = searchParams.get("code");
   const remainingParam = searchParams.get("remaining");
   const mode = searchParams.get("mode"); // 'pack' or 'individual'
-  const type = searchParams.get("type"); // 'credit'
+  const type = searchParams.get("type"); // 'credit' or 'request'
   const bookedParam = searchParams.get("booked"); // 'true' or 'false'
+  const status = searchParams.get("status");
 
   const remainingCredits =
     remainingParam &&
@@ -40,11 +41,15 @@ export default function Success({ currentLang, setCurrentLang }) {
     en: {
       titleBooking: "booking successful",
       titlePurchase: "purchase successful",
+      titleRequest: "request sent",
       message: "Thank you! Your transaction was successful.",
+      requestMessage: "Thank you! We have received your request.",
       dateConfirmation:
         "Your selected dates are confirmed. You will receive a confirmation email shortly.",
       packOnlyConfirmation:
         "Your session pack is ready! You will receive a receipt via email shortly.",
+      requestConfirmation:
+        "Your request has been successfully submitted. We will review the dates and contact you via email shortly to confirm availability.",
       memberPack: "Your credits have been added to your profile balance.",
       guestPack:
         "Since you purchased a session pack, we have sent a unique booking code to your email for future use.",
@@ -60,11 +65,15 @@ export default function Success({ currentLang, setCurrentLang }) {
     de: {
       titleBooking: "buchung erfolgreich",
       titlePurchase: "kauf erfolgreich",
+      titleRequest: "anfrage gesendet",
       message: "Vielen Dank! Die Transaktion war erfolgreich.",
+      requestMessage: "Vielen Dank! Wir haben deine Anfrage erhalten.",
       dateConfirmation:
         "Deine gewählten Termine sind bestätigt. Du erhältst in Kürze eine Bestätigungs-E-Mail.",
       packOnlyConfirmation:
         "Dein Kurspaket ist bereit! Du erhältst in Kürze einen Beleg per E-Mail.",
+      requestConfirmation:
+        "Deine Anfrage wurde erfolgreich übermittelt. Wir werden die Termine prüfen und dich in Kürze per E-Mail kontaktieren, um die Verfügbarkeit zu bestätigen.",
       memberPack: "Dein Guthaben wurde deinem Profil gutgeschrieben.",
       guestPack:
         "Da du eine Karte gekauft hast, haben wir dir einen Buchungscode per E-Mail gesendet.",
@@ -102,11 +111,21 @@ export default function Success({ currentLang, setCurrentLang }) {
         />
 
         <h1 style={styles.title}>
-          {hasBookedDates ? t.titleBooking : t.titlePurchase}
+          {type === "request"
+            ? t.titleRequest
+            : hasBookedDates
+              ? t.titleBooking
+              : t.titlePurchase}
         </h1>
-        <p style={styles.message}>{t.message}</p>
+        <p style={styles.message}>
+          {type === "request" ? t.requestMessage : t.message}
+        </p>
         <p style={styles.confirmation}>
-          {hasBookedDates ? t.dateConfirmation : t.packOnlyConfirmation}
+          {type === "request"
+            ? t.requestConfirmation
+            : hasBookedDates
+              ? t.dateConfirmation
+              : t.packOnlyConfirmation}
         </p>
 
         {/* SCENARIO 1: REDEEMED A PACK CODE */}

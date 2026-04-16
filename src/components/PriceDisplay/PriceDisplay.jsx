@@ -50,6 +50,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const [hasBookedBefore, setHasBookedBefore] = useState(false);
+  const [requestedDates, setRequestedDates] = useState([]);
 
   useEffect(() => {
     if (forceExpand) {
@@ -124,6 +125,24 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           }
         } catch (sub) {
           console.warn(sub);
+        }
+        try {
+          const reqSnap = await getDocs(
+            query(
+              collection(db, "requests"),
+              where("coursePath", "==", coursePath),
+            ),
+          );
+          const rDates = reqSnap.docs.flatMap((d) => {
+            const data = d.data();
+            if (data.status !== "rejected" && data.status !== "cancelled") {
+              return (data.selectedDates || []).map((sd) => sd.date);
+            }
+            return [];
+          });
+          if (isMounted) setRequestedDates(rDates);
+        } catch (reqErr) {
+          console.warn("Error fetching requests:", reqErr);
         }
         if (currentUser && isMounted) {
           const uSnap = await getDocs(
@@ -246,6 +265,44 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     }
   };
 
+  const handleRequestSubmit = async () => {
+    setIsProcessing(true);
+    try {
+      const expandedDates = selectedDates.flatMap((d) =>
+        Array(d.count || 1)
+          .fill(null)
+          .map(() => ({
+            id: d.id,
+            date: d.date,
+            time: d.time,
+            selectedAddons: d.selectedAddons || [],
+          })),
+      );
+
+      // Call a new Firebase Function (e.g., 'submitAvailabilityRequest')
+      // OR write directly to a 'requests' Firestore collection here.
+      const functions = getFunctions();
+      const submitRequest = httpsCallable(
+        functions,
+        "submitAvailabilityRequest",
+      );
+
+      await submitRequest({
+        coursePath,
+        selectedDates: expandedDates,
+        guestInfo: !currentUser ? guestInfo : null,
+        currentLang,
+      });
+
+      // Navigate to a custom success page for requests
+      navigate("/success?type=request&status=submitted");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const year = currentViewDate.getFullYear();
   const month = currentViewDate.getMonth();
   const monthName = currentViewDate.toLocaleString(
@@ -342,13 +399,42 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
             ))}
             {[...Array(new Date(year, month + 1, 0).getDate())].map((_, i) => {
               const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
-              const event = availableDates.find((e) => e.date === dateStr);
-              const isSelected = selectedDates.find((d) => d.id === event?.id);
-              const isFull =
-                event &&
+
+              // 1. Find if an actual admin-created event exists here
+              const realEvent = availableDates.find((e) => e.date === dateStr);
+
+              // 2. Check if the date is in the past
+              const cellDate = new Date(year, month, i + 1);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const isPast = cellDate < today;
+
+              // 3. Determine if the date is full (either via real bookings, or pending requests)
+              const isRealEventFull =
+                realEvent &&
                 pricing?.hasCapacity &&
-                (eventBookingCounts[event.id] || 0) >=
+                (eventBookingCounts[realEvent.id] || 0) >=
                   parseInt(pricing.capacity);
+              const isRequestedByOther = requestedDates.includes(dateStr);
+              const isFull = isRealEventFull || isRequestedByOther;
+
+              // 4. Create a "Virtual Event" if we are in Request Mode and the date is valid
+              let event = realEvent;
+              if (pricing?.isRequestOnly && !realEvent && !isPast) {
+                event = {
+                  id: `request_${dateStr}`,
+                  date: dateStr,
+                  time: "To be agreed", // Placeholder time for requests
+                  isVirtual: true, // Flag so we don't show the purple dot
+                };
+              }
+
+              // Ensure past dates without real events are completely unclickable
+              if (isPast && !realEvent) {
+                event = null;
+              }
+
+              const isSelected = selectedDates.find((d) => d.id === event?.id);
 
               const rawAddons = scheduleData?.specialAssignments?.[event?.id];
               const activeAddons = Array.isArray(rawAddons)
@@ -361,13 +447,12 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                 <div
                   key={i}
                   onClick={() => {
-                    if (!event || isFull) return;
+                    if (!event || isFull || isPast) return; // Prevent clicking invalid dates
                     setSelectedDates((prev) => {
                       if (prev.find((x) => x.id === event.id)) {
                         return prev.filter((x) => x.id !== event.id);
                       } else {
                         let autoAddons = [];
-                        // Check if a mandatory addon is already in the cart somewhere
                         let hasMandatoryInCart = prev.some((d) =>
                           d.selectedAddons?.some((aid) => {
                             const def = pricing?.specialEvents?.find(
@@ -377,15 +462,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                           }),
                         );
 
-                        // If not logged in or hasn't booked before, auto-add mandatory addons
                         if (!currentUser || !hasBookedBefore) {
-                          const rawAddons =
-                            scheduleData?.specialAssignments?.[event.id];
-                          const activeAddons = Array.isArray(rawAddons)
-                            ? rawAddons
-                            : rawAddons
-                              ? [rawAddons]
-                              : [];
                           activeAddons.forEach((aid) => {
                             const def = pricing?.specialEvents?.find(
                               (se) => se.id === aid,
@@ -422,7 +499,8 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                     </div>
                   )}
                   {i + 1}
-                  {event && !isFull && (
+                  {/* Only show the purple dot if it's a REAL scheduled event, not a virtual request date */}
+                  {event && !event.isVirtual && !isFull && (
                     <div
                       style={S.dotStyle(
                         !!isSelected,
@@ -488,6 +566,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           isMobile={isMobile}
           onBookCredits={handleBookWithCredits}
           onPayment={handlePayment}
+          onRequestSubmit={handleRequestSubmit}
           coursePath={coursePath}
           userBookedIds={userBookedIds}
           userCreditBookedIds={userCreditBookedIds}

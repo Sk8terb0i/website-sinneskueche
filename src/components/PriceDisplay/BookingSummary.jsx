@@ -45,6 +45,7 @@ export default function BookingSummary({
   isMobile,
   onBookCredits,
   onPayment,
+  onRequestSubmit,
   coursePath,
   userBookedIds = [],
   userCreditBookedIds = [],
@@ -1406,6 +1407,61 @@ export default function BookingSummary({
     </div>
   );
 
+  const renderRequestOption = () => (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "1rem",
+        marginTop: "0.5rem",
+      }}
+    >
+      {!currentUser && renderSelectionSummary()}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {renderTermsAgreement()}
+        <button
+          onClick={() => validateAndProceed(onRequestSubmit)}
+          style={{
+            ...S.primaryBtnStyle(isMobile),
+            marginTop: "10px",
+            opacity:
+              !hasSelection ||
+              (!currentUser && (!guestInfo.firstName || !guestInfo.email))
+                ? 0.5
+                : 1,
+            cursor:
+              !hasSelection ||
+              (!currentUser && (!guestInfo.firstName || !guestInfo.email))
+                ? "not-allowed"
+                : "pointer",
+          }}
+          disabled={
+            !hasSelection ||
+            (!currentUser && (!guestInfo.firstName || !guestInfo.email))
+          }
+        >
+          {currentLang === "en"
+            ? "Request Selected Dates"
+            : "Ausgewählte Termine anfragen"}
+        </button>
+        <p
+          style={{
+            fontSize: "0.75rem",
+            opacity: 0.6,
+            textAlign: "center",
+            fontStyle: "italic",
+            marginTop: "4px",
+          }}
+        >
+          {currentLang === "en"
+            ? "No payment required yet. We will confirm availability via email."
+            : "Noch keine Zahlung erforderlich. Wir bestätigen die Verfügbarkeit per E-Mail."}
+        </p>
+      </div>
+    </div>
+  );
+
   return (
     <div style={S.bookingCardStyle(isMobile, true)}>
       {/* LIGHTWEIGHT CONFIRMATION POPUP */}
@@ -1752,7 +1808,9 @@ export default function BookingSummary({
                 />
               </div>
             )}
-            {renderPurchaseOptions()}
+            {pricing?.isRequestOnly
+              ? renderRequestOption()
+              : renderPurchaseOptions()}
           </div>
         ) : (
           <>
@@ -1786,7 +1844,9 @@ export default function BookingSummary({
             <div
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
-              {coversEntirely && !activePackCode ? (
+              {pricing?.isRequestOnly ? (
+                renderRequestOption()
+              ) : coversEntirely && !activePackCode ? (
                 <>
                   {renderTermsAgreement()}
                   <button

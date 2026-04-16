@@ -230,6 +230,7 @@ export default function PricingTab({
         hasCapacity: priceData[courseId]?.hasCapacity ?? false,
         capacity: priceData[courseId]?.capacity || "",
         isVisible: priceData[courseId]?.isVisible ?? true,
+        isRequestOnly: priceData[courseId]?.isRequestOnly ?? false,
         courseName: courseName,
         specialEvents: priceData[courseId]?.specialEvents || [],
         updatedAt: new Date().toISOString(),
@@ -739,6 +740,42 @@ export default function PricingTab({
                   />
                 </div>
               )}
+            </div>
+
+            <div
+              style={{
+                backgroundColor: "rgba(78, 95, 40, 0.05)",
+                padding: "12px",
+                borderRadius: "12px",
+                marginTop: "12px",
+                border: "1px solid rgba(28,7,0,0.05)",
+              }}
+            >
+              <label
+                style={{
+                  ...labelStyle,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  cursor: "pointer",
+                  margin: 0,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={priceData[selectedCourse]?.isRequestOnly ?? false}
+                  onChange={(e) =>
+                    handlePriceChange(
+                      selectedCourse,
+                      "isRequestOnly",
+                      e.target.checked,
+                    )
+                  }
+                />
+                {currentLang === "en"
+                  ? "Request Only Mode (No upfront payment)"
+                  : "Nur auf Anfrage (Keine Vorauszahlung)"}
+              </label>
             </div>
 
             <div

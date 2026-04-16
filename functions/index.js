@@ -1552,3 +1552,119 @@ exports.replyToRentalRequest = onCall({ cors: true }, async (request) => {
 
   return { success: true };
 });
+
+// ============================================================================
+// 8. AVAILABILITY REQUESTS
+// ============================================================================
+
+exports.submitAvailabilityRequest = onCall({ cors: true }, async (request) => {
+  const { coursePath, selectedDates, guestInfo, currentLang } = request.data;
+
+  try {
+    // 1. Gather user info (Logged in user or Guest)
+    let userInfo = guestInfo || {};
+    let userId = "GUEST_USER";
+
+    if (request.auth) {
+      userId = request.auth.uid;
+      const userDoc = await db.collection("users").doc(userId).get();
+      if (userDoc.exists) {
+        const uData = userDoc.data();
+        userInfo = {
+          firstName: uData.firstName || "",
+          lastName: uData.lastName || "",
+          email: uData.email || "",
+          phone: uData.phone || "",
+        };
+      }
+    }
+
+    // 2. Save the request to the "requests" collection
+    const requestDoc = {
+      coursePath: coursePath || "Unknown Course",
+      selectedDates: selectedDates || [],
+      guestInfo: userInfo,
+      userId: userId,
+      status: "new",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      language: currentLang || "en",
+    };
+
+    const requestRef = await db.collection("requests").add(requestDoc);
+
+    // 3. Fetch Admin Notification Emails
+    const settingsSnap = await db
+      .collection("admin_settings")
+      .doc("requests")
+      .get();
+    let adminEmails = [];
+    if (settingsSnap.exists) {
+      const emailString = settingsSnap.data().emails || "";
+      adminEmails = emailString
+        .split(",")
+        .map((e) => e.trim())
+        .filter((e) => e.length > 0);
+    }
+
+    // 4. Format the Email Content
+    const courseName = getCleanCourseKey(coursePath).toUpperCase();
+
+    const datesHtml = selectedDates
+      .map((d) => {
+        const parts = d.date.split("-");
+        const fDate =
+          parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : d.date;
+        const extras =
+          d.selectedAddons && d.selectedAddons.length > 0
+            ? `<div style="font-size: 12px; color: #9960a8; margin-top: 4px;"><strong>+ Extras:</strong> ${d.selectedAddons.length} selected</div>`
+            : "";
+        return `
+        <li style="margin-bottom: 15px; list-style: none; padding: 12px; background: #fff; border-radius: 8px; border: 1px solid #caaff3;">
+          <strong style="color: #1c0700;">${fDate}</strong> | ${d.time || "Time TBD"}
+          ${extras}
+        </li>`;
+      })
+      .join("");
+
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 12px; color: #1c0700; border: 1px solid #caaff3;">
+        <h2 style="color: #4e5f28; margin-top: 0; text-transform: lowercase; font-family: 'Harmond', sans-serif;">new course request</h2>
+        <p style="font-size: 16px;">You received a new availability request for <strong>${courseName}</strong>.</p>
+        
+        <div style="background-color: rgba(202, 175, 243, 0.1); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px dashed #caaff3;">
+          <h3 style="font-size: 14px; color: #9960a8; margin-top: 0; text-transform: uppercase; letter-spacing: 1px;">Contact Details</h3>
+          <p style="margin: 5px 0;"><strong>Name:</strong> ${userInfo.firstName} ${userInfo.lastName}</p>
+          <p style="margin: 5px 0;"><strong>Email:</strong> <a href="mailto:${userInfo.email}" style="color: #9960a8; text-decoration: none;">${userInfo.email}</a></p>
+          ${userInfo.phone ? `<p style="margin: 5px 0;"><strong>Phone:</strong> ${userInfo.phone}</p>` : ""}
+        </div>
+
+        <h3 style="font-size: 14px; color: #9960a8; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">Requested Dates</h3>
+        <ul style="padding: 0; margin: 0;">
+          ${datesHtml}
+        </ul>
+
+        <div style="margin-top: 30px; text-align: center;">
+          <a href="https://sinneskueche.ch/admin-sinneskueche?tab=events" style="display: inline-block; padding: 14px 28px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold; font-size: 14px;">View in Admin Panel</a>
+        </div>
+        
+        <p style="margin-top: 30px; font-size: 12px; opacity: 0.5; text-align: center;">This is an automated notification from Atelier Sinnesküche.</p>
+      </div>
+    `;
+
+    // 5. Trigger the Email
+    if (adminEmails.length > 0) {
+      await db.collection("mail").add({
+        to: adminEmails,
+        message: {
+          subject: `Request: ${courseName}`,
+          html: htmlBody,
+        },
+      });
+    }
+
+    return { success: true, requestId: requestRef.id };
+  } catch (error) {
+    logger.error("Error submitting request:", error);
+    throw new HttpsError("internal", "Unable to submit request.");
+  }
+});

@@ -74,6 +74,11 @@ export default function EventsTab({
   const [participantCache, setParticipantCache] = useState({});
   const [isFormExpanded, setIsFormExpanded] = useState(!isMobile);
 
+  // New Request State
+  const [requests, setRequests] = useState([]);
+  const [notificationEmails, setNotificationEmails] = useState("");
+  const [isSavingEmails, setIsSavingEmails] = useState(false);
+
   const isFullAdmin = userRole === "admin";
   const labels = {
     en: {
@@ -106,6 +111,12 @@ export default function EventsTab({
       participants: "Participants",
       noParticipants: "No bookings yet.",
       addons: "Add-ons:",
+      requestsHeader: "REQUESTS",
+      notificationEmailsLabel: "Notification Emails (comma separated)",
+      saveEmails: "Save Emails",
+      noRequests: "No pending requests.",
+      requestedDates: "Requested Dates:",
+      markResolved: "Archive / Resolve",
     },
     de: {
       newEntry: "NEUER EINTRAG",
@@ -137,6 +148,12 @@ export default function EventsTab({
       participants: "Teilnehmer",
       noParticipants: "Noch keine Buchungen.",
       addons: "Extras:",
+      requestsHeader: "ANFRAGEN",
+      notificationEmailsLabel: "Benachrichtigungs-E-Mails (kommagetrennt)",
+      saveEmails: "E-Mails speichern",
+      noRequests: "Keine ausstehenden Anfragen.",
+      requestedDates: "Angefragte Termine:",
+      markResolved: "Archivieren / Erledigt",
     },
   }[currentLang || "en"];
 
@@ -154,6 +171,8 @@ export default function EventsTab({
   useEffect(() => {
     fetchEvents();
     autoFillFirstCourse();
+    fetchRequests();
+    fetchAdminSettings();
   }, [userRole, allowedCourses]);
 
   const fetchEvents = async () => {
@@ -190,6 +209,96 @@ export default function EventsTab({
       return isFullAdmin || allowedCourses.includes(event.link);
     });
     setEvents(validEvents);
+  };
+
+  const fetchRequests = async () => {
+    try {
+      const reqSnap = await getDocs(collection(db, "requests"));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const validRequests = [];
+
+      await Promise.all(
+        reqSnap.docs.map(async (docSnap) => {
+          const req = { id: docSnap.id, ...docSnap.data() };
+
+          // Check if all dates in the request are in the past
+          if (req.selectedDates && req.selectedDates.length > 0) {
+            const hasFutureDate = req.selectedDates.some((sd) => {
+              const eventDate = new Date(sd.date);
+              eventDate.setHours(0, 0, 0, 0);
+              return eventDate >= today;
+            });
+
+            if (!hasFutureDate) {
+              // If all requested dates have passed, delete the request
+              await deleteDoc(doc(db, "requests", req.id));
+              return; // Skip adding to the UI array
+            }
+          }
+
+          // Filter out archived/cancelled requests for the UI
+          if (
+            req.status !== "rejected" &&
+            req.status !== "cancelled" &&
+            req.status !== "archived"
+          ) {
+            validRequests.push(req);
+          }
+        }),
+      );
+
+      setRequests(validRequests);
+    } catch (error) {
+      console.error("Error fetching requests:", error);
+    }
+  };
+
+  const fetchAdminSettings = async () => {
+    try {
+      const docSnap = await getDoc(doc(db, "admin_settings", "requests"));
+      if (docSnap.exists()) {
+        setNotificationEmails(docSnap.data().emails || "");
+      }
+    } catch (error) {
+      console.error("Error fetching settings:", error);
+    }
+  };
+
+  const handleSaveEmails = async () => {
+    setIsSavingEmails(true);
+    try {
+      await setDoc(
+        doc(db, "admin_settings", "requests"),
+        { emails: notificationEmails },
+        { merge: true },
+      );
+      alert("Emails successfully saved!");
+    } catch (error) {
+      alert("Error saving emails: " + error.message);
+    } finally {
+      setIsSavingEmails(false);
+    }
+  };
+
+  const handleArchiveRequest = async (requestId) => {
+    if (
+      !window.confirm(
+        currentLang === "de" ? "Anfrage archivieren?" : "Archive this request?",
+      )
+    )
+      return;
+    try {
+      await setDoc(
+        doc(db, "requests", requestId),
+        { status: "archived" },
+        { merge: true },
+      );
+      setRequests((prev) => prev.filter((r) => r.id !== requestId));
+    } catch (error) {
+      alert("Error archiving request: " + error.message);
+    }
   };
 
   const handleShowParticipants = async (event) => {
@@ -391,7 +500,7 @@ export default function EventsTab({
     return acc;
   }, {});
 
-  // Group Events (By Custom Tab Group Name, otherwise they remain standalone)
+  // Group Events
   const groupedEvents = [];
   const eventGroupsMap = {};
 
@@ -402,7 +511,7 @@ export default function EventsTab({
         eventGroupsMap[groupName] = {
           isGroup: true,
           title: groupName,
-          id: groupName, // Using the group name as the unique ID for the wrapper
+          id: groupName,
           dates: [],
         };
         groupedEvents.push(eventGroupsMap[groupName]);
@@ -418,7 +527,27 @@ export default function EventsTab({
     }
   });
 
-  // Reusable function to render the inner card logic, preventing massive duplication
+  // Group Requests
+  const groupedRequests = requests.reduce((acc, req) => {
+    const key = req.coursePath || "unknown";
+    if (!acc[key]) {
+      const courseDef = availableCourses.find(
+        (c) =>
+          c.link === key ||
+          c.link === `/${key}` ||
+          c.link.replace(/\//g, "") === key,
+      );
+      acc[key] = {
+        isGroup: true,
+        title: courseDef ? courseDef.text[currentLang || "en"] : key,
+        link: key,
+        items: [],
+      };
+    }
+    acc[key].items.push(req);
+    return acc;
+  }, {});
+
   const renderEventCard = (ev, isEvent) => (
     <div key={ev.id} style={styles.eventItemWrapper}>
       <div
@@ -456,11 +585,9 @@ export default function EventsTab({
               </button>
             )}
 
-            {/* TEXT INFO CONTAINER */}
             <div
               style={{ display: "flex", flexDirection: "column", gap: "6px" }}
             >
-              {/* TITLE & FESTIVAL ROW */}
               <div
                 style={{
                   display: "flex",
@@ -487,7 +614,7 @@ export default function EventsTab({
                     style={{
                       fontSize: "0.75rem",
                       fontWeight: "800",
-                      color: "#9960a8", // Matches your theme purple
+                      color: "#9960a8",
                       backgroundColor: "rgba(202, 175, 243, 0.15)",
                       padding: "2px 8px",
                       borderRadius: "6px",
@@ -500,7 +627,6 @@ export default function EventsTab({
                 )}
               </div>
 
-              {/* METADATA ROW */}
               <div
                 style={{
                   display: "flex",
@@ -533,7 +659,6 @@ export default function EventsTab({
             </div>
           </div>
 
-          {/* MOBILE EDIT BUTTON */}
           {isMobile && (
             <button
               onClick={() => startEdit(ev)}
@@ -553,7 +678,6 @@ export default function EventsTab({
           )}
         </div>
 
-        {/* ACTION BUTTONS ROW */}
         <div
           style={{
             ...styles.actionRow,
@@ -603,7 +727,6 @@ export default function EventsTab({
         </div>
       </div>
 
-      {/* PARTICIPANTS PANEL (COURSES ONLY) */}
       {!isEvent && showParticipantsFor === ev.id && participantCache[ev.id] && (
         <div style={styles.participantPanel}>
           {participantCache[ev.id].map((u, i) => (
@@ -970,60 +1093,261 @@ export default function EventsTab({
           >
             <Star size={16} /> {labels.eventHeader} ({scheduledEvents.length})
           </button>
+          <button
+            onClick={() => setActiveSubTab("requests")}
+            style={styles.subTabBtn(activeSubTab === "requests")}
+          >
+            <Mail size={16} /> {labels.requestsHeader} ({requests.length})
+          </button>
         </div>
 
         <div style={styles.tabContent}>
-          {itemsToRender.map((item) => {
-            const isEvent = activeSubTab === "events";
-
-            // If the item doesn't have a tab group wrapper, simply render it as a standalone card
-            if (!item.isGroup) {
-              return (
-                <div key={item.id} style={{ marginBottom: "0.5rem" }}>
-                  {renderEventCard(item.dates[0], isEvent)}
-                </div>
-              );
-            }
-
-            // Render it as a collapsible tab group
-            const groupKey = isEvent ? item.id : item.link;
-            const isExpanded = expandedGroups[groupKey];
-
-            return (
-              <div key={groupKey} style={styles.courseGroupWrapper}>
-                <div
-                  onClick={() =>
-                    setExpandedGroups((prev) => ({
-                      ...prev,
-                      [groupKey]: !prev[groupKey],
-                    }))
-                  }
-                  style={styles.groupHeader}
+          {activeSubTab === "requests" ? (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "2rem" }}
+            >
+              <div
+                style={{
+                  ...cardStyle,
+                  padding: "1.5rem",
+                  backgroundColor: "#fdf8e1",
+                  flexDirection: "column",
+                  alignItems: "stretch",
+                }}
+              >
+                <label
+                  style={{
+                    ...labelStyle,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
                 >
-                  <div style={styles.groupTitleText}>
-                    {isExpanded ? (
-                      <ChevronDown size={14} />
-                    ) : (
-                      <ChevronRight size={14} />
-                    )}
-                    {item.title} ({item.dates.length})
-                  </div>
-                </div>
-                {isExpanded && (
-                  <div
-                    className="custom-scrollbar"
+                  <Mail size={16} color="#9960a8" />{" "}
+                  {labels.notificationEmailsLabel}
+                </label>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: isMobile ? "column" : "row",
+                    gap: "10px",
+                    marginTop: "8px",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="hello@atelier.com, booking@atelier.com"
+                    value={notificationEmails}
+                    onChange={(e) => setNotificationEmails(e.target.value)}
+                    style={{ ...inputStyle, flex: 1, marginBottom: 0 }}
+                  />
+                  <button
+                    onClick={handleSaveEmails}
+                    disabled={isSavingEmails}
                     style={{
-                      ...styles.expandedContent,
-                      maxHeight: item.dates.length > 3 ? "400px" : "auto",
-                      overflowY: item.dates.length > 3 ? "auto" : "visible",
+                      ...btnStyle,
+                      marginTop: 0,
+                      padding: "0 20px",
+                      width: isMobile ? "100%" : "auto", // Fixes the crushing issue
+                      whiteSpace: "nowrap", // Keeps the text on one line
                     }}
                   >
-                    {item.dates.map((ev) => renderEventCard(ev, isEvent))}
-                  </div>
-                )}
+                    {isSavingEmails ? (
+                      <Loader2 size={16} className="spinner" />
+                    ) : (
+                      labels.saveEmails
+                    )}
+                  </button>
+                </div>
               </div>
-            );
-          })}
+
+              {Object.keys(groupedRequests).length === 0 ? (
+                <p style={{ opacity: 0.6, fontSize: "0.9rem" }}>
+                  {labels.noRequests}
+                </p>
+              ) : (
+                Object.values(groupedRequests).map((group) => {
+                  const groupKey = `req_${group.link}`;
+                  const isExpanded = expandedGroups[groupKey];
+
+                  return (
+                    <div key={groupKey} style={styles.courseGroupWrapper}>
+                      <div
+                        onClick={() =>
+                          setExpandedGroups((prev) => ({
+                            ...prev,
+                            [groupKey]: !prev[groupKey],
+                          }))
+                        }
+                        style={styles.groupHeader}
+                      >
+                        <div style={styles.groupTitleText}>
+                          {isExpanded ? (
+                            <ChevronDown size={14} />
+                          ) : (
+                            <ChevronRight size={14} />
+                          )}
+                          {group.title} ({group.items.length})
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div
+                          style={{
+                            ...styles.expandedContent,
+                            paddingBottom: "10px",
+                          }}
+                        >
+                          {group.items.map((req) => (
+                            <div
+                              key={req.id}
+                              style={{
+                                ...cardStyle,
+                                padding: "1rem",
+                                backgroundColor: "#fdf8e1",
+                                flexDirection: "column",
+                                alignItems: "flex-start",
+                                gap: "10px",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  width: "100%",
+                                  alignItems: "flex-start",
+                                }}
+                              >
+                                <div>
+                                  <strong
+                                    style={{
+                                      display: "block",
+                                      fontSize: "1rem",
+                                      color: "#1c0700",
+                                    }}
+                                  >
+                                    {req.guestInfo?.firstName}{" "}
+                                    {req.guestInfo?.lastName}
+                                  </strong>
+                                  <a
+                                    href={`mailto:${req.guestInfo?.email}`}
+                                    style={{
+                                      fontSize: "0.8rem",
+                                      color: "#9960a8",
+                                      textDecoration: "none",
+                                    }}
+                                  >
+                                    {req.guestInfo?.email}
+                                  </a>
+                                </div>
+                                <button
+                                  onClick={() => handleArchiveRequest(req.id)}
+                                  style={{
+                                    ...styles.cancelBtn,
+                                    background: "rgba(0,0,0,0.05)",
+                                    color: "#1c0700",
+                                  }}
+                                >
+                                  {labels.markResolved}
+                                </button>
+                              </div>
+
+                              <div
+                                style={{
+                                  width: "100%",
+                                  borderTop: "1px dashed rgba(0,0,0,0.1)",
+                                  paddingTop: "10px",
+                                  marginTop: "5px",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: "bold",
+                                    opacity: 0.6,
+                                  }}
+                                >
+                                  {labels.requestedDates}
+                                </span>
+                                <ul
+                                  style={{
+                                    margin: "5px 0 0 0",
+                                    paddingLeft: "20px",
+                                    fontSize: "0.85rem",
+                                    color: "#1c0700",
+                                  }}
+                                >
+                                  {(req.selectedDates || []).map((sd, i) => (
+                                    <li key={i}>
+                                      <strong>
+                                        {formatDisplayDate(sd.date)}
+                                      </strong>
+                                      {sd.selectedAddons?.length > 0 &&
+                                        ` (+ ${sd.selectedAddons.length} Extras)`}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          ) : (
+            itemsToRender.map((item) => {
+              const isEvent = activeSubTab === "events";
+
+              if (!item.isGroup) {
+                return (
+                  <div key={item.id} style={{ marginBottom: "0.5rem" }}>
+                    {renderEventCard(item.dates[0], isEvent)}
+                  </div>
+                );
+              }
+
+              const groupKey = isEvent ? item.id : item.link;
+              const isExpanded = expandedGroups[groupKey];
+
+              return (
+                <div key={groupKey} style={styles.courseGroupWrapper}>
+                  <div
+                    onClick={() =>
+                      setExpandedGroups((prev) => ({
+                        ...prev,
+                        [groupKey]: !prev[groupKey],
+                      }))
+                    }
+                    style={styles.groupHeader}
+                  >
+                    <div style={styles.groupTitleText}>
+                      {isExpanded ? (
+                        <ChevronDown size={14} />
+                      ) : (
+                        <ChevronRight size={14} />
+                      )}
+                      {item.title} ({item.dates.length})
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <div
+                      className="custom-scrollbar"
+                      style={{
+                        ...styles.expandedContent,
+                        maxHeight: item.dates.length > 3 ? "400px" : "auto",
+                        overflowY: item.dates.length > 3 ? "auto" : "visible",
+                      }}
+                    >
+                      {item.dates.map((ev) => renderEventCard(ev, isEvent))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       </section>
       <style>{` .custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: rgba(28, 7, 0, 0.05); border-radius: 10px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #caaff3; border-radius: 10px; } .spinner { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } `}</style>
