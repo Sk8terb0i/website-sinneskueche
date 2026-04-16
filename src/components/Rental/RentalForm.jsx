@@ -46,10 +46,32 @@ export default function RentalForm({ lang }) {
       collection(db, "rent_requests"),
       where("status", "in", ["pending", "approved", "confirmed"]),
     );
+
     const unsubscribe = onSnapshot(q, (snap) => {
-      const dates = snap.docs.map((d) => d.data().startDate || d.data().date);
-      setBlockedDates([...new Set(dates)]);
+      let allDates = [];
+
+      snap.docs.forEach((doc) => {
+        const data = doc.data();
+        const start = data.startDate || data.date;
+        const end = data.endDate;
+
+        if (start && end && start !== end) {
+          // If there is a range, find every day in between
+          let current = new Date(start);
+          const last = new Date(end);
+          while (current <= last) {
+            allDates.push(current.toISOString().split("T")[0]);
+            current.setDate(current.getDate() + 1);
+          }
+        } else if (start) {
+          // Single day request
+          allDates.push(start);
+        }
+      });
+
+      setBlockedDates([...new Set(allDates)]);
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -61,14 +83,20 @@ export default function RentalForm({ lang }) {
   const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
   const firstDay = (y, m) => new Date(y, m, 1).getDay();
 
-  // Range Selection Logic
   const handleDateClick = (dStr) => {
+    // If no start date exists, or a full range is already selected, start a new range
     if (!formData.startDate || (formData.startDate && formData.endDate)) {
       setFormData({ ...formData, startDate: dStr, endDate: "" });
+    }
+    // If user clicks the exact same date as the start date, treat it as a single-day selection
+    else if (dStr === formData.startDate) {
+      setFormData({ ...formData, endDate: dStr });
     } else {
       if (dStr < formData.startDate) {
+        // If they click an earlier date, reset that as the new start date
         setFormData({ ...formData, startDate: dStr, endDate: "" });
       } else {
+        // Check for blocked dates in between
         const hasBlockedInRange = blockedDates.some(
           (bd) => bd > formData.startDate && bd < dStr,
         );
@@ -537,7 +565,7 @@ export default function RentalForm({ lang }) {
 
               <button
                 type="submit"
-                disabled={loading || (formData.startDate && !formData.endDate)}
+                disabled={loading || !formData.startDate}
                 style={S.primaryBtnStyle}
               >
                 {loading ? (

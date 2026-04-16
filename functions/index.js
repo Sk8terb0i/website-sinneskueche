@@ -1096,21 +1096,56 @@ exports.onRentRequestCreate = onDocumentCreated(
     const snap = event.data;
     if (!snap) return;
     const data = snap.data();
+
+    // 1. Fetch Admin Notification Email from settings
     const settingsSnap = await db
       .collection("settings")
       .doc("admin_config")
       .get();
-
     const adminEmail = settingsSnap.exists
       ? settingsSnap.data().adminEmail
       : null;
-    if (!adminEmail) return;
 
+    if (!adminEmail) {
+      logger.error("No admin email configured for rental notifications.");
+      return;
+    }
+
+    // 2. Format Dates (Handling both single date and range)
+    const formatDate = (d) => (d ? d.split("-").reverse().join(".") : "");
+    const dateDisplay = data.endDate
+      ? `${formatDate(data.startDate)} — ${formatDate(data.endDate)}`
+      : formatDate(data.startDate || data.date);
+
+    // 3. Professional HTML Body
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 12px; color: #1c0700; border: 1px solid #caaff3;">
+        <h2 style="color: #4e5f28; margin-top: 0; text-transform: lowercase; font-family: 'Harmond', sans-serif;">new rental request</h2>
+        <p style="font-size: 16px;">You received a new inquiry to rent the Atelier for <strong>${dateDisplay}</strong>.</p>
+        
+        <div style="background-color: rgba(202, 175, 243, 0.1); padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px dashed #caaff3;">
+          <h3 style="font-size: 14px; color: #9960a8; margin-top: 0; text-transform: uppercase; letter-spacing: 1px;">Inquiry Details</h3>
+          <p style="margin: 5px 0;"><strong>Name:</strong> ${data.name}</p>
+          <p style="margin: 5px 0;"><strong>Email:</strong> <a href="mailto:${data.email}" style="color: #9960a8; text-decoration: none;">${data.email}</a></p>
+          <p style="margin: 5px 0;"><strong>Phone:</strong> ${data.phone || "N/A"}</p>
+          <p style="margin: 15px 0 5px 0;"><strong>Message:</strong></p>
+          <div style="font-style: italic; opacity: 0.8; padding-left: 10px; border-left: 2px solid #caaff3;">"${data.message}"</div>
+        </div>
+
+        <div style="margin-top: 30px; text-align: center;">
+          <a href="https://sinneskueche.ch/admin-sinneskueche?tab=rentals" style="display: inline-block; padding: 14px 28px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold; font-size: 14px;">Review in Admin Panel</a>
+        </div>
+        
+        <p style="margin-top: 30px; font-size: 12px; opacity: 0.5; text-align: center;">Atelier Sinnesküche Rental System</p>
+      </div>
+    `;
+
+    // 4. Send the Mail
     await db.collection("mail").add({
       to: adminEmail,
       message: {
-        subject: `New Rental Request: ${data.name}`,
-        html: `<div style="font-family: Arial; padding: 20px; background: #fffce3; border: 1px solid #caaff3; border-radius: 12px;"><h2>New Rental Request</h2><p><strong>From:</strong> ${data.name}</p><p><strong>Date:</strong> ${data.date}</p><p><strong>Message:</strong><br/>${data.message}</p></div>`,
+        subject: `Rental Request: ${data.name} (${dateDisplay})`,
+        html: htmlBody,
       },
     });
   },
