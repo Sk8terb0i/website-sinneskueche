@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import {
   collection,
-  addDoc,
   getDocs,
   deleteDoc,
   doc,
@@ -14,24 +13,20 @@ import {
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import {
-  PlusCircle,
-  Trash2,
   Mail,
   Clock,
   CheckCircle,
   XCircle,
   MessageSquare,
-  Calendar,
   Loader2,
-  Phone,
   X,
   Check,
-  AlertCircle,
   Eye,
   EyeOff,
   Send,
   CornerDownRight,
   ExternalLink,
+  Archive,
 } from "lucide-react";
 import {
   formCardStyle,
@@ -40,48 +35,34 @@ import {
   btnStyle,
   labelStyle,
   cardStyle,
-  deleteBtnStyle,
 } from "./AdminStyles";
 
 export default function RentalTab({ isMobile, currentLang }) {
   const [rentRequests, setRentRequests] = useState([]);
-  const [availabilities, setAvailabilities] = useState([]);
-  const [availDate, setAvailDate] = useState("");
-  const [availTime, setAvailTime] = useState("");
   const [notifyEmail, setNotifyEmail] = useState("");
   const [showInProfile, setShowInProfile] = useState(false);
-  const [requestFilter, setRequestFilter] = useState("avail");
+  const [requestFilter, setRequestFilter] = useState("pending");
   const [loading, setLoading] = useState(true);
-  const [viewingRequest, setViewingRequest] = useState(null);
 
   const [replyText, setReplyText] = useState({});
   const [isSendingReply, setIsSendingReply] = useState(null);
 
   const labels = {
     en: {
-      setAvail: "set availability",
-      showInCal: "show approved requests in my calendar",
+      showInCal: "Allow Rental Requests on Website",
       on: "on",
       off: "off",
-      pubDate: "publish date",
-      persistEmail: "persistent notification email",
-      adminEmail: "admin notification email",
-      liveTab: "live dates",
-      rentReq: "rent requests",
-      inc: "incoming",
-      app: "approved",
-      noReq: "no",
-      reqFound: "requests found.",
+      persistEmail: "Notification Settings",
+      adminEmail: "Admin notification email(s)",
+      rentReq: "Rental Management",
+      inc: "Incoming",
+      app: "Approved (Blocks Date)",
+      arch: "Archive",
       email: "email:",
       phone: "phone:",
       reqDate: "requested date:",
       received: "received:",
       msg: "message:",
-      statusOpen: "available",
-      statusPending: "request pending",
-      statusBooked: "booked",
-      detailsTitle: "request details",
-      close: "close",
       replyLabel: "Write a response...",
       sendReply: "Send Response",
       responded: "Responded on",
@@ -89,29 +70,20 @@ export default function RentalTab({ isMobile, currentLang }) {
       successMsg: "Reply sent successfully!",
     },
     de: {
-      setAvail: "verfügbarkeit einstellen",
-      showInCal: "akzeptierte anfragen im kalender zeigen",
+      showInCal: "Mietanfragen auf Website erlauben",
       on: "an",
       off: "aus",
-      pubDate: "datum veröffentlichen",
-      persistEmail: "benachrichtigungs-e-mail",
-      adminEmail: "admin benachrichtigungs-e-mail",
-      liveTab: "aktuelle daten",
-      rentReq: "mietanfragen",
-      inc: "eingehend",
-      app: "bestätigt",
-      noReq: "keine",
-      reqFound: "anfragen gefunden.",
+      persistEmail: "Benachrichtigungs-Einstellungen",
+      adminEmail: "Admin E-Mail(s) für Anfragen",
+      rentReq: "Mietverwaltung",
+      inc: "Eingehend",
+      app: "Bestätigt (Blockiert Datum)",
+      arch: "Archiv",
       email: "e-mail:",
       phone: "telefon:",
       reqDate: "gewünschtes datum:",
       received: "erhalten:",
       msg: "nachricht:",
-      statusOpen: "verfügbar",
-      statusPending: "anfrage offen",
-      statusBooked: "gebucht",
-      detailsTitle: "details zur anfrage",
-      close: "schließen",
       replyLabel: "Antwort schreiben...",
       sendReply: "Antwort senden",
       responded: "Beantwortet am",
@@ -131,29 +103,7 @@ export default function RentalTab({ isMobile, currentLang }) {
         setLoading(false);
       },
     );
-    const unsubAvail = onSnapshot(
-      query(collection(db, "rental_availability"), orderBy("date", "asc")),
-      (snap) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const validAvail = snap.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter((item) => {
-            const itemDate = new Date(item.date);
-            itemDate.setHours(0, 0, 0, 0);
-            if (itemDate < today) {
-              deleteDoc(doc(db, "rental_availability", item.id));
-              return false;
-            }
-            return true;
-          });
-        setAvailabilities(validAvail);
-      },
-    );
-    return () => {
-      unsubRequests();
-      unsubAvail();
-    };
+    return () => unsubRequests();
   }, []);
 
   const fetchSettings = async () => {
@@ -181,7 +131,7 @@ export default function RentalTab({ isMobile, currentLang }) {
       { adminEmail: notifyEmail },
       { merge: true },
     );
-    alert("notification email saved!");
+    alert("Notification settings saved!");
   };
 
   const handleSendReply = async (requestId) => {
@@ -191,7 +141,7 @@ export default function RentalTab({ isMobile, currentLang }) {
       const replyFn = httpsCallable(getFunctions(), "replyToRentalRequest");
       await replyFn({ requestId, replyText: replyText[requestId] });
       setReplyText((prev) => ({ ...prev, [requestId]: "" }));
-      alert(labels.successMsg); // Feedback provided here
+      alert(labels.successMsg);
     } catch (err) {
       console.error("Reply error:", err);
     } finally {
@@ -199,9 +149,23 @@ export default function RentalTab({ isMobile, currentLang }) {
     }
   };
 
+  const updateStatus = async (id, status) => {
+    await updateDoc(doc(db, "rent_requests", id), { status });
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
     return dateStr.split("-").reverse().join(".");
+  };
+
+  const renderRequestedPeriod = (req) => {
+    const start = req.startDate || req.date; // Support new and old schema
+    const end = req.endDate;
+
+    if (start && end) {
+      return `${formatDate(start)} — ${formatDate(end)}`;
+    }
+    return formatDate(start);
   };
 
   const subTabStyle = (active) => ({
@@ -235,133 +199,92 @@ export default function RentalTab({ isMobile, currentLang }) {
         alignItems: "flex-start",
       }}
     >
-      {/* SIDEBAR */}
+      {/* SIDEBAR: SETTINGS ONLY */}
       <section style={{ width: isMobile ? "100%" : "380px" }}>
         <div style={{ ...formCardStyle, backgroundColor: "#fdf8e1" }}>
-          <h3 style={{ ...sectionTitleStyle, textTransform: "none" }}>
-            <PlusCircle size={18} /> {labels.setAvail}
-          </h3>
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-          >
-            <input
-              type="date"
-              value={availDate}
-              onChange={(e) => setAvailDate(e.target.value)}
-              style={{ ...inputStyle, backgroundColor: "#fffce3" }}
-            />
-            <input
-              type="text"
-              placeholder="time slot"
-              value={availTime}
-              onChange={(e) => setAvailTime(e.target.value)}
-              style={{ ...inputStyle, backgroundColor: "#fffce3" }}
-            />
-            <button
-              onClick={async () => {
-                if (!availDate) return alert("select a date");
-                await addDoc(collection(db, "rental_availability"), {
-                  date: availDate,
-                  time: availTime,
-                  status: "available",
-                });
-                setAvailDate("");
-                setAvailTime("");
-                setRequestFilter("avail");
-              }}
-              style={{
-                ...btnStyle,
-                backgroundColor: "#4e5f28",
-                color: "#fffce3",
-                fontWeight: "800",
-                textTransform: "none",
-              }}
-            >
-              {labels.pubDate}
-            </button>
-          </div>
-          <div
+          <h3
             style={{
-              marginTop: "2.5rem",
-              paddingTop: "1.5rem",
-              borderTop: "1px dashed rgba(28,7,0,0.1)",
+              ...sectionTitleStyle,
+              textTransform: "none",
+              marginBottom: "1.5rem",
             }}
           >
-            <div
+            {labels.persistEmail}
+          </h3>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "1.5rem",
+              backgroundColor: "rgba(202, 175, 243, 0.1)",
+              padding: "12px",
+              borderRadius: "12px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {showInProfile ? (
+                <Eye size={16} color="#9960a8" />
+              ) : (
+                <EyeOff size={16} color="#4e5f28" />
+              )}
+              <span style={{ fontSize: "0.75rem", fontWeight: "700" }}>
+                {labels.showInCal}
+              </span>
+            </div>
+            <button
+              onClick={toggleGlobalVisibility}
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "1.5rem",
-                backgroundColor: "rgba(202, 175, 243, 0.1)",
-                padding: "12px",
-                borderRadius: "12px",
+                padding: "4px 12px",
+                borderRadius: "100px",
+                border: "none",
+                backgroundColor: showInProfile ? "#9960a8" : "#ccc",
+                color: "#fffce3",
+                fontSize: "0.7rem",
+                fontWeight: "bold",
+                cursor: "pointer",
               }}
             >
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "8px" }}
-              >
-                {showInProfile ? (
-                  <Eye size={16} color="#9960a8" />
-                ) : (
-                  <EyeOff size={16} color="#4e5f28" />
-                )}
-                <span style={{ fontSize: "0.75rem", fontWeight: "700" }}>
-                  {labels.showInCal}
-                </span>
-              </div>
-              <button
-                onClick={toggleGlobalVisibility}
-                style={{
-                  padding: "4px 12px",
-                  borderRadius: "100px",
-                  border: "none",
-                  backgroundColor: showInProfile ? "#9960a8" : "#ccc",
-                  color: "#fffce3",
-                  fontSize: "0.7rem",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  textTransform: "none",
-                }}
-              >
-                {showInProfile ? labels.on : labels.off}
-              </button>
-            </div>
-            <h4
+              {showInProfile ? labels.on : labels.off}
+            </button>
+          </div>
+
+          <h4
+            style={{
+              ...labelStyle,
+              fontSize: "0.85rem",
+              textTransform: "none",
+              opacity: 0.6,
+            }}
+          >
+            {labels.adminEmail}
+          </h4>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <input
+              type="email"
+              placeholder="email@address.com"
+              value={notifyEmail}
+              onChange={(e) => setNotifyEmail(e.target.value)}
+              style={{ ...inputStyle, backgroundColor: "#fffce3", flex: 1 }}
+            />
+            <button
+              onClick={updateNotifyEmail}
               style={{
-                ...labelStyle,
-                fontSize: "0.85rem",
-                textTransform: "none",
+                ...btnStyle,
+                width: "auto",
+                padding: "0 15px",
+                backgroundColor: "#caaff3",
+                color: "#1c0700",
               }}
             >
-              {labels.persistEmail}
-            </h4>
-            <div style={{ display: "flex", gap: "6px" }}>
-              <input
-                type="email"
-                placeholder={labels.adminEmail}
-                value={notifyEmail}
-                onChange={(e) => setNotifyEmail(e.target.value)}
-                style={{ ...inputStyle, backgroundColor: "#fffce3", flex: 1 }}
-              />
-              <button
-                onClick={updateNotifyEmail}
-                style={{
-                  ...btnStyle,
-                  width: "auto",
-                  padding: "0 15px",
-                  backgroundColor: "#caaff3",
-                  color: "#1c0700",
-                }}
-              >
-                <Mail size={16} />
-              </button>
-            </div>
+              <Mail size={16} />
+            </button>
           </div>
         </div>
       </section>
 
-      {/* MAIN CONTENT AREA */}
+      {/* MAIN CONTENT: REQUESTS MANAGEMENT */}
       <section style={{ flex: 1, marginTop: isMobile ? "2rem" : 0 }}>
         <div
           style={{
@@ -394,623 +317,272 @@ export default function RentalTab({ isMobile, currentLang }) {
             }}
           >
             <button
-              onClick={() => setRequestFilter("avail")}
-              style={{
-                ...subTabStyle(requestFilter === "avail"),
-                textTransform: "none",
-              }}
-            >
-              <Calendar size={14} /> {labels.liveTab}
-            </button>
-            <button
               onClick={() => setRequestFilter("pending")}
-              style={{
-                ...subTabStyle(requestFilter === "pending"),
-                textTransform: "none",
-              }}
+              style={subTabStyle(requestFilter === "pending")}
             >
               <Clock size={14} /> {labels.inc}
             </button>
             <button
               onClick={() => setRequestFilter("approved")}
-              style={{
-                ...subTabStyle(requestFilter === "approved"),
-                textTransform: "none",
-              }}
+              style={subTabStyle(requestFilter === "approved")}
             >
               <Check size={14} /> {labels.app}
+            </button>
+            <button
+              onClick={() => setRequestFilter("archived")}
+              style={subTabStyle(requestFilter === "archived")}
+            >
+              <Archive size={14} /> {labels.arch}
             </button>
           </div>
         </div>
 
-        {/* TAB 1: LIVE AVAILABILITIES */}
-        {requestFilter === "avail" && (
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}
-          >
-            {availabilities.map((a) => {
-              const rel = rentRequests.filter((r) => r.availabilityId === a.id);
-              const isBooked = rel.some((r) => r.status === "approved");
-              const hasInc = rel.some((r) => r.status === "pending");
-              const relevantRequest = isBooked
-                ? rel.find((r) => r.status === "approved")
-                : rel.find((r) => r.status === "pending");
-              return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {rentRequests
+            .filter((r) => {
+              if (requestFilter === "pending") return r.status === "pending";
+              if (requestFilter === "approved") return r.status === "approved";
+              return r.status === "rejected" || r.status === "archived";
+            })
+            .map((req) => (
+              <div
+                key={req.id}
+                style={{
+                  ...cardStyle,
+                  backgroundColor: "#fdf8e1",
+                  borderLeft:
+                    req.status === "approved"
+                      ? "6px solid #4e5f28"
+                      : "6px solid #caaff3",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  padding: "1.5rem",
+                }}
+              >
                 <div
-                  key={a.id}
-                  onClick={() =>
-                    (isBooked || hasInc) && setViewingRequest(relevantRequest)
-                  }
                   style={{
-                    ...cardStyle,
-                    backgroundColor: "#fdf8e1",
-                    padding: "1.2rem",
                     display: "flex",
                     justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: isBooked || hasInc ? "pointer" : "default",
+                    width: "100%",
+                    marginBottom: "1rem",
                   }}
                 >
+                  <span
+                    style={{
+                      fontWeight: "800",
+                      fontSize: "1.2rem",
+                      fontFamily: "Harmond-SemiBoldCondensed",
+                    }}
+                  >
+                    {req.name}
+                  </span>
                   <div
                     style={{
                       display: "flex",
+                      gap: "14px",
                       alignItems: "center",
-                      gap: "15px",
                     }}
                   >
-                    <div
-                      style={{
-                        backgroundColor: "#caaff3",
-                        color: "#1c0700",
-                        padding: "8px 12px",
-                        borderRadius: "10px",
-                        fontWeight: "900",
-                      }}
+                    {req.status === "pending" && (
+                      <>
+                        <CheckCircle
+                          size={22}
+                          color="#4e5f28"
+                          onClick={() => updateStatus(req.id, "approved")}
+                          style={{ cursor: "pointer" }}
+                        />
+                        <XCircle
+                          size={22}
+                          color="#ff4d4d"
+                          onClick={() => updateStatus(req.id, "rejected")}
+                          style={{ cursor: "pointer" }}
+                        />
+                      </>
+                    )}
+                    <a
+                      href={`mailto:${req.email}?subject=Rental Inquiry`}
+                      style={{ color: "#caaff3" }}
                     >
-                      {formatDate(a.date)}
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <span style={{ fontSize: "0.85rem", fontWeight: "600" }}>
-                        {a.time || "full day"}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "0.65rem",
-                          fontWeight: "800",
-                          color: isBooked
-                            ? "#1c0700"
-                            : hasInc
-                              ? "#9960a8"
-                              : "#4e5f28",
-                          textTransform: "none",
-                        }}
-                      >
-                        {isBooked
-                          ? labels.statusBooked
-                          : hasInc
-                            ? labels.statusPending
-                            : labels.statusOpen}
-                      </span>
-                    </div>
+                      <Mail size={22} />
+                    </a>
+                    <Archive
+                      size={22}
+                      color="rgba(28,7,0,0.15)"
+                      onClick={() => updateStatus(req.id, "archived")}
+                      style={{ cursor: "pointer" }}
+                    />
                   </div>
-                  <Trash2
-                    size={22}
-                    color="rgba(28,7,0,0.2)"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      if (window.confirm("delete?"))
-                        await deleteDoc(doc(db, "rental_availability", a.id));
-                    }}
-                    style={{ cursor: "pointer" }}
-                  />
                 </div>
-              );
-            })}
-          </div>
-        )}
 
-        {/* TAB 2 & 3: REQUESTS */}
-        {requestFilter !== "avail" && (
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-          >
-            {rentRequests
-              .filter((r) =>
-                requestFilter === "approved"
-                  ? r.status === "approved"
-                  : r.status !== "approved",
-              )
-              .map((req) => (
                 <div
-                  key={req.id}
                   style={{
-                    ...cardStyle,
-                    backgroundColor: "#fdf8e1",
-                    borderLeft:
-                      req.status === "approved"
-                        ? "6px solid #4e5f28"
-                        : "6px solid #caaff3",
-                    flexDirection: "column",
-                    alignItems: "flex-start",
-                    padding: "1.5rem",
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                    gap: "12px",
+                    width: "100%",
+                    fontSize: "0.85rem",
+                    fontWeight: "600",
                   }}
                 >
+                  <div>
+                    <span style={{ opacity: 0.4, fontWeight: "400" }}>
+                      {labels.email}
+                    </span>{" "}
+                    {req.email}
+                  </div>
+                  <div>
+                    <span style={{ opacity: 0.4, fontWeight: "400" }}>
+                      {labels.phone}
+                    </span>{" "}
+                    {req.phone}
+                  </div>
+                  <div style={{ gridColumn: isMobile ? "span 1" : "span 2" }}>
+                    <span style={{ opacity: 0.4, fontWeight: "400" }}>
+                      {labels.reqDate}
+                    </span>{" "}
+                    <strong style={{ fontSize: "1rem", color: "#9960a8" }}>
+                      {renderRequestedPeriod(req)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ opacity: 0.4, fontWeight: "400" }}>
+                      {labels.received}
+                    </span>{" "}
+                    {new Date(req.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+
+                {req.message && (
+                  <div
+                    style={{
+                      width: "100%",
+                      backgroundColor: "rgba(28, 7, 0, 0.03)",
+                      padding: "12px",
+                      borderRadius: "12px",
+                      fontSize: "0.85rem",
+                      border: "1px dashed rgba(28, 7, 0, 0.1)",
+                      marginTop: "1rem",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: "0 0 4px 0",
+                        fontWeight: "900",
+                        opacity: 0.4,
+                        fontSize: "0.65rem",
+                      }}
+                    >
+                      <MessageSquare size={10} /> {labels.msg}
+                    </p>
+                    <p style={{ margin: 0, fontStyle: "italic" }}>
+                      "{req.message}"
+                    </p>
+                  </div>
+                )}
+
+                {req.response && (
+                  <div
+                    style={{
+                      width: "100%",
+                      backgroundColor: "rgba(78, 95, 40, 0.05)",
+                      padding: "1rem",
+                      borderRadius: "12px",
+                      borderLeft: "4px solid #4e5f28",
+                      fontSize: "0.9rem",
+                      marginTop: "1rem",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: "0 0 8px 0",
+                        fontSize: "0.65rem",
+                        fontWeight: "900",
+                        textTransform: "uppercase",
+                        color: "#4e5f28",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <CornerDownRight size={12} /> {labels.responded}{" "}
+                      {req.respondedAt
+                        ? new Date(
+                            req.respondedAt.toDate(),
+                          ).toLocaleDateString()
+                        : ""}
+                    </p>
+                    <div
+                      style={{ whiteSpace: "pre-wrap", fontStyle: "italic" }}
+                    >
+                      {req.response}
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    marginTop: "1.5rem",
+                    borderTop: "1px solid rgba(28,7,0,0.05)",
+                    paddingTop: "1rem",
+                    width: "100%",
+                  }}
+                >
+                  <textarea
+                    placeholder={labels.replyLabel}
+                    value={replyText[req.id] || ""}
+                    onChange={(e) =>
+                      setReplyText({ ...replyText, [req.id]: e.target.value })
+                    }
+                    style={{
+                      ...inputStyle,
+                      width: "100%",
+                      minHeight: "100px",
+                      backgroundColor: "#fffce3",
+                      resize: "vertical",
+                      marginBottom: "10px",
+                      fontSize: "0.9rem",
+                      padding: "12px",
+                    }}
+                  />
                   <div
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
-                      width: "100%",
-                      marginBottom: "1rem",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontWeight: "800",
-                        fontSize: "1.2rem",
-                        fontFamily: "Harmond-SemiBoldCondensed",
-                      }}
-                    >
-                      {req.name}
-                    </span>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "14px",
-                        alignItems: "center",
-                      }}
-                    >
-                      {req.status === "pending" && (
-                        <>
-                          <CheckCircle
-                            size={22}
-                            color="#4e5f28"
-                            onClick={async () =>
-                              await updateDoc(
-                                doc(db, "rent_requests", req.id),
-                                { status: "approved" },
-                              )
-                            }
-                            style={{ cursor: "pointer" }}
-                          />
-                          <XCircle
-                            size={22}
-                            color="#ff4d4d"
-                            onClick={async () => {
-                              await updateDoc(
-                                doc(db, "rent_requests", req.id),
-                                { status: "rejected" },
-                              );
-                              if (req.availabilityId)
-                                await updateDoc(
-                                  doc(
-                                    db,
-                                    "rental_availability",
-                                    req.availabilityId,
-                                  ),
-                                  { status: "available" },
-                                );
-                            }}
-                            style={{ cursor: "pointer" }}
-                          />
-                        </>
-                      )}
-                      <div style={{ display: "flex", alignItems: "center" }}>
-                        <a
-                          href={`mailto:${req.email}`}
-                          style={{
-                            color: "#caaff3",
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                        >
-                          <Mail size={22} />
-                        </a>
-                      </div>
-                      <Trash2
-                        size={22}
-                        color="rgba(28,7,0,0.15)"
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (window.confirm("delete?"))
-                            await deleteDoc(doc(db, "rent_requests", req.id));
-                        }}
-                        style={{ cursor: "pointer" }}
-                      />
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                      gap: "12px",
-                      width: "100%",
-                      fontSize: "0.85rem",
-                      fontWeight: "600",
-                    }}
-                  >
-                    <div>
-                      <span style={{ opacity: 0.4, fontWeight: "400" }}>
-                        {labels.email}
-                      </span>{" "}
-                      {req.email}
-                    </div>
-                    <div>
-                      <span style={{ opacity: 0.4, fontWeight: "400" }}>
-                        {labels.phone}
-                      </span>{" "}
-                      {req.phone}
-                    </div>
-                    <div>
-                      <span style={{ opacity: 0.4, fontWeight: "400" }}>
-                        {labels.reqDate}
-                      </span>{" "}
-                      <strong>{formatDate(req.date)}</strong>
-                    </div>
-                    <div>
-                      <span style={{ opacity: 0.4, fontWeight: "400" }}>
-                        {labels.received}
-                      </span>{" "}
-                      {new Date(req.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                  {req.message && (
-                    <div
-                      style={{
-                        width: "100%",
-                        backgroundColor: "rgba(28, 7, 0, 0.03)",
-                        padding: "12px",
-                        borderRadius: "12px",
-                        fontSize: "0.85rem",
-                        border: "1px dashed rgba(28, 7, 0, 0.1)",
-                        marginTop: "1rem",
-                      }}
-                    >
-                      <p
-                        style={{
-                          margin: "0 0 4px 0",
-                          fontWeight: "900",
-                          opacity: 0.4,
-                          fontSize: "0.65rem",
-                          textTransform: "none",
-                        }}
-                      >
-                        <MessageSquare size={10} /> {labels.msg}
-                      </p>
-                      <p style={{ margin: 0, fontStyle: "italic" }}>
-                        "{req.message}"
-                      </p>
-                    </div>
-                  )}
-                  {/* RESPONSE HISTORY - Visible in the card */}
-                  {req.response && (
-                    <div
-                      style={{
-                        width: "100%",
-                        backgroundColor: "rgba(78, 95, 40, 0.05)",
-                        padding: "1rem",
-                        borderRadius: "12px",
-                        borderLeft: "4px solid #4e5f28",
-                        fontSize: "0.9rem",
-                        marginTop: "1rem",
-                        boxSizing: "border-box",
-                      }}
-                    >
-                      <p
-                        style={{
-                          margin: "0 0 8px 0",
-                          fontSize: "0.65rem",
-                          fontWeight: "900",
-                          textTransform: "uppercase",
-                          color: "#4e5f28",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                        }}
-                      >
-                        <CornerDownRight size={12} /> {labels.responded}{" "}
-                        {req.respondedAt
-                          ? new Date(
-                              req.respondedAt.toDate(),
-                            ).toLocaleDateString()
-                          : ""}
-                      </p>
-                      <div
-                        style={{ whiteSpace: "pre-wrap", fontStyle: "italic" }}
-                      >
-                        {req.response}
-                      </div>
-                    </div>
-                  )}
-                  {/* DIRECT REPLY AREA - Inside the card */}
-                  <div
-                    style={{
-                      marginTop: "1.5rem",
-                      borderTop: "1px solid rgba(28,7,0,0.05)",
-                      paddingTop: "1rem",
-                      width: "100%",
-                    }}
-                  >
-                    <textarea
-                      placeholder={labels.replyLabel}
-                      value={replyText[req.id] || ""}
-                      onChange={(e) =>
-                        setReplyText({ ...replyText, [req.id]: e.target.value })
-                      }
-                      style={{
-                        ...inputStyle,
-                        width: "100%",
-                        minHeight: "100px",
-                        backgroundColor: "#fffce3",
-                        resize: "vertical",
-                        marginBottom: "10px",
-                        fontSize: "0.9rem",
-                        padding: "12px",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                        gap: "10px",
-                      }}
-                    >
-                      <a
-                        href={`mailto:${req.email}?subject=Rental Inquiry`}
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#caaff3",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          textDecoration: "none",
-                          fontWeight: "700",
-                        }}
-                      >
-                        <ExternalLink size={14} /> {labels.external}
-                      </a>
-                      <button
-                        onClick={() => handleSendReply(req.id)}
-                        disabled={
-                          isSendingReply === req.id || !replyText[req.id]
-                        }
-                        style={{
-                          ...btnStyle,
-                          width: "auto",
-                          padding: "8px 24px",
-                          backgroundColor: "#9960a8",
-                          color: "#fffce3",
-                          fontSize: "0.8rem",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          border: "none",
-                        }}
-                      >
-                        {isSendingReply === req.id ? (
-                          <Loader2 size={16} className="spinner" />
-                        ) : (
-                          <Send size={16} />
-                        )}
-                        {labels.sendReply}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-          </div>
-        )}
-      </section>
-
-      {/* REQUEST DETAIL POPUP */}
-      {viewingRequest &&
-        (() => {
-          // Find the "live" version of this request from our state array
-          const liveRequest =
-            rentRequests.find((r) => r.id === viewingRequest.id) ||
-            viewingRequest;
-
-          return (
-            <div style={modalOverlay} onClick={() => setViewingRequest(null)}>
-              <div style={modalContent} onClick={(e) => e.stopPropagation()}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "2rem",
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontFamily: "Harmond-SemiBoldCondensed",
-                      fontSize: "2rem",
-                      textTransform: "none",
-                    }}
-                  >
-                    {labels.detailsTitle}
-                  </h3>
-                  <button
-                    onClick={() => setViewingRequest(null)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      opacity: 0.5,
-                    }}
-                  >
-                    <X />
-                  </button>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "1.5rem",
-                  }}
-                >
-                  <div>
-                    <span style={{ ...labelSub, textTransform: "none" }}>
-                      name
-                    </span>
-                    <div style={{ fontSize: "1.2rem", fontWeight: "800" }}>
-                      {liveRequest.name}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
+                      alignItems: "center",
+                      flexWrap: "wrap",
                       gap: "10px",
                     }}
                   >
-                    <div>
-                      <span style={{ ...labelSub, textTransform: "none" }}>
-                        {labels.email}
-                      </span>
-                      <div style={dataText}>{liveRequest.email}</div>
-                    </div>
-                    <div>
-                      <span style={{ ...labelSub, textTransform: "none" }}>
-                        {labels.phone}
-                      </span>
-                      <div style={dataText}>{liveRequest.phone}</div>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "10px",
-                    }}
-                  >
-                    <div>
-                      <span style={{ ...labelSub, textTransform: "none" }}>
-                        {labels.reqDate}
-                      </span>
-                      <div style={dataText}>{formatDate(liveRequest.date)}</div>
-                    </div>
-                    <div>
-                      <span style={{ ...labelSub, textTransform: "none" }}>
-                        {labels.received}
-                      </span>
-                      <div style={dataText}>
-                        {liveRequest.createdAt
-                          ? new Date(liveRequest.createdAt).toLocaleDateString()
-                          : ""}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ORIGINAL MESSAGE */}
-                  {liveRequest.message && (
-                    <div
+                    <a
+                      href={`mailto:${req.email}?subject=Rental Inquiry: ${renderRequestedPeriod(req)}`}
                       style={{
-                        backgroundColor: "rgba(28, 7, 0, 0.03)",
-                        padding: "1.5rem",
-                        borderRadius: "16px",
-                        border: "1px dashed rgba(28, 7, 0, 0.1)",
+                        fontSize: "0.75rem",
+                        color: "#caaff3",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        textDecoration: "none",
+                        fontWeight: "700",
                       }}
                     >
-                      <span style={{ ...labelSub, textTransform: "none" }}>
-                        {labels.msg}
-                      </span>
-                      <div
-                        style={{
-                          marginTop: "8px",
-                          fontStyle: "italic",
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        "{liveRequest.message}"
-                      </div>
-                    </div>
-                  )}
-
-                  {/* RESPONSE HISTORY - Now visible in popup when updated */}
-                  {liveRequest.response && (
-                    <div
-                      style={{
-                        backgroundColor: "rgba(78, 95, 40, 0.05)",
-                        padding: "1.2rem",
-                        borderRadius: "16px",
-                        borderLeft: "4px solid #4e5f28",
-                      }}
-                    >
-                      <span
-                        style={{
-                          ...labelSub,
-                          color: "#4e5f28",
-                          textTransform: "none",
-                        }}
-                      >
-                        {labels.responded}{" "}
-                        {liveRequest.respondedAt?.toDate
-                          ? liveRequest.respondedAt
-                              .toDate()
-                              .toLocaleDateString()
-                          : new Date().toLocaleDateString()}
-                      </span>
-                      <div style={{ marginTop: "4px", fontWeight: "600" }}>
-                        {liveRequest.response}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* MODAL REPLY UI */}
-                  <div
-                    style={{
-                      borderTop: "1px solid rgba(28,7,0,0.1)",
-                      paddingTop: "1.5rem",
-                    }}
-                  >
-                    <textarea
-                      placeholder={labels.replyLabel}
-                      value={replyText[liveRequest.id] || ""}
-                      onChange={(e) =>
-                        setReplyText({
-                          ...replyText,
-                          [liveRequest.id]: e.target.value,
-                        })
-                      }
-                      style={{
-                        ...inputStyle,
-                        width: "100%",
-                        minHeight: "100px",
-                        backgroundColor: "#fffce3",
-                        resize: "vertical",
-                        marginBottom: "10px",
-                        fontSize: "0.9rem",
-                        padding: "12px",
-                        boxSizing: "border-box",
-                      }}
-                    />
+                      <ExternalLink size={14} /> {labels.external}
+                    </a>
                     <button
-                      onClick={() => handleSendReply(liveRequest.id)}
-                      disabled={
-                        isSendingReply === liveRequest.id ||
-                        !replyText[liveRequest.id]
-                      }
+                      onClick={() => handleSendReply(req.id)}
+                      disabled={isSendingReply === req.id || !replyText[req.id]}
                       style={{
                         ...btnStyle,
-                        width: "100%",
+                        width: "auto",
+                        padding: "8px 24px",
                         backgroundColor: "#9960a8",
                         color: "#fffce3",
-                        fontWeight: "800",
+                        fontSize: "0.8rem",
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "center",
-                        gap: "10px",
-                        border: "none",
+                        gap: "8px",
                       }}
                     >
-                      {isSendingReply === liveRequest.id ? (
+                      {isSendingReply === req.id ? (
                         <Loader2 size={16} className="spinner" />
                       ) : (
                         <Send size={16} />
@@ -1018,58 +590,12 @@ export default function RentalTab({ isMobile, currentLang }) {
                       {labels.sendReply}
                     </button>
                   </div>
-
-                  <button
-                    onClick={() => setViewingRequest(null)}
-                    style={{
-                      ...btnStyle,
-                      backgroundColor: "#caaff3",
-                      color: "#1c0700",
-                      marginTop: "0.5rem",
-                      fontWeight: "800",
-                      textTransform: "none",
-                    }}
-                  >
-                    {labels.close}
-                  </button>
                 </div>
               </div>
-            </div>
-          );
-        })()}
+            ))}
+        </div>
+      </section>
       <style>{`.spinner { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
-
-// POPUP STYLES
-const modalOverlay = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "rgba(28,7,0,0.7)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 10000,
-  padding: "20px",
-};
-const modalContent = {
-  backgroundColor: "#fffce3",
-  padding: "2.5rem",
-  borderRadius: "32px",
-  width: "100%",
-  maxWidth: "500px",
-  color: "#1c0700",
-  border: "1px solid rgba(28,7,0,0.1)",
-};
-const labelSub = {
-  fontSize: "0.65rem",
-  fontWeight: "900",
-  opacity: 0.5,
-  display: "block",
-  marginBottom: "4px",
-};
-const dataText = { fontSize: "0.95rem", fontWeight: "700" };

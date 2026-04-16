@@ -6,8 +6,6 @@ import {
   onSnapshot,
   query,
   where,
-  doc,
-  updateDoc,
 } from "firebase/firestore";
 import {
   ChevronLeft,
@@ -16,6 +14,7 @@ import {
   Calendar,
   CheckCircle,
   X,
+  ArrowRight,
 } from "lucide-react";
 
 export default function RentalForm({ lang }) {
@@ -23,10 +22,13 @@ export default function RentalForm({ lang }) {
     name: "",
     email: "",
     phone: "",
-    date: "",
+    startDate: "", // Changed for range
+    endDate: "", // Added for range
     message: "",
   });
-  const [availabilities, setAvailabilities] = useState([]);
+
+  // Track blocked dates (pending or approved)
+  const [blockedDates, setBlockedDates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
@@ -38,13 +40,15 @@ export default function RentalForm({ lang }) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Listen only for Rental Requests (Independent of courses)
   useEffect(() => {
     const q = query(
-      collection(db, "rental_availability"),
-      where("status", "==", "available"),
+      collection(db, "rent_requests"),
+      where("status", "in", ["pending", "approved", "confirmed"]),
     );
     const unsubscribe = onSnapshot(q, (snap) => {
-      setAvailabilities(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const dates = snap.docs.map((d) => d.data().startDate || d.data().date);
+      setBlockedDates([...new Set(dates)]);
     });
     return () => unsubscribe();
   }, []);
@@ -57,23 +61,53 @@ export default function RentalForm({ lang }) {
   const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
   const firstDay = (y, m) => new Date(y, m, 1).getDay();
 
+  // Range Selection Logic
+  const handleDateClick = (dStr) => {
+    if (!formData.startDate || (formData.startDate && formData.endDate)) {
+      setFormData({ ...formData, startDate: dStr, endDate: "" });
+    } else {
+      if (dStr < formData.startDate) {
+        setFormData({ ...formData, startDate: dStr, endDate: "" });
+      } else {
+        const hasBlockedInRange = blockedDates.some(
+          (bd) => bd > formData.startDate && bd < dStr,
+        );
+        if (hasBlockedInRange) {
+          alert(
+            lang === "en"
+              ? "Range contains occupied dates."
+              : "Zeitraum enthält belegte Tage.",
+          );
+          return;
+        }
+        setFormData({ ...formData, endDate: dStr });
+      }
+    }
+  };
+
+  const isDateInRange = (dStr) => {
+    if (!formData.startDate || !formData.endDate) return false;
+    return dStr > formData.startDate && dStr < formData.endDate;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const selected = availabilities.find((a) => a.date === formData.date);
-    if (!selected) return;
+    if (!formData.startDate) return;
     setLoading(true);
     try {
       await addDoc(collection(db, "rent_requests"), {
         ...formData,
-        availabilityId: selected.id,
         status: "pending",
         createdAt: new Date().toISOString(),
       });
-      await updateDoc(doc(db, "rental_availability", selected.id), {
-        status: "pending",
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        startDate: "",
+        endDate: "",
+        message: "",
       });
-
-      setFormData({ name: "", email: "", phone: "", date: "", message: "" });
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 5000);
     } catch (err) {
@@ -89,16 +123,18 @@ export default function RentalForm({ lang }) {
     { month: "long" },
   );
 
-  const selectedAvail = availabilities.find((a) => a.date === formData.date);
-
-  // --- STYLES COPIED FROM PRICEDISPLAY ---
+  // YOUR ORIGINAL STYLES (UNTOUCHED)
   const S = {
     calendarCardStyle: {
       background: "#fdf8e1",
       padding: isMobile ? "1.2rem" : "2.5rem",
       borderRadius: "24px",
       border: "1px solid rgba(28,7,0,0.08)",
-      flex: isMobile ? "0 0 auto" : !!formData.date ? "0 0 520px" : "0 1 600px",
+      flex: isMobile
+        ? "0 0 auto"
+        : !!formData.startDate
+          ? "0 0 520px"
+          : "0 1 600px",
       width: isMobile ? "100%" : "auto",
       boxSizing: "border-box",
     },
@@ -142,28 +178,33 @@ export default function RentalForm({ lang }) {
       opacity: 0.3,
       textAlign: "center",
     },
-    dayStyle: (isAvail, isSelected) => ({
+
+    // UPDATED dayStyle: Keeps original colors/shape, handles range tint
+    dayStyle: (isBlocked, isPast, isSelected, inRange) => ({
       width: "100%",
       aspectRatio: "1/1",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      borderRadius: "50%",
+      borderRadius: inRange ? "0" : "50%", // Keep circles for selection, square for range fill
       fontSize: isMobile ? "0.95rem" : "1rem",
-      cursor: isAvail ? "pointer" : "default",
+      cursor: isBlocked || isPast ? "default" : "pointer",
       backgroundColor: isSelected
         ? "#caaff3"
-        : isAvail
-          ? "rgba(202, 175, 243, 0.4)"
-          : "transparent",
+        : inRange
+          ? "rgba(202, 175, 243, 0.2)"
+          : !isBlocked && !isPast
+            ? "rgba(202, 175, 243, 0.4)"
+            : "transparent",
       color: "#1c0700",
-      fontWeight: isAvail ? "800" : "400",
-      opacity: isAvail ? 1 : 0.2,
+      fontWeight: !isBlocked && !isPast ? "800" : "400",
+      opacity: isPast ? 0.1 : isBlocked ? 0.2 : 1,
       transition: "0.2s",
       position: "relative",
       boxSizing: "border-box",
-      paddingBottom: isAvail ? (isMobile ? "4px" : "2px") : "0",
+      paddingBottom: !isBlocked && !isPast ? (isMobile ? "4px" : "2px") : "0",
     }),
+
     dotStyle: (isSelected) => ({
       width: "4px",
       height: "4px",
@@ -252,15 +293,9 @@ export default function RentalForm({ lang }) {
     },
   };
 
-  // Helper to format YYYY-MM-DD into "Day Month Year" (e.g., 15 March 2026)
-  const formatDate = (dateStr) => {
+  const formatDateShort = (dateStr) => {
     if (!dateStr) return "";
-    const dateObj = new Date(dateStr);
-    return dateObj.toLocaleDateString(lang === "en" ? "en-GB" : "de-DE", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
+    return dateStr.split("-").reverse().join(".");
   };
 
   return (
@@ -291,7 +326,6 @@ export default function RentalForm({ lang }) {
         </button>
       </div>
 
-      {/* LEFT: CALENDAR CARD */}
       <div style={S.calendarCardStyle}>
         <div style={S.calendarHeaderStyle}>
           <button onClick={() => changeMonth(-1)} style={S.navBtnStyle}>
@@ -315,25 +349,25 @@ export default function RentalForm({ lang }) {
             <div key={`empty-${i}`} />
           ))}
           {[...Array(daysInMonth(year, month))].map((_, i) => {
-            const d = i + 1;
-            const dStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-            const avail = availabilities.find((a) => a.date === dStr);
-            const isSelected = formData.date === dStr;
+            const dStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
+            const isBlocked = blockedDates.includes(dStr);
+            const isPast =
+              new Date(year, month, i + 1) < new Date().setHours(0, 0, 0, 0);
+            const isSelected =
+              formData.startDate === dStr || formData.endDate === dStr;
+            const inRange = isDateInRange(dStr);
 
             return (
               <div
-                key={d}
-                onClick={() =>
-                  avail &&
-                  setFormData({
-                    ...formData,
-                    date: isSelected ? "" : dStr, // Toggle selection
-                  })
-                }
-                style={S.dayStyle(!!avail, isSelected)}
+                key={i}
+                onClick={() => !isBlocked && !isPast && handleDateClick(dStr)}
+                style={S.dayStyle(isBlocked, isPast, isSelected, inRange)}
               >
-                {d}
-                {avail && <div style={S.dotStyle(isSelected)} />}
+                {i + 1}
+                {(isSelected ||
+                  (formData.startDate === dStr && !formData.endDate)) && (
+                  <div style={S.dotStyle(true)} />
+                )}
               </div>
             );
           })}
@@ -342,35 +376,36 @@ export default function RentalForm({ lang }) {
         <div style={S.legendWrapperStyle}>
           <div style={S.legendItemStyle}>
             <div style={S.legendIndicatorStyle("rgba(202, 175, 243, 0.4)")} />
-            {lang === "en" ? "Available" : "Verfügbar"}
+            {lang === "en" ? "Available" : "Frei"}
           </div>
           <div style={S.legendItemStyle}>
-            <div style={S.legendIndicatorStyle("#caaff3")} />
-            {lang === "en" ? "Selected" : "Ausgewählt"}
+            <div style={S.legendIndicatorStyle("rgba(0,0,0,0.05)")} />
+            {lang === "en" ? "Occupied" : "Belegt"}
           </div>
         </div>
       </div>
 
-      {/* RIGHT: FORM CARD */}
       <div style={S.bookingCardStyle}>
+        {/* LEFT ALIGNED TITLE */}
         <h3
           style={{
             fontFamily: "Harmond-SemiBoldCondensed",
-            fontSize: isMobile ? "1.8rem" : "2rem",
+            fontSize: "2rem",
             marginBottom: "1.5rem",
             marginTop: 0,
+            textAlign: "left",
           }}
         >
           {lang === "en" ? "rental request" : "mietanfrage"}
         </h3>
 
-        {!formData.date ? (
+        {!formData.startDate ? (
           <div
             style={{
               padding: "1.5rem",
               border: "1px dashed rgba(28, 7, 0, 0.2)",
               borderRadius: "12px",
-              textAlign: "center",
+              textAlign: "left",
               backgroundColor: "rgba(255, 252, 227, 0.4)",
             }}
           >
@@ -383,21 +418,21 @@ export default function RentalForm({ lang }) {
                 opacity: 0.7,
               }}
             >
-              {lang === "en"
-                ? "Select an available date from the calendar to start your request."
-                : "Wähle ein verfügbares Datum im Kalender, um deine Anfrage zu starten."}
+              {lang === "en" ? "Select a start date." : "Wähle ein Startdatum."}
             </p>
           </div>
         ) : (
           <div
             style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
           >
+            {/* LEFT ALIGNED INFO BOX */}
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
+                alignItems: "flex-start", // Left justify contents
                 backgroundColor: "rgba(202, 175, 243, 0.1)",
-                padding: "12px",
+                padding: "16px",
                 borderRadius: "16px",
                 border: "1px solid rgba(202, 175, 243, 0.3)",
                 gap: "4px",
@@ -405,25 +440,39 @@ export default function RentalForm({ lang }) {
             >
               <h4
                 style={{
-                  fontSize: "0.8rem",
+                  fontSize: "0.65rem",
                   textTransform: "uppercase",
                   letterSpacing: "1px",
-                  opacity: 0.6,
-                  margin: "0 0 4px 0",
+                  opacity: 0.5,
+                  margin: 0,
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
                 }}
               >
-                <Calendar size={14} />{" "}
-                {lang === "en" ? "Selected Date" : "Ausgewähltes Datum"}
+                <Calendar size={12} />{" "}
+                {lang === "en" ? "Selected Period" : "Gewählter Zeitraum"}
               </h4>
-              <span style={{ fontWeight: "800", fontSize: "1rem" }}>
-                {formatDate(formData.date)}
-              </span>
-              <span style={{ fontSize: "0.8rem", opacity: 0.7 }}>
-                {selectedAvail?.time || ""}
-              </span>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  marginTop: "4px",
+                }}
+              >
+                <span style={{ fontWeight: "800", fontSize: "1.1rem" }}>
+                  {formatDateShort(formData.startDate)}
+                </span>
+                {formData.endDate && (
+                  <>
+                    <ArrowRight size={16} opacity={0.3} />
+                    <span style={{ fontWeight: "800", fontSize: "1.1rem" }}>
+                      {formatDateShort(formData.endDate)}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
 
             <form
@@ -476,8 +525,8 @@ export default function RentalForm({ lang }) {
                 rows={3}
                 placeholder={
                   lang === "en"
-                    ? "Please briefly explain what you want to use the space for..."
-                    : "Bitte erkläre kurz, wofür du den Raum nutzen möchtest..."
+                    ? "Briefly explain your project..."
+                    : "Kurze Erklärung zu deinem Projekt..."
                 }
                 required
                 value={formData.message}
@@ -488,11 +537,8 @@ export default function RentalForm({ lang }) {
 
               <button
                 type="submit"
-                disabled={loading}
-                style={{
-                  ...S.primaryBtnStyle,
-                  opacity: loading ? 0.7 : 1,
-                }}
+                disabled={loading || (formData.startDate && !formData.endDate)}
+                style={S.primaryBtnStyle}
               >
                 {loading ? (
                   <Loader2 size={18} className="spinner" />
@@ -508,23 +554,8 @@ export default function RentalForm({ lang }) {
       </div>
 
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(28, 7, 0, 0.1);
-          border-radius: 10px;
-        }
-        .spinner {
-          animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
+        .spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );
