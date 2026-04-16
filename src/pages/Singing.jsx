@@ -78,6 +78,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
         { icon: <Languages size={18} />, text: "DE / EN / FR" },
         { icon: <User size={18} />, text: "Ages 18+" },
       ],
+      trialCTA: "Request a free trial lesson",
     },
     de: {
       title: "gesang und songwriting",
@@ -118,6 +119,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
         { icon: <Languages size={18} />, text: "DE / EN / FR" },
         { icon: <User size={18} />, text: "Ab 18 Jahren" },
       ],
+      trialCTA: "Kostenlose Probelektion anfragen",
     },
   };
 
@@ -224,6 +226,20 @@ export default function Singing({ currentLang, setCurrentLang }) {
       borderRadius: "6px",
       fontSize: "0.85rem",
       fontWeight: "500",
+    },
+    trialButton: {
+      display: "inline-block",
+      padding: isBookingExpanded ? "18px 45px" : "16px 40px",
+      backgroundColor: "#9960a8",
+      color: "#ffffff",
+      borderRadius: "100px",
+      textDecoration: "none",
+      fontWeight: "700",
+      fontSize: "1.1rem",
+      transition: "all 0.3s ease",
+      boxShadow: "0 10px 25px rgba(153, 96, 168, 0.2)",
+      cursor: "pointer",
+      border: "none",
     },
   };
 
@@ -356,13 +372,58 @@ export default function Singing({ currentLang, setCurrentLang }) {
         <div
           ref={bookingRef}
           className="booking-section"
-          style={{ width: "100%", marginTop: "40px" }}
+          style={{
+            width: "100%",
+            marginTop: "80px", // More whitespace to let the page breathe
+            marginBottom: "5px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "2px", // Clean spacing between title and button
+          }}
         >
-          <PriceDisplay
+          {/* Section Title - Slightly larger for a bold statement */}
+          <h3
+            style={{
+              fontFamily: "Harmond-SemiBoldCondensed",
+              fontSize: "2.2rem",
+              margin: 0,
+              color: "#1c0700",
+              textAlign: "center",
+            }}
+          >
+            {current.trialTitle}
+          </h3>
+
+          <a
+            href="https://www.instrumentor.ch/de/luca-koch/anmelden"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.trialButton}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = "translateY(-3px)";
+              e.currentTarget.style.backgroundColor = "#865294";
+              e.currentTarget.style.boxShadow =
+                "0 15px 30px rgba(153, 96, 168, 0.3)";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.backgroundColor = "#9960a8";
+              e.currentTarget.style.boxShadow =
+                "0 10px 25px rgba(153, 96, 168, 0.2)";
+            }}
+          >
+            {current.trialCTA}
+          </a>
+
+          {/* Commented out for later use */}
+          {/* <PriceDisplay
             coursePath="/singing"
             currentLang={currentLang}
             forceExpand={isBookingExpanded}
-          />
+          /> 
+          */}
         </div>
       </main>
     </div>
