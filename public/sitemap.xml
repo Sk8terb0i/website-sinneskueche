@@ -5,15 +5,15 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://sinneskueche.ch/team</loc>
+    <loc>https://sinneskueche.ch/team/</loc>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://sinneskueche.ch/location</loc>
+    <loc>https://sinneskueche.ch/location/</loc>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://sinneskueche.ch/pottery</loc>
+    <loc>https://sinneskueche.ch/pottery/</loc>
     <priority>0.8</priority>
   </url>
   </urlset>
