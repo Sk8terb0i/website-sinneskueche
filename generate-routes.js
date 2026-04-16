@@ -11,7 +11,7 @@ const routes = [
     path: "/pottery",
     title: "Pottery Tuesdays | Sinnesküche",
     description:
-      "Join our Pottery Tuesdays in Schlieren. All skill levels welcome for creative clay workshops.",
+      "Join our Pottery Tuesdays in Schlieren. All skill levels welcome for creative clay workshops/ Töpferkurse.",
   },
   {
     path: "/singing",
