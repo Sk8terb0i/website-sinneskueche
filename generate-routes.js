@@ -86,7 +86,7 @@ if (fs.existsSync(indexHtmlPath)) {
 
     // Replace the generic SEO tags with the route-specific ones
     let customHtml = baseHtml;
-    const pageUrl = `https://sinneskueche.ch${route.path}`;
+    const pageUrl = `https://sinneskueche.ch${route.path}/`;
 
     // Standard HTML Metadata
     customHtml = customHtml.replace(
