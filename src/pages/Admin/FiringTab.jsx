@@ -8,6 +8,7 @@ import {
   doc,
   updateDoc,
   serverTimestamp,
+  deleteDoc,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import {
@@ -28,6 +29,7 @@ import {
   Send,
   Calendar,
   AlertOctagon,
+  Trash2,
 } from "lucide-react";
 import { cardStyle, tabContainerStyle, tabButtonStyle } from "./AdminStyles";
 
@@ -71,9 +73,11 @@ export default function FiringTab({ isMobile, currentLang }) {
       batch_ready_pickup: "mark as picked up",
       batchAction: "process selection",
       overdueBadge: "overdue",
-      archiveOverdue: "archive overdue",
-      confirmArchive:
-        "Archive this overdue piece? It will be moved to the adoptable pool for users.",
+      archiveOverdue: "to adoption pool",
+      confirmArchive: "Move this overdue piece to the adoption pool?",
+      trashPiece: "trash piece",
+      confirmTrash:
+        "Are you sure you want to permanently delete this piece? This cannot be undone.",
     },
     de: {
       bisque_pending: "bisque fire",
@@ -104,9 +108,12 @@ export default function FiringTab({ isMobile, currentLang }) {
       batch_ready_pickup: "als abgeholt markieren",
       batchAction: "auswahl verarbeiten",
       overdueBadge: "überfällig",
-      archiveOverdue: "überfällige archivieren",
-      confirmArchive:
-        "Dieses überfällige Stück archivieren? Es wird zur Adoption freigegeben.",
+      overdueBadge: "überfällig",
+      archiveOverdue: "Zur Adoption freigeben",
+      confirmArchive: "Dieses überfällige Stück zur Adoption freigegeben?",
+      trashPiece: "wegwerfen",
+      confirmTrash:
+        "Soll dieses Stück wirklich endgültig gelöscht werden? Das kann nicht rückgängig gemacht werden.",
     },
   }[currentLang || "en"];
 
@@ -238,6 +245,18 @@ export default function FiringTab({ isMobile, currentLang }) {
         previousStage: item.stage,
         updatedAt: serverTimestamp(),
       });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleTrashPiece = async (item) => {
+    if (!window.confirm(labels.confirmTrash)) return;
+    setProcessingId(item.id);
+    try {
+      await deleteDoc(doc(db, "firings", item.id));
     } catch (err) {
       alert(err.message);
     } finally {
@@ -391,6 +410,13 @@ export default function FiringTab({ isMobile, currentLang }) {
               item.previousStatus || "pending",
             ),
         },
+        {
+          label: labels.trashPiece,
+          icon: <Trash2 size={10} />,
+          color: "#1c0700",
+          borderColor: "rgba(28, 7, 0, 0.2)",
+          onClick: () => handleTrashPiece(item),
+        },
       ];
     }
 
@@ -409,12 +435,21 @@ export default function FiringTab({ isMobile, currentLang }) {
       activeFilter !== "completed" &&
       activeFilter !== "abandoned"
     ) {
+      // Button 1: Adoption Pool (Soft Archive)
       internalActions.push({
         label: labels.archiveOverdue,
         icon: <AlertOctagon size={10} />,
         color: "#ff4d4d",
         borderColor: "rgba(255, 77, 77, 0.4)",
         onClick: () => handleArchiveOverdue(item),
+      });
+      // Button 2: Trash (Permanent Delete)
+      internalActions.push({
+        label: labels.trashPiece,
+        icon: <Trash2 size={10} />,
+        color: "#1c0700",
+        borderColor: "rgba(28, 7, 0, 0.2)",
+        onClick: () => handleTrashPiece(item),
       });
     }
 
