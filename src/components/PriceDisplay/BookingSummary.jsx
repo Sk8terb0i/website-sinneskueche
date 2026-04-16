@@ -41,6 +41,7 @@ export default function BookingSummary({
   guestInfo,
   setGuestInfo,
   currentUser,
+  userData,
   currentLang,
   isMobile,
   onBookCredits,
@@ -92,6 +93,26 @@ export default function BookingSummary({
     const index = pricing.specialEvents.findIndex((se) => se.id === addonId);
     return index !== -1 ? addonColors[index % addonColors.length] : "#ccc";
   };
+
+  useEffect(() => {
+    const currentName = currentUser
+      ? `${userData?.firstName || ""} ${userData?.lastName || ""}`.trim()
+      : `${guestInfo.firstName} ${guestInfo.lastName}`.trim();
+
+    if (currentName) {
+      setSelectedDates((prev) =>
+        prev.map((date) => {
+          const newNames = [...date.names];
+          // Sync the first name if it matches the generic first-ticket name or is empty
+          if (!newNames[0] || newNames[0] === "Primary Booker") {
+            newNames[0] = currentName;
+            return { ...date, names: newNames };
+          }
+          return date;
+        }),
+      );
+    }
+  }, [guestInfo.firstName, guestInfo.lastName, currentUser, userData]);
 
   useEffect(() => {
     const fetchTerms = async () => {
@@ -725,6 +746,7 @@ export default function BookingSummary({
                                 ? {
                                     ...item,
                                     count: Math.max(1, item.count - 1),
+                                    names: item.names.slice(0, -1), // Remove last name
                                   }
                                 : item,
                             ),
@@ -758,7 +780,11 @@ export default function BookingSummary({
                           setSelectedDates((prev) =>
                             prev.map((item) =>
                               item.id === d.id
-                                ? { ...item, count: item.count + 1 }
+                                ? {
+                                    ...item,
+                                    count: item.count + 1,
+                                    names: [...item.names, ""], // Add empty name
+                                  }
                                 : item,
                             ),
                           )
@@ -796,6 +822,64 @@ export default function BookingSummary({
                       <XCircle size={18} />
                     </button>
                   </div>
+                </div>
+
+                {/* Attendee Names List */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    marginTop: "10px",
+                    marginBottom: "15px",
+                  }}
+                >
+                  {d.names.map((name, nameIdx) => (
+                    <div key={nameIdx}>
+                      <label
+                        style={{
+                          fontSize: "0.65rem",
+                          opacity: 0.5,
+                          fontWeight: "900",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {currentLang === "en"
+                          ? `Attendee ${nameIdx + 1}`
+                          : `Teilnehmer ${nameIdx + 1}`}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={
+                          nameIdx === 0
+                            ? currentLang === "en"
+                              ? "Your Name"
+                              : "Dein Name"
+                            : currentLang === "en"
+                              ? "Guest Name"
+                              : "Name des Gastes"
+                        }
+                        value={name}
+                        onChange={(e) => {
+                          const updatedNames = [...d.names];
+                          updatedNames[nameIdx] = e.target.value;
+                          setSelectedDates((prev) =>
+                            prev.map((item) =>
+                              item.id === d.id
+                                ? { ...item, names: updatedNames }
+                                : item,
+                            ),
+                          );
+                        }}
+                        style={{
+                          ...S.guestInputStyle,
+                          padding: "8px 12px",
+                          fontSize: "0.85rem",
+                          backgroundColor: "rgba(255, 252, 227, 0.6)",
+                        }}
+                      />
+                    </div>
+                  ))}
                 </div>
 
                 {/* --- UPDATED ADD-ONS DISPLAY (SHOW ALL, HIDE HEADER IF EMPTY) --- */}

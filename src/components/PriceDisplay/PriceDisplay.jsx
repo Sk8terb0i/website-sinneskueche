@@ -180,14 +180,14 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     setIsProcessing(true);
     try {
       const expandedDates = selectedDates.flatMap((d) =>
-        Array(d.count || 1)
-          .fill(null)
-          .map(() => ({
-            id: d.id,
-            date: d.date,
-            time: d.time,
-            selectedAddons: d.selectedAddons || [],
-          })),
+        d.names.map((attendeeName, idx) => ({
+          id: d.id,
+          date: d.date,
+          time: d.time,
+          attendeeName:
+            attendeeName || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
+          selectedAddons: d.selectedAddons || [],
+        })),
       );
       const functions = getFunctions();
       const bookCredits = httpsCallable(functions, "bookWithCredits");
@@ -212,14 +212,14 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     setIsProcessing(true);
     try {
       const expandedDates = selectedDates.flatMap((d) =>
-        Array(d.count || 1)
-          .fill(null)
-          .map(() => ({
-            id: d.id,
-            date: d.date,
-            time: d.time,
-            selectedAddons: d.selectedAddons || [],
-          })),
+        (d.names || []).map((attendeeName, idx) => ({
+          id: d.id,
+          date: d.date,
+          time: d.time,
+          attendeeName:
+            attendeeName || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
+          selectedAddons: d.selectedAddons || [],
+        })),
       );
       const functions = getFunctions();
       const baseUrl = window.location.origin;
@@ -269,14 +269,14 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     setIsProcessing(true);
     try {
       const expandedDates = selectedDates.flatMap((d) =>
-        Array(d.count || 1)
-          .fill(null)
-          .map(() => ({
-            id: d.id,
-            date: d.date,
-            time: d.time,
-            selectedAddons: d.selectedAddons || [],
-          })),
+        (d.names || []).map((attendeeName, idx) => ({
+          id: d.id,
+          date: d.date,
+          time: d.time,
+          attendeeName:
+            attendeeName || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
+          selectedAddons: d.selectedAddons || [],
+        })),
       );
 
       // Call a new Firebase Function (e.g., 'submitAvailabilityRequest')
@@ -452,6 +452,10 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                       if (prev.find((x) => x.id === event.id)) {
                         return prev.filter((x) => x.id !== event.id);
                       } else {
+                        // Determine the initial name for the first ticket
+                        const initialName = currentUser
+                          ? `${userData?.firstName || ""} ${userData?.lastName || ""}`.trim()
+                          : `${guestInfo.firstName} ${guestInfo.lastName}`.trim();
                         let autoAddons = [];
                         let hasMandatoryInCart = prev.some((d) =>
                           d.selectedAddons?.some((aid) => {
@@ -475,7 +479,12 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                         }
                         return [
                           ...prev,
-                          { ...event, count: 1, selectedAddons: autoAddons },
+                          {
+                            ...event,
+                            count: 1,
+                            names: [initialName || ""],
+                            selectedAddons: autoAddons,
+                          },
                         ];
                       }
                     });
@@ -562,6 +571,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           guestInfo={guestInfo}
           setGuestInfo={setGuestInfo}
           currentUser={currentUser}
+          userData={userData}
           currentLang={currentLang}
           isMobile={isMobile}
           onBookCredits={handleBookWithCredits}

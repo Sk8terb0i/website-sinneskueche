@@ -329,6 +329,7 @@ export default function EventsTab({
               : (await getDoc(doc(db, "users", b.userId))).exists()
                 ? (await getDoc(doc(db, "users", b.userId))).data()
                 : { firstName: "Unknown", lastName: "User", email: "N/A" };
+
           const addonNames = (b.selectedAddons || []).map((id) => {
             const match = specialEvents.find((se) => se.id === id);
             return match
@@ -337,17 +338,31 @@ export default function EventsTab({
                 : match.nameEn
               : id;
           });
-          return { ...baseInfo, addons: addonNames };
+
+          return {
+            ...baseInfo,
+            attendeeName: b.attendeeName,
+            addons: addonNames,
+          };
         }),
       );
 
       const groupedUsersMap = {};
       userDetails.forEach((u) => {
-        const key = `${u.email}_${u.firstName}_${u.lastName}`;
+        const key = u.email; // Use email as the unique key to group multiple tickets from one person
         if (!groupedUsersMap[key]) {
-          groupedUsersMap[key] = { ...u, ticketCount: 1 };
+          // Initialize the group with the first ticket's data
+          groupedUsersMap[key] = {
+            ...u,
+            ticketCount: 1,
+            attendeeNames: [u.attendeeName || u.firstName],
+          };
         } else {
+          // Increment count and add the next attendee's name to the list
           groupedUsersMap[key].ticketCount += 1;
+          groupedUsersMap[key].attendeeNames.push(
+            u.attendeeName || u.firstName,
+          );
           groupedUsersMap[key].addons.push(...u.addons);
         }
       });
@@ -744,19 +759,34 @@ export default function EventsTab({
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "8px",
+                    gap: "10px",
                   }}
                 >
-                  <User size={12} />
-                  <strong
-                    style={{
-                      color: u.isGuest ? "#9960a8" : "inherit",
-                      fontSize: "0.85rem",
-                    }}
-                  >
-                    {u.firstName} {u.lastName}{" "}
-                    {u.ticketCount > 1 && `(${u.ticketCount})`}
-                  </strong>
+                  <User size={14} color="#4e5f28" />
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    {/* Primary Booker Info */}
+                    <strong
+                      style={{
+                        color: u.isGuest ? "#9960a8" : "inherit",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      {u.firstName} {u.lastName} ({u.ticketCount})
+                    </strong>
+
+                    {/* List of individual attendee names provided during booking */}
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        opacity: 0.7,
+                        fontStyle: "italic",
+                        marginTop: "2px",
+                        color: "#1c0700",
+                      }}
+                    >
+                      {u.attendeeNames.join(", ")}
+                    </div>
+                  </div>
                 </div>
                 {u.addons?.length > 0 && (
                   <div style={styles.addonList}>
