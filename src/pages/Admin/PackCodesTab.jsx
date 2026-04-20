@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../../firebase";
-import { collection, query, getDocs, deleteDoc, doc } from "firebase/firestore";
+import {
+  collection,
+  query,
+  getDocs,
+  deleteDoc,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
 import {
   Ticket,
   Trash2,
@@ -26,6 +33,29 @@ export default function PackCodesTab({ isMobile, currentLang }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedGroups, setExpandedGroups] = useState({});
   const [columnCount, setColumnCount] = useState(1);
+
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const updateProfileCredit = async (codeObj, delta) => {
+    if (!codeObj.isProfileCredit) return;
+    setIsUpdating(true);
+    const newCount = Math.max(0, codeObj.remainingCredits + delta);
+
+    try {
+      await updateDoc(doc(db, "users", codeObj.userId), {
+        [`credits.${codeObj.courseKey}`]: newCount,
+      });
+      // Optimistically update the UI so it feels instantaneous
+      setPackCodes((prev) =>
+        prev.map((c) =>
+          c.id === codeObj.id ? { ...c, remainingCredits: newCount } : c,
+        ),
+      );
+    } catch (error) {
+      alert("Error updating credits: " + error.message);
+    }
+    setIsUpdating(false);
+  };
 
   const labels = {
     en: {
@@ -531,39 +561,90 @@ export default function PackCodesTab({ isMobile, currentLang }) {
                                   flexShrink: 0,
                                 }}
                               >
-                                <span
-                                  style={{
-                                    fontWeight: "bold",
-                                    fontSize: "0.85rem",
-                                    color: "#4e5f28",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  {code.remainingCredits} {labels.left}
-                                </span>
-                                <button
-                                  onClick={() => handleDelete(code)}
-                                  style={{
-                                    background: "none",
-                                    border: "none",
-                                    color: code.isProfileCredit
-                                      ? "#1c070040"
-                                      : "#ff4d4d",
-                                    cursor: code.isProfileCredit
-                                      ? "not-allowed"
-                                      : "pointer",
-                                    padding: "4px",
-                                    display: "flex",
-                                    alignItems: "center",
-                                  }}
-                                  title={
-                                    code.isProfileCredit
-                                      ? "Edit profile credits in Profiles tab"
-                                      : "Delete Code"
-                                  }
-                                >
-                                  <Trash2 size={16} />
-                                </button>
+                                {code.isProfileCredit ? (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "2px",
+                                      backgroundColor: "rgba(78, 95, 40, 0.1)",
+                                      borderRadius: "8px",
+                                    }}
+                                  >
+                                    <button
+                                      onClick={() =>
+                                        updateProfileCredit(code, -1)
+                                      }
+                                      disabled={isUpdating}
+                                      style={{
+                                        border: "none",
+                                        background: "none",
+                                        color: "#4e5f28",
+                                        cursor: "pointer",
+                                        padding: "4px 8px",
+                                        fontWeight: "bold",
+                                      }}
+                                    >
+                                      -
+                                    </button>
+                                    <span
+                                      style={{
+                                        fontWeight: "bold",
+                                        fontSize: "0.85rem",
+                                        color: "#4e5f28",
+                                        minWidth: "16px",
+                                        textAlign: "center",
+                                      }}
+                                    >
+                                      {code.remainingCredits}
+                                    </span>
+                                    <button
+                                      onClick={() =>
+                                        updateProfileCredit(code, 1)
+                                      }
+                                      disabled={isUpdating}
+                                      style={{
+                                        border: "none",
+                                        background: "none",
+                                        color: "#4e5f28",
+                                        cursor: "pointer",
+                                        padding: "4px 8px",
+                                        fontWeight: "bold",
+                                      }}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span
+                                    style={{
+                                      fontWeight: "bold",
+                                      fontSize: "0.85rem",
+                                      color: "#4e5f28",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {code.remainingCredits} {labels.left}
+                                  </span>
+                                )}
+
+                                {!code.isProfileCredit && (
+                                  <button
+                                    onClick={() => handleDelete(code)}
+                                    style={{
+                                      background: "none",
+                                      border: "none",
+                                      color: "#ff4d4d",
+                                      cursor: "pointer",
+                                      padding: "4px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                    }}
+                                    title="Delete Code"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           ))}

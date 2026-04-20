@@ -13,6 +13,10 @@ import {
   Plus,
   Trash2,
   Star,
+  Clock,
+  ShieldAlert,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import {
   sectionTitleStyle,
@@ -33,11 +37,17 @@ export default function PricingTab({
   const [priceData, setPriceData] = useState({});
   const [savingPriceId, setSavingPriceId] = useState(null);
   const [selectedCourse, setSelectedCourse] = useState("");
+
   const [newEventEn, setNewEventEn] = useState("");
   const [newEventDe, setNewEventDe] = useState("");
   const [newEventCap, setNewEventCap] = useState("");
   const [newEventPrice, setNewEventPrice] = useState("");
   const [newEventMandatory, setNewEventMandatory] = useState(false);
+  const [newEventFreePack, setNewEventFreePack] = useState(false);
+  const [newEventIntroId, setNewEventIntroId] = useState("");
+  const [newEventTimeSlots, setNewEventTimeSlots] = useState([
+    { startTime: "", endTime: "", capacity: "" },
+  ]);
 
   const isFullAdmin = userRole === "admin";
   const courseSettingsCollection = collection(db, "course_settings");
@@ -71,7 +81,13 @@ export default function PricingTab({
       newAddonEn: "New Add-on (EN)",
       newAddonDe: "New Add-on (DE)",
       mandatoryFirstTimers: "Mandatory for first-timers",
-      addAddon: "Add Add-on",
+      freeWithPack: "Free with Session Pack",
+      requiresIntro: "Prerequisite:",
+      timeSlots: "Time Slots",
+      startTime: "Start Time",
+      endTime: "End Time",
+      addSlot: "Add Slot",
+      addAddon: "Create Add-on",
       saving: "Saving Updates...",
       save: "Save Course Settings",
       errNames: "Please provide both English and German names.",
@@ -104,7 +120,13 @@ export default function PricingTab({
       newAddonEn: "Neues Extra (EN)",
       newAddonDe: "Neues Extra (DE)",
       mandatoryFirstTimers: "Obligatorisch für Erstkunden",
-      addAddon: "Extra hinzufügen",
+      freeWithPack: "Gratis mit Kurspaket",
+      requiresIntro: "Voraussetzung:",
+      timeSlots: "Zeitslots",
+      startTime: "Startzeit",
+      endTime: "Endzeit",
+      addSlot: "Slot hinzufügen",
+      addAddon: "Extra Erstellen",
       saving: "Speichern...",
       save: "Kurseinstellungen speichern",
       errNames: "Bitte sowohl englischen als auch deutschen Namen angeben.",
@@ -172,9 +194,79 @@ export default function PricingTab({
     handlePriceChange(courseId, "packs", updatedPacks);
   };
 
+  const handleNewTimeSlotChange = (index, field, value) => {
+    const updated = [...newEventTimeSlots];
+    updated[index][field] = value;
+    setNewEventTimeSlots(updated);
+  };
+
+  const addNewTimeSlot = () => {
+    setNewEventTimeSlots([
+      ...newEventTimeSlots,
+      { startTime: "", endTime: "", capacity: "" },
+    ]);
+  };
+
+  const removeNewTimeSlot = (index) => {
+    setNewEventTimeSlots(newEventTimeSlots.filter((_, i) => i !== index));
+  };
+
+  const updateExistingTimeSlot = (courseId, eventId, index, field, value) => {
+    const currentEvents = priceData[courseId]?.specialEvents || [];
+    const updatedEvents = currentEvents.map((ev) => {
+      if (ev.id === eventId) {
+        const newSlots = [...(ev.timeSlots || [])];
+        newSlots[index] = { ...newSlots[index], [field]: value };
+        return { ...ev, timeSlots: newSlots };
+      }
+      return ev;
+    });
+    handlePriceChange(courseId, "specialEvents", updatedEvents);
+  };
+
+  const addExistingTimeSlot = (courseId, eventId) => {
+    const currentEvents = priceData[courseId]?.specialEvents || [];
+    const updatedEvents = currentEvents.map((ev) => {
+      if (ev.id === eventId) {
+        return {
+          ...ev,
+          timeSlots: [
+            ...(ev.timeSlots || []),
+            { startTime: "", endTime: "", capacity: "" },
+          ],
+        };
+      }
+      return ev;
+    });
+    handlePriceChange(courseId, "specialEvents", updatedEvents);
+  };
+
+  const removeExistingTimeSlot = (courseId, eventId, index) => {
+    const currentEvents = priceData[courseId]?.specialEvents || [];
+    const updatedEvents = currentEvents.map((ev) => {
+      if (ev.id === eventId) {
+        return {
+          ...ev,
+          timeSlots: (ev.timeSlots || []).filter((_, i) => i !== index),
+        };
+      }
+      return ev;
+    });
+    handlePriceChange(courseId, "specialEvents", updatedEvents);
+  };
+
   const addSpecialEvent = (courseId) => {
     if (!newEventEn.trim() || !newEventDe.trim()) return alert(labels.errNames);
     const currentEvents = priceData[courseId]?.specialEvents || [];
+
+    const parsedTimeSlots = newEventTimeSlots
+      .filter((t) => t.startTime || t.endTime)
+      .map((t) => ({
+        startTime: t.startTime?.trim() || "",
+        endTime: t.endTime?.trim() || "",
+        capacity: parseInt(t.capacity?.toString().trim() || "0") || 0,
+      }));
+
     handlePriceChange(courseId, "specialEvents", [
       ...currentEvents,
       {
@@ -184,13 +276,20 @@ export default function PricingTab({
         capacity: newEventCap || null,
         price: newEventPrice || null,
         isMandatory: newEventMandatory,
+        freeWithPack: newEventFreePack,
+        requiresIntroId: newEventIntroId || null,
+        timeSlots: parsedTimeSlots,
       },
     ]);
+
     setNewEventEn("");
     setNewEventDe("");
     setNewEventCap("");
     setNewEventPrice("");
     setNewEventMandatory(false);
+    setNewEventFreePack(false);
+    setNewEventIntroId("");
+    setNewEventTimeSlots([{ startTime: "", endTime: "", capacity: "" }]);
   };
 
   const updateSpecialEvent = (courseId, eventId, field, value) => {
@@ -208,6 +307,18 @@ export default function PricingTab({
       "specialEvents",
       currentEvents.filter((e) => e.id !== eventId),
     );
+  };
+
+  const moveSpecialEvent = (courseId, index, direction) => {
+    const currentEvents = [...(priceData[courseId]?.specialEvents || [])];
+    if (index + direction < 0 || index + direction >= currentEvents.length)
+      return;
+
+    const temp = currentEvents[index];
+    currentEvents[index] = currentEvents[index + direction];
+    currentEvents[index + direction] = temp;
+
+    handlePriceChange(courseId, "specialEvents", currentEvents);
   };
 
   const savePrice = async (courseId, courseName) => {
@@ -277,6 +388,11 @@ export default function PricingTab({
               setNewEventCap("");
               setNewEventPrice("");
               setNewEventMandatory(false);
+              setNewEventFreePack(false);
+              setNewEventIntroId("");
+              setNewEventTimeSlots([
+                { startTime: "", endTime: "", capacity: "" },
+              ]);
             }}
             style={{
               ...inputStyle,
@@ -318,6 +434,7 @@ export default function PricingTab({
                   : "#f5f5f5",
             }}
           >
+            {/* Top Visibility & Pricing Settings */}
             <div
               style={{
                 display: "flex",
@@ -488,6 +605,7 @@ export default function PricingTab({
               </div>
             </div>
 
+            {/* Packs Toggle */}
             <div
               style={{
                 backgroundColor: "rgba(202, 175, 243, 0.05)",
@@ -673,6 +791,7 @@ export default function PricingTab({
               )}
             </div>
 
+            {/* Capacity Toggle */}
             <div
               style={{
                 backgroundColor: "rgba(78, 95, 40, 0.05)",
@@ -742,6 +861,7 @@ export default function PricingTab({
               )}
             </div>
 
+            {/* Request Mode Toggle */}
             <div
               style={{
                 backgroundColor: "rgba(78, 95, 40, 0.05)",
@@ -778,6 +898,7 @@ export default function PricingTab({
               </label>
             </div>
 
+            {/* ADD-ONS SECTION */}
             <div
               style={{
                 backgroundColor: "rgba(202, 175, 243, 0.05)",
@@ -802,189 +923,512 @@ export default function PricingTab({
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "10px",
+                  gap: "16px",
                 }}
               >
-                {(priceData[selectedCourse]?.specialEvents || []).map((ev) => (
-                  <div
-                    key={ev.id}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      backgroundColor: "rgba(202, 175, 243, 0.08)",
-                      padding: "10px",
-                      borderRadius: "12px",
-                      border: "1px dashed rgba(202, 175, 243, 0.3)",
-                      gap: "8px",
-                    }}
-                  >
+                {/* Existing Add-ons List */}
+                {(priceData[selectedCourse]?.specialEvents || []).map(
+                  (ev, evIdx) => (
                     <div
+                      key={ev.id}
                       style={{
                         display: "flex",
-                        flexDirection: isMobile ? "column" : "row",
-                        justifyContent: "space-between",
-                        alignItems: isMobile ? "stretch" : "center",
-                        gap: "10px",
+                        flexDirection: "column",
+                        backgroundColor: "rgba(255,255,255,0.6)",
+                        padding: "14px",
+                        borderRadius: "12px",
+                        border: "1px dashed rgba(202, 175, 243, 0.5)",
+                        gap: "12px",
                       }}
                     >
-                      <input
-                        value={ev.nameEn || ""}
-                        onChange={(e) =>
-                          updateSpecialEvent(
-                            selectedCourse,
-                            ev.id,
-                            "nameEn",
-                            e.target.value,
-                          )
-                        }
-                        placeholder={labels.nameEn}
+                      {/* Basic Info Row */}
+                      <div
                         style={{
-                          ...inputStyle,
-                          padding: "8px 12px",
-                          flex: 2,
-                          marginBottom: 0,
-                          fontSize: "0.85rem",
-                        }}
-                      />
-                      <input
-                        value={ev.nameDe || ""}
-                        onChange={(e) =>
-                          updateSpecialEvent(
-                            selectedCourse,
-                            ev.id,
-                            "nameDe",
-                            e.target.value,
-                          )
-                        }
-                        placeholder={labels.nameDe}
-                        style={{
-                          ...inputStyle,
-                          padding: "8px 12px",
-                          flex: 2,
-                          marginBottom: 0,
-                          fontSize: "0.85rem",
-                        }}
-                      />
-                      <div style={{ position: "relative", flex: 1 }}>
-                        <input
-                          type="number"
-                          value={ev.capacity || ""}
-                          onChange={(e) =>
-                            updateSpecialEvent(
-                              selectedCourse,
-                              ev.id,
-                              "capacity",
-                              e.target.value,
-                            )
-                          }
-                          placeholder={labels.cap}
-                          style={{
-                            ...inputStyle,
-                            padding: "8px 8px 8px 30px",
-                            marginBottom: 0,
-                            fontSize: "0.85rem",
-                          }}
-                          title="Capacity limit for this add-on"
-                        />
-                        <Users
-                          size={12}
-                          style={{
-                            position: "absolute",
-                            left: "10px",
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            opacity: 0.4,
-                          }}
-                        />
-                      </div>
-                      <div style={{ position: "relative", flex: 1 }}>
-                        <input
-                          type="number"
-                          value={ev.price || ""}
-                          onChange={(e) =>
-                            updateSpecialEvent(
-                              selectedCourse,
-                              ev.id,
-                              "price",
-                              e.target.value,
-                            )
-                          }
-                          placeholder={labels.addonPrice}
-                          style={{
-                            ...inputStyle,
-                            padding: "8px 8px 8px 30px",
-                            marginBottom: 0,
-                            fontSize: "0.85rem",
-                          }}
-                          title="Additional price for this add-on"
-                        />
-                        <CreditCard
-                          size={12}
-                          style={{
-                            position: "absolute",
-                            left: "10px",
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            opacity: 0.4,
-                          }}
-                        />
-                      </div>
-                      <button
-                        onClick={() =>
-                          removeSpecialEvent(selectedCourse, ev.id)
-                        }
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "#ff4d4d",
-                          cursor: "pointer",
-                          padding: isMobile ? "8px" : "4px",
                           display: "flex",
-                          justifyContent: "center",
+                          flexDirection: isMobile ? "column" : "row",
+                          justifyContent: "space-between",
+                          alignItems: isMobile ? "stretch" : "center",
+                          gap: "10px",
                         }}
                       >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    <label
-                      style={{
-                        ...labelStyle,
-                        fontSize: "0.75rem",
-                        margin: 0,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        cursor: "pointer",
-                        opacity: 0.8,
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={ev.isMandatory || false}
-                        onChange={(e) =>
-                          updateSpecialEvent(
-                            selectedCourse,
-                            ev.id,
-                            "isMandatory",
-                            e.target.checked,
-                          )
-                        }
-                      />
-                      {labels.mandatoryFirstTimers}
-                    </label>
-                  </div>
-                ))}
+                        <input
+                          value={ev.nameEn || ""}
+                          onChange={(e) =>
+                            updateSpecialEvent(
+                              selectedCourse,
+                              ev.id,
+                              "nameEn",
+                              e.target.value,
+                            )
+                          }
+                          placeholder={labels.nameEn}
+                          style={{
+                            ...inputStyle,
+                            padding: "8px 12px",
+                            flex: 2,
+                            marginBottom: 0,
+                            fontSize: "0.85rem",
+                          }}
+                        />
+                        <input
+                          value={ev.nameDe || ""}
+                          onChange={(e) =>
+                            updateSpecialEvent(
+                              selectedCourse,
+                              ev.id,
+                              "nameDe",
+                              e.target.value,
+                            )
+                          }
+                          placeholder={labels.nameDe}
+                          style={{
+                            ...inputStyle,
+                            padding: "8px 12px",
+                            flex: 2,
+                            marginBottom: 0,
+                            fontSize: "0.85rem",
+                          }}
+                        />
+                        <div style={{ position: "relative", flex: 1 }}>
+                          <input
+                            type="number"
+                            value={ev.capacity || ""}
+                            onChange={(e) =>
+                              updateSpecialEvent(
+                                selectedCourse,
+                                ev.id,
+                                "capacity",
+                                e.target.value,
+                              )
+                            }
+                            placeholder={labels.cap}
+                            style={{
+                              ...inputStyle,
+                              padding: "8px 8px 8px 30px",
+                              marginBottom: 0,
+                              fontSize: "0.85rem",
+                            }}
+                            title="Global Capacity (If no time slots used)"
+                          />
+                          <Users
+                            size={12}
+                            style={{
+                              position: "absolute",
+                              left: "10px",
+                              top: "50%",
+                              transform: "translateY(-50%)",
+                              opacity: 0.4,
+                            }}
+                          />
+                        </div>
+                        <div style={{ position: "relative", flex: 1 }}>
+                          <input
+                            type="number"
+                            value={ev.price || ""}
+                            onChange={(e) =>
+                              updateSpecialEvent(
+                                selectedCourse,
+                                ev.id,
+                                "price",
+                                e.target.value,
+                              )
+                            }
+                            placeholder={labels.addonPrice}
+                            style={{
+                              ...inputStyle,
+                              padding: "8px 8px 8px 30px",
+                              marginBottom: 0,
+                              fontSize: "0.85rem",
+                            }}
+                          />
+                          <CreditCard
+                            size={12}
+                            style={{
+                              position: "absolute",
+                              left: "10px",
+                              top: "50%",
+                              transform: "translateY(-50%)",
+                              opacity: 0.4,
+                            }}
+                          />
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <button
+                            onClick={() =>
+                              moveSpecialEvent(selectedCourse, evIdx, -1)
+                            }
+                            disabled={evIdx === 0}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: evIdx === 0 ? "#ccc" : "#9960a8",
+                              cursor: evIdx === 0 ? "default" : "pointer",
+                              padding: "4px",
+                              display: "flex",
+                            }}
+                          >
+                            <ChevronUp size={16} />
+                          </button>
+                          <button
+                            onClick={() =>
+                              moveSpecialEvent(selectedCourse, evIdx, 1)
+                            }
+                            disabled={
+                              evIdx ===
+                              (priceData[selectedCourse]?.specialEvents || [])
+                                .length -
+                                1
+                            }
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color:
+                                evIdx ===
+                                (priceData[selectedCourse]?.specialEvents || [])
+                                  .length -
+                                  1
+                                  ? "#ccc"
+                                  : "#9960a8",
+                              cursor:
+                                evIdx ===
+                                (priceData[selectedCourse]?.specialEvents || [])
+                                  .length -
+                                  1
+                                  ? "default"
+                                  : "pointer",
+                              padding: "4px",
+                              display: "flex",
+                            }}
+                          >
+                            <ChevronDown size={16} />
+                          </button>
+                          <button
+                            onClick={() =>
+                              removeSpecialEvent(selectedCourse, ev.id)
+                            }
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#ff4d4d",
+                              cursor: "pointer",
+                              padding: "4px",
+                              display: "flex",
+                            }}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
 
+                      {/* Rules & Prerequisites Row */}
+                      <div
+                        style={{
+                          backgroundColor: "rgba(78, 95, 40, 0.05)",
+                          padding: "10px 14px",
+                          borderRadius: "8px",
+                          display: "flex",
+                          flexDirection: isMobile ? "column" : "row",
+                          alignItems: isMobile ? "flex-start" : "center",
+                          gap: "16px",
+                        }}
+                      >
+                        <select
+                          value={ev.requiresIntroId || ""}
+                          onChange={(e) =>
+                            updateSpecialEvent(
+                              selectedCourse,
+                              ev.id,
+                              "requiresIntroId",
+                              e.target.value,
+                            )
+                          }
+                          style={{
+                            ...inputStyle,
+                            padding: "8px 10px",
+                            marginBottom: 0,
+                            fontSize: "0.75rem",
+                            flex: 1,
+                            backgroundColor: "white",
+                          }}
+                        >
+                          <option value="">
+                            -- {labels.requiresIntro} None --
+                          </option>
+                          {(priceData[selectedCourse]?.specialEvents || []).map(
+                            (other) =>
+                              other.id !== ev.id && (
+                                <option key={other.id} value={other.id}>
+                                  {other.nameEn}
+                                </option>
+                              ),
+                          )}
+                        </select>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "16px",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <label
+                            style={{
+                              ...labelStyle,
+                              fontSize: "0.75rem",
+                              margin: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={ev.isMandatory || false}
+                              onChange={(e) =>
+                                updateSpecialEvent(
+                                  selectedCourse,
+                                  ev.id,
+                                  "isMandatory",
+                                  e.target.checked,
+                                )
+                              }
+                            />
+                            {labels.mandatoryFirstTimers}
+                          </label>
+                          <label
+                            style={{
+                              ...labelStyle,
+                              fontSize: "0.75rem",
+                              margin: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={ev.freeWithPack || false}
+                              onChange={(e) =>
+                                updateSpecialEvent(
+                                  selectedCourse,
+                                  ev.id,
+                                  "freeWithPack",
+                                  e.target.checked,
+                                )
+                              }
+                            />
+                            {labels.freeWithPack}
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Time Slots Area */}
+                      <div
+                        style={{
+                          backgroundColor: "rgba(28, 7, 0, 0.02)",
+                          border: "1px solid rgba(28, 7, 0, 0.05)",
+                          padding: "10px 14px",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          <Clock size={14} color="#9960a8" />
+                          <span
+                            style={{
+                              fontSize: "0.75rem",
+                              fontWeight: "bold",
+                              color: "#9960a8",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            {labels.timeSlots}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                          }}
+                        >
+                          {(ev.timeSlots || []).map((slot, sIdx) => (
+                            <div
+                              key={sIdx}
+                              style={{
+                                display: "flex",
+                                gap: "10px",
+                                alignItems: "center",
+                              }}
+                            >
+                              <input
+                                type="time"
+                                value={slot.startTime || ""}
+                                onChange={(e) =>
+                                  updateExistingTimeSlot(
+                                    selectedCourse,
+                                    ev.id,
+                                    sIdx,
+                                    "startTime",
+                                    e.target.value,
+                                  )
+                                }
+                                style={{
+                                  ...inputStyle,
+                                  padding: "6px 10px",
+                                  marginBottom: 0,
+                                  fontSize: "0.75rem",
+                                  flex: 1,
+                                  backgroundColor: "white",
+                                }}
+                                title={labels.startTime}
+                              />
+                              <span
+                                style={{ fontSize: "0.75rem", opacity: 0.5 }}
+                              >
+                                -
+                              </span>
+                              <input
+                                type="time"
+                                value={slot.endTime || ""}
+                                onChange={(e) =>
+                                  updateExistingTimeSlot(
+                                    selectedCourse,
+                                    ev.id,
+                                    sIdx,
+                                    "endTime",
+                                    e.target.value,
+                                  )
+                                }
+                                style={{
+                                  ...inputStyle,
+                                  padding: "6px 10px",
+                                  marginBottom: 0,
+                                  fontSize: "0.75rem",
+                                  flex: 1,
+                                  backgroundColor: "white",
+                                }}
+                                title={labels.endTime}
+                              />
+                              <div style={{ position: "relative", flex: 1 }}>
+                                <input
+                                  type="number"
+                                  value={slot.capacity || ""}
+                                  onChange={(e) =>
+                                    updateExistingTimeSlot(
+                                      selectedCourse,
+                                      ev.id,
+                                      sIdx,
+                                      "capacity",
+                                      e.target.value,
+                                    )
+                                  }
+                                  placeholder={labels.cap}
+                                  style={{
+                                    ...inputStyle,
+                                    padding: "6px 8px 6px 30px",
+                                    marginBottom: 0,
+                                    fontSize: "0.75rem",
+                                    backgroundColor: "white",
+                                  }}
+                                />
+                                <Users
+                                  size={12}
+                                  style={{
+                                    position: "absolute",
+                                    left: "10px",
+                                    top: "50%",
+                                    transform: "translateY(-50%)",
+                                    opacity: 0.4,
+                                  }}
+                                />
+                              </div>
+                              <button
+                                onClick={() =>
+                                  removeExistingTimeSlot(
+                                    selectedCourse,
+                                    ev.id,
+                                    sIdx,
+                                  )
+                                }
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  color: "#ff4d4d",
+                                  cursor: "pointer",
+                                  padding: "4px",
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() =>
+                              addExistingTimeSlot(selectedCourse, ev.id)
+                            }
+                            style={{
+                              background: "none",
+                              border: "1px dashed #caaff3",
+                              borderRadius: "6px",
+                              padding: "6px",
+                              fontSize: "0.7rem",
+                              color: "#9960a8",
+                              cursor: "pointer",
+                              width: "fit-content",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            <Plus size={12} /> {labels.addSlot}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ),
+                )}
+
+                {/* ADD NEW ADD-ON FORM */}
                 <div
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: "8px",
+                    gap: "12px",
                     marginTop: "8px",
-                    paddingTop: "12px",
-                    borderTop: "1px solid rgba(28, 7, 0, 0.05)",
+                    padding: "16px",
+                    backgroundColor: "rgba(202, 175, 243, 0.15)",
+                    borderRadius: "16px",
+                    border: "1px dashed #caaff3",
                   }}
                 >
+                  <h5
+                    style={{
+                      margin: 0,
+                      fontSize: "0.9rem",
+                      color: "#9960a8",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <Plus size={16} /> {labels.addAddon}
+                  </h5>
+
+                  {/* New Add-on Basic Info */}
                   <div
                     style={{
                       display: "flex",
@@ -1001,6 +1445,7 @@ export default function PricingTab({
                         padding: "10px 12px",
                         flex: 2,
                         marginBottom: 0,
+                        backgroundColor: "white",
                       }}
                     />
                     <input
@@ -1012,6 +1457,7 @@ export default function PricingTab({
                         padding: "10px 12px",
                         flex: 2,
                         marginBottom: 0,
+                        backgroundColor: "white",
                       }}
                     />
                     <div style={{ position: "relative", flex: 1 }}>
@@ -1024,8 +1470,8 @@ export default function PricingTab({
                           ...inputStyle,
                           padding: "10px 10px 10px 32px",
                           marginBottom: 0,
+                          backgroundColor: "white",
                         }}
-                        title="Capacity limit"
                       />
                       <Users
                         size={14}
@@ -1048,8 +1494,8 @@ export default function PricingTab({
                           ...inputStyle,
                           padding: "10px 10px 10px 32px",
                           marginBottom: 0,
+                          backgroundColor: "white",
                         }}
-                        title="Additional price"
                       />
                       <CreditCard
                         size={14}
@@ -1062,12 +1508,256 @@ export default function PricingTab({
                         }}
                       />
                     </div>
+                  </div>
+
+                  {/* New Add-on Rules */}
+                  <div
+                    style={{
+                      backgroundColor: "rgba(255, 255, 255, 0.5)",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      display: "flex",
+                      flexDirection: isMobile ? "column" : "row",
+                      alignItems: isMobile ? "flex-start" : "center",
+                      gap: "16px",
+                    }}
+                  >
+                    <select
+                      value={newEventIntroId}
+                      onChange={(e) => setNewEventIntroId(e.target.value)}
+                      style={{
+                        ...inputStyle,
+                        padding: "8px 10px",
+                        marginBottom: 0,
+                        flex: 1,
+                        fontSize: "0.8rem",
+                        backgroundColor: "white",
+                      }}
+                    >
+                      <option value="">
+                        -- {labels.requiresIntro} None --
+                      </option>
+                      {(priceData[selectedCourse]?.specialEvents || []).map(
+                        (other) => (
+                          <option key={other.id} value={other.id}>
+                            {other.nameEn}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                    <div
+                      style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}
+                    >
+                      <label
+                        style={{
+                          ...labelStyle,
+                          fontSize: "0.8rem",
+                          margin: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={newEventMandatory}
+                          onChange={(e) =>
+                            setNewEventMandatory(e.target.checked)
+                          }
+                        />
+                        {labels.mandatoryFirstTimers}
+                      </label>
+                      <label
+                        style={{
+                          ...labelStyle,
+                          fontSize: "0.8rem",
+                          margin: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={newEventFreePack}
+                          onChange={(e) =>
+                            setNewEventFreePack(e.target.checked)
+                          }
+                        />
+                        {labels.freeWithPack}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* New Add-on Time Slots */}
+                  <div
+                    style={{
+                      backgroundColor: "rgba(255, 255, 255, 0.5)",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      <Clock size={14} color="#9960a8" />
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: "bold",
+                          color: "#9960a8",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {labels.timeSlots}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
+                      }}
+                    >
+                      {newEventTimeSlots.map((slot, sIdx) => (
+                        <div
+                          key={sIdx}
+                          style={{
+                            display: "flex",
+                            gap: "10px",
+                            alignItems: "center",
+                          }}
+                        >
+                          <input
+                            type="time"
+                            value={slot.startTime}
+                            onChange={(e) =>
+                              handleNewTimeSlotChange(
+                                sIdx,
+                                "startTime",
+                                e.target.value,
+                              )
+                            }
+                            style={{
+                              ...inputStyle,
+                              padding: "8px 10px",
+                              marginBottom: 0,
+                              fontSize: "0.8rem",
+                              flex: 1,
+                              backgroundColor: "white",
+                            }}
+                            title={labels.startTime}
+                          />
+                          <span style={{ fontSize: "0.8rem", opacity: 0.5 }}>
+                            -
+                          </span>
+                          <input
+                            type="time"
+                            value={slot.endTime}
+                            onChange={(e) =>
+                              handleNewTimeSlotChange(
+                                sIdx,
+                                "endTime",
+                                e.target.value,
+                              )
+                            }
+                            style={{
+                              ...inputStyle,
+                              padding: "8px 10px",
+                              marginBottom: 0,
+                              fontSize: "0.8rem",
+                              flex: 1,
+                              backgroundColor: "white",
+                            }}
+                            title={labels.endTime}
+                          />
+                          <div style={{ position: "relative", flex: 1 }}>
+                            <input
+                              type="number"
+                              value={slot.capacity}
+                              onChange={(e) =>
+                                handleNewTimeSlotChange(
+                                  sIdx,
+                                  "capacity",
+                                  e.target.value,
+                                )
+                              }
+                              placeholder={labels.cap}
+                              style={{
+                                ...inputStyle,
+                                padding: "8px 8px 8px 30px",
+                                marginBottom: 0,
+                                fontSize: "0.8rem",
+                                backgroundColor: "white",
+                              }}
+                            />
+                            <Users
+                              size={14}
+                              style={{
+                                position: "absolute",
+                                left: "10px",
+                                top: "50%",
+                                transform: "translateY(-50%)",
+                                opacity: 0.4,
+                              }}
+                            />
+                          </div>
+                          <button
+                            onClick={() => removeNewTimeSlot(sIdx)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#ff4d4d",
+                              cursor: "pointer",
+                              padding: "4px",
+                            }}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={addNewTimeSlot}
+                        style={{
+                          background: "none",
+                          border: "1px dashed #caaff3",
+                          borderRadius: "6px",
+                          padding: "6px 10px",
+                          fontSize: "0.75rem",
+                          color: "#9960a8",
+                          cursor: "pointer",
+                          width: "fit-content",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <Plus size={14} /> {labels.addSlot}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Add Button */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      marginTop: "4px",
+                    }}
+                  >
                     <button
                       onClick={() => addSpecialEvent(selectedCourse)}
                       style={{
                         ...btnStyle,
                         width: isMobile ? "100%" : "auto",
-                        padding: "0 18px",
+                        padding: "10px 24px",
                         marginTop: 0,
                         display: "flex",
                         alignItems: "center",
@@ -1075,28 +1765,9 @@ export default function PricingTab({
                         gap: "6px",
                       }}
                     >
-                      <Plus size={16} /> {isMobile && labels.addAddon}
+                      <Plus size={16} /> {labels.addAddon}
                     </button>
                   </div>
-                  <label
-                    style={{
-                      ...labelStyle,
-                      fontSize: "0.75rem",
-                      margin: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      cursor: "pointer",
-                      opacity: 0.8,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={newEventMandatory}
-                      onChange={(e) => setNewEventMandatory(e.target.checked)}
-                    />
-                    {labels.mandatoryFirstTimers}
-                  </label>
                 </div>
               </div>
             </div>

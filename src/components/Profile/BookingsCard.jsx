@@ -112,14 +112,21 @@ export default function BookingsCard({ userId, currentLang, t }) {
       grouped[title][dateKey].count += 1;
       grouped[title][dateKey].ids.push(booking.id);
 
-      // Collect add-on names for this grouping
+      // --- UPDATED: Collect add-on names correctly handling strings or objects ---
       if (booking.selectedAddons && Array.isArray(booking.selectedAddons)) {
-        booking.selectedAddons.forEach((aid) => {
-          const meta = courseSettings[sanitizedId]?.find((s) => s.id === aid);
+        booking.selectedAddons.forEach((item) => {
+          const addonId = typeof item === "object" ? item.id : item;
+          const timeSlot = typeof item === "object" ? item.time : null;
+
+          const meta = courseSettings[sanitizedId]?.find(
+            (s) => s.id === addonId,
+          );
           if (meta) {
-            const name = currentLang === "de" ? meta.nameDe : meta.nameEn;
-            if (!grouped[title][dateKey].addons.includes(name)) {
-              grouped[title][dateKey].addons.push(name);
+            const baseName = currentLang === "de" ? meta.nameDe : meta.nameEn;
+            const fullName = timeSlot ? `${baseName} (${timeSlot})` : baseName;
+
+            if (!grouped[title][dateKey].addons.includes(fullName)) {
+              grouped[title][dateKey].addons.push(fullName);
             }
           }
         });

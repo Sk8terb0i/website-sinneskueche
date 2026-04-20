@@ -650,8 +650,8 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           >
             instagram
           </a>
-          <a href="mailto:hallo@sinneskueche.de" className="footer-link">
-            hallo@sinneskueche.de
+          <a href="mailto:salut@sinneskueche.de" className="footer-link">
+            salut@sinneskueche.de
           </a>
         </div>
       </div>

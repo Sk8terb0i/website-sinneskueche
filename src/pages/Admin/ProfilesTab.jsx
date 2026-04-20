@@ -8,6 +8,7 @@ import {
   query,
   where,
   orderBy,
+  getDoc,
 } from "firebase/firestore";
 import {
   Edit2,
@@ -19,6 +20,7 @@ import {
   Loader2,
   ShieldCheck,
   User as UserIcon,
+  BookOpen,
 } from "lucide-react";
 import { planets } from "../../data/planets";
 import * as S from "./AdminStyles";
@@ -35,6 +37,14 @@ export default function ProfilesTab({
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
 
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyUser, setHistoryUser] = useState(null);
+  const [historyCourse, setHistoryCourse] = useState("");
+  const [courseAddons, setCourseAddons] = useState([]);
+  const [completedAddons, setCompletedAddons] = useState([]);
+  const [bookedAddonsInfo, setBookedAddonsInfo] = useState({}); // Stores { addonId: [{date, isPast}] }
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   const labels = {
     en: {
       search: "Search users...",
@@ -48,6 +58,10 @@ export default function ProfilesTab({
       save: "Save",
       cancel: "Cancel",
       accessTo: "ACCESS TO:",
+      historyTitle: "Add-on History",
+      selectCourse: "Select a course to view add-ons",
+      noAddons: "No add-ons found for this course.",
+      close: "Close",
     },
     de: {
       search: "Nutzer suchen...",
@@ -61,6 +75,10 @@ export default function ProfilesTab({
       save: "Speichern",
       cancel: "Abbrechen",
       accessTo: "ZUGRIFF AUF:",
+      historyTitle: "Add-on Verlauf",
+      selectCourse: "Kurs wählen, um Extras zu sehen",
+      noAddons: "Keine Extras für diesen Kurs gefunden.",
+      close: "Schliessen",
     },
   }[currentLang || "en"];
 
@@ -128,6 +146,98 @@ export default function ProfilesTab({
       ? current.filter((p) => p !== path)
       : [...current, path];
     setEditForm({ ...editForm, allowedCourses: updated });
+  };
+
+  // --- UPDATED HISTORY LOGIC ---
+  const openHistory = async (user) => {
+    setHistoryUser(user);
+    setCompletedAddons(user.completedAddons || []);
+
+    // NEW: Auto-select the first course from the dropdown immediately
+    if (allPossibleCourses.length > 0) {
+      setHistoryCourse(allPossibleCourses[0][0]);
+    }
+
+    setHistoryLoading(true);
+    setHistoryModalOpen(true);
+
+    try {
+      // Fetch all bookings for this user to find addon history
+      const q = query(
+        collection(db, "bookings"),
+        where("userId", "==", user.id),
+      );
+      const snap = await getDocs(q);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const addonMap = {};
+      snap.docs.forEach((doc) => {
+        const data = doc.data();
+        if (data.selectedAddons) {
+          data.selectedAddons.forEach((item) => {
+            const aid = typeof item === "object" ? item.id : item;
+            if (!addonMap[aid]) addonMap[aid] = [];
+
+            const bookingDate = new Date(data.date);
+            addonMap[aid].push({
+              date: data.date,
+              isPast: bookingDate < today,
+            });
+          });
+        }
+      });
+      setBookedAddonsInfo(addonMap);
+    } catch (e) {
+      console.error("Error fetching user booking history:", e);
+    }
+    setHistoryLoading(false);
+  };
+
+  useEffect(() => {
+    if (!historyCourse) return;
+    const fetchAddons = async () => {
+      setHistoryLoading(true);
+      try {
+        const docId = historyCourse.replace(/\//g, "");
+        const snap = await getDoc(doc(db, "course_settings", docId));
+        if (snap.exists()) {
+          setCourseAddons(snap.data().specialEvents || []);
+        } else {
+          setCourseAddons([]);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      setHistoryLoading(false);
+    };
+    fetchAddons();
+  }, [historyCourse]);
+
+  const toggleHistoryAddon = (addonId) => {
+    setCompletedAddons((prev) =>
+      prev.includes(addonId)
+        ? prev.filter((id) => id !== addonId)
+        : [...prev, addonId],
+    );
+  };
+
+  const saveHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      await updateDoc(doc(db, "users", historyUser.id), {
+        completedAddons,
+      });
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === historyUser.id ? { ...u, completedAddons } : u,
+        ),
+      );
+      setHistoryModalOpen(false);
+    } catch (e) {
+      alert("Error saving history: " + e.message);
+    }
+    setHistoryLoading(false);
   };
 
   const filteredUsers = users.filter((u) => {
@@ -384,24 +494,301 @@ export default function ProfilesTab({
                       </div>
                     )}
 
-                  <button
-                    onClick={() => handleEdit(u)}
+                  <div
                     style={{
                       position: "absolute",
                       bottom: "1.5rem",
                       right: "1.5rem",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      opacity: 0.4,
+                      display: "flex",
+                      gap: "12px",
                     }}
                   >
-                    <Edit2 size={18} />
-                  </button>
+                    <button
+                      onClick={() => openHistory(u)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        opacity: 0.4,
+                        display: "flex",
+                      }}
+                      title="View Add-on History"
+                    >
+                      <BookOpen size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleEdit(u)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        opacity: 0.4,
+                        display: "flex",
+                      }}
+                      title="Edit User"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                  </div>
                 </>
               )}
             </div>
           ))}
+        </div>
+      )}
+      {/* HISTORY MODAL */}
+      {historyModalOpen && historyUser && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(28, 7, 0, 0.4)",
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={() => setHistoryModalOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "#fffce3",
+              width: "100%",
+              maxWidth: "450px",
+              borderRadius: "24px",
+              padding: "2rem",
+              position: "relative",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setHistoryModalOpen(false)}
+              style={{
+                position: "absolute",
+                top: "20px",
+                right: "20px",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                opacity: 0.5,
+              }}
+            >
+              <X size={20} />
+            </button>
+            <h3
+              style={{
+                margin: "0 0 1.5rem 0",
+                fontFamily: "Harmond-SemiBoldCondensed",
+                fontSize: "1.5rem",
+                color: "#1c0700",
+              }}
+            >
+              {labels.historyTitle} - {historyUser.firstName}
+            </h3>
+
+            <select
+              value={historyCourse}
+              onChange={(e) => setHistoryCourse(e.target.value)}
+              style={{
+                ...S.inputStyle,
+                backgroundColor: "rgba(202, 175, 243, 0.1)",
+                marginBottom: "1.5rem",
+              }}
+            >
+              <option value="" disabled>
+                {labels.selectCourse}
+              </option>
+              {allPossibleCourses.map(([path, name]) => (
+                <option key={path} value={path}>
+                  {name}
+                </option>
+              ))}
+            </select>
+
+            {historyLoading ? (
+              <div style={{ textAlign: "center", padding: "2rem" }}>
+                <Loader2 size={24} className="spinner" color="#caaff3" />
+              </div>
+            ) : historyCourse && courseAddons.length === 0 ? (
+              <p
+                style={{
+                  opacity: 0.5,
+                  textAlign: "center",
+                  fontSize: "0.85rem",
+                }}
+              >
+                {labels.noAddons}
+              </p>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                  maxHeight: "300px",
+                  overflowY: "auto",
+                  paddingRight: "5px",
+                }}
+              >
+                {/* --- UPDATED: Only show Mandatory or Prerequisite add-ons --- */}
+                {courseAddons
+                  .filter((addon) => {
+                    const isMandatory = addon.isMandatory === true;
+                    const isPrerequisite = courseAddons.some(
+                      (se) => se.requiresIntroId === addon.id,
+                    );
+                    return isMandatory || isPrerequisite;
+                  })
+                  .map((addon) => {
+                    const manualDone = completedAddons.includes(addon.id);
+                    const bookingInfo = bookedAddonsInfo[addon.id] || [];
+                    const hasPastBooking = bookingInfo.some((b) => b.isPast);
+                    const upcomingBookings = bookingInfo.filter(
+                      (b) => !b.isPast,
+                    );
+
+                    // An addon is visually "Complete" if manually checked OR if they attended a past date
+                    const isEffectiveDone = manualDone || hasPastBooking;
+
+                    return (
+                      <div
+                        key={addon.id}
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "4px",
+                        }}
+                      >
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            padding: "12px",
+                            backgroundColor: isEffectiveDone
+                              ? "rgba(78, 95, 40, 0.1)"
+                              : "rgba(28, 7, 0, 0.03)",
+                            borderRadius: "12px",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                            border: isEffectiveDone
+                              ? "1px solid rgba(78, 95, 40, 0.3)"
+                              : "1px solid transparent",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isEffectiveDone}
+                            disabled={hasPastBooking} // Prevent unchecking if there is a past booking record
+                            onChange={() => toggleHistoryAddon(addon.id)}
+                            style={{
+                              transform: "scale(1.2)",
+                              accentColor: "#4e5f28",
+                            }}
+                          />
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              flex: 1,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "0.85rem",
+                                fontWeight: "600",
+                                color: "#1c0700",
+                              }}
+                            >
+                              {currentLang === "en"
+                                ? addon.nameEn
+                                : addon.nameDe}
+                              {addon.isMandatory && (
+                                <span
+                                  style={{
+                                    color: "#9960a8",
+                                    fontSize: "0.7rem",
+                                    marginLeft: "8px",
+                                  }}
+                                ></span>
+                              )}
+                            </span>
+
+                            {/* STATUS INDICATORS */}
+                            {hasPastBooking && (
+                              <span
+                                style={{
+                                  fontSize: "0.65rem",
+                                  color: "#4e5f28",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                ✓{" "}
+                                {currentLang === "en"
+                                  ? "Attended on "
+                                  : "Besucht am "}
+                                {bookingInfo
+                                  .filter((b) => b.isPast)
+                                  .map((b) =>
+                                    b.date.split("-").reverse().join("."),
+                                  )
+                                  .join(", ")}
+                              </span>
+                            )}
+
+                            {upcomingBookings.length > 0 && (
+                              <span
+                                style={{
+                                  fontSize: "0.65rem",
+                                  color: "#9960a8",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                ○{" "}
+                                {currentLang === "en"
+                                  ? "Upcoming: "
+                                  : "Geplant: "}
+                                {upcomingBookings
+                                  .map((b) =>
+                                    b.date.split("-").reverse().join("."),
+                                  )
+                                  .join(", ")}
+                              </span>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "10px", marginTop: "2rem" }}>
+              <button
+                onClick={saveHistory}
+                disabled={historyLoading}
+                style={{
+                  ...S.btnStyle,
+                  flex: 1,
+                  backgroundColor: "#9960a8",
+                  color: "white",
+                }}
+              >
+                {historyLoading ? (
+                  <Loader2 size={16} className="spinner" />
+                ) : (
+                  <Save size={16} />
+                )}{" "}
+                {labels.save}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

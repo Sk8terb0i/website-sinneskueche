@@ -37,6 +37,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   const [selectedDates, setSelectedDates] = useState([]);
   const [userBookedIds, setUserBookedIds] = useState([]);
   const [userCreditBookedIds, setUserCreditBookedIds] = useState([]);
+  const [userBookedAddonIds, setUserBookedAddonIds] = useState([]);
   const [eventBookingCounts, setEventBookingCounts] = useState({});
   const [addonBookingCounts, setAddonBookingCounts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -115,7 +116,11 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
             c[data.eventId] = (c[data.eventId] || 0) + 1;
             if (data.selectedAddons)
               data.selectedAddons.forEach((aid) => {
-                const k = `${data.eventId}_${aid}`;
+                const id = typeof aid === "object" ? aid.id : aid;
+                const time = typeof aid === "object" ? aid.time : null;
+                const k = time
+                  ? `${data.eventId}_${id}_${time}`
+                  : `${data.eventId}_${id}`;
                 ac[k] = (ac[k] || 0) + 1;
               });
           });
@@ -142,7 +147,10 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           });
           if (isMounted) setRequestedDates(rDates);
         } catch (reqErr) {
-          console.warn("Error fetching requests:", reqErr);
+          // Only log if it's NOT a permission error (which is expected for guests)
+          if (reqErr.code !== "permission-denied") {
+            console.warn("Error fetching requests:", reqErr);
+          }
         }
         if (currentUser && isMounted) {
           const uSnap = await getDocs(
@@ -157,6 +165,15 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
             allUserBookings.some((b) => b.coursePath === coursePath),
           );
           setUserBookedIds(allUserBookings.map((b) => b.eventId));
+
+          // --- NEW: Track specific addon IDs the user has already booked ---
+          const bookedAddonIds = allUserBookings.flatMap((b) =>
+            (b.selectedAddons || []).map((a) =>
+              typeof a === "object" ? a.id : a,
+            ),
+          );
+          setUserBookedAddonIds([...new Set(bookedAddonIds)]);
+          // ----------------------------------------------------------------
           // Filter out ONLY the bookings made with credits
           setUserCreditBookedIds(
             allUserBookings
@@ -459,8 +476,10 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                         let autoAddons = [];
                         let hasMandatoryInCart = prev.some((d) =>
                           d.selectedAddons?.some((aid) => {
+                            const idToCheck =
+                              typeof aid === "string" ? aid : aid.id;
                             const def = pricing?.specialEvents?.find(
-                              (se) => se.id === aid,
+                              (se) => se.id === idToCheck,
                             );
                             return def?.isMandatory;
                           }),
@@ -471,8 +490,25 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                             const def = pricing?.specialEvents?.find(
                               (se) => se.id === aid,
                             );
-                            if (def?.isMandatory && !hasMandatoryInCart) {
-                              autoAddons.push(aid);
+
+                            // UPDATED: Check if completed in profile OR already booked for the future
+                            const isAlreadyDone =
+                              userData?.completedAddons?.includes(aid) ||
+                              userBookedAddonIds.includes(aid);
+
+                            if (
+                              def?.isMandatory &&
+                              !hasMandatoryInCart &&
+                              !isAlreadyDone
+                            ) {
+                              if (def.timeSlots && def.timeSlots.length > 0) {
+                                autoAddons.push({
+                                  id: aid,
+                                  time: `${def.timeSlots[0].startTime}-${def.timeSlots[0].endTime}`,
+                                });
+                              } else {
+                                autoAddons.push(aid);
+                              }
                               hasMandatoryInCart = true;
                             }
                           });
@@ -493,18 +529,22 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                 >
                   {activeAddons.length > 0 && (
                     <div style={S.addonArcContainerStyle}>
-                      {activeAddons.map((id, idx) => (
-                        <div
-                          key={idx}
-                          style={S.addonDotStyle(
-                            getAddonColor(id),
-                            Math.pow(
-                              Math.abs(idx - (activeAddons.length - 1) / 2),
-                              2,
-                            ) * 3,
-                          )}
-                        />
-                      ))}
+                      {activeAddons
+                        .filter(
+                          (id) => !userData?.completedAddons?.includes(id),
+                        ) // Filter out completed addons
+                        .map((id, idx, filteredArray) => (
+                          <div
+                            key={idx}
+                            style={S.addonDotStyle(
+                              getAddonColor(id),
+                              Math.pow(
+                                Math.abs(idx - (filteredArray.length - 1) / 2),
+                                2,
+                              ) * 3,
+                            )}
+                          />
+                        ))}
                     </div>
                   )}
                   {i + 1}
@@ -545,17 +585,19 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
               </div>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-              {pricing?.specialEvents?.map((se) => (
-                <div key={se.id} style={S.legendItemStyle(isMobile)}>
-                  <div
-                    style={S.legendIndicatorStyle(
-                      getAddonColor(se.id),
-                      isMobile,
-                    )}
-                  />
-                  {currentLang === "en" ? se.nameEn : se.nameDe}
-                </div>
-              ))}
+              {pricing?.specialEvents
+                ?.filter((se) => !userData?.completedAddons?.includes(se.id)) // Filter out completed addons
+                ?.map((se) => (
+                  <div key={se.id} style={S.legendItemStyle(isMobile)}>
+                    <div
+                      style={S.legendIndicatorStyle(
+                        getAddonColor(se.id),
+                        isMobile,
+                      )}
+                    />
+                    {currentLang === "en" ? se.nameEn : se.nameDe}
+                  </div>
+                ))}
             </div>
           </div>
         </div>

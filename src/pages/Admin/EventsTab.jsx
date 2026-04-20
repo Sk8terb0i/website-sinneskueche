@@ -74,10 +74,11 @@ export default function EventsTab({
   const [participantCache, setParticipantCache] = useState({});
   const [isFormExpanded, setIsFormExpanded] = useState(!isMobile);
 
-  // New Request State
   const [requests, setRequests] = useState([]);
   const [notificationEmails, setNotificationEmails] = useState("");
   const [isSavingEmails, setIsSavingEmails] = useState(false);
+
+  const [expandedParticipants, setExpandedParticipants] = useState({});
 
   const isFullAdmin = userRole === "admin";
   const labels = {
@@ -223,7 +224,6 @@ export default function EventsTab({
         reqSnap.docs.map(async (docSnap) => {
           const req = { id: docSnap.id, ...docSnap.data() };
 
-          // Check if all dates in the request are in the past
           if (req.selectedDates && req.selectedDates.length > 0) {
             const hasFutureDate = req.selectedDates.some((sd) => {
               const eventDate = new Date(sd.date);
@@ -232,13 +232,11 @@ export default function EventsTab({
             });
 
             if (!hasFutureDate) {
-              // If all requested dates have passed, delete the request
               await deleteDoc(doc(db, "requests", req.id));
-              return; // Skip adding to the UI array
+              return;
             }
           }
 
-          // Filter out archived/cancelled requests for the UI
           if (
             req.status !== "rejected" &&
             req.status !== "cancelled" &&
@@ -307,6 +305,7 @@ export default function EventsTab({
       return;
     }
     if (event.bookedCount === 0) return alert(labels.noParticipants);
+
     if (!participantCache[event.id]) {
       const sanitizedId = event.link.replace(/\//g, "");
       const settingsSnap = await getDoc(
@@ -330,13 +329,16 @@ export default function EventsTab({
                 ? (await getDoc(doc(db, "users", b.userId))).data()
                 : { firstName: "Unknown", lastName: "User", email: "N/A" };
 
-          const addonNames = (b.selectedAddons || []).map((id) => {
-            const match = specialEvents.find((se) => se.id === id);
-            return match
+          const addonNames = (b.selectedAddons || []).map((item) => {
+            const addonId = typeof item === "object" ? item.id : item;
+            const timeSlot = typeof item === "object" ? item.time : null;
+            const match = specialEvents.find((se) => se.id === addonId);
+            const baseName = match
               ? currentLang === "de"
                 ? match.nameDe
                 : match.nameEn
-              : id;
+              : "Unknown Add-on";
+            return timeSlot ? `${baseName} (${timeSlot})` : baseName;
           });
 
           return {
@@ -349,21 +351,21 @@ export default function EventsTab({
 
       const groupedUsersMap = {};
       userDetails.forEach((u) => {
-        const key = u.email; // Use email as the unique key to group multiple tickets from one person
+        const key = u.email;
         if (!groupedUsersMap[key]) {
-          // Initialize the group with the first ticket's data
           groupedUsersMap[key] = {
             ...u,
             ticketCount: 1,
-            attendeeNames: [u.attendeeName || u.firstName],
+            tickets: [
+              { name: u.attendeeName || u.firstName, addons: u.addons },
+            ], // Store individual ticket info
           };
         } else {
-          // Increment count and add the next attendee's name to the list
           groupedUsersMap[key].ticketCount += 1;
-          groupedUsersMap[key].attendeeNames.push(
-            u.attendeeName || u.firstName,
-          );
-          groupedUsersMap[key].addons.push(...u.addons);
+          groupedUsersMap[key].tickets.push({
+            name: u.attendeeName || u.firstName,
+            addons: u.addons,
+          });
         }
       });
 
@@ -501,7 +503,6 @@ export default function EventsTab({
   const scheduledCourses = events.filter((ev) => ev.type === "course");
   const scheduledEvents = events.filter((ev) => ev.type === "event");
 
-  // Group Courses
   const groupedCourses = scheduledCourses.reduce((acc, course) => {
     const key = course.link;
     if (!acc[key])
@@ -515,7 +516,6 @@ export default function EventsTab({
     return acc;
   }, {});
 
-  // Group Events
   const groupedEvents = [];
   const eventGroupsMap = {};
 
@@ -542,7 +542,6 @@ export default function EventsTab({
     }
   });
 
-  // Group Requests
   const groupedRequests = requests.reduce((acc, req) => {
     const key = req.coursePath || "unknown";
     if (!acc[key]) {
@@ -744,68 +743,160 @@ export default function EventsTab({
 
       {!isEvent && showParticipantsFor === ev.id && participantCache[ev.id] && (
         <div style={styles.participantPanel}>
-          {participantCache[ev.id].map((u, i) => (
-            <div key={i} style={styles.userRow}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  flexWrap: "wrap",
-                  gap: "8px",
-                }}
-              >
+          {participantCache[ev.id].map((u, i) => {
+            const groupKey = `${ev.id}_${u.email}`;
+            const isExpanded = expandedParticipants[groupKey];
+            const hasMultiple = u.ticketCount > 1;
+
+            return (
+              <div key={i} style={styles.userRowGroup}>
+                {/* Header Row: Primary Booker */}
                 <div
+                  onClick={() =>
+                    hasMultiple &&
+                    setExpandedParticipants((prev) => ({
+                      ...prev,
+                      [groupKey]: !isExpanded,
+                    }))
+                  }
                   style={{
                     display: "flex",
+                    justifyContent: "space-between",
                     alignItems: "center",
-                    gap: "10px",
+                    cursor: hasMultiple ? "pointer" : "default",
+                    padding: "8px 0",
                   }}
                 >
-                  <User size={14} color="#4e5f28" />
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    {/* Primary Booker Info */}
-                    <strong
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      flex: 1,
+                    }}
+                  >
+                    <div
                       style={{
-                        color: u.isGuest ? "#9960a8" : "inherit",
-                        fontSize: "0.85rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "24px",
                       }}
                     >
-                      {u.firstName} {u.lastName}{" "}
-                      {u.ticketCount > 1 ? `(${u.ticketCount})` : ""}
-                    </strong>
-
-                    {/* ONLY show list of attendee names if they booked more than 1 ticket */}
-                    {u.ticketCount > 1 && (
-                      <div
+                      <User
+                        size={16}
+                        color={u.isGuest ? "#9960a8" : "#4e5f28"}
+                      />
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span
                         style={{
-                          fontSize: "0.75rem",
-                          opacity: 0.7,
-                          fontStyle: "italic",
-                          marginTop: "2px",
-                          color: "#1c0700",
+                          fontWeight: "800",
+                          fontSize: "0.95rem",
+                          color: u.isGuest ? "#9960a8" : "#1c0700",
                         }}
                       >
-                        {u.attendeeNames.join(", ")}
-                      </div>
-                    )}
+                        {u.firstName} {u.lastName}{" "}
+                        {hasMultiple && `(${u.ticketCount})`}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          opacity: 0.6,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <Mail size={10} /> {u.email}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
+                  >
+                    {/* Show addons on main row only if NOT expanded or if only 1 ticket */}
+                    {(!isExpanded || !hasMultiple) &&
+                      u.tickets[0].addons?.length > 0 && (
+                        <div style={styles.addonList}>
+                          {u.tickets[0].addons.map((an, ai) => (
+                            <span key={ai} style={styles.addonBadge}>
+                              <Star size={10} fill="#caaff3" color="#caaff3" />{" "}
+                              {an}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    {hasMultiple &&
+                      (isExpanded ? (
+                        <ChevronDown size={18} opacity={0.4} />
+                      ) : (
+                        <ChevronRight size={18} opacity={0.4} />
+                      ))}
                   </div>
                 </div>
-                {u.addons?.length > 0 && (
-                  <div style={styles.addonList}>
-                    {u.addons.map((an, ai) => (
-                      <span key={ai} style={styles.addonBadge}>
-                        <Star size={10} fill="#caaff3" color="#caaff3" /> {an}
-                      </span>
+
+                {/* Expanded Section: Individual Attendees */}
+                {hasMultiple && isExpanded && (
+                  <div
+                    style={{
+                      marginLeft: "36px",
+                      marginTop: "4px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      borderLeft: "2px solid rgba(28,7,0,0.05)",
+                      paddingLeft: "12px",
+                      paddingBottom: "8px",
+                    }}
+                  >
+                    {u.tickets.map((t, ti) => (
+                      <div
+                        key={ti}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          backgroundColor: "rgba(255,252,225,0.4)",
+                          padding: "6px 10px",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "0.85rem",
+                            fontWeight: "600",
+                            color: "#1c0700",
+                          }}
+                        >
+                          {t.name}
+                        </span>
+                        {t.addons?.length > 0 && (
+                          <div style={styles.addonList}>
+                            {t.addons.map((an, ai) => (
+                              <span key={ai} style={styles.addonBadge}>
+                                <Star
+                                  size={10}
+                                  fill="#caaff3"
+                                  color="#caaff3"
+                                />{" "}
+                                {an}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
-              <span style={styles.contactText}>
-                <Mail size={10} /> {u.email}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -1181,8 +1272,8 @@ export default function EventsTab({
                       ...btnStyle,
                       marginTop: 0,
                       padding: "0 20px",
-                      width: isMobile ? "100%" : "auto", // Fixes the crushing issue
-                      whiteSpace: "nowrap", // Keeps the text on one line
+                      width: isMobile ? "100%" : "auto",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {isSavingEmails ? (
@@ -1495,11 +1586,18 @@ const styles = {
     minWidth: "110px",
   },
   participantPanel: {
-    backgroundColor: "rgba(78, 95, 40, 0.05)",
-    padding: "12px",
-    borderRadius: "12px",
-    border: "1px solid rgba(78, 95, 40, 0.1)",
-    marginTop: "5px",
+    backgroundColor: "rgba(78, 95, 40, 0.04)",
+    padding: "8px 16px",
+    borderRadius: "16px",
+    border: "1px solid rgba(78, 95, 40, 0.08)",
+    marginTop: "8px",
+    display: "flex",
+    flexDirection: "column",
+  },
+  userRowGroup: {
+    borderBottom: "1px solid rgba(28,7,0,0.05)",
+    padding: "4px 0",
+    "&:last-child": { borderBottom: "none" },
   },
   userRow: {
     display: "flex",
@@ -1524,17 +1622,18 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: "4px",
-    alignItems: "flex-end",
+    alignItems: "flex-end", // Keeps them neatly tucked to the right
   },
   addonBadge: {
     fontSize: "0.65rem",
     fontWeight: "800",
     color: "#9960a8",
-    backgroundColor: "rgba(202, 175, 243, 0.15)",
-    padding: "2px 8px",
-    borderRadius: "4px",
+    backgroundColor: "rgba(202, 175, 243, 0.12)",
+    padding: "3px 10px",
+    borderRadius: "6px",
     display: "flex",
     alignItems: "center",
-    gap: "4px",
+    gap: "5px",
+    whiteSpace: "nowrap",
   },
 };

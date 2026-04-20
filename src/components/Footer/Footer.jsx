@@ -105,8 +105,8 @@ export default function Footer({ currentLang }) {
                 >
                   instagram
                 </a>
-                <a href="mailto:hallo@sinneskueche.ch" style={styles.link}>
-                  hallo@sinneskueche.ch
+                <a href="mailto:salut@sinneskueche.ch" style={styles.link}>
+                  salut@sinneskueche.ch
                 </a>
               </>
             )}
