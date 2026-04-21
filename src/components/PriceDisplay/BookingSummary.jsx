@@ -1619,6 +1619,27 @@ export default function BookingSummary({
                     : "Pro Tag kann nur 1 Ticket mit Guthaben bezahlt werden. Zusätzliche Tickets werden zum Einzelpreis berechnet."}
                 </p>
               )}
+            {/* --- NEW: Remaining credits info inside the selected card --- */}
+            {isSelected && !pack.isIndividual && (
+              <p
+                style={{
+                  fontSize: "0.7rem",
+                  opacity: 0.6,
+                  marginTop: "8px",
+                  fontStyle: "italic",
+                  lineHeight: "1.4",
+                }}
+              >
+                {extraSessionsCount > 0
+                  ? currentLang === "en"
+                    ? "Selection exceeds available credits and pack size. Extras added at single price."
+                    : "Auswahl überschreitet Guthaben und Kartengröße. Extras zum Einzelpreis berechnet."
+                  : currentLang === "en"
+                    ? `The remaining ${Math.max(0, pack.size - remainingEligibleToPay)} credits will be saved to your profile.`
+                    : `Die restlichen ${Math.max(0, pack.size - remainingEligibleToPay)} Guthaben werden deinem Profil gutgeschrieben.`}
+              </p>
+            )}
+            {/* ----------------------------------------------------------- */}
           </div>
         );
       })}
@@ -1696,27 +1717,6 @@ export default function BookingSummary({
                 ? `${hasSelection ? "Buy & Book" : "Buy"} (${formatPrice(finalPackPrice)} CHF)`
                 : `${hasSelection ? "Kaufen & Buchen" : "Kaufen"} (${formatPrice(finalPackPrice)} CHF)`}
         </button>
-
-        {selectedPackIndex !== null && !currentPack.isIndividual && (
-          <p
-            style={{
-              fontSize: "0.7rem",
-              opacity: 0.6,
-              marginTop: "5px",
-              fontStyle: "italic",
-              lineHeight: "1.4",
-              textAlign: "center",
-            }}
-          >
-            {extraSessionsCount > 0
-              ? currentLang === "en"
-                ? "Selection exceeds available credits and pack size. Extras added at single price."
-                : "Auswahl überschreitet Guthaben und Kartengröße. Extras zum Einzelpreis berechnet."
-              : currentLang === "en"
-                ? `The remaining ${Math.max(0, currentPack.size - remainingEligibleToPay)} credits will be saved to your profile.`
-                : `Die restlichen ${Math.max(0, currentPack.size - remainingEligibleToPay)} Guthaben werden deinem Profil gutgeschrieben.`}
-          </p>
-        )}
       </div>
     </div>
   );
