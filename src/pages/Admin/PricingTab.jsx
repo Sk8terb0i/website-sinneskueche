@@ -1272,6 +1272,7 @@ export default function PricingTab({
                                 display: "flex",
                                 gap: "10px",
                                 alignItems: "center",
+                                flexWrap: "wrap", // <-- Added to allow wrapping on mobile
                               }}
                             >
                               <input
@@ -1293,6 +1294,7 @@ export default function PricingTab({
                                   fontSize: "0.75rem",
                                   flex: 1,
                                   backgroundColor: "white",
+                                  minWidth: "90px", // <-- Ensure time input doesn't get cut off
                                 }}
                                 title={labels.startTime}
                               />
@@ -1320,10 +1322,19 @@ export default function PricingTab({
                                   fontSize: "0.75rem",
                                   flex: 1,
                                   backgroundColor: "white",
+                                  minWidth: "90px", // <-- Ensure time input doesn't get cut off
                                 }}
                                 title={labels.endTime}
                               />
-                              <div style={{ position: "relative", flex: 1 }}>
+                              <div
+                                style={{
+                                  position: "relative",
+                                  flex: 1,
+                                  minWidth: "90px",
+                                }}
+                              >
+                                {" "}
+                                {/* <-- Added minWidth */}
                                 <input
                                   type="number"
                                   value={slot.capacity || ""}
@@ -1633,6 +1644,7 @@ export default function PricingTab({
                             display: "flex",
                             gap: "10px",
                             alignItems: "center",
+                            flexWrap: "wrap", // <-- Added to allow wrapping on mobile
                           }}
                         >
                           <input
@@ -1652,6 +1664,7 @@ export default function PricingTab({
                               fontSize: "0.8rem",
                               flex: 1,
                               backgroundColor: "white",
+                              minWidth: "90px", // <-- Ensure time input doesn't get cut off
                             }}
                             title={labels.startTime}
                           />
@@ -1675,10 +1688,19 @@ export default function PricingTab({
                               fontSize: "0.8rem",
                               flex: 1,
                               backgroundColor: "white",
+                              minWidth: "90px", // <-- Ensure time input doesn't get cut off
                             }}
                             title={labels.endTime}
                           />
-                          <div style={{ position: "relative", flex: 1 }}>
+                          <div
+                            style={{
+                              position: "relative",
+                              flex: 1,
+                              minWidth: "90px",
+                            }}
+                          >
+                            {" "}
+                            {/* <-- Added minWidth */}
                             <input
                               type="number"
                               value={slot.capacity}
