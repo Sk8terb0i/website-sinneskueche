@@ -88,7 +88,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const labels = {
+  const ALL_LABELS = {
     en: {
       loginTitle: "Atelier Login",
       email: "Email",
@@ -149,7 +149,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
       groupName: "Gruppenname",
       setGroupColor: "Gruppenfarbe setzen",
     },
-  }[currentLang || "en"];
+  };
+
+  const labels = ALL_LABELS[currentLang || "en"];
 
   const DEFAULT_NAV = {
     groups: [
@@ -181,6 +183,29 @@ export default function Admin({ currentLang, setCurrentLang }) {
       },
     ],
     tabSettings: {},
+  };
+
+  const defaultTabKeys = {
+    events: "events",
+    profiles: "profiles",
+    "course-management": "courseMgmt",
+    schedule: "schedule",
+    reminders: "reminders",
+    terms: "terms",
+    emails: "emails",
+    "pack-codes": "packCodes",
+    promotions: "promotions",
+    rental: "rental",
+    firing: "firing",
+    messages: "messages",
+  };
+
+  const getTabLabel = (tabKey, lang) => {
+    // 1. Check if user set a custom name for this tab
+    const customName = navConfig?.tabSettings?.[tabKey]?.name?.[lang];
+    if (customName && customName.trim() !== "") return customName;
+    // 2. Fall back to default label
+    return ALL_LABELS[lang]?.[defaultTabKeys[tabKey]] || tabKey;
   };
 
   const TAB_META = {
@@ -354,6 +379,22 @@ export default function Admin({ currentLang, setCurrentLang }) {
     setNavConfig(newConfig);
   };
 
+  const updateTabName = (tabKey, lang, val) => {
+    setNavConfig((prev) => ({
+      ...prev,
+      tabSettings: {
+        ...prev.tabSettings,
+        [tabKey]: {
+          ...prev.tabSettings?.[tabKey],
+          name: {
+            ...prev.tabSettings?.[tabKey]?.name,
+            [lang]: val,
+          },
+        },
+      },
+    }));
+  };
+
   const updateTabColor = (tabKey, color) => {
     setNavConfig((prev) => ({
       ...prev,
@@ -435,7 +476,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       <span
         style={{
           backgroundColor: "#9960a8",
-          color: "white",
+          color: "#fffce3",
           fontSize: "10px",
           fontWeight: "bold",
           padding: "2px 6px",
@@ -652,7 +693,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
                 <div
                   key={group.id}
                   style={{
-                    backgroundColor: "white",
+                    backgroundColor: "#fefce6",
                     padding: "1.5rem",
                     borderRadius: "16px",
                     boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
@@ -772,14 +813,20 @@ export default function Admin({ currentLang, setCurrentLang }) {
                     }}
                   >
                     {group.items.map((item, iIdx) => {
-                      const meta = TAB_META[item];
                       const settings = navConfig.tabSettings?.[item] || {};
+
+                      // Fetch the default names for the placeholders
+                      const defaultEn =
+                        ALL_LABELS.en[defaultTabKeys[item]] || item;
+                      const defaultDe =
+                        ALL_LABELS.de[defaultTabKeys[item]] || item;
+
                       return (
                         <div
                           key={item}
                           style={{
                             display: "flex",
-                            alignItems: "center",
+                            alignItems: isMobile ? "flex-start" : "center",
                             gap: "10px",
                             padding: "10px",
                             border: uniformColor
@@ -788,17 +835,63 @@ export default function Admin({ currentLang, setCurrentLang }) {
                             borderRadius: "10px",
                           }}
                         >
-                          <GripVertical size={16} style={{ opacity: 0.3 }} />
+                          <GripVertical
+                            size={16}
+                            style={{
+                              opacity: 0.3,
+                              marginTop: isMobile ? "10px" : "0",
+                              flexShrink: 0,
+                            }}
+                          />
+
                           <div
                             style={{
                               flex: 1,
-                              fontWeight: "700",
-                              fontSize: "14px",
+                              display: "flex",
+                              flexDirection: isMobile ? "column" : "row",
+                              gap: "6px",
+                              minWidth: 0, // Prevents inputs from blowing out the container width on small screens
                             }}
                           >
-                            {meta?.label}
+                            <input
+                              placeholder={`EN: ${defaultEn}`}
+                              value={settings.name?.en || ""}
+                              onChange={(e) =>
+                                updateTabName(item, "en", e.target.value)
+                              }
+                              style={{
+                                ...inputStyle,
+                                padding: "8px",
+                                fontSize: "12px",
+                                height: "auto",
+                                width: "100%",
+                              }}
+                            />
+                            <input
+                              placeholder={`DE: ${defaultDe}`}
+                              value={settings.name?.de || ""}
+                              onChange={(e) =>
+                                updateTabName(item, "de", e.target.value)
+                              }
+                              style={{
+                                ...inputStyle,
+                                padding: "8px",
+                                fontSize: "12px",
+                                height: "auto",
+                                width: "100%",
+                              }}
+                            />
                           </div>
-                          <div style={{ display: "flex", gap: "4px" }}>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: isMobile ? "column" : "row",
+                              gap: "8px",
+                              alignItems: "center",
+                              flexShrink: 0,
+                            }}
+                          >
                             <input
                               type="color"
                               value={settings.color || "#caaff3"}
@@ -806,35 +899,41 @@ export default function Admin({ currentLang, setCurrentLang }) {
                                 updateTabColor(item, e.target.value)
                               }
                               style={{
-                                width: "20px",
-                                height: "20px",
+                                width: "24px",
+                                height: "24px",
                                 border: "none",
                                 background: "none",
                                 cursor: "pointer",
                               }}
                             />
-                            <button
-                              onClick={() => moveItem(gIdx, iIdx, "up")}
-                              style={{
-                                border: "none",
-                                background: "#f5f5f5",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                              }}
-                            >
-                              <ArrowUp size={12} />
-                            </button>
-                            <button
-                              onClick={() => moveItem(gIdx, iIdx, "down")}
-                              style={{
-                                border: "none",
-                                background: "#f5f5f5",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                              }}
-                            >
-                              <ArrowDown size={12} />
-                            </button>
+                            <div style={{ display: "flex", gap: "4px" }}>
+                              <button
+                                onClick={() => moveItem(gIdx, iIdx, "up")}
+                                style={{
+                                  border: "none",
+                                  background: "#edead3",
+                                  borderRadius: "6px",
+                                  cursor: "pointer",
+                                  padding: "4px",
+                                  display: "flex",
+                                }}
+                              >
+                                <ArrowUp size={14} />
+                              </button>
+                              <button
+                                onClick={() => moveItem(gIdx, iIdx, "down")}
+                                style={{
+                                  border: "none",
+                                  background: "#edead3",
+                                  borderRadius: "6px",
+                                  cursor: "pointer",
+                                  padding: "4px",
+                                  display: "flex",
+                                }}
+                              >
+                                <ArrowDown size={14} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
