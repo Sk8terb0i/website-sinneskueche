@@ -9,6 +9,7 @@ import {
   where,
   orderBy,
   getDoc,
+  deleteDoc,
 } from "firebase/firestore";
 import {
   Edit2,
@@ -42,7 +43,7 @@ export default function ProfilesTab({
   const [historyCourse, setHistoryCourse] = useState("");
   const [courseAddons, setCourseAddons] = useState([]);
   const [completedAddons, setCompletedAddons] = useState([]);
-  const [bookedAddonsInfo, setBookedAddonsInfo] = useState({}); // Stores { addonId: [{date, isPast}] }
+  const [bookedAddonsInfo, setBookedAddonsInfo] = useState({});
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const labels = {
@@ -96,16 +97,59 @@ export default function ProfilesTab({
     fetchUsers();
   }, []);
 
+  const getGroupTint = (id) => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash % 360);
+    return `hsl(${h}, 35%, 94%)`;
+  };
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
+      const roleOrder = { admin: 0, course_admin: 1, instructor: 2, user: 3 };
       const q = query(collection(db, "users"), orderBy("email", "asc"));
       const querySnapshot = await getDocs(q);
-      const userList = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setUsers(userList);
+
+      // Sort main users by role priority
+      const sortedMainDocs = querySnapshot.docs.sort((a, b) => {
+        const priorityA = roleOrder[a.data().role] ?? 99;
+        const priorityB = roleOrder[b.data().role] ?? 99;
+        return priorityA - priorityB;
+      });
+
+      const allProfiles = [];
+      sortedMainDocs.forEach((docSnap) => {
+        const mainId = docSnap.id;
+        const data = docSnap.data();
+        const hasSubs = data.linkedProfiles && data.linkedProfiles.length > 0;
+        const groupColor = hasSubs ? getGroupTint(mainId) : null;
+
+        allProfiles.push({
+          id: mainId,
+          ...data,
+          isMain: true,
+          groupColor: groupColor,
+        });
+
+        if (hasSubs) {
+          data.linkedProfiles.forEach((lp) => {
+            allProfiles.push({
+              ...lp,
+              id: `${mainId}_${lp.id}`, // Unique ID for the UI
+              realSubId: lp.id, // Original ID for DB updates
+              parentId: mainId,
+              parentEmail: data.email,
+              isMain: false,
+              groupColor: groupColor,
+              role: "user",
+            });
+          });
+        }
+      });
+      setUsers(allProfiles);
     } catch (error) {
       console.error("Error fetching users:", error);
     } finally {
@@ -120,19 +164,28 @@ export default function ProfilesTab({
 
   const handleSave = async () => {
     try {
-      const userRef = doc(db, "users", editingId);
-      const updateData = {
-        role: editForm.role || "user",
-        firstName: editForm.firstName || "",
-        lastName: editForm.lastName || "",
-        credits: editForm.credits || {},
-        // Allow instructors and course admins to have permitted courses if needed
-        allowedCourses:
-          editForm.role === "course_admin" || editForm.role === "instructor"
-            ? editForm.allowedCourses || []
-            : [],
-      };
-      await updateDoc(userRef, updateData);
+      const docId = editForm.isMain ? editingId : editForm.parentId;
+      const userRef = doc(db, "users", docId);
+
+      if (editForm.isMain) {
+        await updateDoc(userRef, {
+          role: editForm.role || "user",
+          firstName: editForm.firstName || "",
+          lastName: editForm.lastName || "",
+        });
+      } else {
+        const parentSnap = await getDoc(userRef);
+        const updatedLinked = parentSnap.data().linkedProfiles.map((lp) =>
+          lp.id === editForm.realSubId
+            ? {
+                ...lp,
+                firstName: editForm.firstName,
+                lastName: editForm.lastName,
+              }
+            : lp,
+        );
+        await updateDoc(userRef, { linkedProfiles: updatedLinked });
+      }
       setEditingId(null);
       fetchUsers();
     } catch (error) {
@@ -148,24 +201,43 @@ export default function ProfilesTab({
     setEditForm({ ...editForm, allowedCourses: updated });
   };
 
-  // --- UPDATED HISTORY LOGIC ---
+  const handleDeleteUser = async (u) => {
+    const msg = u.isMain
+      ? "Delete main user? Linked profiles will be lost."
+      : `Delete sub-user ${u.firstName}?`;
+
+    if (window.confirm(msg)) {
+      try {
+        const userRef = doc(db, "users", u.isMain ? u.id : u.parentId);
+        if (u.isMain) {
+          await deleteDoc(userRef);
+        } else {
+          const parentSnap = await getDoc(userRef);
+          const updatedLinked = parentSnap
+            .data()
+            .linkedProfiles.filter((lp) => lp.id !== u.realSubId);
+          await updateDoc(userRef, { linkedProfiles: updatedLinked });
+        }
+        fetchUsers();
+      } catch (e) {
+        alert("Delete failed: " + e.message);
+      }
+    }
+  };
+
   const openHistory = async (user) => {
     setHistoryUser(user);
     setCompletedAddons(user.completedAddons || []);
-
-    // NEW: Auto-select the first course from the dropdown immediately
     if (allPossibleCourses.length > 0) {
       setHistoryCourse(allPossibleCourses[0][0]);
     }
-
     setHistoryLoading(true);
     setHistoryModalOpen(true);
 
     try {
-      // Fetch all bookings for this user to find addon history
       const q = query(
         collection(db, "bookings"),
-        where("userId", "==", user.id),
+        where("userId", "==", user.isMain ? user.id : user.parentId),
       );
       const snap = await getDocs(q);
       const today = new Date();
@@ -174,11 +246,13 @@ export default function ProfilesTab({
       const addonMap = {};
       snap.docs.forEach((doc) => {
         const data = doc.data();
-        if (data.selectedAddons) {
+        if (
+          data.profileId === (user.isMain ? "main" : user.id.split("_")[1]) &&
+          data.selectedAddons
+        ) {
           data.selectedAddons.forEach((item) => {
             const aid = typeof item === "object" ? item.id : item;
             if (!addonMap[aid]) addonMap[aid] = [];
-
             const bookingDate = new Date(data.date);
             addonMap[aid].push({
               date: data.date,
@@ -201,11 +275,8 @@ export default function ProfilesTab({
       try {
         const docId = historyCourse.replace(/\//g, "");
         const snap = await getDoc(doc(db, "course_settings", docId));
-        if (snap.exists()) {
-          setCourseAddons(snap.data().specialEvents || []);
-        } else {
-          setCourseAddons([]);
-        }
+        if (snap.exists()) setCourseAddons(snap.data().specialEvents || []);
+        else setCourseAddons([]);
       } catch (e) {
         console.error(e);
       }
@@ -225,14 +296,21 @@ export default function ProfilesTab({
   const saveHistory = async () => {
     setHistoryLoading(true);
     try {
-      await updateDoc(doc(db, "users", historyUser.id), {
-        completedAddons,
-      });
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === historyUser.id ? { ...u, completedAddons } : u,
-        ),
-      );
+      const docId = historyUser.isMain ? historyUser.id : historyUser.parentId;
+      const userRef = doc(db, "users", docId);
+      if (historyUser.isMain) {
+        await updateDoc(userRef, { completedAddons });
+      } else {
+        const parentSnap = await getDoc(userRef);
+        const parentData = parentSnap.data();
+        const updatedLinked = parentData.linkedProfiles.map((lp) => {
+          if (lp.id === historyUser.id.split("_")[1])
+            return { ...lp, completedAddons };
+          return lp;
+        });
+        await updateDoc(userRef, { linkedProfiles: updatedLinked });
+      }
+      fetchUsers();
       setHistoryModalOpen(false);
     } catch (e) {
       alert("Error saving history: " + e.message);
@@ -241,11 +319,27 @@ export default function ProfilesTab({
   };
 
   const filteredUsers = users.filter((u) => {
-    const matchesSearch =
-      u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.firstName?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
+    const search = searchQuery.toLowerCase();
+    return (
+      u.email?.toLowerCase().includes(search) ||
+      u.firstName?.toLowerCase().includes(search) ||
+      u.lastName?.toLowerCase().includes(search) ||
+      u.parentEmail?.toLowerCase().includes(search)
+    );
   });
+
+  const familyStacks = [];
+  let currentStack = [];
+  filteredUsers.forEach((u) => {
+    if (u.isMain) {
+      if (currentStack.length > 0) familyStacks.push(currentStack);
+      currentStack = [u];
+    } else {
+      if (currentStack.length === 0) familyStacks.push([u]);
+      else currentStack.push(u);
+    }
+  });
+  if (currentStack.length > 0) familyStacks.push(currentStack);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
@@ -257,7 +351,6 @@ export default function ProfilesTab({
         }}
       >
         <div style={{ position: "relative", maxWidth: "400px", flex: 1 }}>
-          {/* FIX: Replaced non-existent S.SearchIconWrapper with standard div styling */}
           <div
             style={{
               position: "absolute",
@@ -292,251 +385,238 @@ export default function ProfilesTab({
       ) : (
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: isMobile
-              ? "1fr"
-              : "repeat(auto-fill, minmax(380px, 1fr))",
-            gap: "1.5rem",
+            // Use columns to pack items vertically and remove the gaps
+            columns: isMobile ? "auto" : "2 380px",
+            columnGap: "1.5rem",
+            width: "100%",
           }}
         >
-          {filteredUsers.map((u) => (
+          {familyStacks.map((stack, stackIdx) => (
             <div
-              key={u.id}
+              key={stackIdx}
               style={{
-                backgroundColor: "#fdf8e1",
-                padding: "1.5rem",
-                borderRadius: "20px",
-                border: "1px solid rgba(28,7,0,0.05)",
-                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+                gap: "1rem",
+                marginBottom: "1.5rem",
+                breakInside: "avoid", // Prevents family members from splitting across columns
               }}
             >
-              {editingId === u.id ? (
+              {stack.map((u) => (
                 <div
+                  key={u.id}
                   style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "1rem",
+                    backgroundColor: u.groupColor || "#fdf8e1",
+                    padding: "1.5rem",
+                    borderRadius: "20px",
+                    border: u.isMain
+                      ? u.groupColor
+                        ? "1px solid rgba(153, 96, 168, 0.2)"
+                        : "1px solid rgba(28,7,0,0.05)"
+                      : "2px dashed rgba(153, 96, 168, 0.3)",
+                    position: "relative",
+                    marginLeft:
+                      !isMobile &&
+                      !u.isMain &&
+                      filteredUsers.some((f) => f.id === u.parentId)
+                        ? "30px"
+                        : "0",
+                    transition: "all 0.2s ease",
                   }}
                 >
-                  <input
-                    style={S.inputStyle}
-                    value={editForm.firstName || ""}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, firstName: e.target.value })
-                    }
-                    placeholder={labels.first}
-                  />
-                  <label style={S.labelStyle}>{labels.role}</label>
-                  <select
-                    style={S.inputStyle}
-                    value={editForm.role}
-                    disabled={currentUserRole !== "admin"}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, role: e.target.value })
-                    }
-                  >
-                    <option value="user">{labels.user}</option>
-                    <option value="instructor">{labels.instructor}</option>
-                    <option value="course_admin">{labels.courseAdmin}</option>
-                    <option value="admin">{labels.fullAdmin}</option>
-                  </select>
-
-                  {(editForm.role === "course_admin" ||
-                    editForm.role === "instructor") && (
-                    <div style={{ marginTop: "5px" }}>
-                      <label style={{ ...S.labelStyle, fontSize: "0.65rem" }}>
-                        {labels.permitted}
-                      </label>
+                  {editingId === u.id ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "1rem",
+                      }}
+                    >
+                      <input
+                        style={S.inputStyle}
+                        value={editForm.firstName || ""}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            firstName: e.target.value,
+                          })
+                        }
+                        placeholder={labels.first}
+                      />
+                      <label style={S.labelStyle}>{labels.role}</label>
+                      <select
+                        style={S.inputStyle}
+                        value={editForm.role}
+                        disabled={currentUserRole !== "admin" || !u.isMain}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, role: e.target.value })
+                        }
+                      >
+                        <option value="user">{labels.user}</option>
+                        <option value="instructor">{labels.instructor}</option>
+                        <option value="course_admin">
+                          {labels.courseAdmin}
+                        </option>
+                        <option value="admin">{labels.fullAdmin}</option>
+                      </select>
                       <div
                         style={{
                           display: "flex",
-                          flexWrap: "wrap",
-                          gap: "5px",
-                          marginTop: "8px",
+                          gap: "10px",
+                          marginTop: "1rem",
                         }}
                       >
-                        {allPossibleCourses.map(([path, name]) => (
-                          <button
-                            key={path}
-                            type="button"
-                            onClick={() => toggleCoursePermission(path)}
+                        <button
+                          onClick={handleSave}
+                          style={{ ...S.btnStyle, flex: 1 }}
+                        >
+                          <Save size={16} /> {labels.save}
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          style={{
+                            ...S.btnStyle,
+                            flex: 1,
+                            backgroundColor: "rgba(28,7,0,0.1)",
+                          }}
+                        >
+                          <X size={16} /> {labels.cancel}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          marginBottom: "1rem",
+                        }}
+                      >
+                        <div>
+                          <h3
                             style={{
-                              padding: "5px 12px",
-                              fontSize: "0.65rem",
-                              borderRadius: "100px",
-                              border: "1px solid #caaff3",
-                              fontWeight: "bold",
-                              backgroundColor:
-                                editForm.allowedCourses?.includes(path)
-                                  ? "#caaff3"
-                                  : "transparent",
-                              cursor: "pointer",
+                              margin: 0,
+                              fontSize: "1.1rem",
+                              fontFamily: "Harmond-SemiBoldCondensed",
                             }}
                           >
-                            {name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div
-                    style={{ display: "flex", gap: "10px", marginTop: "1rem" }}
-                  >
-                    <button
-                      onClick={handleSave}
-                      style={{ ...S.btnStyle, flex: 1 }}
-                    >
-                      <Save size={16} /> {labels.save}
-                    </button>
-                    <button
-                      onClick={() => setEditingId(null)}
-                      style={{
-                        ...S.btnStyle,
-                        flex: 1,
-                        backgroundColor: "rgba(28,7,0,0.1)",
-                      }}
-                    >
-                      <X size={16} /> {labels.cancel}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      marginBottom: "1rem",
-                    }}
-                  >
-                    <div>
-                      <h3
-                        style={{
-                          margin: 0,
-                          fontSize: "1.1rem",
-                          fontFamily: "Harmond-SemiBoldCondensed",
-                        }}
-                      >
-                        {u.firstName || "Unnamed"} {u.lastName || ""}
-                      </h3>
-                      <p
-                        style={{ margin: 0, fontSize: "0.8rem", opacity: 0.6 }}
-                      >
-                        <Mail size={12} /> {u.email}
-                      </p>
-                    </div>
-                    <div
-                      style={{
-                        backgroundColor:
-                          u.role === "admin"
-                            ? "#caaff3"
-                            : u.role === "course_admin"
-                              ? "#4e5f28"
-                              : u.role === "instructor"
-                                ? "#9960a8"
-                                : "rgba(28,7,0,0.05)",
-                        color:
-                          u.role === "course_admin" || u.role === "instructor"
-                            ? "white"
-                            : "inherit",
-                        padding: "4px 10px",
-                        borderRadius: "100px",
-                        fontSize: "0.6rem",
-                        fontWeight: "900",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {u.role === "admin"
-                        ? labels.fullAdmin
-                        : u.role === "course_admin"
-                          ? labels.courseAdmin
-                          : u.role === "instructor"
-                            ? labels.instructor
-                            : labels.user}
-                    </div>
-                  </div>
-
-                  {(u.role === "course_admin" || u.role === "instructor") &&
-                    u.allowedCourses?.length > 0 && (
-                      <div style={{ marginBottom: "10px" }}>
-                        <p
-                          style={{
-                            fontSize: "0.6rem",
-                            opacity: 0.5,
-                            marginBottom: "4px",
-                          }}
-                        >
-                          {labels.accessTo}
-                        </p>
+                            {u.firstName || "Unnamed"} {u.lastName || ""}
+                            {!u.isMain && (
+                              <span
+                                style={{
+                                  fontSize: "0.6rem",
+                                  color: "#9960a8",
+                                  marginLeft: "8px",
+                                  backgroundColor: "rgba(255,255,255,0.7)",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                SUB-USER
+                              </span>
+                            )}
+                          </h3>
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: "0.8rem",
+                              opacity: 0.6,
+                            }}
+                          >
+                            <Mail size={12} />{" "}
+                            {u.isMain ? u.email : `Linked to: ${u.parentEmail}`}
+                          </p>
+                        </div>
                         <div
                           style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: "4px",
+                            backgroundColor:
+                              u.role === "admin"
+                                ? "#caaff3"
+                                : u.role === "course_admin"
+                                  ? "#4e5f28"
+                                  : u.role === "instructor"
+                                    ? "#9960a8"
+                                    : "rgba(28,7,0,0.1)",
+                            color:
+                              u.role === "course_admin" ||
+                              u.role === "instructor"
+                                ? "white"
+                                : "inherit",
+                            padding: "4px 10px",
+                            borderRadius: "100px",
+                            fontSize: "0.6rem",
+                            fontWeight: "900",
+                            textTransform: "uppercase",
                           }}
                         >
-                          {u.allowedCourses.map((p) => (
-                            <span
-                              key={p}
-                              style={{
-                                fontSize: "0.6rem",
-                                background: "rgba(28,7,0,0.05)",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              {p}
-                            </span>
-                          ))}
+                          {u.role === "admin"
+                            ? labels.fullAdmin
+                            : u.role === "course_admin"
+                              ? labels.courseAdmin
+                              : u.role === "instructor"
+                                ? labels.instructor
+                                : labels.user}
                         </div>
                       </div>
-                    )}
-
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: "1.5rem",
-                      right: "1.5rem",
-                      display: "flex",
-                      gap: "12px",
-                    }}
-                  >
-                    <button
-                      onClick={() => openHistory(u)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        opacity: 0.4,
-                        display: "flex",
-                      }}
-                      title="View Add-on History"
-                    >
-                      <BookOpen size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleEdit(u)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        opacity: 0.4,
-                        display: "flex",
-                      }}
-                      title="Edit User"
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                  </div>
-                </>
-              )}
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: "1.5rem",
+                          right: "1.5rem",
+                          display: "flex",
+                          gap: "12px",
+                        }}
+                      >
+                        <button
+                          onClick={() => openHistory(u)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            opacity: 0.4,
+                          }}
+                        >
+                          <BookOpen size={18} />
+                        </button>
+                        {currentUserRole === "admin" && (
+                          <>
+                            <button
+                              onClick={() => handleEdit(u)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                opacity: 0.4,
+                              }}
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(u)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                opacity: 0.4,
+                              }}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           ))}
         </div>
       )}
-      {/* HISTORY MODAL */}
+
       {historyModalOpen && historyUser && (
         <div
           style={{
@@ -591,7 +671,6 @@ export default function ProfilesTab({
             >
               {labels.historyTitle} - {historyUser.firstName}
             </h3>
-
             <select
               value={historyCourse}
               onChange={(e) => setHistoryCourse(e.target.value)}
@@ -610,7 +689,6 @@ export default function ProfilesTab({
                 </option>
               ))}
             </select>
-
             {historyLoading ? (
               <div style={{ textAlign: "center", padding: "2rem" }}>
                 <Loader2 size={24} className="spinner" color="#caaff3" />
@@ -636,15 +714,14 @@ export default function ProfilesTab({
                   paddingRight: "5px",
                 }}
               >
-                {/* --- UPDATED: Only show Mandatory or Prerequisite add-ons --- */}
                 {courseAddons
-                  .filter((addon) => {
-                    const isMandatory = addon.isMandatory === true;
-                    const isPrerequisite = courseAddons.some(
-                      (se) => se.requiresIntroId === addon.id,
-                    );
-                    return isMandatory || isPrerequisite;
-                  })
+                  .filter(
+                    (addon) =>
+                      addon.isMandatory ||
+                      courseAddons.some(
+                        (se) => se.requiresIntroId === addon.id,
+                      ),
+                  )
                   .map((addon) => {
                     const manualDone = completedAddons.includes(addon.id);
                     const bookingInfo = bookedAddonsInfo[addon.id] || [];
@@ -652,10 +729,7 @@ export default function ProfilesTab({
                     const upcomingBookings = bookingInfo.filter(
                       (b) => !b.isPast,
                     );
-
-                    // An addon is visually "Complete" if manually checked OR if they attended a past date
                     const isEffectiveDone = manualDone || hasPastBooking;
-
                     return (
                       <div
                         key={addon.id}
@@ -676,7 +750,6 @@ export default function ProfilesTab({
                               : "rgba(28, 7, 0, 0.03)",
                             borderRadius: "12px",
                             cursor: "pointer",
-                            transition: "all 0.2s",
                             border: isEffectiveDone
                               ? "1px solid rgba(78, 95, 40, 0.3)"
                               : "1px solid transparent",
@@ -685,7 +758,7 @@ export default function ProfilesTab({
                           <input
                             type="checkbox"
                             checked={isEffectiveDone}
-                            disabled={hasPastBooking} // Prevent unchecking if there is a past booking record
+                            disabled={hasPastBooking}
                             onChange={() => toggleHistoryAddon(addon.id)}
                             style={{
                               transform: "scale(1.2)",
@@ -709,18 +782,7 @@ export default function ProfilesTab({
                               {currentLang === "en"
                                 ? addon.nameEn
                                 : addon.nameDe}
-                              {addon.isMandatory && (
-                                <span
-                                  style={{
-                                    color: "#9960a8",
-                                    fontSize: "0.7rem",
-                                    marginLeft: "8px",
-                                  }}
-                                ></span>
-                              )}
                             </span>
-
-                            {/* STATUS INDICATORS */}
                             {hasPastBooking && (
                               <span
                                 style={{
@@ -741,7 +803,6 @@ export default function ProfilesTab({
                                   .join(", ")}
                               </span>
                             )}
-
                             {upcomingBookings.length > 0 && (
                               <span
                                 style={{
@@ -768,7 +829,6 @@ export default function ProfilesTab({
                   })}
               </div>
             )}
-
             <div style={{ display: "flex", gap: "10px", marginTop: "2rem" }}>
               <button
                 onClick={saveHistory}

@@ -322,7 +322,10 @@ export default function FiringTab({ isMobile, currentLang }) {
     const studentName = userMap[item.email?.toLowerCase()];
     // Prioritize the real name from the userMap if the database accidentally saved "Guest"
     const savedName = item.name === "Guest" ? null : item.name;
-    const displayName = studentName || savedName || item.email || "Guest";
+    const displayName =
+      item.name && item.name !== "Guest" && item.name !== "Student"
+        ? item.name
+        : userMap[item.email?.toLowerCase()] || item.email || "Guest";
     // ------------------------------------------
 
     const isOverdue = checkOverdue(item);

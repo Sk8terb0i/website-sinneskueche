@@ -7,287 +7,267 @@ import {
   deleteDoc,
   doc,
   updateDoc,
+  getDoc,
+  increment,
 } from "firebase/firestore";
 import {
   Ticket,
   Trash2,
-  User,
-  Mail,
-  CreditCard,
   RefreshCw,
   Search,
-  ChevronDown,
-  ChevronUp,
+  Plus,
+  X,
   ShieldCheck,
 } from "lucide-react";
-import {
-  sectionTitleStyle,
-  cardStyle,
-  btnStyle,
-  inputStyle,
-} from "./AdminStyles";
+import { planets } from "../../data/planets";
+import * as S from "./AdminStyles";
 
 export default function PackCodesTab({ isMobile, currentLang }) {
-  const [packCodes, setPackCodes] = useState([]);
+  const [userCredits, setUserCredits] = useState([]);
+  const [guestCodes, setGuestCodes] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [expandedGroups, setExpandedGroups] = useState({});
-  const [columnCount, setColumnCount] = useState(1);
-
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const updateProfileCredit = async (codeObj, delta) => {
-    if (!codeObj.isProfileCredit) return;
-    setIsUpdating(true);
-    const newCount = Math.max(0, codeObj.remainingCredits + delta);
-
-    try {
-      await updateDoc(doc(db, "users", codeObj.userId), {
-        [`credits.${codeObj.courseKey}`]: newCount,
-      });
-      // Optimistically update the UI so it feels instantaneous
-      setPackCodes((prev) =>
-        prev.map((c) =>
-          c.id === codeObj.id ? { ...c, remainingCredits: newCount } : c,
-        ),
-      );
-    } catch (error) {
-      alert("Error updating credits: " + error.message);
-    }
-    setIsUpdating(false);
-  };
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [modalSearch, setModalSearch] = useState("");
 
   const labels = {
     en: {
-      title: "Active Session Packs",
-      search: "Search codes, emails...",
-      refresh: "Refresh",
-      loading: "Loading credits...",
-      noMatch: "No codes match your search.",
-      noActive: "No active pack credits found.",
-      total: "Total",
-      credits: "Credits",
-      profCreated: "Profile Created:",
-      codeCreated: "Code Created:",
-      left: "left",
-      collapse: "Collapse",
-      show: "Show",
-      more: "More",
-      errProf:
-        "This balance is attached to a registered user profile. To modify it, please go to the 'Profiles' tab and edit the user directly.",
-      delConfirm:
-        "Are you sure you want to delete this guest pack code? Any remaining credits will be lost forever.",
-      errDel: "Error deleting code: ",
+      title: "Credits & Packs",
+      search: "Search...",
+      users: "User Balances",
+      guests: "Guest Codes",
+      addBtn: "Add Credit",
+      selectUser: "Search any user...",
+      loading: "Loading...",
+      deleteConfirm: "Delete code?",
     },
     de: {
-      title: "Aktive Session-Packs",
-      search: "Codes, E-Mails suchen...",
-      refresh: "Aktualisieren",
-      loading: "Guthaben wird geladen...",
-      noMatch: "Keine Codes gefunden.",
-      noActive: "Keine aktiven Pakete gefunden.",
-      total: "Gesamt",
-      credits: "Credits",
-      profCreated: "Profil erstellt:",
-      codeCreated: "Code erstellt:",
-      left: "übrig",
-      collapse: "Einklappen",
-      show: "Zeige",
-      more: "weitere",
-      errProf:
-        "Dieses Guthaben ist mit einem registrierten Profil verknüpft. Um es zu ändern, bearbeite den Nutzer direkt im Tab 'Profile'.",
-      delConfirm:
-        "Bist du sicher, dass du diesen Gast-Code löschen möchtest? Alle verbleibenden Credits gehen dauerhaft verloren.",
-      errDel: "Fehler beim Löschen: ",
+      title: "Guthaben & Codes",
+      search: "Suchen...",
+      users: "Nutzer-Guthaben",
+      guests: "Gast-Codes",
+      addBtn: "Guthaben hinzufügen",
+      selectUser: "Nutzer suchen...",
+      loading: "Laden...",
+      deleteConfirm: "Code löschen?",
     },
   }[currentLang || "en"];
 
-  useEffect(() => {
-    fetchPackCodes();
-    const updateColumns = () => {
-      if (window.innerWidth < 800) setColumnCount(1);
-      else if (window.innerWidth < 1200) setColumnCount(2);
-      else setColumnCount(3);
-    };
-    updateColumns();
-    window.addEventListener("resize", updateColumns);
-    return () => window.removeEventListener("resize", updateColumns);
-  }, []);
+  const courseKeys = Array.from(
+    new Set(
+      planets
+        .filter((p) => p.type === "courses")
+        .flatMap((p) => p.courses || [])
+        .map((c) => c.link?.replace(/\//g, ""))
+        .filter(Boolean),
+    ),
+  ).sort();
 
-  const fetchPackCodes = async () => {
+  const fetchData = async () => {
     setIsLoading(true);
     try {
-      const codesQuery = query(collection(db, "pack_codes"));
-      const codesSnap = await getDocs(codesQuery);
-      let allCredits = codesSnap.docs.map((doc) => ({
-        id: doc.id,
-        isProfileCredit: false,
-        ...doc.data(),
+      const [codesSnap, usersSnap] = await Promise.all([
+        getDocs(query(collection(db, "pack_codes"))),
+        getDocs(query(collection(db, "users"))),
+      ]);
+
+      const guests = codesSnap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        type: "guest",
       }));
 
-      const usersQuery = query(collection(db, "users"));
-      const usersSnap = await getDocs(usersQuery);
+      const usersWithCredits = [];
+      const everyUser = [];
 
-      usersSnap.docs.forEach((doc) => {
-        const userData = doc.data();
-        if (userData.credits && typeof userData.credits === "object") {
-          Object.entries(userData.credits).forEach(([courseKey, count]) => {
-            if (count > 0) {
-              const fullName =
-                [userData.firstName, userData.lastName]
-                  .filter(Boolean)
-                  .join(" ") || "Registered User";
-              allCredits.push({
-                id: `user_${doc.id}_${courseKey}`,
-                userId: doc.id,
-                isProfileCredit: true,
-                code: "PROFILE BALANCE",
-                buyerEmail: userData.email || "",
-                buyerName: fullName,
-                courseKey: courseKey,
-                remainingCredits: count,
-                createdAt: userData.createdAt || new Date().toISOString(),
-              });
+      usersSnap.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const mainUser = { id: docSnap.id, ...data, isMain: true };
+        everyUser.push(mainUser);
+
+        if (data.credits && Object.values(data.credits).some((v) => v > 0)) {
+          usersWithCredits.push(mainUser);
+        }
+
+        if (data.linkedProfiles) {
+          data.linkedProfiles.forEach((lp) => {
+            const subUser = {
+              ...lp,
+              id: lp.id,
+              realSubId: lp.id,
+              parentId: docSnap.id,
+              isMain: false,
+            };
+            everyUser.push(subUser);
+            if (lp.credits && Object.values(lp.credits).some((v) => v > 0)) {
+              usersWithCredits.push(subUser);
             }
           });
         }
       });
 
-      allCredits.sort((a, b) => {
-        const timeA = a.createdAt?.seconds
-          ? a.createdAt.seconds * 1000
-          : new Date(a.createdAt).getTime() || 0;
-        const timeB = b.createdAt?.seconds
-          ? b.createdAt.seconds * 1000
-          : new Date(b.createdAt).getTime() || 0;
-        return timeB - timeA;
-      });
-
-      setPackCodes(allCredits);
+      setGuestCodes(guests);
+      setUserCredits(usersWithCredits);
+      setAllUsers(everyUser);
     } catch (error) {
-      console.error("Error fetching credits:", error);
+      console.error(error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDelete = async (codeObj) => {
-    if (codeObj.isProfileCredit) {
-      alert(labels.errProf);
-      return;
-    }
-    if (window.confirm(labels.delConfirm)) {
-      try {
-        await deleteDoc(doc(db, "pack_codes", codeObj.id));
-        fetchPackCodes();
-      } catch (error) {
-        alert(labels.errDel + error.message);
-      }
-    }
-  };
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  const formatDate = (timestamp) => {
-    if (!timestamp) return "Unknown";
+  const updateBalance = async (user, courseKey, delta) => {
+    setIsUpdating(true);
     try {
-      if (timestamp.seconds)
-        return new Date(timestamp.seconds * 1000).toLocaleDateString();
-      if (timestamp.toDate) return timestamp.toDate().toLocaleDateString();
-      return new Date(timestamp).toLocaleDateString();
+      const parentId = user.isMain ? user.id : user.parentId;
+      const userRef = doc(db, "users", parentId);
+
+      if (user.isMain) {
+        await updateDoc(userRef, {
+          [`credits.${courseKey}`]: increment(delta),
+        });
+      } else {
+        const snap = await getDoc(userRef);
+        const updatedLinked = snap.data().linkedProfiles.map((lp) => {
+          if (lp.id === user.realSubId) {
+            const cur = lp.credits?.[courseKey] || 0;
+            return {
+              ...lp,
+              credits: { ...lp.credits, [courseKey]: Math.max(0, cur + delta) },
+            };
+          }
+          return lp;
+        });
+        await updateDoc(userRef, { linkedProfiles: updatedLinked });
+      }
+      fetchData();
     } catch (e) {
-      return "Invalid Date";
+      alert(e.message);
+    }
+    setIsUpdating(false);
+  };
+
+  const updateGuestBalance = async (codeId, delta) => {
+    setIsUpdating(true);
+    try {
+      await updateDoc(doc(db, "pack_codes", codeId), {
+        remainingCredits: increment(delta),
+      });
+      fetchData();
+    } catch (e) {
+      alert(e.message);
+    }
+    setIsUpdating(false);
+  };
+
+  const handleDeleteGuest = async (id) => {
+    if (window.confirm(labels.deleteConfirm)) {
+      await deleteDoc(doc(db, "pack_codes", id));
+      fetchData();
     }
   };
 
-  const toggleGroup = (groupKey) => {
-    setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
-  };
+  const filterFn = (list) =>
+    list.filter((item) => {
+      const s = searchTerm.toLowerCase();
+      const name = (
+        item.buyerName ||
+        item.firstName ||
+        item.name ||
+        ""
+      ).toLowerCase();
+      const code = (item.id || "").toLowerCase();
+      return name.includes(s) || code.includes(s);
+    });
 
-  const filteredCodes = packCodes.filter((code) => {
-    const searchLower = searchTerm.toLowerCase().trim();
-    if (!searchLower) return true;
-    const codeString = String(code.code || "").toLowerCase();
-    const emailString = String(
-      code.buyerEmail || code.email || code.userEmail || "",
-    ).toLowerCase();
-    const nameString = String(
-      code.buyerName || code.name || code.userName || "",
-    ).toLowerCase();
-    const courseString = String(
-      code.courseKey || code.coursePath || "",
-    ).toLowerCase();
-    return (
-      codeString.includes(searchLower) ||
-      emailString.includes(searchLower) ||
-      nameString.includes(searchLower) ||
-      courseString.includes(searchLower)
-    );
-  });
-
-  const groupedCodes = filteredCodes.reduce((acc, code) => {
-    const rawEmail =
-      code.buyerEmail || code.email || code.userEmail || "no-email";
-    const rawName = code.buyerName || code.name || code.userName || "Guest";
-    const emailKey = String(rawEmail).toLowerCase().trim();
-    const nameKey = String(rawName).toLowerCase().trim();
-    const userKey = `${emailKey}_${nameKey}`;
-    const rawCourse =
-      code.courseKey || code.coursePath || code.course || "General";
-    const courseKey = String(rawCourse).replace(/\//g, "").trim() || "General";
-
-    if (!acc[userKey]) {
-      acc[userKey] = {
-        userKey: userKey,
-        email: rawEmail !== "no-email" ? rawEmail : "No email provided",
-        name: rawName,
-        totalCreditsAllCourses: 0,
-        courses: {},
-      };
-    }
-    if (!acc[userKey].courses[courseKey]) {
-      acc[userKey].courses[courseKey] = {
-        courseName: courseKey,
-        totalCredits: 0,
-        codes: [],
-      };
-    }
-    acc[userKey].courses[courseKey].codes.push(code);
-    acc[userKey].courses[courseKey].totalCredits += Number(
-      code.remainingCredits || 0,
-    );
-    acc[userKey].totalCreditsAllCourses += Number(code.remainingCredits || 0);
-    return acc;
-  }, {});
-
-  const groupedArray = Object.values(groupedCodes);
-  const columns = Array.from({ length: columnCount }, () => []);
-  groupedArray.forEach((group, index) => {
-    columns[index % columnCount].push(group);
-  });
+  const renderControls = (val, onUpdate) => (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        backgroundColor: "rgba(28, 7, 0, 0.04)",
+        padding: "4px 12px",
+        borderRadius: "100px",
+        border: "1px solid rgba(78, 95, 40, 0.1)",
+        minWidth: isMobile ? "100px" : "auto",
+        justifyContent: "center",
+      }}
+    >
+      <button
+        onClick={() => onUpdate(-1)}
+        disabled={isUpdating}
+        style={{
+          border: "none",
+          background: "none",
+          cursor: "pointer",
+          fontWeight: "900",
+          color: "#4e5f28",
+          fontSize: "1.1rem",
+        }}
+      >
+        -
+      </button>
+      <span
+        style={{
+          fontWeight: "900",
+          minWidth: "18px",
+          textAlign: "center",
+          fontSize: "0.9rem",
+          color: "#1c0700",
+        }}
+      >
+        {val}
+      </span>
+      <button
+        onClick={() => onUpdate(1)}
+        disabled={isUpdating}
+        style={{
+          border: "none",
+          background: "none",
+          cursor: "pointer",
+          fontWeight: "900",
+          color: "#4e5f28",
+          fontSize: "1.1rem",
+        }}
+      >
+        +
+      </button>
+    </div>
+  );
 
   return (
     <section>
+      {/* Header */}
       <div
         style={{
           display: "flex",
           flexDirection: isMobile ? "column" : "row",
           justifyContent: "space-between",
           alignItems: isMobile ? "flex-start" : "center",
-          marginBottom: "1.5rem",
-          gap: "1rem",
+          marginBottom: "2.5rem",
+          gap: "1.2rem",
         }}
       >
-        <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
-          <Ticket size={18} /> {labels.title}
+        <h3 style={{ ...S.sectionTitleStyle, margin: 0 }}>
+          <Ticket size={20} /> {labels.title}
         </h3>
-
         <div
           style={{
             display: "flex",
-            gap: "10px",
+            gap: "12px",
+            alignItems: "center",
             width: isMobile ? "100%" : "auto",
           }}
         >
-          <div style={{ position: "relative", flex: 1 }}>
+          <div style={{ position: "relative", flex: isMobile ? 1 : "initial" }}>
             <Search
               size={16}
               style={{
@@ -295,7 +275,7 @@ export default function PackCodesTab({ isMobile, currentLang }) {
                 left: "12px",
                 top: "50%",
                 transform: "translateY(-50%)",
-                color: "#9960a8",
+                opacity: 0.3,
               }}
             />
             <input
@@ -304,391 +284,375 @@ export default function PackCodesTab({ isMobile, currentLang }) {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
-                ...inputStyle,
+                ...S.inputStyle,
                 paddingLeft: "36px",
                 marginBottom: 0,
-                width: "100%",
-                boxSizing: "border-box",
+                width: isMobile ? "100%" : "240px",
+                backgroundColor: "#fdf8e1",
               }}
             />
           </div>
           <button
-            onClick={fetchPackCodes}
+            onClick={() => setIsAddModalOpen(true)}
             style={{
-              ...btnStyle,
-              width: "auto",
-              padding: "0 14px",
-              backgroundColor: "rgba(28,7,0,0.05)",
-              color: "#1c0700",
+              background: "#9960a8",
+              color: "#fffce3",
+              border: "none",
+              borderRadius: "50%",
+              width: "40px",
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              boxShadow: "0 4px 10px rgba(153, 96, 168, 0.2)",
+              flexShrink: 0,
             }}
           >
-            <RefreshCw size={16} />
+            <Plus size={22} />
+          </button>
+          <button
+            onClick={fetchData}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              opacity: 0.4,
+              flexShrink: 0,
+            }}
+          >
+            <RefreshCw size={18} />
           </button>
         </div>
       </div>
 
       {isLoading ? (
-        <p style={{ opacity: 0.5 }}>{labels.loading}</p>
-      ) : groupedArray.length === 0 ? (
-        <div
-          style={{
-            ...cardStyle,
-            textAlign: "center",
-            opacity: 0.5,
-            padding: "2rem",
-          }}
-        >
-          {searchTerm ? labels.noMatch : labels.noActive}
-        </div>
+        <p style={{ textAlign: "center", opacity: 0.5 }}>{labels.loading}</p>
       ) : (
-        <div
-          style={{ display: "flex", gap: "1.5rem", alignItems: "flex-start" }}
-        >
-          {columns.map((colGroups, colIndex) => (
-            <div
-              key={colIndex}
+        <div style={{ display: "flex", flexDirection: "column", gap: "3rem" }}>
+          {/* User Section */}
+          <div>
+            <h4
               style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                gap: "1.5rem",
-                minWidth: 0,
+                fontSize: "0.7rem",
+                fontWeight: "900",
+                opacity: 0.4,
+                textTransform: "uppercase",
+                marginBottom: "1rem",
+                letterSpacing: "1.5px",
               }}
             >
-              {colGroups.map((userGroup) => {
-                const courseKeys = Object.keys(userGroup.courses);
-                const hasMultipleCourses = courseKeys.length > 1;
-
-                return (
-                  <div
-                    key={userGroup.userKey}
+              {labels.users}
+            </h4>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+            >
+              {filterFn(userCredits).map((u) => (
+                <div
+                  key={u.id}
+                  style={{
+                    display: "flex",
+                    flexDirection: isMobile ? "column" : "row",
+                    justifyContent: "space-between",
+                    alignItems: isMobile ? "flex-start" : "center",
+                    padding: isMobile ? "16px 20px" : "14px 24px",
+                    backgroundColor: "#fdf8e1",
+                    borderRadius: "16px",
+                    border: "1px solid rgba(28,7,0,0.06)",
+                    gap: isMobile ? "12px" : "0",
+                  }}
+                >
+                  <p
                     style={{
-                      ...cardStyle,
+                      fontWeight: "800",
+                      margin: 0,
+                      color: "#1c0700",
+                      fontSize: "0.95rem",
+                    }}
+                  >
+                    {u.firstName} {u.lastName}
+                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: isMobile ? "column" : "row",
+                      gap: isMobile ? "10px" : "20px",
+                      width: isMobile ? "100%" : "auto",
+                    }}
+                  >
+                    {Object.entries(u.credits || {})
+                      .filter(([_, v]) => v > 0)
+                      .map(([k, v]) => (
+                        <div
+                          key={k}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: isMobile
+                              ? "space-between"
+                              : "flex-start",
+                            gap: "10px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "0.65rem",
+                              fontWeight: "900",
+                              opacity: 0.4,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.5px",
+                            }}
+                          >
+                            {k}
+                          </span>
+                          {renderControls(v, (d) => updateBalance(u, k, d))}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Guest Section */}
+          <div>
+            <h4
+              style={{
+                fontSize: "0.7rem",
+                fontWeight: "900",
+                opacity: 0.4,
+                textTransform: "uppercase",
+                marginBottom: "1rem",
+                letterSpacing: "1.5px",
+              }}
+            >
+              {labels.guests}
+            </h4>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+            >
+              {filterFn(guestCodes).map((g) => (
+                <div
+                  key={g.id}
+                  style={{
+                    display: "flex",
+                    flexDirection: isMobile ? "column" : "row",
+                    justifyContent: "space-between",
+                    alignItems: isMobile ? "flex-start" : "center",
+                    padding: isMobile ? "16px 20px" : "14px 24px",
+                    backgroundColor: "#fdf8e1",
+                    borderRadius: "16px",
+                    border: "1px solid rgba(28,7,0,0.06)",
+                    gap: isMobile ? "12px" : "0",
+                  }}
+                >
+                  <div
+                    style={{
                       display: "flex",
                       flexDirection: "column",
-                      gap: "12px",
-                      borderTop: "4px solid #4e5f28",
-                      marginBottom: 0,
+                      gap: "1px",
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontWeight: "900",
+                        margin: 0,
+                        color: "#9960a8",
+                        letterSpacing: "1px",
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      {g.id}
+                    </p>
+                    <p
+                      style={{
+                        fontSize: "0.65rem",
+                        fontWeight: "800",
+                        opacity: 0.4,
+                        margin: 0,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {g.courseKey} • {g.buyerName}
+                    </p>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: isMobile ? "space-between" : "flex-end",
+                      gap: isMobile ? "12px" : "18px",
+                      width: isMobile ? "100%" : "auto",
+                    }}
+                  >
+                    {renderControls(g.remainingCredits, (d) =>
+                      updateGuestBalance(g.id, d),
+                    )}
+                    <button
+                      onClick={() => handleDeleteGuest(g.id)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#ff4d4d",
+                        cursor: "pointer",
+                        opacity: 0.3,
+                        padding: "4px",
+                      }}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Modal */}
+      {isAddModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(28,7,0,0.3)",
+            zIndex: 2000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            backdropFilter: "blur(8px)",
+          }}
+          onClick={() => setIsAddModalOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "#fffce3",
+              width: "100%",
+              maxWidth: "440px",
+              borderRadius: "28px",
+              padding: isMobile ? "1.5rem" : "2.5rem",
+              position: "relative",
+              boxShadow: "0 25px 60px rgba(0,0,0,0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setIsAddModalOpen(false)}
+              style={{
+                position: "absolute",
+                top: "24px",
+                right: "24px",
+                border: "none",
+                background: "none",
+                cursor: "pointer",
+                opacity: 0.3,
+              }}
+            >
+              <X size={24} />
+            </button>
+            <h3
+              style={{
+                margin: "0 0 1.5rem 0",
+                fontFamily: "Harmond-SemiBoldCondensed",
+                fontSize: isMobile ? "1.6rem" : "2rem",
+                color: "#1c0700",
+              }}
+            >
+              {labels.addBtn}
+            </h3>
+            <input
+              type="text"
+              placeholder={labels.selectUser}
+              style={{
+                ...S.inputStyle,
+                backgroundColor: "rgba(255,255,255,0.5)",
+                borderRadius: "14px",
+              }}
+              value={modalSearch}
+              onChange={(e) => setModalSearch(e.target.value)}
+            />
+            <div
+              style={{
+                maxHeight: isMobile ? "280px" : "320px",
+                overflowY: "auto",
+                marginTop: "1.2rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}
+              className="custom-scrollbar"
+            >
+              {allUsers
+                .filter((u) =>
+                  (u.firstName + " " + (u.lastName || ""))
+                    .toLowerCase()
+                    .includes(modalSearch.toLowerCase()),
+                )
+                .slice(0, 8)
+                .map((u) => (
+                  <div
+                    key={u.id}
+                    style={{
+                      padding: "14px",
+                      border: "1px solid rgba(28,7,0,0.08)",
+                      borderRadius: "16px",
+                      backgroundColor: "rgba(255,255,255,0.4)",
                     }}
                   >
                     <div
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        borderBottom: "1px solid rgba(28,7,0,0.1)",
-                        paddingBottom: "10px",
-                        gap: "8px",
+                        alignItems: "center",
+                        marginBottom: "12px",
                       }}
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            fontSize: "1.1rem",
-                            fontWeight: "bold",
-                            color: "#1c0700",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          <User
-                            size={16}
-                            color="#9960a8"
-                            style={{ flexShrink: 0 }}
-                          />{" "}
-                          <span
-                            style={{
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {userGroup.name}
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            fontSize: "0.85rem",
-                            opacity: 0.7,
-                            marginTop: "4px",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          <Mail size={14} style={{ flexShrink: 0 }} />{" "}
-                          <span
-                            style={{
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {userGroup.email}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div
+                      <p
                         style={{
-                          backgroundColor: "#caaff3",
+                          margin: 0,
+                          fontWeight: "800",
+                          fontSize: "0.95rem",
                           color: "#1c0700",
-                          padding: "6px 12px",
-                          borderRadius: "100px",
-                          fontWeight: "900",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          fontSize: "0.85rem",
-                          flexShrink: 0,
                         }}
                       >
-                        <CreditCard size={14} />{" "}
-                        {userGroup.totalCreditsAllCourses} {labels.total}
-                      </div>
+                        {u.firstName} {u.lastName}
+                      </p>
+                      <ShieldCheck size={18} color="#4e5f28" opacity={0.3} />
                     </div>
-
-                    {courseKeys.map((cKey) => {
-                      const courseData = userGroup.courses[cKey];
-                      const groupKey = `${userGroup.userKey}_${cKey}`;
-                      const isExpanded = expandedGroups[groupKey];
-                      const displayedCodes = isExpanded
-                        ? courseData.codes
-                        : courseData.codes.slice(0, 1);
-
-                      return (
-                        <div
-                          key={groupKey}
+                    <div
+                      style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}
+                    >
+                      {courseKeys.map((key) => (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            updateBalance(u, key, 1);
+                            setIsAddModalOpen(false);
+                          }}
                           style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "8px",
-                            marginTop: "4px",
+                            fontSize: "0.55rem",
+                            padding: "6px 12px",
+                            borderRadius: "100px",
+                            border: "1.5px solid #4e5f28",
+                            background: "none",
+                            cursor: "pointer",
+                            fontWeight: "900",
+                            textTransform: "uppercase",
+                            color: "#4e5f28",
                           }}
                         >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: "0.8rem",
-                                fontWeight: "bold",
-                                textTransform: "uppercase",
-                                color: "#9960a8",
-                                letterSpacing: "1px",
-                              }}
-                            >
-                              {courseData.courseName}
-                            </span>
-                            {hasMultipleCourses && (
-                              <span
-                                style={{
-                                  fontSize: "0.75rem",
-                                  opacity: 0.6,
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                {courseData.totalCredits} {labels.credits}
-                              </span>
-                            )}
-                          </div>
-
-                          {displayedCodes.map((code) => (
-                            <div
-                              key={code.id}
-                              style={{
-                                backgroundColor: code.isProfileCredit
-                                  ? "rgba(78, 95, 40, 0.05)"
-                                  : "rgba(28,7,0,0.03)",
-                                border: code.isProfileCredit
-                                  ? "1px solid rgba(78, 95, 40, 0.2)"
-                                  : "1px solid transparent",
-                                padding: "10px",
-                                borderRadius: "8px",
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                gap: "10px",
-                              }}
-                            >
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "6px",
-                                    fontWeight: "900",
-                                    letterSpacing: "1px",
-                                    color: code.isProfileCredit
-                                      ? "#4e5f28"
-                                      : "#1c0700",
-                                    wordBreak: "break-all",
-                                  }}
-                                >
-                                  {code.isProfileCredit && (
-                                    <ShieldCheck size={14} />
-                                  )}{" "}
-                                  {code.code}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "0.65rem",
-                                    opacity: 0.5,
-                                    marginTop: "2px",
-                                  }}
-                                >
-                                  {code.isProfileCredit
-                                    ? labels.profCreated
-                                    : labels.codeCreated}{" "}
-                                  {formatDate(code.createdAt)}
-                                </div>
-                              </div>
-
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "10px",
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {code.isProfileCredit ? (
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: "2px",
-                                      backgroundColor: "rgba(78, 95, 40, 0.1)",
-                                      borderRadius: "8px",
-                                    }}
-                                  >
-                                    <button
-                                      onClick={() =>
-                                        updateProfileCredit(code, -1)
-                                      }
-                                      disabled={isUpdating}
-                                      style={{
-                                        border: "none",
-                                        background: "none",
-                                        color: "#4e5f28",
-                                        cursor: "pointer",
-                                        padding: "4px 8px",
-                                        fontWeight: "bold",
-                                      }}
-                                    >
-                                      -
-                                    </button>
-                                    <span
-                                      style={{
-                                        fontWeight: "bold",
-                                        fontSize: "0.85rem",
-                                        color: "#4e5f28",
-                                        minWidth: "16px",
-                                        textAlign: "center",
-                                      }}
-                                    >
-                                      {code.remainingCredits}
-                                    </span>
-                                    <button
-                                      onClick={() =>
-                                        updateProfileCredit(code, 1)
-                                      }
-                                      disabled={isUpdating}
-                                      style={{
-                                        border: "none",
-                                        background: "none",
-                                        color: "#4e5f28",
-                                        cursor: "pointer",
-                                        padding: "4px 8px",
-                                        fontWeight: "bold",
-                                      }}
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span
-                                    style={{
-                                      fontWeight: "bold",
-                                      fontSize: "0.85rem",
-                                      color: "#4e5f28",
-                                      whiteSpace: "nowrap",
-                                    }}
-                                  >
-                                    {code.remainingCredits} {labels.left}
-                                  </span>
-                                )}
-
-                                {!code.isProfileCredit && (
-                                  <button
-                                    onClick={() => handleDelete(code)}
-                                    style={{
-                                      background: "none",
-                                      border: "none",
-                                      color: "#ff4d4d",
-                                      cursor: "pointer",
-                                      padding: "4px",
-                                      display: "flex",
-                                      alignItems: "center",
-                                    }}
-                                    title="Delete Code"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-
-                          {courseData.codes.length > 1 && (
-                            <button
-                              onClick={() => toggleGroup(groupKey)}
-                              style={{
-                                background: "rgba(153, 96, 168, 0.1)",
-                                border: "none",
-                                color: "#9960a8",
-                                padding: "8px",
-                                borderRadius: "8px",
-                                cursor: "pointer",
-                                display: "flex",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                gap: "6px",
-                                fontWeight: "bold",
-                                fontSize: "0.8rem",
-                                marginTop: "2px",
-                                marginBottom: "8px",
-                              }}
-                            >
-                              {isExpanded ? (
-                                <>
-                                  <ChevronUp size={16} /> {labels.collapse}
-                                </>
-                              ) : (
-                                <>
-                                  <ChevronDown size={16} /> {labels.show}{" "}
-                                  {courseData.codes.length - 1} {labels.more}
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
+                          + {key}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                );
-              })}
+                ))}
             </div>
-          ))}
+          </div>
         </div>
       )}
     </section>

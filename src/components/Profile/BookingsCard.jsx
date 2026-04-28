@@ -10,15 +10,40 @@ import {
   getDoc,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { Calendar, Loader2, Clock, X, Check, Info, Star } from "lucide-react";
+import {
+  Calendar,
+  Loader2,
+  Clock,
+  X,
+  Check,
+  Info,
+  Star,
+  User,
+} from "lucide-react";
 import { planets } from "../../data/planets";
 
-export default function BookingsCard({ userId, currentLang, t }) {
+export default function BookingsCard({ userId, currentLang, t, userData }) {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
-  const [courseSettings, setCourseSettings] = useState({}); // Stores addon names per course
+  const [courseSettings, setCourseSettings] = useState({});
   const [dataLoading, setDataLoading] = useState(true);
   const [confirmingId, setConfirmingId] = useState(null);
+
+  // Helper to get linked profile name
+  const getProfileName = (profileId) => {
+    // If there are no linked profiles at all, we don't need to show names
+    if (!userData?.linkedProfiles || userData.linkedProfiles.length === 0)
+      return null;
+
+    // If it's the main account holder
+    if (!profileId || profileId === "main") {
+      return userData.firstName || (currentLang === "en" ? "Me" : "Ich");
+    }
+
+    // Look up the linked profile
+    const linked = userData?.linkedProfiles?.find((p) => p.id === profileId);
+    return linked ? linked.firstName : null;
+  };
 
   const getCourseTitle = (link) => {
     if (!link) return "Course";
@@ -39,14 +64,13 @@ export default function BookingsCard({ userId, currentLang, t }) {
         );
         const querySnapshot = await getDocs(q);
 
-        const settingsMap = {}; // Local cache for the current fetch operation
+        const settingsMap = {};
 
         const bookingsWithEventData = await Promise.all(
           querySnapshot.docs.map(async (bookingDoc) => {
             const bookingData = bookingDoc.data();
             let eventData = {};
 
-            // 1. Fetch Event Data for Time/Link
             if (bookingData.eventId) {
               const eventRef = doc(db, "events", bookingData.eventId);
               const eventSnap = await getDoc(eventRef);
@@ -56,7 +80,6 @@ export default function BookingsCard({ userId, currentLang, t }) {
             const coursePath = eventData.link || bookingData.coursePath;
             const sanitizedId = coursePath.replace(/\//g, "");
 
-            // 2. Fetch Course Settings for Add-on Labels if not already cached
             if (sanitizedId && !settingsMap[sanitizedId]) {
               const sSnap = await getDoc(
                 doc(db, "course_settings", sanitizedId),
@@ -90,12 +113,14 @@ export default function BookingsCard({ userId, currentLang, t }) {
     if (userId) fetchUserBookings();
   }, [userId, currentLang]);
 
-  // Group by Course Title, then by Date & Time
+  // Group by Course Title, then by Date & Time & Profile
   const groupedBookings = useMemo(() => {
     const grouped = {};
     bookings.forEach((booking) => {
       const title = booking.courseTitle;
-      const dateKey = `${booking.date}_${booking.time}`;
+      const profileName = getProfileName(booking.profileId);
+      // Create a unique key that accounts for the profile so family members aren't merged
+      const dateKey = `${booking.date}_${booking.time}_${booking.profileId || "main"}`;
       const sanitizedId = booking.coursePath?.replace(/\//g, "");
 
       if (!grouped[title]) grouped[title] = {};
@@ -103,16 +128,16 @@ export default function BookingsCard({ userId, currentLang, t }) {
         grouped[title][dateKey] = {
           date: booking.date,
           time: booking.time,
+          profileName: profileName,
           count: 0,
           ids: [],
-          addons: [], // Store unique names of add-ons for this slot
+          addons: [],
         };
       }
 
       grouped[title][dateKey].count += 1;
       grouped[title][dateKey].ids.push(booking.id);
 
-      // --- UPDATED: Collect add-on names correctly handling strings or objects ---
       if (booking.selectedAddons && Array.isArray(booking.selectedAddons)) {
         booking.selectedAddons.forEach((item) => {
           const addonId = typeof item === "object" ? item.id : item;
@@ -133,9 +158,8 @@ export default function BookingsCard({ userId, currentLang, t }) {
       }
     });
     return grouped;
-  }, [bookings, courseSettings, currentLang]);
+  }, [bookings, courseSettings, currentLang, userData]);
 
-  // Handle bulk cancellation
   const handleCancelGroup = async (bookingIds) => {
     const functions = getFunctions();
     const cancelBookings = httpsCallable(functions, "cancelBookings");
@@ -245,13 +269,19 @@ export default function BookingsCard({ userId, currentLang, t }) {
                                     {groupData.count} Tickets
                                   </span>
                                 )}
+                                {/* Display badge if booking is for a linked profile */}
+                                {groupData.profileName && (
+                                  <span style={styles.profileBadge}>
+                                    <User size={10} color="#caaff3" />{" "}
+                                    {groupData.profileName}
+                                  </span>
+                                )}
                               </div>
                               <div style={styles.timeRow}>
                                 <Clock size={12} />{" "}
                                 <span>{groupData.time}</span>
                               </div>
 
-                              {/* ADD-ONS BADGES */}
                               {groupData.addons.length > 0 && (
                                 <div style={styles.addonsWrapper}>
                                   {groupData.addons.map((name, idx) => (
@@ -405,6 +435,18 @@ const styles = {
     fontWeight: "900",
     padding: "2px 6px",
     borderRadius: "100px",
+  },
+  profileBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px",
+    backgroundColor: "rgba(28, 7, 0, 0.03)",
+    color: "#1c0700",
+    fontSize: "0.65rem",
+    fontWeight: "800",
+    padding: "2px 8px",
+    borderRadius: "100px",
+    border: "1px solid rgba(202, 175, 243, 0.3)",
   },
   timeRow: {
     display: "flex",

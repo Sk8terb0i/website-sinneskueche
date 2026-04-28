@@ -6,10 +6,16 @@ import {
   Loader2,
   Info,
   MailOpen,
-  Code,
-  Eye,
   Globe,
   ChevronDown,
+  Bold,
+  Italic,
+  List,
+  AlignLeft,
+  AlignCenter,
+  Type,
+  Code,
+  Eye,
 } from "lucide-react";
 import {
   formCardStyle,
@@ -23,33 +29,31 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
   const uiLabels = {
     en: {
       type: "Email Type",
-      code: "Code",
-      preview: "Preview",
-      save: "Save",
+      save: "Save Changes",
       saving: "Saving...",
-      vars: "Available Variables:",
+      vars: "Insert Variable",
       deTab: "German (DE)",
       enTab: "English (EN)",
-      subject: "Subject",
-      body: "HTML Body",
+      subject: "Subject Line",
       success: "Templates saved successfully!",
       fail: "Save failed: ",
-      selectType: "Select email to edit...",
+      selectType: "Select an email to edit",
+      code: "Code",
+      preview: "Visual",
     },
     de: {
       type: "E-Mail Typ",
-      code: "Code",
-      preview: "Vorschau",
-      save: "Speichern",
-      saving: "Speichern...",
-      vars: "Verfügbare Variablen:",
+      save: "Änderungen speichern",
+      saving: "Speichert...",
+      vars: "Variable einfügen",
       deTab: "Deutsch (DE)",
       enTab: "Englisch (EN)",
-      subject: "Betreff",
-      body: "HTML Body",
+      subject: "Betreffzeile",
       success: "Vorlagen erfolgreich gespeichert!",
       fail: "Fehler beim Speichern: ",
-      selectType: "E-Mail zum Bearbeiten wählen...",
+      selectType: "Wähle eine E-Mail",
+      code: "Code",
+      preview: "Visuell",
     },
   }[currentLang || "en"];
 
@@ -173,72 +177,42 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
     },
     {
       id: "firing_registered",
-      vars: ["{stage}"],
+      vars: ["{userName}", "{stage}", "{imageUrl}"],
       defaults: {
-        en: {
-          subject: "Object Registered for {stage} Firing",
-          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">Registration Successful</h2><p>Your object has been successfully registered for the <strong>{stage} firing</strong>.</p><p>We will email you as soon as it is out of the kiln and ready for the next step!</p><br/><p>Warmly,<br/>Atelier Sinnesküche</p></div>`,
-        },
-        de: {
-          subject: "Objekt für {stage} registriert",
-          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">Registrierung erfolgreich</h2><p>Dein Objekt wurde erfolgreich für den <strong>{stage}</strong> registriert.</p><p>Wir schreiben dir eine E-Mail, sobald es fertig aus dem Ofen kommt!</p><br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`,
-        },
+        en: { subject: "Object Registered for {stage} Firing", body: "" },
+        de: { subject: "Objekt für {stage} registriert", body: "" },
       },
     },
     {
       id: "firing_bisque_ready",
-      vars: [],
+      vars: ["{userName}", "{imageUrl}"],
       defaults: {
-        en: {
-          subject: "Ready for Glazing!",
-          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">Your object has been fired!</h2><p>Great news, your creation has successfully passed the bisque firing stage.</p><p>It is now waiting in the studio for you to glaze it. Please make sure to come in and glaze it within the next <strong>8 weeks</strong>.</p><br/><p>Warmly,<br/>Atelier Sinnesküche</p></div>`,
-        },
-        de: {
-          subject: "Bereit zum Glasieren!",
-          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">Dein Objekt wurde gebrannt!</h2><p>Tolle Neuigkeiten: Dein Werk hat den Schrühbrand erfolgreich überstanden.</p><p>Es wartet nun im Studio darauf, von dir glasiert zu werden. Bitte komme innerhalb der nächsten <strong>8 Wochen</strong> vorbei, um es zu glasieren.</p><br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`,
-        },
+        en: { subject: "Ready for Glazing!", body: "" },
+        de: { subject: "Bereit zum Glasieren!", body: "" },
       },
     },
     {
       id: "firing_glaze_ready",
-      vars: [],
+      vars: ["{userName}", "{imageUrl}"],
       defaults: {
-        en: {
-          subject: "Your pottery is ready for pickup!",
-          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">It's finished!</h2><p>Your object has completed the glaze firing and is fully finished.</p><p>You can now pick it up at the studio. Please collect it within the next <strong>4 weeks</strong>.</p><br/><p>Warmly,<br/>Atelier Sinnesküche</p></div>`,
-        },
-        de: {
-          subject: "Dein Werk ist abholbereit!",
-          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #4e5f28;">Es ist vollbracht!</h2><p>Dein Objekt hat den Glasurbrand hinter sich und ist komplett fertig.</p><p>Du kannst es ab sofort im Studio abholen. Bitte hole es innerhalb der nächsten <strong>4 Wochen</strong> ab.</p><br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`,
-        },
+        en: { subject: "Your pottery is ready for pickup!", body: "" },
+        de: { subject: "Dein Werk ist abholbereit!", body: "" },
       },
     },
     {
       id: "firing_reminder",
-      vars: ["{action}", "{weeksLeft}"],
+      vars: ["{userName}", "{action}", "{weeksLeft}", "{imageUrl}"],
       defaults: {
-        en: {
-          subject: "Reminder: Action required for your pottery",
-          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #f39c12;">Gentle Reminder</h2><p>We wanted to remind you that your object is waiting at the studio.</p><p>Please make sure to <strong>{action}</strong> within the next <strong>{weeksLeft} week(s)</strong>.</p><br/><p>Warmly,<br/>Atelier Sinnesküche</p></div>`,
-        },
-        de: {
-          subject: "Erinnerung: Dein Keramik-Objekt wartet",
-          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #f39c12;">Kleine Erinnerung</h2><p>Wir wollten dich kurz daran erinnern, dass dein Objekt bei uns im Studio auf dich wartet.</p><p>Bitte denke daran, es innerhalb der nächsten <strong>{weeksLeft} Woche(n)</strong> <strong>{action}</strong>.</p><br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`,
-        },
+        en: { subject: "Reminder: Action required for your pottery", body: "" },
+        de: { subject: "Erinnerung: Dein Keramik-Objekt wartet", body: "" },
       },
     },
     {
       id: "firing_broken",
-      vars: [],
+      vars: ["{userName}", "{imageUrl}"],
       defaults: {
-        en: {
-          subject: "Update on your pottery",
-          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #ff4d4d;">Oh no!</h2><p>Unfortunately, your object didn't survive the extreme temperatures in the kiln and broke during the firing process.</p><p>This happens to the best of us and is a natural part of the ceramics journey. Please don't be discouraged, and keep creating!</p><br/><p>Warmly,<br/>Atelier Sinnesküche</p></div>`,
-        },
-        de: {
-          subject: "Update zu deinem Keramik-Objekt",
-          body: `<div style="font-family: Arial; padding: 30px; background-color: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;"><h2 style="color: #ff4d4d;">Oh nein!</h2><p>Leider hat dein Objekt die extremen Temperaturen im Ofen nicht überstanden und ist beim Brennen kaputtgegangen.</p><p>Das passiert den Besten und ist ein ganz normaler Teil der Arbeit mit Keramik. Lass dich davon bitte nicht entmutigen und mach weiter so!</p><br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p></div>`,
-        },
+        en: { subject: "Update on your pottery", body: "" },
+        de: { subject: "Update zu deinem Keramik-Objekt", body: "" },
       },
     },
   ];
@@ -247,8 +221,8 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
   const [templates, setTemplates] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [viewMode, setViewMode] = useState("code");
   const [mobileLang, setMobileLang] = useState("de");
+  const [viewMode, setViewMode] = useState("preview"); // "preview" or "code"
 
   useEffect(() => {
     fetchTemplates();
@@ -302,32 +276,95 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
     }));
   };
 
-  const generatePreview = (htmlStr, lang) => {
-    const sampleData = {
-      "{userName}": "Jane Doe",
-      "{firstName}": "Jane",
-      "{courseKey}": "pottery tuesdays",
-      "{packSize}": "5",
-      "{newCode}": "A1B2C3D4",
-      "{netIncrease}": "5",
-      "{courseDate}": "15.05.2025",
-      "{refundCode}": "X9Y8Z7W6",
-      "{refundAmount}": "2",
-      "{profileUrl}": "#",
-      "{adminUrl}": "#",
-      "{registrationCTA}":
-        lang === "de"
-          ? `<div style="margin-top: 30px; padding: 20px; border: 1px dashed #caaff3; background-color: rgba(202, 175, 243, 0.05); border-radius: 12px; text-align: center;"><p style="font-size: 14px; margin-bottom: 15px; color: #1c0700;">Möchtest du deine Buchungen verwalten?</p><a href="#" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold; font-size: 14px;">Profil erstellen</a></div>`
-          : `<div style="margin-top: 30px; padding: 20px; border: 1px dashed #caaff3; background-color: rgba(202, 175, 243, 0.05); border-radius: 12px; text-align: center;"><p style="font-size: 14px; margin-bottom: 15px; color: #1c0700;">Want to manage your bookings?</p><a href="#" style="display: inline-block; padding: 12px 25px; background-color: #9960a8; color: #fffce3; text-decoration: none; border-radius: 100px; font-weight: bold; font-size: 14px;">Create Profile</a></div>`,
-      "{datesHtml}": `<li style="margin-bottom: 18px; list-style: none; font-size: 15px;"><div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;"><span style="font-weight: bold;">15.05.2025 | 18:00</span><a href="#" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff;">📅 Add to Calendar</a></div></li>`,
-      "{scheduleList}": `<li style="margin-bottom: 15px; list-style: none; padding: 15px; background: #fff; border-radius: 8px; border: 1px solid #caaff3;"><strong style="color: #1c0700;">15.05.2025</strong> | 18:00<br/><span style="font-size: 13px; opacity: 0.7;">Working with: John Smith</span></li>`,
-    };
-    let previewHtml = htmlStr || "";
-    Object.keys(sampleData).forEach((key) => {
-      previewHtml = previewHtml.split(key).join(sampleData[key]);
-    });
-    return previewHtml;
+  const execCommand = (command, value = null) => {
+    document.execCommand(command, false, value);
   };
+
+  const insertVariable = (variable) => {
+    execCommand("insertText", variable);
+  };
+
+  const Toolbar = () => (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "8px",
+        padding: "10px",
+        backgroundColor: "rgba(28,7,0,0.05)",
+        borderRadius: "12px",
+        marginBottom: "1.5rem",
+        alignItems: "center",
+      }}
+    >
+      <button onClick={() => execCommand("bold")} style={toolBtn}>
+        <Bold size={16} />
+      </button>
+      <button onClick={() => execCommand("italic")} style={toolBtn}>
+        <Italic size={16} />
+      </button>
+      <div
+        style={{
+          width: "1px",
+          height: "20px",
+          backgroundColor: "rgba(0,0,0,0.1)",
+          margin: "0 4px",
+        }}
+      />
+      <button
+        onClick={() => execCommand("insertUnorderedList")}
+        style={toolBtn}
+      >
+        <List size={16} />
+      </button>
+      <button onClick={() => execCommand("justifyLeft")} style={toolBtn}>
+        <AlignLeft size={16} />
+      </button>
+      <button onClick={() => execCommand("justifyCenter")} style={toolBtn}>
+        <AlignCenter size={16} />
+      </button>
+      <div
+        style={{
+          width: "1px",
+          height: "20px",
+          backgroundColor: "rgba(0,0,0,0.1)",
+          margin: "0 4px",
+        }}
+      />
+
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+        }}
+      >
+        <Type size={14} opacity={0.5} />
+        <select
+          onChange={(e) => {
+            insertVariable(e.target.value);
+            e.target.value = "";
+          }}
+          style={{
+            padding: "4px 8px",
+            borderRadius: "6px",
+            border: "1px solid rgba(0,0,0,0.1)",
+            fontSize: "0.75rem",
+            cursor: "pointer",
+            backgroundColor: "#fffce3",
+          }}
+        >
+          <option value="">{uiLabels.vars || "Insert Variable"}</option>
+          {selectedType.vars.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
 
   if (loading) return <Loader2 className="spinner" size={30} color="#caaff3" />;
   const current = templates[selectedType.id];
@@ -409,7 +446,7 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
 
       {/* MAIN CONTENT (Editor) */}
       <section style={{ flex: 1 }}>
-        <div style={formCardStyle}>
+        <div style={{ ...formCardStyle, backgroundColor: "#fdf8e1" }}>
           {/* HEADER ROW */}
           <div
             style={{
@@ -444,7 +481,7 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
                 flexWrap: "wrap",
               }}
             >
-              {/* Code / Preview Toggle */}
+              {/* Code / Visual Toggle */}
               <div
                 style={{
                   display: "flex",
@@ -500,34 +537,32 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
                 </button>
               </div>
 
-              {/* Save Button */}
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "1rem" }}
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                style={{
+                  ...btnStyle,
+                  width: "auto",
+                  padding: "8px 20px",
+                  margin: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                }}
               >
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  style={{
-                    ...btnStyle,
-                    width: "auto",
-                    padding: "8px 20px",
-                    margin: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                  }}
-                >
-                  {saving ? (
-                    <Loader2 className="spinner" size={16} />
-                  ) : (
-                    <Save size={16} />
-                  )}
-                  {uiLabels.save}
-                </button>
-              </div>
+                {saving ? (
+                  <Loader2 className="spinner" size={16} />
+                ) : (
+                  <Save size={16} />
+                )}
+                {uiLabels.save}
+              </button>
             </div>
           </div>
+
+          {/* Only show formatting toolbar if we are in Visual Mode */}
+          {viewMode === "preview" && <Toolbar />}
 
           {/* VARIABLES INFO */}
           <div
@@ -632,33 +667,31 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
                 <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
                   {uiLabels.body}
                 </label>
+
                 {viewMode === "code" ? (
                   <textarea
                     style={{
                       ...inputStyle,
-                      minHeight: "400px",
-                      paddingTop: "10px",
+                      minHeight: "450px",
+                      padding: "20px",
                       lineHeight: "1.5",
                       fontSize: "0.8rem",
                       fontFamily: "monospace",
                       whiteSpace: "pre-wrap",
+                      resize: "vertical",
                     }}
                     value={current.de.body}
                     onChange={(e) => updateField("de", "body", e.target.value)}
                   />
                 ) : (
                   <div
-                    style={{
-                      ...inputStyle,
-                      minHeight: "400px",
-                      padding: "0",
-                      background: "#f9f9f9",
-                      border: "1px solid #ddd",
-                      overflowY: "auto",
-                    }}
-                    dangerouslySetInnerHTML={{
-                      __html: generatePreview(current.de.body, "de"),
-                    }}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) =>
+                      updateField("de", "body", e.currentTarget.innerHTML)
+                    }
+                    dangerouslySetInnerHTML={{ __html: current.de.body }}
+                    style={editorCanvas}
                   />
                 )}
               </div>
@@ -690,33 +723,31 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
                 <label style={{ fontSize: "0.7rem", opacity: 0.6 }}>
                   {uiLabels.body}
                 </label>
+
                 {viewMode === "code" ? (
                   <textarea
                     style={{
                       ...inputStyle,
-                      minHeight: "400px",
-                      paddingTop: "10px",
+                      minHeight: "450px",
+                      padding: "20px",
                       lineHeight: "1.5",
                       fontSize: "0.8rem",
                       fontFamily: "monospace",
                       whiteSpace: "pre-wrap",
+                      resize: "vertical",
                     }}
                     value={current.en.body}
                     onChange={(e) => updateField("en", "body", e.target.value)}
                   />
                 ) : (
                   <div
-                    style={{
-                      ...inputStyle,
-                      minHeight: "400px",
-                      padding: "0",
-                      background: "#f9f9f9",
-                      border: "1px solid #ddd",
-                      overflowY: "auto",
-                    }}
-                    dangerouslySetInnerHTML={{
-                      __html: generatePreview(current.en.body, "en"),
-                    }}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) =>
+                      updateField("en", "body", e.currentTarget.innerHTML)
+                    }
+                    dangerouslySetInnerHTML={{ __html: current.en.body }}
+                    style={editorCanvas}
                   />
                 )}
               </div>
@@ -727,3 +758,29 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
     </div>
   );
 }
+
+const toolBtn = {
+  background: "white",
+  border: "1px solid rgba(0,0,0,0.1)",
+  borderRadius: "6px",
+  padding: "6px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#1c0700",
+};
+
+const editorCanvas = {
+  minHeight: "450px",
+  padding: "30px",
+  backgroundColor: "#fffce3",
+  border: "1px solid rgba(153, 96, 168, 0.2)",
+  borderRadius: "16px",
+  outline: "none",
+  color: "#1c0700",
+  fontSize: "14px",
+  lineHeight: "1.6",
+  overflowY: "auto",
+  boxShadow: "inset 0 2px 10px rgba(0,0,0,0.02)",
+};

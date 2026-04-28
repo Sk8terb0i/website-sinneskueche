@@ -1,10 +1,24 @@
 import React, { useState, useMemo } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { ShoppingBag, Loader2 } from "lucide-react";
+import { ShoppingBag, Loader2, User } from "lucide-react";
 
-export default function BuyPackCard({ packCourses, currentLang, t }) {
+export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
   const [selectedPackData, setSelectedPackData] = useState(null);
+  const [selectedProfileId, setSelectedProfileId] = useState("main");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Build the array of available profiles
+  const allProfiles = useMemo(() => {
+    const profiles = [
+      { id: "main", name: currentLang === "de" ? "Mich" : "Me" },
+    ];
+    if (userData?.linkedProfiles) {
+      userData.linkedProfiles.forEach((p) => {
+        profiles.push({ id: p.id, name: `${p.firstName} ${p.lastName}` });
+      });
+    }
+    return profiles;
+  }, [userData, currentLang]);
 
   // Group packs by course name
   const groupedPacks = useMemo(() => {
@@ -19,6 +33,7 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
   const handleBuy = async () => {
     if (!selectedPackData) return;
     const { course, pack } = selectedPackData;
+    const targetProfile = allProfiles.find((p) => p.id === selectedProfileId);
 
     setIsProcessing(true);
     const functions = getFunctions();
@@ -41,6 +56,8 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
         coursePath: `/${course.id}`,
         selectedDates: [],
         currentLang: currentLang,
+        profileId: selectedProfileId,
+        profileName: targetProfile?.name || "Main User",
         successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}&mode=pack&booked=false`,
         cancelUrl: window.location.href,
       });
@@ -58,9 +75,39 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
       <h3 style={styles.cardTitle}>
         <ShoppingBag size={20} /> {t.buyPack}
       </h3>
+
+      {/* Profile Selector */}
+      {allProfiles.length > 1 && (
+        <div
+          style={{
+            marginBottom: "1rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+          }}
+        >
+          <User size={16} color="#9960a8" />
+          <select
+            value={selectedProfileId}
+            onChange={(e) => setSelectedProfileId(e.target.value)}
+            style={{
+              ...styles.select,
+              padding: "8px 12px",
+              flex: "none",
+              width: "auto",
+            }}
+          >
+            {allProfiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {currentLang === "de" ? "Für: " : "For: "} {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div style={styles.row}>
         <select
-          // Concatenated ID and size to ensure a unique value for the selection state
           value={
             selectedPackData
               ? `${selectedPackData.course.id}|${selectedPackData.pack.size}`
@@ -85,7 +132,6 @@ export default function BuyPackCard({ packCourses, currentLang, t }) {
           {Object.entries(groupedPacks).map(([courseName, courses]) => (
             <optgroup key={courseName} label={courseName}>
               {courses.map((courseDoc) =>
-                // Map through the nested 'packs' array from PricingTab.jsx
                 (courseDoc.packs || []).map((p, idx) => (
                   <option
                     key={`${courseDoc.id}-${p.size}-${idx}`}

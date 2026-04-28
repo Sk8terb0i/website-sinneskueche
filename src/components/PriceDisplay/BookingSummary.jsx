@@ -54,6 +54,8 @@ export default function BookingSummary({
   eventBookingCounts,
   totalPrice,
   availableCredits,
+  profileBalances = {},
+  profileHistoryMap = {},
   pricing,
   scheduleData,
   addonBookingCounts,
@@ -124,11 +126,13 @@ export default function BookingSummary({
     if (currentName) {
       setSelectedDates((prev) =>
         prev.map((date) => {
-          const newNames = [...date.names];
-          // Sync the first name if it matches the generic first-ticket name or is empty
-          if (!newNames[0] || newNames[0] === "Primary Booker") {
-            newNames[0] = currentName;
-            return { ...date, names: newNames };
+          const newAtts = [...(date.attendees || [])];
+          if (
+            newAtts.length > 0 &&
+            (!newAtts[0].name || newAtts[0].name === "Primary Booker")
+          ) {
+            newAtts[0] = { ...newAtts[0], name: currentName };
+            return { ...date, attendees: newAtts };
           }
           return date;
         }),
@@ -160,10 +164,13 @@ export default function BookingSummary({
       setSelectedDates((prev) =>
         prev.map((date) => ({
           ...date,
-          selectedAddons: (date.selectedAddons || []).filter((a) => {
-            const addonId = typeof a === "string" ? a : a.id;
-            return !userData.completedAddons.includes(addonId);
-          }),
+          attendees: (date.attendees || []).map((att) => ({
+            ...att,
+            selectedAddons: (att.selectedAddons || []).filter((a) => {
+              const addonId = typeof a === "string" ? a : a.id;
+              return !userData.completedAddons.includes(addonId);
+            }),
+          })),
         })),
       );
     }
@@ -184,29 +191,52 @@ export default function BookingSummary({
     return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : dateStr;
   };
 
-  const toggleAddon = (eventId, addon, isMandatory, selectedTime = null) => {
-    const dateObj = selectedDates.find((d) => d.id === eventId);
+  // Update in BookingSummary.jsx
+  const getProfileHistory = (pid) => {
+    if (!pid || pid === "guest") return [];
 
-    // Check if the specific addon/time is currently selected
-    const isSelected = dateObj?.selectedAddons?.some((a) =>
+    let completed = [];
+    if (pid === "main") {
+      completed = userData?.completedAddons || [];
+    } else {
+      const linked = userData?.linkedProfiles?.find((p) => p.id === pid);
+      completed = linked?.completedAddons || [];
+    }
+
+    // Use optional chaining to prevent crashes
+    const alreadyBooked = profileHistoryMap?.[pid]?.addons || [];
+
+    return [...new Set([...completed, ...alreadyBooked])];
+  };
+
+  const toggleAddon = (
+    eventId,
+    attendeeIndex,
+    addon,
+    isMandatory,
+    selectedTime = null,
+  ) => {
+    const dateObj = selectedDates.find((d) => d.id === eventId);
+    const att = dateObj?.attendees[attendeeIndex];
+
+    const isSelected = att?.selectedAddons?.some((a) =>
       typeof a === "string"
         ? a === addon.id
         : a.id === addon.id && (!selectedTime || a.time === selectedTime),
     );
 
-    // --- CASE A: SELECTING (Adding an add-on) ---
     if (!isSelected) {
-      // 1. Check for Time Conflicts
       if (selectedTime) {
-        const conflict = dateObj?.selectedAddons?.find((a) => {
-          // SAFETY: Ignore completed addons in conflict check
+        const conflict = att?.selectedAddons?.find((a) => {
           const addonId = typeof a === "string" ? a : a.id;
-          if (userData?.completedAddons?.includes(addonId)) return false;
+
+          // Use the helper to check THIS specific attendee's history
+          const history = getProfileHistory(att.profileId);
+          if (history.includes(addonId)) return false;
 
           const existingTime = typeof a === "object" ? a.time : null;
           return existingTime && timesOverlap(selectedTime, existingTime);
         });
-
         if (conflict) {
           const conflictingAddon = pricing?.specialEvents?.find(
             (se) =>
@@ -215,6 +245,7 @@ export default function BookingSummary({
           setUncheckWarning({
             type: "time_conflict",
             eventId,
+            attendeeIndex, // <-- NEW
             addonId: addon.id,
             conflictingName:
               currentLang === "en"
@@ -225,39 +256,27 @@ export default function BookingSummary({
         }
       }
 
-      // 2. Prerequisite Check
       if (addon.requiresIntroId) {
         if (!currentUser) {
           setUncheckWarning({
             type: "login_required",
             eventId,
+            attendeeIndex,
             addonId: addon.id,
           });
           return;
         }
-
-        const todayStr = new Date().toISOString().split("T")[0];
-        const hasCompleted = userData?.completedAddons?.includes(
-          addon.requiresIntroId,
-        );
-
-        const hadPastBooking = (userBookedIds || []).some((id) => {
-          // Since userBookedIds is just IDs, we check the actual booking date from a separate source
-          // or rely on the fact that if it was auto-selected and date passed, user is 'done'.
-          // For efficiency, we rely on the Profile History we just enabled above.
-          return false;
-        });
-
-        const inCart = selectedDates.some((d) =>
-          d.selectedAddons?.some(
-            (a) => (typeof a === "string" ? a : a.id) === addon.requiresIntroId,
-          ),
+        const history = getProfileHistory(att.profileId);
+        const hasCompleted = history.includes(addon.requiresIntroId);
+        const inCart = att?.selectedAddons?.some(
+          (a) => (typeof a === "string" ? a : a.id) === addon.requiresIntroId,
         );
 
         if (!hasCompleted && !inCart) {
           setUncheckWarning({
             type: "missing_prerequisite",
             eventId,
+            attendeeIndex, // <-- NEW
             addonId: addon.id,
             requiredIntroId: addon.requiresIntroId,
           });
@@ -265,7 +284,6 @@ export default function BookingSummary({
         }
       }
 
-      // 3. Prerequisite for another check
       const isPrerequisiteForAnother = pricing?.specialEvents?.some(
         (se) => se.requiresIntroId === addon.id,
       );
@@ -273,19 +291,21 @@ export default function BookingSummary({
         setUncheckWarning({
           type: "login_required_prerequisite",
           eventId,
+          attendeeIndex,
           addonId: addon.id,
         });
         return;
       }
-    }
+    } else {
+      // Check the history for THIS specific profile ID
+      const history = getProfileHistory(att.profileId);
+      const isFirstTimerForAddon = !history.includes(addon.id);
 
-    // --- CASE B: DESELECTING (Removing an add-on) ---
-    else {
-      const isFirstTimer = !currentUser || !hasBookedBefore;
-      if (isMandatory && isFirstTimer) {
+      if (isMandatory && isFirstTimerForAddon) {
         setUncheckWarning({
           type: "mandatory",
           eventId,
+          attendeeIndex,
           addonId: addon.id,
           selectedTime,
         });
@@ -293,14 +313,21 @@ export default function BookingSummary({
       }
     }
 
-    executeToggleAddon(eventId, addon.id, selectedTime);
+    executeToggleAddon(eventId, attendeeIndex, addon.id, selectedTime);
   };
 
-  const executeToggleAddon = (eventId, addonId, selectedTime = null) => {
+  const executeToggleAddon = (
+    eventId,
+    attendeeIndex,
+    addonId,
+    selectedTime = null,
+  ) => {
     setSelectedDates((prev) =>
       prev.map((date) => {
         if (date.id === eventId) {
-          const current = date.selectedAddons || [];
+          const updatedAttendees = [...(date.attendees || [])];
+          const att = updatedAttendees[attendeeIndex];
+          const current = att.selectedAddons || [];
           const isAlreadySelected = current.some((a) =>
             typeof a === "string"
               ? a === addonId
@@ -319,7 +346,8 @@ export default function BookingSummary({
                 selectedTime ? { id: addonId, time: selectedTime } : addonId,
               ];
 
-          return { ...date, selectedAddons: updated };
+          updatedAttendees[attendeeIndex] = { ...att, selectedAddons: updated };
+          return { ...date, attendees: updatedAttendees };
         }
         return date;
       }),
@@ -332,45 +360,57 @@ export default function BookingSummary({
   const limitOnePerDay = pricing?.limitOnePerDay ?? true;
   let eligibleForCredit = 0;
   let ineligibleForCredit = 0;
+  let totalUsableUserCredits = 0;
+
+  const profileUsage = {};
 
   selectedDates.forEach((d) => {
-    const count = d.count || 1;
-
-    // Check if a credit was already used for this specific event
-    let alreadyUsedCredit = false;
-    if (currentUser) {
-      alreadyUsedCredit = userCreditBookedIds?.includes(d.id);
-    } else if (activePackCode) {
-      alreadyUsedCredit = activePackCode.redeemedEventIds?.includes(d.id);
-    }
-
-    if (limitOnePerDay) {
-      if (alreadyUsedCredit) {
-        // They already used a credit for this day, so it defaults to cash
-        eligibleForCredit += 0;
-        ineligibleForCredit += count;
+    (d.attendees || []).forEach((att) => {
+      const pid = att.profileId;
+      if (!pid) {
+        // Guests with no profile ID are never eligible for credits
+        ineligibleForCredit += 1;
       } else {
-        // They haven't used a credit yet, so 1 goes to credit, remainder goes to cash
-        eligibleForCredit += 1;
-        ineligibleForCredit += Math.max(0, count - 1);
+        if (!profileUsage[pid])
+          profileUsage[pid] = { requested: 0, usedDates: new Set() };
+
+        let alreadyUsedCredit = false;
+        if (pid === "main") {
+          alreadyUsedCredit = userCreditBookedIds?.includes(d.id);
+        } else if (activePackCode) {
+          alreadyUsedCredit = activePackCode.redeemedEventIds?.includes(d.id);
+        }
+
+        if (
+          limitOnePerDay &&
+          (profileUsage[pid].usedDates.has(d.id) || alreadyUsedCredit)
+        ) {
+          ineligibleForCredit += 1;
+        } else {
+          profileUsage[pid].usedDates.add(d.id);
+          profileUsage[pid].requested += 1;
+          eligibleForCredit += 1;
+        }
       }
-    } else {
-      eligibleForCredit += count;
-    }
+    });
   });
 
   const totalTicketsSelected = eligibleForCredit + ineligibleForCredit;
-  const usableUserCredits = currentUser
-    ? Math.min(availableCredits, eligibleForCredit)
-    : 0;
-  const usablePackCredits =
-    activePackCode && activePackCode.remaining > 0
-      ? Math.min(activePackCode.remaining, eligibleForCredit)
-      : 0;
 
-  const usableCredits = activePackCode ? usablePackCredits : usableUserCredits;
+  if (activePackCode) {
+    totalUsableUserCredits =
+      activePackCode.remaining > 0
+        ? Math.min(activePackCode.remaining, eligibleForCredit)
+        : 0;
+  } else {
+    Object.entries(profileUsage).forEach(([pid, usage]) => {
+      const bal = profileBalances[pid] || 0;
+      totalUsableUserCredits += Math.min(bal, usage.requested);
+    });
+  }
+
+  const usableCredits = totalUsableUserCredits;
   const remainingEligibleToPay = eligibleForCredit - usableCredits;
-
   const ticketsToPayCash = remainingEligibleToPay + ineligibleForCredit;
 
   const baseTotalTicketsPrice =
@@ -399,24 +439,27 @@ export default function BookingSummary({
   const qualifiesForFreeAddon = isBuyingPack || isUsingCredits;
 
   let addonCashTotal = 0;
+  let chargeableAddonCount = 0; // <-- NEW
   selectedDates.forEach((d) => {
-    const count = d.count || 1;
-    if (d.selectedAddons && d.selectedAddons.length > 0) {
-      d.selectedAddons.forEach((selAddon) => {
-        const addonId = typeof selAddon === "string" ? selAddon : selAddon.id;
-        const addonDef = pricing?.specialEvents?.find(
-          (se) => se.id === addonId,
-        );
+    (d.attendees || []).forEach((att) => {
+      if (att.selectedAddons && att.selectedAddons.length > 0) {
+        att.selectedAddons.forEach((selAddon) => {
+          const addonId = typeof selAddon === "string" ? selAddon : selAddon.id;
+          const addonDef = pricing?.specialEvents?.find(
+            (se) => se.id === addonId,
+          );
 
-        if (addonDef && addonDef.price) {
-          if (addonDef.freeWithPack && qualifiesForFreeAddon) {
-            addonCashTotal += 0;
-          } else {
-            addonCashTotal += parseFloat(addonDef.price) * count;
+          if (addonDef && addonDef.price) {
+            if (addonDef.freeWithPack && qualifiesForFreeAddon) {
+              addonCashTotal += 0;
+            } else {
+              addonCashTotal += parseFloat(addonDef.price); // Calculated per attendee
+              chargeableAddonCount++; // Count for the UI text later
+            }
           }
-        }
-      });
-    }
+        });
+      }
+    });
   });
 
   const isMixedPayment =
@@ -916,7 +959,7 @@ export default function BookingSummary({
                                 ? {
                                     ...item,
                                     count: Math.max(1, item.count - 1),
-                                    names: item.names.slice(0, -1), // Remove last name
+                                    attendees: item.attendees.slice(0, -1),
                                   }
                                 : item,
                             ),
@@ -953,7 +996,10 @@ export default function BookingSummary({
                                 ? {
                                     ...item,
                                     count: item.count + 1,
-                                    names: [...item.names, ""], // Add empty name
+                                    attendees: [
+                                      ...item.attendees,
+                                      { profileId: null, name: "" },
+                                    ],
                                   }
                                 : item,
                             ),
@@ -993,441 +1039,657 @@ export default function BookingSummary({
                     </button>
                   </div>
                 </div>
-                {/* Attendee Names List */}
-                {d.count > 1 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "8px",
-                      marginTop: "10px",
-                      marginBottom: "15px",
-                    }}
-                  >
-                    {d.names.map((name, nameIdx) => (
-                      <div key={nameIdx}>
-                        <label
-                          style={{
-                            fontSize: "0.65rem",
-                            opacity: 0.5,
-                            fontWeight: "900",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          {currentLang === "en"
-                            ? `Attendee ${nameIdx + 1}`
-                            : `Teilnehmer ${nameIdx + 1}`}
-                        </label>
-                        <input
-                          type="text"
-                          placeholder={
-                            nameIdx === 0
-                              ? currentLang === "en"
-                                ? "Your Name"
-                                : "Dein Name"
-                              : currentLang === "en"
-                                ? "Guest Name"
-                                : "Name des Gastes"
-                          }
-                          value={name}
-                          onChange={(e) => {
-                            const updatedNames = [...d.names];
-                            updatedNames[nameIdx] = e.target.value;
-                            setSelectedDates((prev) =>
-                              prev.map((item) =>
-                                item.id === d.id
-                                  ? { ...item, names: updatedNames }
-                                  : item,
-                              ),
-                            );
-                          }}
-                          style={{
-                            ...S.guestInputStyle,
-                            padding: "8px 12px",
-                            fontSize: "0.85rem",
-                            backgroundColor: "rgba(255, 252, 227, 0.6)",
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* --- 1. START OF REPLACEMENT --- */}
-                {(() => {
-                  const rawAddons = scheduleData?.specialAssignments?.[d.id];
-                  const assignedAddonIds = Array.isArray(rawAddons)
-                    ? rawAddons
-                    : rawAddons
-                      ? [rawAddons]
-                      : [];
+                {/* Attendee & Add-ons List */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "16px",
+                    marginTop: "10px",
+                    marginBottom: "15px",
+                  }}
+                >
+                  {d.attendees.map((att, nameIdx) => {
+                    const isMultiple = d.attendees.length > 1;
 
-                  const visibleAddons = (pricing?.specialEvents || []).filter(
-                    (se) =>
-                      assignedAddonIds.includes(se.id) &&
-                      !userData?.completedAddons?.includes(se.id), // Filter out completed addons
-                  );
+                    // Calculate addons for this specific attendee
+                    const rawAddons = scheduleData?.specialAssignments?.[d.id];
+                    const assignedAddonIds = Array.isArray(rawAddons)
+                      ? rawAddons
+                      : rawAddons
+                        ? [rawAddons]
+                        : [];
+                    const attHistory = getProfileHistory(att.profileId); // Fetch history for this specific person
 
-                  if (visibleAddons.length === 0) return null;
+                    const visibleAddons = (pricing?.specialEvents || []).filter(
+                      (se) =>
+                        assignedAddonIds.includes(se.id) &&
+                        !attHistory.includes(se.id), // Use the attendee's history instead of userData
+                    );
 
-                  // Determine if this specific date should be expanded
-                  // Default: Expanded if only 1 date is selected, otherwise collapsed
-                  const isAddonsExpanded =
-                    selectedDates.length === 1
-                      ? manuallyExpandedDates[d.id] !== false
-                      : manuallyExpandedDates[d.id] === true;
+                    const isAddonsExpanded =
+                      selectedDates.length === 1 && d.attendees.length === 1
+                        ? manuallyExpandedDates[`${d.id}_${nameIdx}`] !== false
+                        : manuallyExpandedDates[`${d.id}_${nameIdx}`] === true;
 
-                  return (
-                    <div
-                      style={{
-                        borderTop: "1px dashed rgba(28,7,0,0.1)",
-                        paddingTop: "8px",
-                      }}
-                    >
-                      {/* CLICKABLE HEADER TO EXPAND/COLLAPSE */}
+                    return (
                       <div
-                        onClick={() =>
-                          setManuallyExpandedDates((prev) => ({
-                            ...prev,
-                            [d.id]: !isAddonsExpanded,
-                          }))
-                        }
+                        key={nameIdx}
                         style={{
                           display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          cursor: "pointer",
-                          paddingBottom: isAddonsExpanded ? "8px" : "0",
+                          flexDirection: "column",
+                          gap: "6px",
+                          paddingBottom:
+                            nameIdx < d.attendees.length - 1 ? "16px" : "0",
+                          borderBottom:
+                            nameIdx < d.attendees.length - 1
+                              ? "1px dashed rgba(28, 7, 0, 0.1)"
+                              : "none",
                         }}
                       >
-                        <p
-                          style={{
-                            fontSize: "0.65rem",
-                            fontWeight: "900",
-                            textTransform: "uppercase",
-                            opacity: 0.5,
-                            margin: 0,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                        >
-                          <Star size={10} fill="#9960a8" color="#9960a8" />
-                          {currentLang === "en"
-                            ? "Available Add-ons"
-                            : "Verfügbare Extras"}
-                        </p>
-                        {isAddonsExpanded ? (
-                          <ChevronUp size={14} color="#9960a8" />
-                        ) : (
-                          <ChevronDown size={14} color="#9960a8" />
+                        {/* Attendee Identity Select/Input */}
+                        {isMultiple && (
+                          <label
+                            style={{
+                              fontSize: "0.65rem",
+                              opacity: 0.5,
+                              fontWeight: "900",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            {currentLang === "en"
+                              ? `Attendee ${nameIdx + 1}`
+                              : `Teilnehmer ${nameIdx + 1}`}
+                          </label>
                         )}
-                      </div>
 
-                      {/* THE ACTUAL LIST (ONLY SHOWS IF EXPANDED) */}
-                      {isAddonsExpanded && (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "6px",
-                          }}
-                        >
-                          {visibleAddons.map((addon) => {
-                            const addonColor = getAddonColor(addon.id);
-                            const priceLabel = addon.price
-                              ? ` (+${addon.price} CHF)`
-                              : "";
-                            const displayAddonName =
-                              (currentLang === "en"
-                                ? addon.nameEn
-                                : addon.nameDe) + priceLabel;
+                        {currentUser &&
+                          userData?.linkedProfiles?.length > 0 && (
+                            <select
+                              value={att.profileId || "guest"}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updatedAttendees = [...d.attendees];
+                                let targetName = "";
+                                let targetProfileId = val;
 
-                            if (addon.timeSlots && addon.timeSlots.length > 0) {
-                              return (
-                                <div
-                                  key={addon.id}
-                                  style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "8px",
-                                    padding: "10px 12px",
-                                    borderRadius: "12px",
-                                    backgroundColor: "rgba(28,7,0,0.02)",
-                                    border: "1px dashed rgba(28,7,0,0.1)",
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      fontSize: "0.8rem",
-                                      fontWeight: "800",
-                                      color: "#1c0700",
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      gap: "2px",
-                                    }}
-                                  >
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "6px",
-                                      }}
-                                    >
+                                // 1. Resolve Identity based on selection
+                                if (val === "guest") {
+                                  targetName = "";
+                                  targetProfileId = null;
+                                } else if (val === "main") {
+                                  targetName = `${userData.firstName} ${userData.lastName}`;
+                                  targetProfileId = "main";
+                                } else {
+                                  const linked = userData.linkedProfiles.find(
+                                    (p) => p.id === val,
+                                  );
+                                  targetName = `${linked.firstName} ${linked.lastName}`;
+                                }
+
+                                // 2. Calculate mandatory addons specifically for THIS person
+                                const history =
+                                  getProfileHistory(targetProfileId);
+                                const rawAddons =
+                                  scheduleData?.specialAssignments?.[d.id];
+                                const assignedAddonIds = Array.isArray(
+                                  rawAddons,
+                                )
+                                  ? rawAddons
+                                  : rawAddons
+                                    ? [rawAddons]
+                                    : [];
+
+                                const mandatoryForThisPerson = [];
+                                assignedAddonIds.forEach((aid) => {
+                                  const def = pricing?.specialEvents?.find(
+                                    (se) => se.id === aid,
+                                  );
+                                  if (
+                                    def?.isMandatory &&
+                                    !history.includes(aid)
+                                  ) {
+                                    if (def.timeSlots?.length > 0) {
+                                      mandatoryForThisPerson.push({
+                                        id: aid,
+                                        time: `${def.timeSlots[0].startTime}-${def.timeSlots[0].endTime}`,
+                                      });
+                                    } else {
+                                      mandatoryForThisPerson.push(aid);
+                                    }
+                                  }
+                                });
+
+                                // 3. MERGE logic: Keep existing manual addons if the new person hasn't done them
+                                const currentManualAddons = (
+                                  att.selectedAddons || []
+                                ).filter((a) => {
+                                  const aid = typeof a === "string" ? a : a.id;
+                                  // Keep it if it's NOT already in the new mandatory list AND the person hasn't done it before
+                                  const isMandatoryNow =
+                                    mandatoryForThisPerson.some(
+                                      (m) =>
+                                        (typeof m === "string" ? m : m.id) ===
+                                        aid,
+                                    );
+                                  return (
+                                    !isMandatoryNow && !history.includes(aid)
+                                  );
+                                });
+
+                                // 4. Update the attendee with merged list
+                                updatedAttendees[nameIdx] = {
+                                  ...att,
+                                  profileId: targetProfileId,
+                                  name: targetName,
+                                  selectedAddons: [
+                                    ...mandatoryForThisPerson,
+                                    ...currentManualAddons,
+                                  ],
+                                };
+
+                                setSelectedDates((prev) =>
+                                  prev.map((item) =>
+                                    item.id === d.id
+                                      ? { ...item, attendees: updatedAttendees }
+                                      : item,
+                                  ),
+                                );
+                              }}
+                              style={{
+                                ...S.guestInputStyle,
+                                padding: "8px 12px",
+                                fontSize: "0.85rem",
+                                backgroundColor: "rgba(255, 252, 227, 0.6)",
+                              }}
+                            >
+                              <option value="main">
+                                {currentLang === "en" ? "Me" : "Ich"} (
+                                {userData.firstName})
+                              </option>
+                              {userData.linkedProfiles.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.firstName} {p.lastName}
+                                </option>
+                              ))}
+                              <option value="guest">
+                                {currentLang === "en"
+                                  ? "Guest (Other)"
+                                  : "Gast (Andere)"}
+                              </option>
+                            </select>
+                          )}
+
+                        {(!att.profileId || att.profileId === "guest") && (
+                          <input
+                            type="text"
+                            placeholder={
+                              nameIdx === 0
+                                ? currentLang === "en"
+                                  ? "Your Name"
+                                  : "Dein Name"
+                                : currentLang === "en"
+                                  ? "Guest Name"
+                                  : "Name des Gastes"
+                            }
+                            value={att.name}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const updatedAttendees = [...d.attendees];
+                              let targetName = "";
+                              let targetProfileId = val;
+
+                              // 1. Resolve Profile Identity
+                              if (val === "guest") {
+                                targetName = "";
+                                targetProfileId = null;
+                              } else if (val === "main") {
+                                targetName = `${userData.firstName} ${userData.lastName}`;
+                                targetProfileId = "main";
+                              } else {
+                                const linked = userData.linkedProfiles.find(
+                                  (p) => p.id === val,
+                                );
+                                targetName = `${linked.firstName} ${linked.lastName}`;
+                              }
+
+                              // 2. Calculate mandatory addons specifically for THIS person
+                              const history =
+                                getProfileHistory(targetProfileId);
+                              const rawAddons =
+                                scheduleData?.specialAssignments?.[d.id];
+                              const assignedAddonIds = Array.isArray(rawAddons)
+                                ? rawAddons
+                                : rawAddons
+                                  ? [rawAddons]
+                                  : [];
+
+                              const mandatoryForThisPerson = [];
+                              assignedAddonIds.forEach((aid) => {
+                                const def = pricing?.specialEvents?.find(
+                                  (se) => se.id === aid,
+                                );
+                                // If it's mandatory and this specific person hasn't done it/booked it
+                                if (
+                                  def?.isMandatory &&
+                                  !history.includes(aid)
+                                ) {
+                                  if (def.timeSlots?.length > 0) {
+                                    mandatoryForThisPerson.push({
+                                      id: aid,
+                                      time: `${def.timeSlots[0].startTime}-${def.timeSlots[0].endTime}`,
+                                    });
+                                  } else {
+                                    mandatoryForThisPerson.push(aid);
+                                  }
+                                }
+                              });
+
+                              // 3. Update the attendee with their specific identity AND their specific mandatory addons
+                              updatedAttendees[nameIdx] = {
+                                ...att,
+                                profileId: targetProfileId,
+                                name: targetName,
+                                selectedAddons: mandatoryForThisPerson,
+                              };
+
+                              setSelectedDates((prev) =>
+                                prev.map((item) =>
+                                  item.id === d.id
+                                    ? { ...item, attendees: updatedAttendees }
+                                    : item,
+                                ),
+                              );
+                            }}
+                            style={{
+                              ...S.guestInputStyle,
+                              padding: "8px 12px",
+                              fontSize: "0.85rem",
+                              backgroundColor: "rgba(255, 252, 227, 0.6)",
+                              display:
+                                currentUser &&
+                                userData?.linkedProfiles?.length > 0 &&
+                                att.profileId !== "guest"
+                                  ? "none"
+                                  : "block",
+                            }}
+                          />
+                        )}
+
+                        {/* Attendee-Specific Add-ons */}
+                        {visibleAddons.length > 0 && (
+                          <div style={{ marginTop: "4px" }}>
+                            <div
+                              onClick={() =>
+                                setManuallyExpandedDates((prev) => ({
+                                  ...prev,
+                                  [`${d.id}_${nameIdx}`]: !isAddonsExpanded,
+                                }))
+                              }
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                cursor: "pointer",
+                                paddingBottom: isAddonsExpanded ? "8px" : "0",
+                              }}
+                            >
+                              <p
+                                style={{
+                                  fontSize: "0.65rem",
+                                  fontWeight: "900",
+                                  textTransform: "uppercase",
+                                  opacity: 0.5,
+                                  margin: 0,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                <Star
+                                  size={10}
+                                  fill="#9960a8"
+                                  color="#9960a8"
+                                />
+                                {currentLang === "en"
+                                  ? "Available Add-ons"
+                                  : "Verfügbare Extras"}
+                              </p>
+                              {isAddonsExpanded ? (
+                                <ChevronUp size={14} color="#9960a8" />
+                              ) : (
+                                <ChevronDown size={14} color="#9960a8" />
+                              )}
+                            </div>
+
+                            {isAddonsExpanded && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "6px",
+                                }}
+                              >
+                                {visibleAddons.map((addon) => {
+                                  const addonColor = getAddonColor(addon.id);
+                                  const priceLabel = addon.price
+                                    ? ` (+${addon.price} CHF)`
+                                    : "";
+                                  const displayAddonName =
+                                    (currentLang === "en"
+                                      ? addon.nameEn
+                                      : addon.nameDe) + priceLabel;
+
+                                  if (
+                                    addon.timeSlots &&
+                                    addon.timeSlots.length > 0
+                                  ) {
+                                    return (
                                       <div
+                                        key={addon.id}
                                         style={{
-                                          width: "8px",
-                                          height: "8px",
-                                          borderRadius: "50%",
-                                          backgroundColor: addonColor,
+                                          display: "flex",
+                                          flexDirection: "column",
+                                          gap: "8px",
+                                          padding: "10px 12px",
+                                          borderRadius: "12px",
+                                          backgroundColor: "rgba(28,7,0,0.02)",
+                                          border: "1px dashed rgba(28,7,0,0.1)",
                                         }}
-                                      />
-                                      {displayAddonName}
-                                    </div>
-                                    {/* Removed !isFull check since this is a general header for multiple slots */}
-                                    {addon.freeWithPack &&
-                                      !qualifiesForFreeAddon && (
-                                        <span
-                                          style={{
-                                            fontSize: "0.65rem",
-                                            color: "#9960a8",
-                                            fontWeight: "600",
-                                            paddingLeft: "14px",
-                                          }}
-                                        >
-                                          {currentLang === "en"
-                                            ? "Tip: Free with any session pack"
-                                            : "Tipp: Gratis mit jedem Kurspaket"}
-                                        </span>
-                                      )}
-                                  </div>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      gap: "6px",
-                                      paddingLeft: "14px",
-                                    }}
-                                  >
-                                    {addon.timeSlots.map((ts) => {
-                                      const timeString = `${ts.startTime}-${ts.endTime}`;
-                                      const isSelected = d.selectedAddons?.some(
-                                        (a) =>
-                                          typeof a === "object" &&
-                                          a.id === addon.id &&
-                                          a.time === timeString,
-                                      );
-                                      const bookedKey = `${d.id}_${addon.id}_${timeString}`;
-                                      const booked =
-                                        addonBookingCounts[bookedKey] || 0;
-                                      const isFull =
-                                        booked >= parseInt(ts.capacity || 999);
-
-                                      return (
+                                      >
                                         <div
-                                          key={timeString}
-                                          onClick={() =>
-                                            !isFull &&
-                                            toggleAddon(
-                                              d.id,
-                                              addon,
-                                              addon.isMandatory,
-                                              timeString,
-                                            )
-                                          }
                                           style={{
+                                            fontSize: "0.8rem",
+                                            fontWeight: "800",
+                                            color: "#1c0700",
                                             display: "flex",
-                                            alignItems: "center",
-                                            gap: "10px",
-                                            padding: "8px 10px",
-                                            borderRadius: "8px",
-                                            cursor: isFull
-                                              ? "not-allowed"
-                                              : "pointer",
-                                            backgroundColor: isSelected
-                                              ? "rgba(78, 95, 40, 0.1)"
-                                              : "rgba(28,7,0,0.03)",
-                                            border:
-                                              "1px solid rgba(28,7,0,0.05)",
-                                            transition: "all 0.2s",
+                                            flexDirection: "column",
+                                            gap: "2px",
                                           }}
                                         >
                                           <div
                                             style={{
-                                              width: "16px",
-                                              height: "16px",
-                                              borderRadius: "4px",
-                                              border: `2px solid ${isSelected ? addonColor : "#caaff3"}`,
                                               display: "flex",
                                               alignItems: "center",
-                                              justifyContent: "center",
-                                              backgroundColor: isSelected
-                                                ? addonColor
-                                                : "transparent",
+                                              gap: "6px",
                                             }}
                                           >
-                                            {isSelected && (
-                                              <Check
-                                                size={12}
-                                                color="#fdf8e1"
-                                                strokeWidth={4}
-                                              />
-                                            )}
-                                          </div>
-                                          <div
-                                            style={{
-                                              flex: 1,
-                                              display: "flex",
-                                              justifyContent: "space-between",
-                                              alignItems: "center",
-                                            }}
-                                          >
-                                            <span
+                                            <div
                                               style={{
-                                                fontSize: "0.75rem",
-                                                fontWeight: "600",
-                                                color: isFull
-                                                  ? "#ccc"
-                                                  : "#1c0700",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: "6px",
+                                                width: "8px",
+                                                height: "8px",
+                                                borderRadius: "50%",
+                                                backgroundColor: addonColor,
                                               }}
-                                            >
-                                              <Clock size={12} opacity={0.6} />{" "}
-                                              {ts.startTime} - {ts.endTime}
-                                            </span>
-                                            {isFull && (
+                                            />
+                                            {displayAddonName}
+                                          </div>
+                                          {addon.freeWithPack &&
+                                            !qualifiesForFreeAddon && (
                                               <span
                                                 style={{
-                                                  fontSize: "0.6rem",
-                                                  color: "#ff4d4d",
-                                                  fontWeight: "800",
+                                                  fontSize: "0.65rem",
+                                                  color: "#9960a8",
+                                                  fontWeight: "600",
+                                                  paddingLeft: "14px",
                                                 }}
                                               >
                                                 {currentLang === "en"
-                                                  ? "FULL"
-                                                  : "AUSGEBUCHT"}
+                                                  ? "Tip: Free with any session pack"
+                                                  : "Tipp: Gratis mit jedem Kurspaket"}
                                               </span>
                                             )}
-                                          </div>
                                         </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            } else {
-                              const isSelected = d.selectedAddons?.some((a) =>
-                                typeof a === "string"
-                                  ? a === addon.id
-                                  : a.id === addon.id,
-                              );
-                              const bookedKey = `${d.id}_${addon.id}`;
-                              const booked = addonBookingCounts[bookedKey] || 0;
-                              const isFull =
-                                booked >= parseInt(addon.capacity || 999);
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: "6px",
+                                            paddingLeft: "14px",
+                                          }}
+                                        >
+                                          {addon.timeSlots.map((ts) => {
+                                            const timeString = `${ts.startTime}-${ts.endTime}`;
+                                            const isSelected =
+                                              att.selectedAddons?.some(
+                                                (a) =>
+                                                  typeof a === "object" &&
+                                                  a.id === addon.id &&
+                                                  a.time === timeString,
+                                              );
+                                            const bookedKey = `${d.id}_${addon.id}_${timeString}`;
+                                            const booked =
+                                              addonBookingCounts[bookedKey] ||
+                                              0;
+                                            const isFull =
+                                              booked >=
+                                              parseInt(ts.capacity || 999);
 
-                              return (
-                                <div
-                                  key={addon.id}
-                                  onClick={() =>
-                                    !isFull &&
-                                    toggleAddon(d.id, addon, addon.isMandatory)
-                                  }
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "10px",
-                                    padding: "10px 12px",
-                                    borderRadius: "12px",
-                                    cursor: isFull ? "not-allowed" : "pointer",
-                                    backgroundColor: isSelected
-                                      ? "rgba(78, 95, 40, 0.1)"
-                                      : "rgba(28,7,0,0.03)",
-                                    transition: "all 0.2s",
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      width: "18px",
-                                      height: "18px",
-                                      borderRadius: "6px",
-                                      border: `2px solid ${isSelected ? addonColor : "#caaff3"}`,
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      backgroundColor: isSelected
-                                        ? addonColor
-                                        : "transparent",
-                                    }}
-                                  >
-                                    {isSelected && (
-                                      <Check
-                                        size={14}
-                                        color="#fdf8e1"
-                                        strokeWidth={4}
-                                      />
-                                    )}
-                                  </div>
-                                  <div
-                                    style={{
-                                      flex: 1,
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                    }}
-                                  >
-                                    <div
-                                      style={{
-                                        fontSize: "0.8rem",
-                                        fontWeight: "700",
-                                        color: isFull ? "#ccc" : "#1c0700",
-                                        display: "flex",
-                                        flexDirection: "column",
-                                      }}
-                                    >
-                                      {displayAddonName}
-                                      {/* NEW: Pack savings notice */}
-                                      {addon.freeWithPack &&
-                                        !qualifiesForFreeAddon &&
-                                        !isFull && (
-                                          <span
-                                            style={{
-                                              fontSize: "0.65rem",
-                                              color: "#9960a8",
-                                              fontWeight: "600",
-                                              marginTop: "2px",
-                                            }}
-                                          >
-                                            {currentLang === "en"
-                                              ? "Tip: Free with any session pack"
-                                              : "Tipp: Gratis mit jedem Kurspaket"}
-                                          </span>
-                                        )}
-                                    </div>
-                                    {isFull && (
-                                      <span
+                                            return (
+                                              <div
+                                                key={timeString}
+                                                onClick={() =>
+                                                  !isFull &&
+                                                  toggleAddon(
+                                                    d.id,
+                                                    nameIdx,
+                                                    addon,
+                                                    addon.isMandatory,
+                                                    timeString,
+                                                  )
+                                                }
+                                                style={{
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  gap: "10px",
+                                                  padding: "8px 10px",
+                                                  borderRadius: "8px",
+                                                  cursor: isFull
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                                  backgroundColor: isSelected
+                                                    ? "rgba(78, 95, 40, 0.1)"
+                                                    : "rgba(28,7,0,0.03)",
+                                                  border:
+                                                    "1px solid rgba(28,7,0,0.05)",
+                                                  transition: "all 0.2s",
+                                                }}
+                                              >
+                                                <div
+                                                  style={{
+                                                    width: "16px",
+                                                    height: "16px",
+                                                    borderRadius: "4px",
+                                                    border: `2px solid ${isSelected ? addonColor : "#caaff3"}`,
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    backgroundColor: isSelected
+                                                      ? addonColor
+                                                      : "transparent",
+                                                  }}
+                                                >
+                                                  {isSelected && (
+                                                    <Check
+                                                      size={12}
+                                                      color="#fdf8e1"
+                                                      strokeWidth={4}
+                                                    />
+                                                  )}
+                                                </div>
+                                                <div
+                                                  style={{
+                                                    flex: 1,
+                                                    display: "flex",
+                                                    justifyContent:
+                                                      "space-between",
+                                                    alignItems: "center",
+                                                  }}
+                                                >
+                                                  <span
+                                                    style={{
+                                                      fontSize: "0.75rem",
+                                                      fontWeight: "600",
+                                                      color: isFull
+                                                        ? "#ccc"
+                                                        : "#1c0700",
+                                                      display: "flex",
+                                                      alignItems: "center",
+                                                      gap: "6px",
+                                                    }}
+                                                  >
+                                                    <Clock
+                                                      size={12}
+                                                      opacity={0.6}
+                                                    />{" "}
+                                                    {ts.startTime} -{" "}
+                                                    {ts.endTime}
+                                                  </span>
+                                                  {isFull && (
+                                                    <span
+                                                      style={{
+                                                        fontSize: "0.6rem",
+                                                        color: "#ff4d4d",
+                                                        fontWeight: "800",
+                                                      }}
+                                                    >
+                                                      {currentLang === "en"
+                                                        ? "FULL"
+                                                        : "AUSGEBUCHT"}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    );
+                                  } else {
+                                    const isSelected = att.selectedAddons?.some(
+                                      (a) =>
+                                        typeof a === "string"
+                                          ? a === addon.id
+                                          : a.id === addon.id,
+                                    );
+                                    const bookedKey = `${d.id}_${addon.id}`;
+                                    const booked =
+                                      addonBookingCounts[bookedKey] || 0;
+                                    const isFull =
+                                      booked >= parseInt(addon.capacity || 999);
+
+                                    return (
+                                      <div
+                                        key={addon.id}
+                                        onClick={() =>
+                                          !isFull &&
+                                          toggleAddon(
+                                            d.id,
+                                            nameIdx,
+                                            addon,
+                                            addon.isMandatory,
+                                          )
+                                        }
                                         style={{
-                                          fontSize: "0.6rem",
-                                          color: "#ff4d4d",
-                                          fontWeight: "800",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: "10px",
+                                          padding: "10px 12px",
+                                          borderRadius: "12px",
+                                          cursor: isFull
+                                            ? "not-allowed"
+                                            : "pointer",
+                                          backgroundColor: isSelected
+                                            ? "rgba(78, 95, 40, 0.1)"
+                                            : "rgba(28,7,0,0.03)",
+                                          transition: "all 0.2s",
                                         }}
                                       >
-                                        {currentLang === "en"
-                                          ? "FULL"
-                                          : "AUSGEBUCHT"}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            }
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                                        <div
+                                          style={{
+                                            width: "18px",
+                                            height: "18px",
+                                            borderRadius: "6px",
+                                            border: `2px solid ${isSelected ? addonColor : "#caaff3"}`,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            backgroundColor: isSelected
+                                              ? addonColor
+                                              : "transparent",
+                                          }}
+                                        >
+                                          {isSelected && (
+                                            <Check
+                                              size={14}
+                                              color="#fdf8e1"
+                                              strokeWidth={4}
+                                            />
+                                          )}
+                                        </div>
+                                        <div
+                                          style={{
+                                            flex: 1,
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              fontSize: "0.8rem",
+                                              fontWeight: "700",
+                                              color: isFull
+                                                ? "#ccc"
+                                                : "#1c0700",
+                                              display: "flex",
+                                              flexDirection: "column",
+                                            }}
+                                          >
+                                            {displayAddonName}
+                                            {addon.freeWithPack &&
+                                              !qualifiesForFreeAddon &&
+                                              !isFull && (
+                                                <span
+                                                  style={{
+                                                    fontSize: "0.65rem",
+                                                    color: "#9960a8",
+                                                    fontWeight: "600",
+                                                    marginTop: "2px",
+                                                  }}
+                                                >
+                                                  {currentLang === "en"
+                                                    ? "Tip: Free with any session pack"
+                                                    : "Tipp: Gratis mit jedem Kurspaket"}
+                                                </span>
+                                              )}
+                                          </div>
+                                          {isFull && (
+                                            <span
+                                              style={{
+                                                fontSize: "0.6rem",
+                                                color: "#ff4d4d",
+                                                fontWeight: "800",
+                                              }}
+                                            >
+                                              {currentLang === "en"
+                                                ? "FULL"
+                                                : "AUSGEBUCHT"}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
@@ -1526,16 +1788,32 @@ export default function BookingSummary({
                     }}
                   >
                     {pack.isIndividual && isMixedPayment ? (
-                      <>
-                        {ticketsToPayCash}{" "}
-                        {currentLang === "en"
-                          ? ticketsToPayCash === 1
-                            ? "extra Session"
-                            : "extra Sessions"
-                          : ticketsToPayCash === 1
-                            ? "zusätzlicher Termin"
-                            : "zusätzliche Termine"}
-                      </>
+                      ticketsToPayCash > 0 ? (
+                        <>
+                          {ticketsToPayCash}{" "}
+                          {currentLang === "en"
+                            ? ticketsToPayCash === 1
+                              ? "extra Session"
+                              : "extra Sessions"
+                            : ticketsToPayCash === 1
+                              ? "zusätzlicher Termin"
+                              : "zusätzliche Termine"}
+                          {chargeableAddonCount > 0
+                            ? currentLang === "en"
+                              ? ` + ${chargeableAddonCount} Extras`
+                              : ` + ${chargeableAddonCount} Extras`
+                            : ""}
+                        </>
+                      ) : (
+                        <>
+                          {chargeableAddonCount}{" "}
+                          {currentLang === "en"
+                            ? chargeableAddonCount === 1
+                              ? "Extra"
+                              : "Extras"
+                            : "Extras"}
+                        </>
+                      )
                     ) : (
                       <>
                         {pack.size}{" "}
@@ -2129,6 +2407,7 @@ export default function BookingSummary({
                     // Execute the removal and close the modal
                     executeToggleAddon(
                       uncheckWarning.eventId,
+                      uncheckWarning.attendeeIndex,
                       uncheckWarning.addonId,
                       uncheckWarning.selectedTime,
                     );
@@ -2397,30 +2676,68 @@ export default function BookingSummary({
           <>
             {renderSelectionSummary()}
 
-            {availableCredits > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  backgroundColor: "rgba(78, 95, 40, 0.1)",
-                  color: "#4e5f28",
-                  padding: "8px 16px",
-                  borderRadius: "100px",
-                  fontSize: "0.85rem",
-                  marginBottom: "1.5rem",
-                  width: "fit-content",
-                  fontWeight: "400",
-                }}
-              >
-                <Ticket size={16} />
-                <span>
-                  {currentLang === "en" ? "Your Balance:" : "Dein Guthaben:"}{" "}
-                  {availableCredits}{" "}
-                  {currentLang === "en" ? "credits" : "Karten"}
-                </span>
-              </div>
-            )}
+            {/* DYNAMIC BALANCE DISPLAY */}
+            {(() => {
+              // 1. Find all unique profile IDs currently in the cart
+              const activeProfileIds = [
+                ...new Set(
+                  selectedDates.flatMap((d) =>
+                    d.attendees.map((a) => a.profileId || "main"),
+                  ),
+                ),
+              ];
+
+              // 2. Map those IDs to their specific names and balances
+              const relevantBalances = activeProfileIds
+                .map((pid) => {
+                  const bal = profileBalances[pid] || 0;
+                  const name =
+                    pid === "main"
+                      ? userData?.firstName ||
+                        (currentLang === "en" ? "Me" : "Ich")
+                      : userData?.linkedProfiles?.find((lp) => lp.id === pid)
+                          ?.firstName || "User";
+                  return { name, bal };
+                })
+                .filter((item) => item.bal > 0); // Only show if they actually have credits
+
+              if (relevantBalances.length === 0) return null;
+
+              return (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    marginBottom: "1.5rem",
+                  }}
+                >
+                  {relevantBalances.map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        backgroundColor: "rgba(78, 95, 40, 0.1)",
+                        color: "#4e5f28",
+                        padding: "6px 14px",
+                        borderRadius: "100px",
+                        fontSize: "0.8rem",
+                        width: "fit-content",
+                        fontWeight: "600",
+                      }}
+                    >
+                      <Ticket size={14} />
+                      <span>
+                        {item.name}: {item.bal}{" "}
+                        {currentLang === "en" ? "credits" : "Guthaben"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             <div
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}

@@ -20,7 +20,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext"; // Fixed path based on your Profile.jsx location
+import { useAuth } from "../../contexts/AuthContext";
 import Cropper from "react-easy-crop";
 import {
   Camera,
@@ -31,7 +31,6 @@ import {
   Search,
   PlusCircle,
   Home,
-  User as UserIcon,
   ArrowRight,
   ArrowLeft,
   Flame,
@@ -41,7 +40,6 @@ import {
   User,
 } from "lucide-react";
 
-// --- CROP & COMPRESSION HELPER FUNCTIONS ---
 const createImage = (url) =>
   new Promise((resolve, reject) => {
     const image = new Image();
@@ -80,11 +78,9 @@ async function getCroppedImg(imageSrc, pixelCrop, quality = 0.7) {
     );
   });
 }
-// -------------------------------------------
 
 export default function PotteryFiringCard({ currentLang }) {
   const navigate = useNavigate();
-  // Pulled userData in addition to currentUser
   const { currentUser, userData } = useAuth();
 
   const [step, setStep] = useState("email");
@@ -105,7 +101,8 @@ export default function PotteryFiringCard({ currentLang }) {
   const [imagePreview, setImagePreview] = useState(null);
   const [viewingImage, setViewingImage] = useState(null);
 
-  // --- CROPPER STATE ---
+  const [selectedProfileId, setSelectedProfileId] = useState("main"); // <-- Profile Selector
+
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
@@ -113,12 +110,27 @@ export default function PotteryFiringCard({ currentLang }) {
   const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
-  // ---------------------
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  const allProfiles = useMemo(() => {
+    const profiles = [
+      { id: "main", name: currentLang === "de" ? "Mich" : "Me" },
+    ];
+    if (userData?.linkedProfiles) {
+      userData.linkedProfiles.forEach((p) => {
+        profiles.push({
+          id: p.id,
+          name: `${p.firstName} ${p.lastName}`,
+          email: p.email,
+        });
+      });
+    }
+    return profiles;
+  }, [userData, currentLang]);
 
   const fetchAbandoned = useCallback(async () => {
     try {
@@ -375,65 +387,48 @@ export default function PotteryFiringCard({ currentLang }) {
     if (!imagePreview || !croppedAreaPixels) return setError("Photo required.");
     setError("");
 
-    const isFirstTimeGuest = !currentUser && existingObjects.length === 0;
     const finalCode = userCode.toUpperCase();
 
-    if (isFirstTimeGuest) {
-      if (finalCode.length !== 4) return setError(labels.codeLength);
-      if (!guestName || !guestEmail) return setError(labels.requiredFields);
-      setLoading(true);
-      try {
-        const q = query(
-          collection(db, "firings"),
-          where("userCode", "==", finalCode),
-          limit(1),
-        );
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          setLoading(false);
-          return setError(labels.codeTaken);
-        }
-      } catch (err) {
-        setLoading(false);
-        return setError("Database error. Please try again.");
-      }
-    }
+    // 1. Resolve Identity
+    const activeProfile =
+      allProfiles.find((p) => p.id === selectedProfileId) || allProfiles[0];
 
+    // Use sub-user email if it exists, otherwise use parent email
     const finalEmail =
-      currentUser?.email ||
-      (existingObjects.length > 0 ? existingObjects[0].email : guestEmail);
+      selectedProfileId !== "main" && activeProfile.email
+        ? activeProfile.email
+        : currentUser?.email || guestEmail;
 
-    // Fix for "Guest" issue. Use userData if available, else currentUser, else previous, else "Guest"
+    // Use the specific profile name
     const finalName =
-      (userData?.firstName
-        ? `${userData.firstName} ${userData.lastName || ""}`.trim()
-        : currentUser?.displayName) ||
-      (existingObjects.length > 0 ? existingObjects[0].name : guestName) ||
-      "Guest";
+      selectedProfileId !== "main"
+        ? activeProfile.name
+        : (userData?.firstName
+            ? `${userData.firstName} ${userData.lastName || ""}`.trim()
+            : currentUser?.displayName) ||
+          guestName ||
+          "Guest";
 
     setLoading(true);
     try {
-      // 1. Generate the cropped and compressed Blob
       const croppedBlob = await getCroppedImg(
         imagePreview,
         croppedAreaPixels,
         0.7,
       );
-
-      // 2. Upload the compressed Blob
       const storageRef = ref(storage, `firings/${Date.now()}.jpg`);
       await uploadBytes(storageRef, croppedBlob);
       const imageUrl = await getDownloadURL(storageRef);
 
-      // 3. Register entry in database
       const registerFn = httpsCallable(getFunctions(), "registerFiringObject");
       await registerFn({
         email: finalEmail.toLowerCase(),
-        name: finalName,
+        name: finalName, // Now sending the specific attendee name
         userCode: finalCode,
         stage: "bisque",
         imageUrl,
         currentLang,
+        profileId: selectedProfileId,
       });
 
       setSuccess(true);
@@ -648,7 +643,6 @@ export default function PotteryFiringCard({ currentLang }) {
           </div>
         )}
 
-        {/* STEP 1: LOOKUP GUEST VIEW */}
         {step === "email" && (!currentUser || !loading) && (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {!currentUser && (
@@ -706,7 +700,6 @@ export default function PotteryFiringCard({ currentLang }) {
               </>
             )}
 
-            {/* INJECTING CARD STYLING FOR LOGGED IN USERS WHO HAVE NO PIECES YET */}
             <div style={currentUser ? cardContainer : {}}>
               {currentUser && (
                 <h2 style={cardTitleStyle}>
@@ -718,7 +711,6 @@ export default function PotteryFiringCard({ currentLang }) {
           </div>
         )}
 
-        {/* STEP 2: PIECES LIST / TABS */}
         {step === "selection" && (
           <div style={cardContainer}>
             <h2 style={cardTitleStyle}>
@@ -886,7 +878,7 @@ export default function PotteryFiringCard({ currentLang }) {
                             }}
                           >
                             <User size={12} />{" "}
-                            {currentUser?.displayName || obj.email}
+                            {obj.name || currentUser?.displayName || obj.email}
                           </div>
                         )}
                     </div>
@@ -954,7 +946,6 @@ export default function PotteryFiringCard({ currentLang }) {
           </div>
         )}
 
-        {/* SEPARATE ADOPT SECTION (Always visible below the main content when looking at pieces or form) */}
         {step !== "email" && abandonedObjects.length > 0 && (
           <div style={{ ...cardContainer, marginTop: "2rem" }}>
             <h3
@@ -1026,7 +1017,6 @@ export default function PotteryFiringCard({ currentLang }) {
           </div>
         )}
 
-        {/* REGISTRATION MODAL (The Form) */}
         {step === "form" && (
           <form
             onSubmit={handleNewRegistration}
@@ -1058,6 +1048,35 @@ export default function PotteryFiringCard({ currentLang }) {
                 <XCircle size={24} />
               </button>
             </div>
+
+            {/* Profile Selector for logged-in users */}
+            {currentUser && allProfiles.length > 1 && (
+              <div
+                style={{
+                  marginBottom: "1.5rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "5px",
+                }}
+              >
+                <label style={labelStyle}>
+                  {currentLang === "de"
+                    ? "Wem gehört das?"
+                    : "Who does this belong to?"}
+                </label>
+                <select
+                  value={selectedProfileId}
+                  onChange={(e) => setSelectedProfileId(e.target.value)}
+                  style={inputStyle}
+                >
+                  {allProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {!currentUser && existingObjects.length === 0 && (
               <div
@@ -1184,7 +1203,6 @@ export default function PotteryFiringCard({ currentLang }) {
           </form>
         )}
 
-        {/* CLAIM MODAL */}
         {claimingPiece && (
           <div style={modalOverlay} onClick={() => !loading && resetModal()}>
             <div style={modalContent} onClick={(e) => e.stopPropagation()}>
@@ -1274,7 +1292,6 @@ export default function PotteryFiringCard({ currentLang }) {
           </div>
         )}
 
-        {/* FULLSCREEN IMAGE MODAL */}
         {viewingImage && (
           <div
             onClick={() => setViewingImage(null)}
@@ -1303,7 +1320,7 @@ export default function PotteryFiringCard({ currentLang }) {
               <img
                 src={viewingImage}
                 alt="Enlarged Pottery"
-                onClick={(e) => e.stopPropagation()} // Prevents closing when clicking the image itself
+                onClick={(e) => e.stopPropagation()}
                 style={{
                   maxWidth: "100%",
                   maxHeight: "90vh",
@@ -1358,8 +1375,7 @@ export default function PotteryFiringCard({ currentLang }) {
   );
 }
 
-// --- STYLES ---
-const containerStyle = {}; // REMOVED FULL PAGE WRAPPER STYLES
+const containerStyle = {};
 const titleStyle = {
   fontFamily: "Harmond-SemiBoldCondensed",
   fontSize: "2.8rem",

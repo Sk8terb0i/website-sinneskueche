@@ -743,88 +743,98 @@ export default function EventsTab({
 
       {!isEvent && showParticipantsFor === ev.id && participantCache[ev.id] && (
         <div style={styles.participantPanel}>
-          {participantCache[ev.id].map((u, i) => {
-            const groupKey = `${ev.id}_${u.email}`;
-            const isExpanded = expandedParticipants[groupKey];
-            const hasMultiple = u.ticketCount > 1;
+          {participantCache[ev.id].map((group, i) => {
+            const hasMultiple = group.ticketCount > 1;
 
             return (
-              <div key={i} style={styles.userRowGroup}>
-                {/* Header Row: Primary Booker */}
+              <div
+                key={i}
+                style={{
+                  ...styles.userRowGroup,
+                  backgroundColor: hasMultiple
+                    ? "rgba(153, 96, 168, 0.03)"
+                    : "transparent",
+                  borderRadius: "12px",
+                  padding: hasMultiple ? "8px" : "4px 0",
+                  marginBottom: "4px",
+                  border: hasMultiple
+                    ? "1px solid rgba(153, 96, 168, 0.1)"
+                    : "none",
+                  borderBottom: !hasMultiple
+                    ? "1px solid rgba(28,7,0,0.05)"
+                    : "none",
+                }}
+              >
+                {/* Contact Info Header (Only show once per group) */}
                 <div
-                  onClick={() =>
-                    hasMultiple &&
-                    setExpandedParticipants((prev) => ({
-                      ...prev,
-                      [groupKey]: !isExpanded,
-                    }))
-                  }
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: hasMultiple ? "pointer" : "default",
-                    padding: "8px 0",
+                    fontSize: "0.7rem",
+                    opacity: 0.6,
+                    padding: "0 8px 4px 8px",
+                    borderBottom: "1px solid rgba(28,7,0,0.05)",
+                    marginBottom: "8px",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "12px",
-                      flex: 1,
-                    }}
-                  >
+                  <span style={{ fontWeight: "800", color: "#9960a8" }}>
+                    {group.isGuest ? "GUEST BOOKING" : "USER BOOKING"}
+                  </span>
+                  <span>{group.email}</span>
+                </div>
+
+                {/* Individual Tickets */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                  }}
+                >
+                  {group.tickets.map((t, ti) => (
                     <div
+                      key={ti}
                       style={{
                         display: "flex",
+                        justifyContent: "space-between",
                         alignItems: "center",
-                        justifyContent: "center",
-                        width: "24px",
+                        padding: "4px 8px",
+                        position: "relative",
                       }}
                     >
-                      <User
-                        size={16}
-                        color={u.isGuest ? "#9960a8" : "#4e5f28"}
-                      />
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <span
+                      <div
                         style={{
-                          fontWeight: "800",
-                          fontSize: "0.95rem",
-                          color: u.isGuest ? "#9960a8" : "#1c0700",
-                        }}
-                      >
-                        {u.firstName} {u.lastName}{" "}
-                        {hasMultiple && `(${u.ticketCount})`}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          opacity: 0.6,
                           display: "flex",
                           alignItems: "center",
-                          gap: "4px",
+                          gap: "10px",
                         }}
                       >
-                        <Mail size={10} /> {u.email}
-                      </span>
-                    </div>
-                  </div>
+                        {/* Visual indicator for grouped bookings */}
+                        {hasMultiple && (
+                          <div
+                            style={{
+                              width: "2px",
+                              height: "20px",
+                              backgroundColor: "#caaff3",
+                              borderRadius: "2px",
+                            }}
+                          />
+                        )}
+                        <User size={14} opacity={0.5} />
+                        <span
+                          style={{
+                            fontWeight: "700",
+                            fontSize: "0.9rem",
+                            color: "#1c0700",
+                          }}
+                        >
+                          {t.name}
+                        </span>
+                      </div>
 
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                    }}
-                  >
-                    {/* Show addons on main row only if NOT expanded or if only 1 ticket */}
-                    {(!isExpanded || !hasMultiple) &&
-                      u.tickets[0].addons?.length > 0 && (
+                      {t.addons?.length > 0 && (
                         <div style={styles.addonList}>
-                          {u.tickets[0].addons.map((an, ai) => (
+                          {t.addons.map((an, ai) => (
                             <span key={ai} style={styles.addonBadge}>
                               <Star size={10} fill="#caaff3" color="#caaff3" />{" "}
                               {an}
@@ -832,68 +842,9 @@ export default function EventsTab({
                           ))}
                         </div>
                       )}
-                    {hasMultiple &&
-                      (isExpanded ? (
-                        <ChevronDown size={18} opacity={0.4} />
-                      ) : (
-                        <ChevronRight size={18} opacity={0.4} />
-                      ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-
-                {/* Expanded Section: Individual Attendees */}
-                {hasMultiple && isExpanded && (
-                  <div
-                    style={{
-                      marginLeft: "36px",
-                      marginTop: "4px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "8px",
-                      borderLeft: "2px solid rgba(28,7,0,0.05)",
-                      paddingLeft: "12px",
-                      paddingBottom: "8px",
-                    }}
-                  >
-                    {u.tickets.map((t, ti) => (
-                      <div
-                        key={ti}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          backgroundColor: "rgba(255,252,225,0.4)",
-                          padding: "6px 10px",
-                          borderRadius: "8px",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "0.85rem",
-                            fontWeight: "600",
-                            color: "#1c0700",
-                          }}
-                        >
-                          {t.name}
-                        </span>
-                        {t.addons?.length > 0 && (
-                          <div style={styles.addonList}>
-                            {t.addons.map((an, ai) => (
-                              <span key={ai} style={styles.addonBadge}>
-                                <Star
-                                  size={10}
-                                  fill="#caaff3"
-                                  color="#caaff3"
-                                />{" "}
-                                {an}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -1586,18 +1537,17 @@ const styles = {
     minWidth: "110px",
   },
   participantPanel: {
-    backgroundColor: "rgba(78, 95, 40, 0.04)",
-    padding: "8px 16px",
+    backgroundColor: "rgba(28, 7, 0, 0.02)", // Subtler background
+    padding: "12px",
     borderRadius: "16px",
-    border: "1px solid rgba(78, 95, 40, 0.08)",
+    border: "1px solid rgba(28, 7, 0, 0.05)",
     marginTop: "8px",
     display: "flex",
     flexDirection: "column",
+    gap: "8px", // Space between groups
   },
   userRowGroup: {
-    borderBottom: "1px solid rgba(28,7,0,0.05)",
-    padding: "4px 0",
-    "&:last-child": { borderBottom: "none" },
+    // Styles are now handled inline above to accommodate dynamic grouping
   },
   userRow: {
     display: "flex",
@@ -1625,7 +1575,7 @@ const styles = {
     alignItems: "flex-end", // Keeps them neatly tucked to the right
   },
   addonBadge: {
-    fontSize: "0.65rem",
+    fontSize: "0.6rem",
     fontWeight: "800",
     color: "#9960a8",
     backgroundColor: "rgba(202, 175, 243, 0.12)",

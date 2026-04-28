@@ -7,6 +7,7 @@ export default function CreditHistoryCard({
   userId,
   courseKey,
   currentLang,
+  profileId, // <-- Added
   t,
 }) {
   const [history, setHistory] = useState([]);
@@ -27,7 +28,24 @@ export default function CreditHistoryCard({
 
         const q = query(collection(db, "credit_history"), ...constraints);
         const snap = await getDocs(q);
-        setHistory(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+
+        let fetchedHistory = snap.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        // Filter locally to ensure backward compatibility with older docs that have no profileId
+        if (profileId === "main") {
+          fetchedHistory = fetchedHistory.filter(
+            (item) => !item.profileId || item.profileId === "main",
+          );
+        } else if (profileId) {
+          fetchedHistory = fetchedHistory.filter(
+            (item) => item.profileId === profileId,
+          );
+        }
+
+        setHistory(fetchedHistory);
       } catch (error) {
         console.error("Error fetching credit history:", error);
       } finally {
@@ -36,7 +54,7 @@ export default function CreditHistoryCard({
     };
 
     if (userId) fetchHistory();
-  }, [userId, courseKey]);
+  }, [userId, courseKey, profileId]);
 
   const formatDate = (timestamp) => {
     if (!timestamp) return "";
@@ -141,11 +159,11 @@ export default function CreditHistoryCard({
 
 const styles = {
   card: {
-    padding: "2rem 2rem 1rem 2rem", // Bottom padding reduced as list handles its own spacing
+    padding: "2rem 2rem 1rem 2rem",
     display: "flex",
     flexDirection: "column",
-    backgroundColor: "transparent", // Parent modal usually has the color
-    maxHeight: "60vh", // Restricts the height so the scrollArea can trigger
+    backgroundColor: "transparent",
+    maxHeight: "60vh",
   },
   title: {
     fontFamily: "Harmond-SemiBoldCondensed",
@@ -160,9 +178,8 @@ const styles = {
   },
   scrollArea: {
     overflowY: "auto",
-    paddingRight: "8px", // Space for the scrollbar so it doesn't overlap text
+    paddingRight: "8px",
     flex: 1,
-    // Custom scrollbar styling
     WebkitOverflowScrolling: "touch",
   },
   emptyText: {
@@ -182,7 +199,7 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "12px",
-    backgroundColor: "rgba(153, 96, 168, 0.05)", // Soft non-white background
+    backgroundColor: "rgba(153, 96, 168, 0.05)",
     borderRadius: "14px",
     border: "1px solid rgba(28, 7, 0, 0.03)",
   },
@@ -209,7 +226,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "6px",
-    color: isPositive ? "#4e5f28" : "#9960a8", // Using your brand colors
+    color: isPositive ? "#4e5f28" : "#9960a8",
     backgroundColor: isPositive
       ? "rgba(78, 95, 40, 0.1)"
       : "rgba(153, 96, 168, 0.1)",

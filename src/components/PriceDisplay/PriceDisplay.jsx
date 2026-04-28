@@ -52,6 +52,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const [hasBookedBefore, setHasBookedBefore] = useState(false);
   const [requestedDates, setRequestedDates] = useState([]);
+  const [profileHistoryMap, setProfileHistoryMap] = useState({});
 
   useEffect(() => {
     if (forceExpand) {
@@ -60,6 +61,17 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   }, [forceExpand]);
 
   const balance = userData?.credits?.[getCreditKey(coursePath)] || 0;
+
+  const profileBalances = {
+    main: balance,
+  };
+  if (userData?.linkedProfiles) {
+    userData.linkedProfiles.forEach((p) => {
+      profileBalances[p.id] = p.credits?.[getCreditKey(coursePath)] || 0;
+    });
+  }
+  // -----------------------------------------------------------
+
   const addonColors = [
     "#9960a8",
     "#4e5f28",
@@ -73,6 +85,19 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     if (!pricing?.specialEvents) return "#ccc";
     const index = pricing.specialEvents.findIndex((se) => se.id === addonId);
     return index !== -1 ? addonColors[index % addonColors.length] : "#ccc";
+  };
+
+  const getProfileHistory = (pid) => {
+    if (!pid || pid === "guest") return [];
+    let completed = [];
+    if (pid === "main") {
+      completed = userData?.completedAddons || [];
+    } else {
+      const linked = userData?.linkedProfiles?.find((p) => p.id === pid);
+      completed = linked?.completedAddons || [];
+    }
+    const alreadyBooked = profileHistoryMap?.[pid]?.addons || [];
+    return [...new Set([...completed, ...alreadyBooked])];
   };
 
   useEffect(() => {
@@ -161,25 +186,36 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           );
           const allUserBookings = uSnap.docs.map((d) => d.data());
 
-          setHasBookedBefore(
-            allUserBookings.some((b) => b.coursePath === coursePath),
-          );
-          setUserBookedIds(allUserBookings.map((b) => b.eventId));
-
-          // --- NEW: Track specific addon IDs the user has already booked ---
-          const bookedAddonIds = allUserBookings.flatMap((b) =>
+          // 1. Define variables clearly before using them
+          const profileBookedMap = {};
+          const allAddonIds = allUserBookings.flatMap((b) =>
             (b.selectedAddons || []).map((a) =>
               typeof a === "object" ? a.id : a,
             ),
           );
-          setUserBookedAddonIds([...new Set(bookedAddonIds)]);
-          // ----------------------------------------------------------------
-          // Filter out ONLY the bookings made with credits
-          setUserCreditBookedIds(
-            allUserBookings
-              .filter((b) => b.usedCredit === true)
-              .map((b) => b.eventId),
+
+          allUserBookings.forEach((b) => {
+            const pid = b.profileId || "main";
+            if (!profileBookedMap[pid])
+              profileBookedMap[pid] = { courses: [], addons: [] };
+
+            profileBookedMap[pid].courses.push(b.coursePath);
+
+            const addons = (b.selectedAddons || []).map((a) =>
+              typeof a === "object" ? a.id : a,
+            );
+            profileBookedMap[pid].addons.push(...addons);
+          });
+
+          // 2. Set the state variables
+          setProfileHistoryMap(profileBookedMap);
+          setUserBookedAddonIds(allAddonIds);
+
+          // Keep these for existing legacy logic if needed
+          setHasBookedBefore(
+            allUserBookings.some((b) => b.coursePath === coursePath),
           );
+          setUserBookedIds(allUserBookings.map((b) => b.eventId));
         }
       } catch (err) {
         console.error(err);
@@ -197,13 +233,14 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     setIsProcessing(true);
     try {
       const expandedDates = selectedDates.flatMap((d) =>
-        d.names.map((attendeeName, idx) => ({
+        (d.attendees || []).map((att, idx) => ({
           id: d.id,
           date: d.date,
           time: d.time,
           attendeeName:
-            attendeeName || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
-          selectedAddons: d.selectedAddons || [],
+            att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
+          profileId: att.profileId || null,
+          selectedAddons: att.selectedAddons || [], // <-- Now pulls from attendee
         })),
       );
       const functions = getFunctions();
@@ -229,13 +266,14 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     setIsProcessing(true);
     try {
       const expandedDates = selectedDates.flatMap((d) =>
-        (d.names || []).map((attendeeName, idx) => ({
+        (d.attendees || []).map((att, idx) => ({
           id: d.id,
           date: d.date,
           time: d.time,
           attendeeName:
-            attendeeName || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
-          selectedAddons: d.selectedAddons || [],
+            att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
+          profileId: att.profileId || null,
+          selectedAddons: att.selectedAddons || [], // <-- Now pulls from attendee
         })),
       );
       const functions = getFunctions();
@@ -286,13 +324,14 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     setIsProcessing(true);
     try {
       const expandedDates = selectedDates.flatMap((d) =>
-        (d.names || []).map((attendeeName, idx) => ({
+        (d.attendees || []).map((att, idx) => ({
           id: d.id,
           date: d.date,
           time: d.time,
           attendeeName:
-            attendeeName || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
-          selectedAddons: d.selectedAddons || [],
+            att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
+          profileId: att.profileId || null,
+          selectedAddons: att.selectedAddons || [], // <-- Now pulls from attendee
         })),
       );
 
@@ -453,7 +492,11 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
 
               const isSelected = selectedDates.find((d) => d.id === event?.id);
 
-              const rawAddons = scheduleData?.specialAssignments?.[event?.id];
+              const rawAddons =
+                event && scheduleData?.specialAssignments
+                  ? scheduleData.specialAssignments[event.id]
+                  : [];
+
               const activeAddons = Array.isArray(rawAddons)
                 ? rawAddons
                 : rawAddons
@@ -518,8 +561,38 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                           {
                             ...event,
                             count: 1,
-                            names: [initialName || ""],
-                            selectedAddons: autoAddons,
+                            attendees: [
+                              {
+                                profileId: currentUser ? "main" : null,
+                                name: initialName || "",
+                                selectedAddons: (() => {
+                                  let auto = [];
+                                  // Use our new helper to check the "main" user's history
+                                  const history = getProfileHistory("main");
+
+                                  activeAddons.forEach((aid) => {
+                                    const def = pricing?.specialEvents?.find(
+                                      (se) => se.id === aid,
+                                    );
+
+                                    // Check if THIS specific person needs this mandatory addon
+                                    const isAlreadyDone = history.includes(aid);
+
+                                    if (def?.isMandatory && !isAlreadyDone) {
+                                      if (def.timeSlots?.length > 0) {
+                                        auto.push({
+                                          id: aid,
+                                          time: `${def.timeSlots[0].startTime}-${def.timeSlots[0].endTime}`,
+                                        });
+                                      } else {
+                                        auto.push(aid);
+                                      }
+                                    }
+                                  });
+                                  return auto;
+                                })(),
+                              },
+                            ],
                           },
                         ];
                       }
@@ -607,6 +680,8 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           eventBookingCounts={eventBookingCounts}
           totalPrice={selectedDates.length * (pricing?.priceSingle || 0)}
           availableCredits={balance}
+          profileBalances={profileBalances}
+          profileHistoryMap={profileHistoryMap}
           pricing={pricing}
           scheduleData={scheduleData}
           addonBookingCounts={addonBookingCounts}

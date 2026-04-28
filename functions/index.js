@@ -41,6 +41,30 @@ const formatDate = (dateStr) => {
   return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : dateStr;
 };
 
+// NEW HELPER: Resolves the correct name and email for a specific booking
+const getAttendeeRecipient = (booking, userData) => {
+  const mainEmail = userData?.email || booking.guestEmail;
+  const mainName = userData?.firstName || booking.guestName || "Customer";
+
+  // If it's a linked profile and not the main user
+  if (
+    booking.profileId &&
+    booking.profileId !== "main" &&
+    userData?.linkedProfiles
+  ) {
+    const profile = userData.linkedProfiles.find(
+      (p) => p.id === booking.profileId,
+    );
+    if (profile) {
+      return {
+        email: profile.email || mainEmail, // Use specific email if exists, else fallback
+        name: profile.firstName || mainName,
+      };
+    }
+  }
+  return { email: mainEmail, name: mainName };
+};
+
 const getGoogleCalLink = (title, dateStr) => {
   if (!dateStr) return "#";
   const start = dateStr.replace(/-/g, "");
@@ -146,7 +170,7 @@ const getTemplate = async (transaction, typeId, lang) => {
 };
 
 const replaceVars = (str, replacements) => {
-  let result = str;
+  let result = str || ""; // Ensure str isn't null/undefined
   for (const [key, value] of Object.entries(replacements)) {
     result = result.split(key).join(value || "");
   }
@@ -240,74 +264,106 @@ const sendGuestPackCodeEmail = async (
 
 const sendBookingEmail = async (
   transaction,
-  email,
-  name,
+  mainEmail,
+  mainName,
   coursePath,
   dates,
   lang,
   isGuest,
   origin,
+  userData = null,
 ) => {
-  if (!email || dates.length === 0) return;
+  if (!mainEmail || dates.length === 0) return;
+
+  // 1. Fetch Course Settings to translate technical IDs into readable names
+  const courseId = coursePath.replace(/\//g, "");
+  const settingsRef = db.collection("course_settings").doc(courseId);
+  const settingsSnap = await (transaction
+    ? transaction.get(settingsRef)
+    : settingsRef.get());
+  const specialEvents = settingsSnap.exists
+    ? settingsSnap.data().specialEvents || []
+    : [];
+
+  // 2. Group tickets by recipient (Email + Name)
+  const recipientGroups = {};
+  dates.forEach((d) => {
+    const { email, name } = getAttendeeRecipient(
+      { ...d, guestEmail: mainEmail, guestName: mainName },
+      userData,
+    );
+    const key = `${email}_${name}`;
+    if (!recipientGroups[key])
+      recipientGroups[key] = { email, name, tickets: [] };
+    recipientGroups[key].tickets.push(d);
+  });
+
   const courseKey = getCleanCourseKey(coursePath);
-  const sanitizedId = coursePath.replace(/\//g, "");
-
-  const reminderRef = db.collection("course_reminders").doc(sanitizedId);
-  const reminderSnap = await (transaction
-    ? transaction.get(reminderRef)
-    : reminderRef.get());
-
-  const addonTexts = reminderSnap.exists
-    ? reminderSnap.data()[lang]?.addonTexts || {}
-    : {};
-
-  const datesHtml = dates
-    .map((d) => {
-      const fDate = formatDate(d.date);
-      const fTime = d.time ? ` | ${d.time}` : "";
-      let addonBlock = "";
-      if (d.selectedAddons && Array.isArray(d.selectedAddons)) {
-        d.selectedAddons.forEach((id) => {
-          if (addonTexts[id]) {
-            addonBlock += `<div style="margin-top: 8px; padding: 12px; background: #fff; border-left: 3px solid #9960a8; font-size: 13px; color: #1c0700; white-space: pre-wrap;">${addonTexts[id]}</div>`;
-          }
-        });
-      }
-      return `
-    <li style="margin-bottom: 18px; list-style: none; font-size: 15px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
-        <span style="font-weight: bold;">${fDate}${fTime}</span> 
-        <a href="${getGoogleCalLink(courseKey, d.date)}" target="_blank" style="font-size: 11px; color: #9960a8; text-decoration: none; border: 1px solid #caaff3; padding: 2px 6px; border-radius: 4px; background-color: #fff;">${lang === "de" ? "📅 Zum Kalender" : "📅 Add to Calendar"}</a>
-      </div>
-      ${addonBlock}
-    </li>`;
-    })
-    .join("");
-
   const typeId = isGuest
     ? "booking_confirmation_guest"
     : "booking_confirmation_user";
   const template = await getTemplate(transaction, typeId, lang);
 
-  const replacements = {
-    "{userName}": name,
-    "{courseKey}": courseKey,
-    "{datesHtml}": datesHtml,
-    "{registrationCTA}": isGuest ? getRegistrationCTA(lang, email, origin) : "",
-    "{profileUrl}": `${origin}/profile`,
-  };
+  // 3. Send one email per group
+  for (const key in recipientGroups) {
+    const { email, name, tickets } = recipientGroups[key];
 
-  const mailRef = db.collection("mail").doc();
-  const mailData = {
-    to: email,
-    message: {
-      subject: replaceVars(template.subject, replacements),
-      html: replaceVars(template.body, replacements),
-    },
-  };
+    const datesHtml = tickets
+      .map((d) => {
+        const fDate = formatDate(d.date);
 
-  if (transaction) transaction.set(mailRef, mailData);
-  else await mailRef.set(mailData);
+        // --- ADD-ON NAME RESOLUTION ---
+        let addonsHtml = "";
+        if (d.selectedAddons && d.selectedAddons.length > 0) {
+          addonsHtml = `<div style="font-size: 13px; color: #9960a8; margin-top: 5px;">`;
+          d.selectedAddons.forEach((addon) => {
+            const addonId = typeof addon === "string" ? addon : addon.id;
+            const addonTime = typeof addon === "object" ? addon.time : null;
+
+            // Look for the addon in the course settings
+            const match = specialEvents.find(
+              (se) => se.id === addonId.toString(),
+            );
+            const displayName = match
+              ? lang === "de"
+                ? match.nameDe
+                : match.nameEn
+              : addonId; // Fallback to ID if not found
+
+            addonsHtml += `<div>+ ${displayName}${addonTime ? ` (${addonTime})` : ""}</div>`;
+          });
+          addonsHtml += `</div>`;
+        }
+
+        return `
+          <li style="margin-bottom: 18px; list-style: none; padding: 15px; background: #ffffff; border-radius: 8px; border: 1px solid #caaff3;">
+            <strong style="color: #1c0700;">${fDate}${d.time ? ` | ${d.time}` : ""}</strong>
+            ${addonsHtml}
+          </li>`;
+      })
+      .join("");
+
+    const mailRef = db.collection("mail").doc();
+    const mailData = {
+      to: email,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      message: {
+        subject: replaceVars(template.subject, { "{courseKey}": courseKey }),
+        html: replaceVars(template.body, {
+          "{userName}": name,
+          "{courseKey}": courseKey,
+          "{datesHtml}": `<ul>${datesHtml}</ul>`,
+          "{registrationCTA}": isGuest
+            ? getRegistrationCTA(lang, email, origin)
+            : "",
+          "{profileUrl}": `${origin}/profile`,
+        }),
+      },
+    };
+
+    if (transaction) transaction.set(mailRef, mailData);
+    else await mailRef.set(mailData);
+  }
 };
 
 const sendCancellationEmail = async (
@@ -379,6 +435,8 @@ exports.createStripeCheckout = onCall(
         cancelUrl,
         creditsToUse,
         baseUrl,
+        profileId, // <-- NEW
+        profileName, // <-- NEW
       } = request.data;
       const userId = request.auth ? request.auth.uid : "GUEST_USER";
       const userEmail = request.auth
@@ -425,6 +483,8 @@ exports.createStripeCheckout = onCall(
           currentLang: currentLang || "en",
           origin,
           creditsToUse: creditsToUse ? creditsToUse.toString() : "0",
+          profileId: profileId || "main", // <-- NEW
+          profileName: profileName || "Main User", // <-- NEW
         },
       });
       return { url: session.url };
@@ -475,57 +535,127 @@ exports.handleStripeWebhook = onRequest(
             currentLang,
             origin,
             creditsToUse,
+            profileId, // Target profile for Packs
           } = session.metadata;
+
           const parsedDates = JSON.parse(selectedDates);
           const courseKey = getCleanCourseKey(coursePath);
           const lang = currentLang || "en";
           const email = session.customer_details.email;
           const isGuest = userId === "GUEST_USER";
           const parsedCreditsToUse = parseInt(creditsToUse || "0", 10);
+          const targetProfileId = profileId || "main";
 
           let finalName = guestName;
+          let userData = null;
+          let userRef = null;
+
+          // Fetch User Data so we can manipulate arrays
           if (!isGuest) {
-            const userSnap = await transaction.get(
-              db.collection("users").doc(userId),
-            );
-            if (userSnap.exists)
-              finalName = userSnap.data().firstName || guestName;
+            userRef = db.collection("users").doc(userId);
+            const userSnap = await transaction.get(userRef);
+            if (userSnap.exists) {
+              userData = userSnap.data();
+              finalName = userData.firstName || guestName;
+              if (!userData.credits) userData.credits = {};
+              if (!userData.linkedProfiles) userData.linkedProfiles = [];
+            }
           }
 
-          if (!isGuest && parsedCreditsToUse > 0) {
-            transaction.update(db.collection("users").doc(userId), {
-              [`credits.${courseKey}`]:
-                admin.firestore.FieldValue.increment(-parsedCreditsToUse),
-            });
-            const historyRef = db.collection("credit_history").doc();
-            transaction.set(historyRef, {
+          // 1. Process Deductions if mixed payment (using existing credits)
+          let creditsApplied = 0;
+          const profileDeductions = {};
+
+          parsedDates.forEach((d) => {
+            let isCreditBooking = false;
+            // Mark as credit if using existing balance
+            if (!isGuest && parsedCreditsToUse > creditsApplied) {
+              isCreditBooking = true;
+              creditsApplied++;
+              const pid = d.profileId || "main";
+              profileDeductions[pid] = (profileDeductions[pid] || 0) + 1;
+            }
+            // Mark as credit if buying a pack (the booked dates consume the new pack)
+            if (mode === "pack" && !isGuest) {
+              isCreditBooking = true;
+            }
+
+            // Create booking doc
+            transaction.set(db.collection("bookings").doc(), {
               userId,
-              courseKey,
-              amount: -parsedCreditsToUse,
-              type: "booking",
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              guestName: isGuest ? guestName : null,
+              guestEmail: isGuest ? email : null,
+              eventId: d.id,
+              date: d.date,
+              attendeeName: d.attendeeName || "Customer",
+              profileId: d.profileId || "main", // <-- NEW: Save profile to booking
+              coursePath,
+              selectedAddons: d.selectedAddons || [],
+              status: "confirmed",
+              lang,
+              usedCredit: isCreditBooking,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          });
+
+          // Apply existing credit deductions to the user document
+          if (!isGuest && parsedCreditsToUse > 0) {
+            Object.entries(profileDeductions).forEach(([pid, amount]) => {
+              if (pid === "main") {
+                userData.credits[courseKey] =
+                  (userData.credits[courseKey] || 0) - amount;
+              } else {
+                const linkedIndex = userData.linkedProfiles.findIndex(
+                  (p) => p.id === pid,
+                );
+                if (linkedIndex !== -1) {
+                  if (!userData.linkedProfiles[linkedIndex].credits)
+                    userData.linkedProfiles[linkedIndex].credits = {};
+                  userData.linkedProfiles[linkedIndex].credits[courseKey] =
+                    (userData.linkedProfiles[linkedIndex].credits[courseKey] ||
+                      0) - amount;
+                }
+              }
+              // History Record
+              const historyRef = db.collection("credit_history").doc();
+              transaction.set(historyRef, {
+                userId,
+                profileId: pid, // Identify who lost the credit
+                courseKey,
+                amount: -amount,
+                type: "booking",
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
             });
           }
 
+          // 2. Process Additions (Pack Purchases)
           let netIncrease = 0;
           let generatedCode = null;
 
           if (mode === "pack") {
             netIncrease = Math.max(0, parseInt(packSize) - parsedDates.length);
             if (!isGuest) {
-              transaction.set(
-                db.collection("users").doc(userId),
-                {
-                  credits: {
-                    [courseKey]:
-                      admin.firestore.FieldValue.increment(netIncrease),
-                  },
-                },
-                { merge: true },
-              );
+              if (targetProfileId === "main") {
+                userData.credits[courseKey] =
+                  (userData.credits[courseKey] || 0) + netIncrease;
+              } else {
+                const linkedIndex = userData.linkedProfiles.findIndex(
+                  (p) => p.id === targetProfileId,
+                );
+                if (linkedIndex !== -1) {
+                  if (!userData.linkedProfiles[linkedIndex].credits)
+                    userData.linkedProfiles[linkedIndex].credits = {};
+                  userData.linkedProfiles[linkedIndex].credits[courseKey] =
+                    (userData.linkedProfiles[linkedIndex].credits[courseKey] ||
+                      0) + netIncrease;
+                }
+              }
+
               const historyRef = db.collection("credit_history").doc();
               transaction.set(historyRef, {
                 userId,
+                profileId: targetProfileId,
                 courseKey,
                 amount: netIncrease,
                 type: "purchase",
@@ -541,40 +671,19 @@ exports.handleStripeWebhook = onRequest(
                 buyerEmail: email,
                 buyerName: guestName,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                redeemedEventIds: parsedDates.map((d) => d.id), // Log initial dates
+                redeemedEventIds: parsedDates.map((d) => d.id),
               });
               isPackGuest = true;
             }
           }
 
-          let creditsApplied = 0;
-          parsedDates.forEach((d) => {
-            let isCreditBooking = false;
-            // Mark as credit if they are using their existing balance
-            if (!isGuest && parsedCreditsToUse > creditsApplied) {
-              isCreditBooking = true;
-              creditsApplied++;
-            }
-            // Mark as credit if they are buying a pack (these dates consume the pack)
-            if (mode === "pack" && !isGuest) {
-              isCreditBooking = true;
-            }
-
-            transaction.set(db.collection("bookings").doc(), {
-              userId,
-              guestName: isGuest ? guestName : null,
-              guestEmail: isGuest ? email : null,
-              eventId: d.id,
-              date: d.date,
-              attendeeName: d.attendeeName || "Customer",
-              coursePath,
-              selectedAddons: d.selectedAddons || [],
-              status: "confirmed",
-              lang,
-              usedCredit: isCreditBooking, // Save the flag
-              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          // 3. Save the modified user document
+          if (!isGuest && userRef) {
+            transaction.update(userRef, {
+              credits: userData.credits,
+              linkedProfiles: userData.linkedProfiles,
             });
-          });
+          }
 
           transaction.set(paymentCheckRef, {
             processedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -593,6 +702,7 @@ exports.handleStripeWebhook = onRequest(
             netIncrease,
             generatedCode,
             courseKey,
+            userData,
           };
         });
 
@@ -631,6 +741,7 @@ exports.handleStripeWebhook = onRequest(
               emailData.lang,
               emailData.isGuest,
               emailData.origin,
+              emailData.userData,
             );
           }
         }
@@ -656,38 +767,67 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
 
     const result = await db.runTransaction(async (transaction) => {
       const userSnap = await transaction.get(userRef);
-      const firstName = userSnap.data()?.firstName || "Customer";
+      const userData = userSnap.data() || {};
+      const firstName = userData.firstName || "Customer";
 
-      transaction.update(userRef, {
-        [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(
-          -selectedDates.length,
-        ),
-      });
+      if (!userData.credits) userData.credits = {};
+      if (!userData.linkedProfiles) userData.linkedProfiles = [];
 
-      const historyRef = db.collection("credit_history").doc();
-      transaction.set(historyRef, {
-        userId: request.auth.uid,
-        courseKey,
-        amount: -selectedDates.length,
-        type: "booking",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      const profileDeductions = {};
 
       selectedDates.forEach((d) => {
+        const pid = d.profileId || "main";
+        profileDeductions[pid] = (profileDeductions[pid] || 0) + 1;
+
         transaction.set(db.collection("bookings").doc(), {
           userId: request.auth.uid,
           eventId: d.id,
           date: d.date,
           attendeeName: d.attendeeName || "Customer",
+          profileId: pid, // <-- Save profile to booking
           coursePath,
           selectedAddons: d.selectedAddons || [],
           status: "confirmed",
           lang: currentLang || "en",
-          usedCredit: true, // Save the flag
+          usedCredit: true,
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
       });
-      return { firstName };
+
+      Object.entries(profileDeductions).forEach(([pid, amount]) => {
+        if (pid === "main") {
+          userData.credits[courseKey] =
+            (userData.credits[courseKey] || 0) - amount;
+        } else {
+          const linkedIndex = userData.linkedProfiles.findIndex(
+            (p) => p.id === pid,
+          );
+          if (linkedIndex !== -1) {
+            if (!userData.linkedProfiles[linkedIndex].credits)
+              userData.linkedProfiles[linkedIndex].credits = {};
+            userData.linkedProfiles[linkedIndex].credits[courseKey] =
+              (userData.linkedProfiles[linkedIndex].credits[courseKey] || 0) -
+              amount;
+          }
+        }
+
+        const historyRef = db.collection("credit_history").doc();
+        transaction.set(historyRef, {
+          userId: request.auth.uid,
+          profileId: pid,
+          courseKey,
+          amount: -amount,
+          type: "booking",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+
+      transaction.update(userRef, {
+        credits: userData.credits,
+        linkedProfiles: userData.linkedProfiles,
+      });
+
+      return { firstName, userData };
     });
 
     await sendBookingEmail(
@@ -699,6 +839,7 @@ exports.bookWithCredits = onCall({ cors: true }, async (request) => {
       currentLang || "en",
       false,
       origin,
+      result.userData,
     );
     return { success: true };
   } catch (error) {
@@ -764,6 +905,7 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
       currentLang || "en",
       true,
       origin,
+      null,
     );
     return { success: true };
   } catch (error) {
@@ -777,22 +919,52 @@ exports.cancelBooking = onCall({ cors: true }, async (request) => {
   try {
     const { bookingId } = request.data;
     const bRef = db.collection("bookings").doc(bookingId);
+
     return db.runTransaction(async (t) => {
       const snap = await t.get(bRef);
       if (!snap.exists || snap.data().userId !== request.auth.uid)
         throw new HttpsError("permission-denied", "Unauthorized.");
-      const courseKey = getCleanCourseKey(snap.data().coursePath);
-      t.update(db.collection("users").doc(request.auth.uid), {
-        [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(1),
+
+      const bookingData = snap.data();
+      const courseKey = getCleanCourseKey(bookingData.coursePath);
+      const pid = bookingData.profileId || "main";
+
+      const userRef = db.collection("users").doc(request.auth.uid);
+      const userSnap = await t.get(userRef);
+      const userData = userSnap.data();
+
+      if (!userData.credits) userData.credits = {};
+      if (!userData.linkedProfiles) userData.linkedProfiles = [];
+
+      if (pid === "main") {
+        userData.credits[courseKey] = (userData.credits[courseKey] || 0) + 1;
+      } else {
+        const linkedIndex = userData.linkedProfiles.findIndex(
+          (p) => p.id === pid,
+        );
+        if (linkedIndex !== -1) {
+          if (!userData.linkedProfiles[linkedIndex].credits)
+            userData.linkedProfiles[linkedIndex].credits = {};
+          userData.linkedProfiles[linkedIndex].credits[courseKey] =
+            (userData.linkedProfiles[linkedIndex].credits[courseKey] || 0) + 1;
+        }
+      }
+
+      t.update(userRef, {
+        credits: userData.credits,
+        linkedProfiles: userData.linkedProfiles,
       });
+
       const historyRef = db.collection("credit_history").doc();
       t.set(historyRef, {
         userId: request.auth.uid,
+        profileId: pid,
         courseKey,
         amount: 1,
         type: "refund",
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
       t.delete(bRef);
       return { success: true };
     });
@@ -810,26 +982,63 @@ exports.cancelBookings = onCall({ cors: true }, async (request) => {
       throw new HttpsError("invalid-argument", "No bookings provided.");
 
     return db.runTransaction(async (t) => {
-      const firstBookingRef = db.collection("bookings").doc(bookingIds[0]);
-      const firstSnap = await t.get(firstBookingRef);
-      if (!firstSnap.exists || firstSnap.data().userId !== request.auth.uid)
-        throw new HttpsError("permission-denied", "Unauthorized.");
+      const userRef = db.collection("users").doc(request.auth.uid);
+      const userSnap = await t.get(userRef);
+      const userData = userSnap.data();
 
-      const courseKey = getCleanCourseKey(firstSnap.data().coursePath);
-      t.update(db.collection("users").doc(request.auth.uid), {
-        [`credits.${courseKey}`]: admin.firestore.FieldValue.increment(
-          bookingIds.length,
-        ),
+      if (!userData.credits) userData.credits = {};
+      if (!userData.linkedProfiles) userData.linkedProfiles = [];
+
+      const profileRefunds = {};
+      let courseKey = "";
+
+      for (const id of bookingIds) {
+        const bRef = db.collection("bookings").doc(id);
+        const bSnap = await t.get(bRef);
+        if (!bSnap.exists || bSnap.data().userId !== request.auth.uid)
+          throw new HttpsError("permission-denied", "Unauthorized.");
+
+        const bData = bSnap.data();
+        courseKey = getCleanCourseKey(bData.coursePath);
+        const pid = bData.profileId || "main";
+
+        profileRefunds[pid] = (profileRefunds[pid] || 0) + 1;
+        t.delete(bRef);
+      }
+
+      Object.entries(profileRefunds).forEach(([pid, amount]) => {
+        if (pid === "main") {
+          userData.credits[courseKey] =
+            (userData.credits[courseKey] || 0) + amount;
+        } else {
+          const linkedIndex = userData.linkedProfiles.findIndex(
+            (p) => p.id === pid,
+          );
+          if (linkedIndex !== -1) {
+            if (!userData.linkedProfiles[linkedIndex].credits)
+              userData.linkedProfiles[linkedIndex].credits = {};
+            userData.linkedProfiles[linkedIndex].credits[courseKey] =
+              (userData.linkedProfiles[linkedIndex].credits[courseKey] || 0) +
+              amount;
+          }
+        }
+
+        const historyRef = db.collection("credit_history").doc();
+        t.set(historyRef, {
+          userId: request.auth.uid,
+          profileId: pid,
+          courseKey,
+          amount: amount,
+          type: "refund",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
       });
-      const historyRef = db.collection("credit_history").doc();
-      t.set(historyRef, {
-        userId: request.auth.uid,
-        courseKey,
-        amount: bookingIds.length,
-        type: "refund",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+
+      t.update(userRef, {
+        credits: userData.credits,
+        linkedProfiles: userData.linkedProfiles,
       });
-      for (const id of bookingIds) t.delete(db.collection("bookings").doc(id));
+
       return { success: true };
     });
   } catch (error) {
@@ -854,50 +1063,40 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
       .where("eventId", "==", eventId)
       .get();
 
-    // 2. Aggregate bookings by user to combine multiple tickets into one refund
-    const aggregatedBookings = {};
+    // 2. Resolve every booking to its specific recipient (Main vs. Linked Profile)
+    const individualCancellations = [];
+
+    // We pre-fetch user data to avoid lookups inside the transaction
+    const userCache = {};
+
     for (const bDoc of bookingsSnap.docs) {
       const bData = bDoc.data();
-      const isGuest = bData.userId === "GUEST_USER";
-      // Fallback key if guestEmail is missing (unlikely, but safe)
-      const key = isGuest
-        ? `guest_${bData.guestEmail || bDoc.id}`
-        : `user_${bData.userId}`;
+      const userId = bData.userId;
 
-      if (!aggregatedBookings[key]) {
-        aggregatedBookings[key] = {
-          isGuest,
-          userId: bData.userId,
-          guestEmail: bData.guestEmail,
-          guestName: bData.guestName,
-          count: 0,
-          bookingRefs: [],
-        };
+      if (userId !== "GUEST_USER" && !userCache[userId]) {
+        const uSnap = await db.collection("users").doc(userId).get();
+        if (uSnap.exists) userCache[userId] = uSnap.data();
       }
-      aggregatedBookings[key].count += 1;
-      aggregatedBookings[key].bookingRefs.push(bDoc.ref);
+
+      // Use the helper to find who actually gets this specific notification
+      const { email, name } = getAttendeeRecipient(bData, userCache[userId]);
+
+      individualCancellations.push({
+        bookingRef: bDoc.ref,
+        userId: bData.userId,
+        profileId: bData.profileId || "main",
+        isGuest: bData.userId === "GUEST_USER",
+        email,
+        name,
+        guestEmail: bData.guestEmail, // needed for guest refund code
+        guestName: bData.guestName,
+      });
     }
 
-    // 3. Pre-fetch user emails for registered users to avoid reads inside the write-phase
-    const userInfos = {};
-    for (const key in aggregatedBookings) {
-      const bData = aggregatedBookings[key];
-      if (!bData.isGuest) {
-        const uSnap = await db.collection("users").doc(bData.userId).get();
-        if (uSnap.exists) {
-          userInfos[bData.userId] = {
-            email: uSnap.data().email,
-            name: uSnap.data().firstName || "Customer",
-          };
-        }
-      }
-    }
-
-    // 4. Prepare email data outside the transaction
     const emailsToSend = [];
 
+    // 3. Process Refunds and Deletions
     await db.runTransaction(async (transaction) => {
-      // READ FIRST
       const eventSnap = await transaction.get(eventRef);
       if (!eventSnap.exists)
         throw new HttpsError("not-found", "Event not found");
@@ -905,70 +1104,80 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
       const eventData = eventSnap.data();
       const courseKey = getCleanCourseKey(eventData.link || "");
 
-      // ALL WRITES
-      for (const key in aggregatedBookings) {
-        const bData = aggregatedBookings[key];
-        const amount = bData.count;
-
-        if (bData.isGuest) {
+      for (const item of individualCancellations) {
+        if (item.isGuest) {
+          // Guest logic: Create a unique refund code for each ticket
           const newCode = generatePackCode();
           transaction.set(db.collection("pack_codes").doc(newCode), {
             code: newCode,
             courseKey,
-            remainingCredits: amount,
-            buyerEmail: bData.guestEmail,
-            buyerName: bData.guestName,
+            remainingCredits: 1,
+            buyerEmail: item.email,
+            buyerName: item.name,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
           emailsToSend.push({
-            email: bData.guestEmail,
-            name: bData.guestName,
+            email: item.email,
+            name: item.name,
             courseKey,
             date: eventData.date,
             code: newCode,
-            amount: amount,
           });
         } else {
-          const userRef = db.collection("users").doc(bData.userId);
-          transaction.update(userRef, {
-            [`credits.${courseKey}`]:
-              admin.firestore.FieldValue.increment(amount),
-          });
+          // Registered User logic
+          const userRef = db.collection("users").doc(item.userId);
 
+          // CRITICAL: Fetch the LATEST data from the transaction, not the cache
+          const userSnap = await transaction.get(userRef);
+          const userData = userSnap.data();
+
+          if (item.profileId === "main") {
+            const currentCredits = userData.credits?.[courseKey] || 0;
+            transaction.update(userRef, {
+              [`credits.${courseKey}`]: currentCredits + 1,
+            });
+          } else {
+            const updatedLinked = (userData.linkedProfiles || []).map((p) => {
+              if (p.id === item.profileId) {
+                const credits = p.credits || {};
+                credits[courseKey] = (credits[courseKey] || 0) + 1;
+                return { ...p, credits };
+              }
+              return p;
+            });
+            transaction.update(userRef, { linkedProfiles: updatedLinked });
+          }
+
+          // Log History for the specific profile
           const historyRef = db.collection("credit_history").doc();
           transaction.set(historyRef, {
-            userId: bData.userId,
+            userId: item.userId,
+            profileId: item.profileId,
             courseKey,
-            amount: amount,
+            amount: 1,
             type: "refund",
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
-          const uInfo = userInfos[bData.userId];
-          if (uInfo && uInfo.email) {
-            emailsToSend.push({
-              email: uInfo.email,
-              name: uInfo.name,
-              courseKey,
-              date: eventData.date,
-              code: null,
-              amount: amount,
-            });
-          }
+          emailsToSend.push({
+            email: item.email,
+            name: item.name,
+            courseKey,
+            date: eventData.date,
+            code: null,
+          });
         }
 
-        // Delete all associated bookings for this user
-        for (const ref of bData.bookingRefs) {
-          transaction.delete(ref);
-        }
+        // Delete the individual booking
+        transaction.delete(item.bookingRef);
       }
 
+      // Delete the event itself
       transaction.delete(eventRef);
     });
 
-    // 5. SEND EMAILS OUTSIDE THE TRANSACTION
-    // This completely eliminates the "Read after Write" error.
+    // 4. Send Individual Emails
     const emailPromises = emailsToSend.map((e) =>
       sendCancellationEmail(
         null,
@@ -978,7 +1187,7 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
         e.date,
         lang,
         e.code,
-        e.amount,
+        1, // Each email is now per individual ticket
         origin,
       ),
     );
@@ -1022,25 +1231,32 @@ exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
       const booking = bDoc.data();
       if (booking.reminderSent) continue;
 
-      let email = booking.guestEmail;
-      let name = booking.guestName || "Customer";
-      let isFirstTimer = false;
-
+      // 1. Fetch full userData once to allow helper to look up linked profiles
+      let userData = null;
       if (booking.userId !== "GUEST_USER") {
         const uSnap = await db.collection("users").doc(booking.userId).get();
-        if (uSnap.exists) {
-          email = uSnap.data().email;
-          name = uSnap.data().firstName || name;
-          const prevBookings = await db
-            .collection("bookings")
-            .where("userId", "==", booking.userId)
-            .where("coursePath", "==", booking.coursePath)
-            .limit(2)
-            .get();
-          isFirstTimer = prevBookings.size <= 1;
-        }
-      } else {
-        isFirstTimer = true;
+        if (uSnap.exists) userData = uSnap.data();
+      }
+
+      // 2. Use helper to find who actually gets this specific reminder
+      // This resolves the linked profile email/name or falls back to the main account
+      const { email, name } = getAttendeeRecipient(booking, userData);
+
+      // 3. Determine isFirstTimer status
+      let isFirstTimer = booking.userId === "GUEST_USER";
+      if (userData) {
+        const pid = booking.profileId || "main";
+
+        // Check if THIS profile has booked this course before
+        const prevBookings = await db
+          .collection("bookings")
+          .where("userId", "==", booking.userId)
+          .where("profileId", "==", pid) // <-- CRITICAL FIX: Filter by profile
+          .where("coursePath", "==", booking.coursePath)
+          .limit(2)
+          .get();
+
+        isFirstTimer = prevBookings.size <= 1;
       }
 
       const lang = booking.lang || "en";
@@ -1295,10 +1511,11 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
 // 6. FIRING SCHEDULE & OBJECT TRACKING
 // ============================================================================
 
+//
+// 1. Initial Registration Email
 exports.registerFiringObject = onCall({ cors: true }, async (request) => {
   try {
-    // Now accepting name and userCode
-    const { email, name, userCode, stage, imageUrl, currentLang } =
+    const { email, name, userCode, stage, imageUrl, currentLang, profileId } =
       request.data;
     if (!email || !stage || !imageUrl || !userCode)
       throw new HttpsError("invalid-argument", "Missing data.");
@@ -1310,6 +1527,7 @@ exports.registerFiringObject = onCall({ cors: true }, async (request) => {
       email: cleanEmail,
       name: name || "Student",
       userCode: cleanCode,
+      profileId: profileId || "main",
       stage,
       imageUrl,
       status: "pending",
@@ -1327,8 +1545,11 @@ exports.registerFiringObject = onCall({ cors: true }, async (request) => {
           ? "Glasurbrand"
           : "Glaze";
 
+    // PASSING NAME AND IMAGE HERE
     await sendFiringEmail(cleanEmail, "firing_registered", lang, {
       "{stage}": stageText,
+      "{userName}": name || "Student",
+      "{imageUrl}": imageUrl,
     });
     return { success: true, id: docRef.id };
   } catch (error) {
@@ -1337,6 +1558,7 @@ exports.registerFiringObject = onCall({ cors: true }, async (request) => {
   }
 });
 
+// 2. Status Change Emails (Ready/Broken)
 exports.updateFiringStatus = onCall({ cors: true }, async (request) => {
   if (!request.auth)
     throw new HttpsError("unauthenticated", "Must be logged in.");
@@ -1351,17 +1573,32 @@ exports.updateFiringStatus = onCall({ cors: true }, async (request) => {
     await docRef.update({
       status: newStatus,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      reminderSent: false, // reset reminder flag on status change
+      reminderSent: false,
     });
 
-    // Send corresponding email
     const lang = data.lang || "en";
+    // PASSING NAME AND IMAGE HERE
+    const replacements = {
+      "{userName}": data.name || "Student",
+      "{imageUrl}": data.imageUrl || "",
+    };
+
     if (newStatus === "bisque_ready") {
-      await sendFiringEmail(data.email, "firing_bisque_ready", lang, {});
+      await sendFiringEmail(
+        data.email,
+        "firing_bisque_ready",
+        lang,
+        replacements,
+      );
     } else if (newStatus === "glaze_ready") {
-      await sendFiringEmail(data.email, "firing_glaze_ready", lang, {});
+      await sendFiringEmail(
+        data.email,
+        "firing_glaze_ready",
+        lang,
+        replacements,
+      );
     } else if (newStatus === "broken") {
-      await sendFiringEmail(data.email, "firing_broken", lang, {});
+      await sendFiringEmail(data.email, "firing_broken", lang, replacements);
     }
 
     return { success: true };
@@ -1371,10 +1608,9 @@ exports.updateFiringStatus = onCall({ cors: true }, async (request) => {
   }
 });
 
+// 3. Automated Daily Reminders
 exports.sendFiringReminders = onSchedule("0 9 * * *", async (event) => {
-  // Runs daily at 9:00 AM
   const today = new Date();
-
   const firingsSnap = await db
     .collection("firings")
     .where("status", "in", ["bisque_ready", "glaze_ready"])
@@ -1385,29 +1621,27 @@ exports.sendFiringReminders = onSchedule("0 9 * * *", async (event) => {
     const data = doc.data();
     if (!data.updatedAt) continue;
 
-    const updatedDate = data.updatedAt.toDate();
-    const diffTime = Math.abs(today - updatedDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
+    const diffDays = Math.ceil(
+      Math.abs(today - data.updatedAt.toDate()) / (1000 * 60 * 60 * 24),
+    );
     const lang = data.lang || "en";
 
-    // Bisque: 8 weeks total. Remind at 7 weeks (49 days)
+    // PASSING NAME AND IMAGE HERE
+    const replacements = {
+      "{userName}": data.name || "Student",
+      "{imageUrl}": data.imageUrl || "",
+      "{weeksLeft}": "1",
+    };
+
     if (data.status === "bisque_ready" && diffDays >= 49) {
-      const actionText = lang === "de" ? "zu glasieren" : "glaze it";
-      await sendFiringEmail(data.email, "firing_reminder", lang, {
-        "{action}": actionText,
-        "{weeksLeft}": "1",
-      });
+      replacements["{action}"] = lang === "de" ? "zu glasieren" : "glaze it";
+      await sendFiringEmail(data.email, "firing_reminder", lang, replacements);
       await doc.ref.update({ reminderSent: true });
     }
 
-    // Glaze: 4 weeks total. Remind at 3 weeks (21 days)
     if (data.status === "glaze_ready" && diffDays >= 21) {
-      const actionText = lang === "de" ? "abzuholen" : "pick it up";
-      await sendFiringEmail(data.email, "firing_reminder", lang, {
-        "{action}": actionText,
-        "{weeksLeft}": "1",
-      });
+      replacements["{action}"] = lang === "de" ? "abzuholen" : "pick it up";
+      await sendFiringEmail(data.email, "firing_reminder", lang, replacements);
       await doc.ref.update({ reminderSent: true });
     }
   }
@@ -1447,6 +1681,8 @@ exports.moveToGlazeStage = onCall({ cors: true }, async (request) => {
   const lang = currentLang || "en";
   await sendFiringEmail(data.email, "firing_registered", lang, {
     "{stage}": lang === "de" ? "Glasurbrand" : "Glaze",
+    "{userName}": data.name || "Student", // <-- ADDED THIS
+    "{imageUrl}": data.imageUrl || "", // <-- ADDED THIS
   });
 
   return { success: true };

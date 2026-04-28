@@ -354,63 +354,48 @@ export default function StudentFiringForm() {
     if (!imagePreview || !croppedAreaPixels) return setError("Photo required.");
     setError("");
 
-    const isFirstTimeGuest = !currentUser && existingObjects.length === 0;
     const finalCode = userCode.toUpperCase();
 
-    if (isFirstTimeGuest) {
-      if (finalCode.length !== 4) return setError(labels.codeLength);
-      if (!guestName || !guestEmail) return setError(labels.requiredFields);
-      setLoading(true);
-      try {
-        const q = query(
-          collection(db, "firings"),
-          where("userCode", "==", finalCode),
-          limit(1),
-        );
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          setLoading(false);
-          return setError(labels.codeTaken);
-        }
-      } catch (err) {
-        setLoading(false);
-        return setError("Database error. Please try again.");
-      }
-    }
+    // 1. Resolve Identity
+    const activeProfile =
+      allProfiles.find((p) => p.id === selectedProfileId) || allProfiles[0];
 
+    // Use sub-user email if it exists, otherwise use parent email
     const finalEmail =
-      currentUser?.email ||
-      (existingObjects.length > 0 ? existingObjects[0].email : guestEmail);
+      selectedProfileId !== "main" && activeProfile.email
+        ? activeProfile.email
+        : currentUser?.email || guestEmail;
+
+    // Use the specific profile name
     const finalName =
-      (userData?.firstName
-        ? `${userData.firstName} ${userData.lastName || ""}`.trim()
-        : currentUser?.displayName) ||
-      (existingObjects.length > 0 ? existingObjects[0].name : guestName) ||
-      "Guest";
+      selectedProfileId !== "main"
+        ? activeProfile.name
+        : (userData?.firstName
+            ? `${userData.firstName} ${userData.lastName || ""}`.trim()
+            : currentUser?.displayName) ||
+          guestName ||
+          "Guest";
 
     setLoading(true);
     try {
-      // 1. Generate the cropped and compressed Blob
       const croppedBlob = await getCroppedImg(
         imagePreview,
         croppedAreaPixels,
         0.7,
       );
-
-      // 2. Upload the compressed Blob
       const storageRef = ref(storage, `firings/${Date.now()}.jpg`);
       await uploadBytes(storageRef, croppedBlob);
       const imageUrl = await getDownloadURL(storageRef);
 
-      // 3. Register entry in database
       const registerFn = httpsCallable(getFunctions(), "registerFiringObject");
       await registerFn({
         email: finalEmail.toLowerCase(),
-        name: finalName || "Guest",
+        name: finalName, // Now sending the specific attendee name
         userCode: finalCode,
         stage: "bisque",
         imageUrl,
-        currentLang: lang,
+        currentLang,
+        profileId: selectedProfileId,
       });
 
       setSuccess(true);

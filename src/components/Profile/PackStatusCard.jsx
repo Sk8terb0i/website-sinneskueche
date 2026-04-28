@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { Ticket, PlusCircle, Loader2, Info, X } from "lucide-react";
+import { Ticket, PlusCircle, Loader2, Info, X, Users } from "lucide-react";
 import CreditHistoryCard from "./CreditHistoryCard";
 import { planets } from "../../data/planets";
 
@@ -14,6 +14,33 @@ export default function PackStatusCard({
   const [isToppingUp, setIsToppingUp] = useState(null);
   const [selectedHistoryCourse, setSelectedHistoryCourse] = useState(null);
   const [showPackPicker, setShowPackPicker] = useState(null);
+  const [viewingProfileId, setViewingProfileId] = useState("main");
+
+  // Build the array of available profiles and their respective credits
+  const allProfiles = useMemo(() => {
+    const profiles = [
+      {
+        id: "main",
+        name: currentLang === "de" ? "Mein Guthaben" : "My Credits",
+        credits: userData?.credits || {},
+      },
+    ];
+    if (userData?.linkedProfiles) {
+      userData.linkedProfiles.forEach((p) => {
+        profiles.push({
+          id: p.id,
+          name: `${p.firstName}'s ${currentLang === "de" ? "Guthaben" : "Credits"}`,
+          credits: p.credits || {},
+        });
+      });
+    }
+    return profiles;
+  }, [userData, currentLang]);
+
+  const activeProfile =
+    allProfiles.find((p) => p.id === viewingProfileId) || allProfiles[0];
+  const activeCredits = activeProfile.credits;
+  const hasCredits = Object.keys(activeCredits).length > 0;
 
   const getCourseTitle = (link) => {
     for (const planet of planets) {
@@ -56,6 +83,8 @@ export default function PackStatusCard({
         coursePath: `/${targetDocId}`,
         selectedDates: [],
         currentLang,
+        profileId: viewingProfileId,
+        profileName: activeProfile.name,
         successUrl: `${window.location.origin}/#/success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: window.location.href,
       });
@@ -86,14 +115,34 @@ export default function PackStatusCard({
     }
   };
 
-  const hasCredits =
-    userData?.credits && Object.keys(userData.credits).length > 0;
-
   return (
     <div style={styles.container}>
-      <h2 style={styles.sectionTitle}>
-        <Ticket size={22} color="#9960a8" /> {t.credits}
-      </h2>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1.2rem",
+        }}
+      >
+        <h2 style={{ ...styles.sectionTitle, marginBottom: 0 }}>
+          <Ticket size={22} color="#9960a8" /> {t.credits}
+        </h2>
+
+        {allProfiles.length > 1 && (
+          <select
+            value={viewingProfileId}
+            onChange={(e) => setViewingProfileId(e.target.value)}
+            style={styles.profileSelect}
+          >
+            {allProfiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
 
       {!hasCredits ? (
         <div style={styles.emptyCard}>
@@ -101,7 +150,7 @@ export default function PackStatusCard({
         </div>
       ) : (
         <div style={styles.creditsList}>
-          {Object.entries(userData.credits).map(([courseKey, amount]) => {
+          {Object.entries(activeCredits).map(([courseKey, amount]) => {
             const isPlural = amount !== 1;
             const sessionLabel =
               currentLang === "de"
@@ -217,6 +266,7 @@ export default function PackStatusCard({
               userId={currentUser.uid}
               courseKey={selectedHistoryCourse}
               currentLang={currentLang}
+              profileId={viewingProfileId}
               t={{
                 ...t,
                 historyTitle: `${getCourseTitle(`/${selectedHistoryCourse}`)} ${t.credits}`,
@@ -247,6 +297,18 @@ const styles = {
     alignItems: "center",
     gap: "12px",
     opacity: 0.8,
+  },
+  profileSelect: {
+    padding: "6px 12px",
+    borderRadius: "100px",
+    border: "1px solid rgba(153, 96, 168, 0.3)",
+    background: "rgba(202, 175, 243, 0.1)",
+    color: "#9960a8",
+    fontFamily: "Satoshi",
+    fontWeight: "bold",
+    fontSize: "0.85rem",
+    outline: "none",
+    cursor: "pointer",
   },
   emptyCard: {
     padding: "2rem",
@@ -300,12 +362,12 @@ const styles = {
     color: "#1c0700",
     opacity: 0.6,
     fontWeight: "700",
-    transform: "translateY(-2px)", // Fine-tuned alignment with the big number
+    transform: "translateY(-2px)",
   },
   actionPod: {
     display: "flex",
     alignItems: "center",
-    backgroundColor: "#fdf8e1", // Replaced white
+    backgroundColor: "#fdf8e1",
     borderRadius: "16px",
     border: "1px solid rgba(28, 7, 0, 0.1)",
     padding: "4px",
@@ -350,7 +412,7 @@ const styles = {
     padding: "20px",
   },
   modalContent: {
-    backgroundColor: "#fffce3", // Replaced white
+    backgroundColor: "#fffce3",
     borderRadius: "28px",
     maxWidth: "420px",
     width: "100%",
@@ -365,7 +427,7 @@ const styles = {
     padding: "16px",
     borderRadius: "16px",
     border: "1px solid rgba(153, 96, 168, 0.2)",
-    background: "#fdf8e1", // Replaced white
+    background: "#fdf8e1",
     cursor: "pointer",
     fontFamily: "Satoshi",
     fontSize: "1rem",

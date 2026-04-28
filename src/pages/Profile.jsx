@@ -222,10 +222,12 @@ export default function Profile({ currentLang, setCurrentLang }) {
       myCourses: "my booked dates",
       noCourses: "no bookings yet.",
       buyPack: "buy session pack",
-      selectCourse: "select a course", // Added missing key
-      buyNow: "buy pack", // Added missing key
+      selectCourse: "select a course",
+      buyNow: "buy pack",
       noCredits: "no active session packs yet.",
       rentalTitle: "rental management",
+      credits: "credits",
+      remaining: "remaining",
     },
     de: {
       title: "mein profil",
@@ -239,13 +241,14 @@ export default function Profile({ currentLang, setCurrentLang }) {
       myCourses: "geplante termine",
       noCourses: "keine buchungen.",
       buyPack: "session-karte kaufen",
-      selectCourse: "kurs auswählen", // Added missing key
-      buyNow: "karte kaufen", // Added missing key
+      selectCourse: "kurs auswählen",
+      buyNow: "karte kaufen",
       noCredits: "noch kein guthaben vorhanden.",
       rentalTitle: "gemieteter raum",
+      credits: "guthaben",
+      remaining: "verbleibend",
     },
   }[currentLang];
-
   return (
     <div style={styles.pageWrapper}>
       <Header
@@ -304,6 +307,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
                     userId={currentUser.uid}
                     currentLang={currentLang}
                     t={t}
+                    userData={userData}
                   />
                   {hasRentalAccess && (
                     <RentalBookingsCard t={t} currentLang={currentLang} />
@@ -323,6 +327,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
                     packCourses={packCourses}
                     currentLang={currentLang}
                     t={t}
+                    userData={userData}
                   />
                 </>
               )}
@@ -370,6 +375,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
                 packCourses={packCourses}
                 currentLang={currentLang}
                 t={t}
+                userData={userData}
               />
             </div>
             <div style={styles.sideColumn}>
@@ -393,6 +399,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
                 userId={currentUser.uid}
                 currentLang={currentLang}
                 t={t}
+                userData={userData}
               />
             </div>
           </div>

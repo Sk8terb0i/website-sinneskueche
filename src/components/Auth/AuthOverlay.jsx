@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Loader2, Info, ChevronLeft } from "lucide-react";
+import { X, Loader2, Info, ChevronLeft, Plus, Trash2 } from "lucide-react";
 import { auth, db } from "../../firebase";
 import {
   createUserWithEmailAndPassword,
@@ -22,6 +22,9 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
 
+  // NEW: Sub-User State
+  const [subUsers, setSubUsers] = useState([]);
+
   const isMobile = window.innerWidth < 768;
 
   // Reset overlay state when closed
@@ -32,6 +35,7 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
         setView("login");
         setError("");
         setMessage("");
+        setSubUsers([]); // Reset sub-users
       }, 500);
     }
     return () => {
@@ -42,6 +46,28 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
   // Email Validation Helper
   const isValidEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  // Sub-User Handlers
+  const addSubUser = () => {
+    setSubUsers([
+      ...subUsers,
+      {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+        firstName: "",
+        lastName: "",
+      },
+    ]);
+  };
+
+  const updateSubUser = (id, field, value) => {
+    setSubUsers(
+      subUsers.map((su) => (su.id === id ? { ...su, [field]: value } : su)),
+    );
+  };
+
+  const removeSubUser = (id) => {
+    setSubUsers(subUsers.filter((su) => su.id !== id));
   };
 
   // Handle Password Reset
@@ -69,7 +95,6 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
           : `Link an ${email} gesendet`,
       );
 
-      // Auto-switch back to login after success so they can sign in once reset
       setTimeout(() => setView("login"), 4000);
     } catch (err) {
       setError(err.message);
@@ -100,19 +125,34 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
         await signInWithEmailAndPassword(auth, email, password);
         onClose();
       } else {
+        // Prepare linked profiles, filtering out completely empty ones
+        const linkedProfiles = subUsers
+          .filter((su) => su.firstName.trim() || su.lastName.trim())
+          .map((su) => ({
+            id: su.id,
+            firstName: su.firstName.trim(),
+            lastName: su.lastName.trim(),
+            email: "", // Empty by default for sub-users
+            credits: {},
+            createdAt: new Date().toISOString(),
+          }));
+
         // Register new user
         const userCred = await createUserWithEmailAndPassword(
           auth,
           email,
           password,
         );
-        // Store extra profile info in Firestore
+
+        // Store extra profile info in Firestore including sub-users
         await setDoc(doc(db, "users", userCred.user.uid), {
           firstName,
           lastName,
           email,
           phone,
           role: "user",
+          linkedProfiles,
+          credits: {},
           createdAt: new Date().toISOString(),
         });
         onClose();
@@ -142,6 +182,8 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
       toggleToLogin: "already have an account? login here",
       backToLogin: "back to login",
       close: "close",
+      subUsersTitle: "Family Members / Sub-Users",
+      addSubUser: "Add Person",
     },
     de: {
       login: "anmelden",
@@ -160,12 +202,13 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
       toggleToLogin: "bereits ein konto? hier anmelden",
       backToLogin: "zurück zum login",
       close: "schließen",
+      subUsersTitle: "Familienmitglieder / Unterkonten",
+      addSubUser: "Person hinzufügen",
     },
   }[currentLang || "en"];
 
   return (
     <>
-      {/* 1. AUTOFILL STYLE FIX */}
       <style>{`
         input:-webkit-autofill,
         input:-webkit-autofill:hover, 
@@ -206,11 +249,12 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
 
       {/* Drawer Container */}
       <div
+        className="custom-scrollbar"
         style={{
           position: "fixed",
           top: 0,
           right: 0,
-          width: isMobile ? "90vw" : "420px",
+          width: isMobile ? "100vw" : "460px",
           height: "100dvh",
           backgroundColor: "#fffce3",
           zIndex: 9999,
@@ -220,7 +264,7 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
           flexDirection: "column",
           padding: isMobile ? "1rem 1.5rem" : "3rem 4rem",
           boxSizing: "border-box",
-          overflow: "hidden",
+          overflowY: "auto",
         }}
       >
         <div
@@ -259,6 +303,7 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
+            paddingBottom: "2rem",
           }}
         >
           <h1
@@ -366,6 +411,113 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
               </div>
             )}
 
+            {/* NEW: Sub-Users Section for Registration */}
+            {view === "register" && (
+              <div
+                style={{
+                  marginTop: "0.5rem",
+                  borderTop: "1px dashed rgba(28,7,0,0.1)",
+                  paddingTop: "1rem",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "10px",
+                  }}
+                >
+                  <label style={{ ...styles.label, marginBottom: 0 }}>
+                    {t.subUsersTitle}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addSubUser}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#9960a8",
+                      fontSize: "0.75rem",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <Plus size={14} /> {t.addSubUser}
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  {subUsers.map((su) => (
+                    <div
+                      key={su.id}
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        alignItems: "center",
+                        backgroundColor: "rgba(202,175,243,0.1)",
+                        padding: "10px",
+                        borderRadius: "12px",
+                      }}
+                    >
+                      <input
+                        className="auth-drawer-input"
+                        type="text"
+                        placeholder={t.firstName}
+                        value={su.firstName}
+                        onChange={(e) =>
+                          updateSubUser(su.id, "firstName", e.target.value)
+                        }
+                        style={{
+                          ...styles.input,
+                          backgroundColor: "rgba(255,255,255,0.6)",
+                          padding: "8px",
+                        }}
+                        required
+                      />
+                      <input
+                        className="auth-drawer-input"
+                        type="text"
+                        placeholder={t.lastName}
+                        value={su.lastName}
+                        onChange={(e) =>
+                          updateSubUser(su.id, "lastName", e.target.value)
+                        }
+                        style={{
+                          ...styles.input,
+                          backgroundColor: "rgba(255,255,255,0.6)",
+                          padding: "8px",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeSubUser(su.id)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#ff4d4d",
+                          cursor: "pointer",
+                          padding: "4px",
+                          display: "flex",
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button type="submit" disabled={isLoading} style={styles.button}>
               {isLoading ? (
                 <Loader2 size={18} className="spinner" />
@@ -393,6 +545,7 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
                 setView(view === "login" ? "register" : "login");
                 setError("");
                 setMessage("");
+                setSubUsers([]); // Clear sub-users if they switch to login
               }}
               style={styles.toggleBtn}
             >
