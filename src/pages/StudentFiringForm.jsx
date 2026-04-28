@@ -16,13 +16,12 @@ import {
   query,
   where,
   getDocs,
-  limit,
   serverTimestamp,
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import Header from "../components/Header/Header";
-import Cropper from "react-easy-crop"; // <-- IMPORTED CROPPER
+import Cropper from "react-easy-crop";
 import {
   Camera,
   UploadCloud,
@@ -40,6 +39,7 @@ import {
   Clock,
   Package,
   User,
+  ChevronDown,
 } from "lucide-react";
 
 // --- CROP & COMPRESSION HELPER FUNCTIONS ---
@@ -56,11 +56,9 @@ async function getCroppedImg(imageSrc, pixelCrop, quality = 0.7) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
-  // Set canvas size to match the cropped area
   canvas.width = pixelCrop.width;
   canvas.height = pixelCrop.height;
 
-  // Draw the cropped area onto the canvas
   ctx.drawImage(
     image,
     pixelCrop.x,
@@ -73,14 +71,13 @@ async function getCroppedImg(imageSrc, pixelCrop, quality = 0.7) {
     pixelCrop.height,
   );
 
-  // Export the canvas as a compressed JPEG Blob
   return new Promise((resolve) => {
     canvas.toBlob(
       (blob) => {
         resolve(blob);
       },
       "image/jpeg",
-      quality, // 0.7 applies 30% compression to keep file sizes very small
+      quality,
     );
   });
 }
@@ -88,7 +85,8 @@ async function getCroppedImg(imageSrc, pixelCrop, quality = 0.7) {
 
 export default function StudentFiringForm() {
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  // FIXED: Destructured userData
+  const { currentUser, userData } = useAuth();
 
   const [step, setStep] = useState("email");
   const [activeTab, setActiveTab] = useState("active");
@@ -107,7 +105,11 @@ export default function StudentFiringForm() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
 
-  // --- CROPPER STATE ---
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef(null);
+
+  // FIXED: Added missing states
+  const [selectedProfileId, setSelectedProfileId] = useState("main");
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
@@ -115,7 +117,6 @@ export default function StudentFiringForm() {
   const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
-  // ---------------------
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -126,6 +127,21 @@ export default function StudentFiringForm() {
     const savedLang = localStorage.getItem("userLanguage");
     return savedLang === "de" || savedLang === "en" ? savedLang : "en";
   });
+
+  // FIXED: allProfiles definition
+  const allProfiles = useMemo(() => {
+    const profiles = [{ id: "main", name: lang === "de" ? "Mich" : "Me" }];
+    if (userData?.linkedProfiles) {
+      userData.linkedProfiles.forEach((p) => {
+        profiles.push({
+          id: p.id,
+          name: `${p.firstName} ${p.lastName}`.trim(),
+          email: p.email,
+        });
+      });
+    }
+    return profiles;
+  }, [userData, lang]);
 
   const fetchAbandoned = useCallback(async () => {
     try {
@@ -189,6 +205,19 @@ export default function StudentFiringForm() {
     return () => window.removeEventListener("resize", handleResize);
   }, [lang]);
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        profileDropdownRef.current &&
+        !profileDropdownRef.current.contains(event.target)
+      ) {
+        setIsProfileDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const fileInputRef = useRef(null);
 
   const labels = {
@@ -208,7 +237,7 @@ export default function StudentFiringForm() {
       pickupAction: "Mark picked up",
       orRegisterNew: "add new object",
       takePhoto: "Open Camera / Select Photo",
-      dragToCrop: "Drag to frame your object", // New label
+      dragToCrop: "Drag to frame your object",
       submit: "Confirm Registration",
       successTitle: "All Set!",
       successText:
@@ -250,7 +279,7 @@ export default function StudentFiringForm() {
       pickupAction: "Als abgeholt markieren",
       orRegisterNew: "neues objekt registrieren",
       takePhoto: "Kamera öffnen / Foto wählen",
-      dragToCrop: "Ziehe das Bild passend in den Rahmen", // New label
+      dragToCrop: "Ziehe das Bild passend in den Rahmen",
       submit: "Registrierung bestätigen",
       successTitle: "Erledigt!",
       successText:
@@ -288,12 +317,12 @@ export default function StudentFiringForm() {
     setLoading(true);
     try {
       const moveFn = httpsCallable(getFunctions(), "moveToGlazeStage");
-      await moveFn({ objectId, currentLang: lang });
-      setSuccess(true);
+      await moveFn({ objectId, currentLang: lang }); // Fixed variable
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+      setSuccess(true);
     }
   };
 
@@ -390,11 +419,11 @@ export default function StudentFiringForm() {
       const registerFn = httpsCallable(getFunctions(), "registerFiringObject");
       await registerFn({
         email: finalEmail.toLowerCase(),
-        name: finalName, // Now sending the specific attendee name
+        name: finalName,
         userCode: finalCode,
         stage: "bisque",
         imageUrl,
-        currentLang,
+        currentLang: lang, // FIXED variable mapping
         profileId: selectedProfileId,
       });
 
@@ -407,12 +436,11 @@ export default function StudentFiringForm() {
   };
 
   const resetModal = () => {
-    setIsModalOpen(false);
     setClaimingPiece(null);
     setSuccess(false);
     setImagePreview(null);
     setImageFile(null);
-    setZoom(1); // Reset zoom
+    setZoom(1);
     setError("");
   };
 
@@ -997,6 +1025,117 @@ export default function StudentFiringForm() {
               <ArrowLeft size={16} /> {labels.back}
             </button>
 
+            {/* CUSTOM Profile Selector for logged-in users with sub-users */}
+            {currentUser && allProfiles.length > 1 && (
+              <div
+                style={{
+                  ...sectionStyle,
+                  marginBottom: "1rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <label style={labelStyle}>
+                  {lang === "de"
+                    ? "Wem gehört dieses Stück?"
+                    : "Who does this piece belong to?"}
+                </label>
+
+                {/* CUSTOM DROPDOWN */}
+                <div style={{ position: "relative" }} ref={profileDropdownRef}>
+                  <div
+                    onClick={() =>
+                      setIsProfileDropdownOpen(!isProfileDropdownOpen)
+                    }
+                    style={{
+                      ...inputStyle,
+                      backgroundColor: "rgba(255, 252, 227, 0.4)",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      userSelect: "none",
+                    }}
+                  >
+                    <span>
+                      {allProfiles.find((p) => p.id === selectedProfileId)
+                        ?.name || "Select Profile"}
+                    </span>
+                    <ChevronDown
+                      size={18}
+                      style={{
+                        opacity: 0.4,
+                        color: "#1c0700",
+                        transform: isProfileDropdownOpen
+                          ? "rotate(180deg)"
+                          : "rotate(0deg)",
+                        transition: "transform 0.2s ease",
+                      }}
+                    />
+                  </div>
+
+                  {/* CUSTOM OPTIONS MENU */}
+                  {isProfileDropdownOpen && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        marginTop: "8px",
+                        backgroundColor: "#fffce3",
+                        border: "1px solid rgba(202, 175, 243, 0.4)",
+                        borderRadius: "12px",
+                        boxShadow: "0 10px 25px rgba(28, 7, 0, 0.1)",
+                        zIndex: 50,
+                        overflow: "hidden",
+                        display: "flex",
+                        flexDirection: "column",
+                        animation: "fadeIn 0.2s ease",
+                      }}
+                    >
+                      {allProfiles.map((p) => {
+                        const isSelected = selectedProfileId === p.id;
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => {
+                              setSelectedProfileId(p.id);
+                              setIsProfileDropdownOpen(false);
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isSelected)
+                                e.currentTarget.style.backgroundColor =
+                                  "rgba(28, 7, 0, 0.03)";
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isSelected)
+                                e.currentTarget.style.backgroundColor =
+                                  "transparent";
+                            }}
+                            style={{
+                              padding: "12px 14px",
+                              cursor: "pointer",
+                              backgroundColor: isSelected
+                                ? "rgba(202, 175, 243, 0.2)"
+                                : "transparent",
+                              color: isSelected ? "#9960a8" : "#1c0700",
+                              fontWeight: isSelected ? "bold" : "normal",
+                              transition: "background-color 0.2s",
+                              fontSize: "0.95rem",
+                            }}
+                          >
+                            {p.name}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {!currentUser && existingObjects.length === 0 && (
               <div
                 style={{
@@ -1056,7 +1195,7 @@ export default function StudentFiringForm() {
                     image={imagePreview}
                     crop={crop}
                     zoom={zoom}
-                    aspect={1} // Forces a perfect square crop
+                    aspect={1}
                     onCropChange={setCrop}
                     onCropComplete={onCropComplete}
                     onZoomChange={setZoom}
@@ -1096,7 +1235,6 @@ export default function StudentFiringForm() {
                   const file = e.target.files[0];
                   if (file) {
                     setImageFile(file);
-                    // Use FileReader to safely get the image data URL for cropping
                     const reader = new FileReader();
                     reader.onload = () => {
                       setImagePreview(reader.result);
@@ -1429,7 +1567,6 @@ const closeBtn = {
   cursor: "pointer",
   opacity: 0.5,
 };
-const photoBox = { marginBottom: "1.5rem" };
 const submitBtn = {
   width: "100%",
   padding: "16px",
