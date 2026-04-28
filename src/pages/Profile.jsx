@@ -22,6 +22,7 @@ import PackStatusCard from "../components/Profile/PackStatusCard";
 import RentalBookingsCard from "../components/Profile/RentalBookingsCard";
 import PotteryFiringCard from "../components/Profile/PotteryFiringCard";
 import TeachingCard from "../components/Profile/TeachingCard";
+import FamilyMemberCard from "../components/Profile/FamilyMemberCard";
 
 import { LogOut, Loader2, User, Ticket, LayoutDashboard } from "lucide-react";
 
@@ -326,12 +327,20 @@ export default function Profile({ currentLang, setCurrentLang }) {
                 </>
               )}
               {activeTab === "me" && (
-                <PersonalInfoCard
-                  currentUser={currentUser}
-                  userData={userData}
-                  currentLang={currentLang}
-                  t={t}
-                />
+                <>
+                  <PersonalInfoCard
+                    currentUser={currentUser}
+                    userData={userData}
+                    currentLang={currentLang}
+                    t={t}
+                  />
+                  {/* Add Family Member Card Here */}
+                  <FamilyMemberCard
+                    currentUser={currentUser}
+                    userData={userData}
+                    currentLang={currentLang}
+                  />
+                </>
               )}
             </div>
           </>
@@ -343,6 +352,12 @@ export default function Profile({ currentLang, setCurrentLang }) {
                 userData={userData}
                 currentLang={currentLang}
                 t={t}
+              />
+              {/* Add Family Member Card Here */}
+              <FamilyMemberCard
+                currentUser={currentUser}
+                userData={userData}
+                currentLang={currentLang}
               />
               <PackStatusCard
                 currentUser={currentUser}
