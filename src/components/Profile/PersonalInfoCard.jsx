@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { auth, db } from "../../firebase";
-import { updateEmail } from "firebase/auth";
+import { updateEmail, updatePassword } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { User, Mail, Phone, Edit2, Check, X, Loader2 } from "lucide-react";
 
@@ -16,6 +16,7 @@ export default function PersonalInfoCard({
   const [editLastName, setEditLastName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editPassword, setEditPassword] = useState("");
 
   useEffect(() => {
     if (userData) {
@@ -23,6 +24,7 @@ export default function PersonalInfoCard({
       setEditLastName(userData.lastName || "");
       setEditEmail(userData.email || "");
       setEditPhone(userData.phone || "");
+      setEditPassword(""); // Clear password field when opening edit mode
     }
   }, [userData, isEditing]);
 
@@ -32,6 +34,11 @@ export default function PersonalInfoCard({
       if (editEmail !== userData.email) {
         await updateEmail(auth.currentUser, editEmail);
       }
+
+      if (editPassword) {
+        await updatePassword(auth.currentUser, editPassword);
+      }
+
       await updateDoc(doc(db, "users", currentUser.uid), {
         firstName: editFirstName,
         lastName: editLastName,
@@ -40,7 +47,16 @@ export default function PersonalInfoCard({
       });
       setIsEditing(false);
     } catch (err) {
-      alert("Error: " + err.message);
+      // Firebase security rule: Changing email/password requires a recent login
+      if (err.code === "auth/requires-recent-login") {
+        alert(
+          currentLang === "de"
+            ? "Bitte melden Sie sich erneut an, um Ihr Passwort oder Ihre E-Mail zu ändern."
+            : "Please log out and log back in to change your password or email.",
+        );
+      } else {
+        alert("Error: " + err.message);
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -82,7 +98,9 @@ export default function PersonalInfoCard({
       {isEditing ? (
         <div style={styles.editForm}>
           <div>
-            <label style={styles.label}>{t.firstName}</label>
+            <label style={styles.label}>
+              {t.firstName || (currentLang === "de" ? "Vorname" : "First Name")}
+            </label>
             <input
               type="text"
               value={editFirstName}
@@ -91,7 +109,9 @@ export default function PersonalInfoCard({
             />
           </div>
           <div>
-            <label style={styles.label}>{t.lastName}</label>
+            <label style={styles.label}>
+              {t.lastName || (currentLang === "de" ? "Nachname" : "Last Name")}
+            </label>
             <input
               type="text"
               value={editLastName}
@@ -100,7 +120,7 @@ export default function PersonalInfoCard({
             />
           </div>
           <div>
-            <label style={styles.label}>{t.email}</label>
+            <label style={styles.label}>{t.email || "Email"}</label>
             <input
               type="email"
               value={editEmail}
@@ -109,11 +129,29 @@ export default function PersonalInfoCard({
             />
           </div>
           <div>
-            <label style={styles.label}>{t.phone}</label>
+            <label style={styles.label}>
+              {t.phone || (currentLang === "de" ? "Telefon" : "Phone")}
+            </label>
             <input
               type="tel"
               value={editPhone}
               onChange={(e) => setEditPhone(e.target.value)}
+              style={styles.input}
+            />
+          </div>
+          <div style={{ marginTop: "1rem" }}>
+            <label style={{ ...styles.label, color: "#ff4d4d" }}>
+              {currentLang === "de" ? "Neues Passwort" : "New Password"}
+            </label>
+            <input
+              type="password"
+              placeholder={
+                currentLang === "de"
+                  ? "Leer lassen, um aktuelles beizubehalten"
+                  : "Leave blank to keep current"
+              }
+              value={editPassword}
+              onChange={(e) => setEditPassword(e.target.value)}
               style={styles.input}
             />
           </div>

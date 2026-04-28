@@ -106,8 +106,8 @@ export default function PackStatusCard({
             const sessionLabel =
               currentLang === "de"
                 ? isPlural
-                  ? "Einheiten"
-                  : "Einheit"
+                  ? "Kredite"
+                  : "Kredit"
                 : isPlural
                   ? "sessions"
                   : "session";
