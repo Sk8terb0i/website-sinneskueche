@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   User as UserIcon,
   BookOpen,
+  Check, // Added this icon
 } from "lucide-react";
 import { planets } from "../../data/planets";
 import * as S from "./AdminStyles";
@@ -159,7 +160,11 @@ export default function ProfilesTab({
 
   const handleEdit = (user) => {
     setEditingId(user.id);
-    setEditForm({ ...user });
+    // Ensure allowedCourses is initialized as an array if missing
+    setEditForm({
+      ...user,
+      allowedCourses: user.allowedCourses || [],
+    });
   };
 
   const handleSave = async () => {
@@ -172,6 +177,8 @@ export default function ProfilesTab({
           role: editForm.role || "user",
           firstName: editForm.firstName || "",
           lastName: editForm.lastName || "",
+          // Save the permitted courses
+          allowedCourses: editForm.allowedCourses || [],
         });
       } else {
         const parentSnap = await getDoc(userRef);
@@ -459,6 +466,71 @@ export default function ProfilesTab({
                         </option>
                         <option value="admin">{labels.fullAdmin}</option>
                       </select>
+                      {(editForm.role === "instructor" ||
+                        editForm.role === "course_admin") && (
+                        <div style={{ marginTop: "1rem" }}>
+                          <label
+                            style={{
+                              ...S.labelStyle,
+                              marginBottom: "8px",
+                              display: "block",
+                            }}
+                          >
+                            {labels.permitted}
+                          </label>
+                          <div style={customStyles.courseGrid}>
+                            {allPossibleCourses.map(([path, name]) => {
+                              const isSelected = (
+                                editForm.allowedCourses || []
+                              ).includes(path);
+                              return (
+                                <div
+                                  key={path}
+                                  onClick={() => toggleCoursePermission(path)}
+                                  style={{
+                                    ...customStyles.courseItem,
+                                    backgroundColor: isSelected
+                                      ? "rgba(153, 96, 168, 0.15)"
+                                      : "rgba(28, 7, 0, 0.03)",
+                                    border: isSelected
+                                      ? "1px solid #9960a8"
+                                      : "1px solid rgba(28, 7, 0, 0.05)",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      ...customStyles.checkbox,
+                                      backgroundColor: isSelected
+                                        ? "#9960a8"
+                                        : "transparent",
+                                      borderColor: isSelected
+                                        ? "#9960a8"
+                                        : "rgba(28, 7, 0, 0.2)",
+                                    }}
+                                  >
+                                    {isSelected && (
+                                      <Check
+                                        size={10}
+                                        color="#fff"
+                                        strokeWidth={4}
+                                      />
+                                    )}
+                                  </div>
+                                  <span
+                                    style={{
+                                      fontSize: "0.75rem",
+                                      fontWeight: "700",
+                                      color: "#1c0700",
+                                    }}
+                                  >
+                                    {name}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                       <div
                         style={{
                           display: "flex",
@@ -524,11 +596,44 @@ export default function ProfilesTab({
                               margin: 0,
                               fontSize: "0.8rem",
                               opacity: 0.6,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
                             }}
                           >
-                            <Mail size={12} />{" "}
+                            <Mail size={12} />
                             {u.isMain ? u.email : `Linked to: ${u.parentEmail}`}
                           </p>
+
+                          {u.allowedCourses?.length > 0 && (
+                            <div
+                              style={{
+                                marginTop: "0.5rem",
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: "4px",
+                              }}
+                            >
+                              {u.allowedCourses.map((path) => (
+                                <span
+                                  key={path}
+                                  style={{
+                                    fontSize: "0.6rem",
+                                    padding: "2px 6px",
+                                    backgroundColor: "rgba(28,7,0,0.05)",
+                                    borderRadius: "4px",
+                                    fontWeight: "900",
+                                    textTransform: "uppercase",
+                                    color: "#4e5f28",
+                                  }}
+                                >
+                                  {allPossibleCourses.find(
+                                    (c) => c[0] === path,
+                                  )?.[1] || path}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div
                           style={{
@@ -854,3 +959,36 @@ export default function ProfilesTab({
     </div>
   );
 }
+
+const customStyles = {
+  courseGrid: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    backgroundColor: "#fffce3",
+    padding: "12px",
+    borderRadius: "16px",
+    border: "1px solid rgba(28, 7, 0, 0.1)",
+    maxHeight: "200px",
+    overflowY: "auto",
+  },
+  courseItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "8px 12px",
+    borderRadius: "10px",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+  },
+  checkbox: {
+    width: "16px",
+    height: "16px",
+    borderRadius: "4px",
+    border: "2px solid",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "all 0.2s ease",
+  },
+};

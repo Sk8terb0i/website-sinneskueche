@@ -609,15 +609,26 @@ export default function Admin({ currentLang, setCurrentLang }) {
   }
 
   const isFullAdmin = adminData.role === "admin";
+
+  // New helper: checks if user is admin OR a course_admin allowed to pottery courses
+  const canSeeFiring =
+    isFullAdmin ||
+    (adminData.role === "course_admin" &&
+      (adminData.allowedCourses || []).some((course) =>
+        course.includes("pottery"),
+      ));
+
   const visibleGroups =
     navConfig?.groups
       .map((group) => ({
         ...group,
-        items: group.items.filter(
-          (itemKey) =>
-            TAB_META[itemKey] &&
-            (TAB_META[itemKey].adminOnly ? isFullAdmin : true),
-        ),
+        items: group.items.filter((itemKey) => {
+          const meta = TAB_META[itemKey];
+          if (!meta) return false;
+          // Override visibility for the firing tab specifically
+          if (itemKey === "firing") return canSeeFiring;
+          return meta.adminOnly ? isFullAdmin : true;
+        }),
       }))
       .filter((g) => g.items.length > 0) || [];
 
@@ -1329,10 +1340,11 @@ export default function Admin({ currentLang, setCurrentLang }) {
             {activeTab === "rental" && (
               <RentalTab isMobile={isMobile} currentLang={currentLang} />
             )}
-            {activeTab === "firing" && (
-              <FiringTab isMobile={isMobile} currentLang={currentLang} />
-            )}
           </>
+        )}
+        {/* Render FiringTab for anyone authorized via the canSeeFiring check */}
+        {activeTab === "firing" && canSeeFiring && (
+          <FiringTab isMobile={isMobile} currentLang={currentLang} />
         )}
       </div>
 
