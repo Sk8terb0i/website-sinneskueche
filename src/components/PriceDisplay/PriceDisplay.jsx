@@ -373,111 +373,37 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   const handleBookWithCredits = async () => {
     setIsProcessing(true);
     try {
-      const expandedDates = selectedDates.flatMap((d) =>
-        (d.attendees || []).map((att, idx) => ({
-          ...d,
-          attendeeName:
-            att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
-          profileId: att.profileId || null,
-          selectedAddons: att.selectedAddons || [],
-        })),
-      );
+      // Logic to determine EXACTLY who is using a credit
+      let tempCredits = JSON.parse(JSON.stringify(profileBalances));
+      let usedDatesByProfile = new Set();
 
-      // Generate the session summary for the success page
-      const sessionSummary = expandedDates
-        .map((d) => {
-          const activeLink = d.link || coursePath;
-          const pData = pricingMap[activeLink];
-          const title =
-            pData?.courseName || activeLink.replace(/\//g, "") || "Session";
-          let displayStr = `${formatDate(d.date)} | ${d.time || ""} (${title})`;
+      const expandedDates = selectedDates.flatMap((d) => {
+        const courseKey = getCreditKey(d.link || coursePath);
+        return (d.attendees || []).map((att, idx) => {
+          const pid = att.profileId || "main";
+          let useCredit = false;
 
-          if (d.selectedAddons && d.selectedAddons.length > 0) {
-            const addonParts = d.selectedAddons.map((a) => {
-              const aid = typeof a === "string" ? a : a.id;
-              const aTime = typeof a === "object" ? a.time : null;
-              const def = pData?.specialEvents?.find(
-                (se) => String(se.id) === String(aid),
-              );
-              const aName = def
-                ? currentLang === "en"
-                  ? def.nameEn
-                  : def.nameDe
-                : "Extra";
-              return `+ ${aName}${aTime ? ` (${aTime})` : ""}`;
-            });
-            displayStr += " " + addonParts.join(" ");
+          const alreadyUsedToday =
+            userCreditBookedIds.includes(`${d.date}_${pid}`) ||
+            usedDatesByProfile.has(`${d.date}_${pid}`);
+
+          if (!alreadyUsedToday && tempCredits[pid]?.[courseKey] > 0) {
+            useCredit = true;
+            tempCredits[pid][courseKey]--;
+            usedDatesByProfile.add(`${d.date}_${pid}`);
           }
-          return displayStr;
-        })
-        .join(", ");
 
-      const functions = getFunctions();
-      const bookCredits = httpsCallable(functions, "bookWithCredits");
-      const baseUrl = window.location.origin;
-
-      await bookCredits({
-        coursePath,
-        selectedDates: expandedDates,
-        currentLang,
-        baseUrl,
+          return {
+            ...d,
+            attendeeName:
+              att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
+            profileId: pid,
+            selectedAddons: att.selectedAddons || [],
+            usedCredit: useCredit,
+          };
+        });
       });
 
-      navigate(
-        `/success?type=credit&booked=true&sessions=${encodeURIComponent(sessionSummary)}`,
-      );
-    } catch (err) {
-      console.error(err);
-      setIsProcessing(false);
-    }
-  };
-
-  const handlePayment = async (mode, code, size, price, creditsToUse = 0) => {
-    setIsProcessing(true);
-    try {
-      // 1. Full data preservation
-      const expandedDates = selectedDates.flatMap((d) =>
-        (d.attendees || []).map((att, idx) => ({
-          ...d,
-          attendeeName:
-            att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
-          profileId: att.profileId || null,
-          selectedAddons: att.selectedAddons || [],
-        })),
-      );
-
-      let packSummary = "";
-      if (mode === "pack" && typeof size === "object") {
-        packSummary = Object.entries(size)
-          .map(([link, pIdx]) => {
-            const pData = pricingMap[link];
-            const pack = pData?.packs?.[pIdx];
-            const name = pData?.courseName || link.replace(/\//g, "");
-            return `${pack?.size} Session Pack (${name})`;
-          })
-          .join(" + ");
-      }
-
-      const functions = getFunctions();
-      const baseUrl = window.location.origin;
-
-      // Handle direct code redemption
-      if (mode === "redeem") {
-        const redeemPack = httpsCallable(functions, "redeemPackCode");
-        await redeemPack({
-          coursePath,
-          selectedDates: expandedDates,
-          packCode: code,
-          guestInfo: !currentUser ? guestInfo : null,
-          currentLang,
-          baseUrl,
-        });
-        navigate(`/success?type=credit&mode=redeem&code=${code}&booked=true`);
-        setIsProcessing(false);
-        return;
-      }
-
-      // Generate summary for success page
       const sessionSummary = expandedDates
         .map((d) => {
           const activeLink = d.link || coursePath;
@@ -499,10 +425,125 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         })
         .join(", ");
 
-      // 2. STRIPE CHUNKING: Split the long JSON string into chunks of 450 characters
+      const functions = getFunctions();
+      const bookCredits = httpsCallable(functions, "bookWithCredits");
+      await bookCredits({
+        coursePath,
+        selectedDates: expandedDates,
+        currentLang,
+        baseUrl: window.location.origin,
+      });
+      navigate(
+        `/success?type=credit&booked=true&sessions=${encodeURIComponent(sessionSummary)}`,
+      );
+    } catch (err) {
+      console.error(err);
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePayment = async (
+    mode,
+    code,
+    size,
+    price,
+    creditsToUse = 0,
+    activePackCode = null,
+  ) => {
+    setIsProcessing(true);
+    try {
+      let tempCredits = JSON.parse(JSON.stringify(profileBalances));
+      const packRemainingCount =
+        activePackCode?.remaining === "?"
+          ? 999
+          : activePackCode?.remaining || 0;
+      let remainingPackCode = packRemainingCount;
+      let usedDatesByProfile = new Set();
+
+      const expandedDates = selectedDates.flatMap((d) => {
+        const courseKey = getCreditKey(d.link || coursePath);
+        return (d.attendees || []).map((att, idx) => {
+          const pid = att.profileId || "main";
+          let useCredit = false;
+
+          const alreadyUsedToday =
+            userCreditBookedIds.includes(`${d.date}_${pid}`) ||
+            usedDatesByProfile.has(`${d.date}_${pid}`);
+
+          if (!alreadyUsedToday) {
+            if (remainingPackCode > 0) {
+              useCredit = true;
+              remainingPackCode--;
+            } else if (tempCredits[pid]?.[courseKey] > 0) {
+              useCredit = true;
+              tempCredits[pid][courseKey]--;
+            }
+          }
+          if (useCredit) usedDatesByProfile.add(`${d.date}_${pid}`);
+
+          return {
+            ...d,
+            attendeeName:
+              att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
+            profileId: pid,
+            selectedAddons: att.selectedAddons || [],
+            usedCredit: useCredit,
+          };
+        });
+      });
+
+      let packSummary = "";
+      if (mode === "pack" && typeof size === "object") {
+        packSummary = Object.entries(size)
+          .map(([link, pIdx]) => {
+            const pData = pricingMap[link];
+            const pack = pData?.packs?.[pIdx];
+            return `${pack?.size} Session Pack (${pData?.courseName || link.replace(/\//g, "")})`;
+          })
+          .join(" + ");
+      }
+
+      const sessionSummary = expandedDates
+        .map((d) => {
+          const activeLink = d.link || coursePath;
+          const pData = pricingMap[activeLink];
+          const title =
+            pData?.courseName || activeLink.replace(/\//g, "") || "Session";
+          let displayStr = `${formatDate(d.date)} | ${d.time || ""} (${title})`;
+          if (d.selectedAddons && d.selectedAddons.length > 0) {
+            const addonParts = d.selectedAddons.map((a) => {
+              const aid = typeof a === "string" ? a : a.id;
+              const def = pData?.specialEvents?.find(
+                (se) => String(se.id) === String(aid),
+              );
+              return `+ ${def ? (currentLang === "en" ? def.nameEn : def.nameDe) : "Extra"}`;
+            });
+            displayStr += " " + addonParts.join(" ");
+          }
+          return displayStr;
+        })
+        .join(", ");
+
+      const functions = getFunctions();
+      const baseUrl = window.location.origin;
+
+      if (mode === "redeem") {
+        const redeemPack = httpsCallable(functions, "redeemPackCode");
+        await redeemPack({
+          coursePath,
+          selectedDates: expandedDates,
+          packCode: code,
+          guestInfo: !currentUser ? guestInfo : null,
+          currentLang,
+          baseUrl,
+        });
+        navigate(`/success?type=credit&mode=redeem&code=${code}&booked=true`);
+        setIsProcessing(false);
+        return;
+      }
+
       const datesJson = JSON.stringify(expandedDates);
       const chunks = datesJson.match(/.{1,450}/g) || [];
-
       const metadataPayload = {
         userId: currentUser ? currentUser.uid : "GUEST_USER",
         mode,
@@ -515,7 +556,6 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         promoCode: code || "",
         chunkCount: chunks.length.toString(),
       };
-
       chunks.forEach((chunk, i) => {
         metadataPayload[`dates_chunk_${i}`] = chunk;
       });
@@ -528,7 +568,6 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=true&packs=${encodeURIComponent(packSummary)}&sessions=${encodeURIComponent(sessionSummary)}`,
         cancelUrl: window.location.href,
       });
-
       if (res.data?.url) window.location.assign(res.data.url);
     } catch (err) {
       console.error(err);

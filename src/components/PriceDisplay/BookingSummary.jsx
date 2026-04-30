@@ -1130,7 +1130,22 @@ export default function BookingSummary({
             // Check if any attendee in this date block is ineligible for credit usage
             const hasIneligibleAttendee = d.attendees.some((att) => {
               const pid = att.profileId || "main";
-              return userCreditBookedIds?.includes(`${d.date}_${pid}`);
+              const hasUsedTodayInHistory = userCreditBookedIds?.includes(
+                `${d.date}_${pid}`,
+              );
+
+              // Only show the alert if they ACTUALLY have credits to use or are buying a pack
+              const hasBalance = (profileBalances[pid]?.[courseKey] || 0) > 0;
+              const isBuyingPackForThis = selectedPacks.hasOwnProperty(
+                d.link || coursePath,
+              );
+              const isUsingRedeemCode =
+                activePackCode && activePackCode.remaining > 0;
+
+              return (
+                hasUsedTodayInHistory &&
+                (hasBalance || isBuyingPackForThis || isUsingRedeemCode)
+              );
             });
 
             let alreadyUsedCredit = hasIneligibleAttendee;
@@ -2345,22 +2360,22 @@ export default function BookingSummary({
               validateAndProceed(() => {
                 const packCount = Object.keys(selectedPacks).length;
                 if (packCount > 0) {
-                  // MODE: PACK (Sends the whole object of selected packs to the backend)
                   onPayment(
                     "pack",
                     promoAppliesToPack ? activePromo?.code : null,
                     selectedPacks,
                     finalPackPrice,
                     usableCredits,
+                    activePackCode,
                   );
                 } else {
-                  // MODE: INDIVIDUAL (Standard single-session purchase)
                   onPayment(
                     "individual",
                     promoAppliesToSingle ? activePromo?.code : null,
                     totalTicketsSelected,
                     finalTotalPrice,
                     usableCredits,
+                    activePackCode,
                   );
                 }
               })

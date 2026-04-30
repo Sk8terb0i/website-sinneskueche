@@ -640,22 +640,18 @@ exports.handleStripeWebhook = onRequest(
             }
           }
 
-          // 1. Process Deductions if mixed payment (using existing credits)
-          let creditsApplied = 0;
+          // 1. Process Deductions using the explicit flags from the frontend
           const profileDeductions = {};
 
           parsedDates.forEach((d) => {
-            let isCreditBooking = false;
-            // Mark as credit if using existing balance
-            if (!isGuest && parsedCreditsToUse > creditsApplied) {
-              isCreditBooking = true;
-              creditsApplied++;
+            const isCreditBooking = d.usedCredit || false;
+            const courseKey = getCleanCourseKey(d.link || coursePath);
+
+            if (isCreditBooking && !isGuest) {
               const pid = d.profileId || "main";
-              profileDeductions[pid] = (profileDeductions[pid] || 0) + 1;
-            }
-            // Mark as credit if buying a pack (the booked dates consume the new pack)
-            if (mode === "pack" && !isGuest) {
-              isCreditBooking = true;
+              profileDeductions[pid] = profileDeductions[pid] || {};
+              profileDeductions[pid][courseKey] =
+                (profileDeductions[pid][courseKey] || 0) + 1;
             }
 
             // Create booking doc
@@ -676,33 +672,36 @@ exports.handleStripeWebhook = onRequest(
             });
           });
 
-          // Apply existing credit deductions to the user document
-          if (!isGuest && parsedCreditsToUse > 0) {
-            Object.entries(profileDeductions).forEach(([pid, amount]) => {
-              if (pid === "main") {
-                userData.credits[courseKey] =
-                  (userData.credits[courseKey] || 0) - amount;
-              } else {
-                const linkedIndex = userData.linkedProfiles.findIndex(
-                  (p) => p.id === pid,
-                );
-                if (linkedIndex !== -1) {
-                  if (!userData.linkedProfiles[linkedIndex].credits)
-                    userData.linkedProfiles[linkedIndex].credits = {};
-                  userData.linkedProfiles[linkedIndex].credits[courseKey] =
-                    (userData.linkedProfiles[linkedIndex].credits[courseKey] ||
-                      0) - amount;
+          // Apply existing credit deductions
+          if (!isGuest && Object.keys(profileDeductions).length > 0) {
+            Object.entries(profileDeductions).forEach(([pid, courses]) => {
+              Object.entries(courses).forEach(([cKey, amount]) => {
+                if (pid === "main") {
+                  userData.credits[cKey] =
+                    (userData.credits[cKey] || 0) - amount;
+                } else {
+                  const linkedIndex = userData.linkedProfiles.findIndex(
+                    (p) => p.id === pid,
+                  );
+                  if (linkedIndex !== -1) {
+                    if (!userData.linkedProfiles[linkedIndex].credits)
+                      userData.linkedProfiles[linkedIndex].credits = {};
+                    userData.linkedProfiles[linkedIndex].credits[cKey] =
+                      (userData.linkedProfiles[linkedIndex].credits[cKey] ||
+                        0) - amount;
+                  }
                 }
-              }
-              // History Record
-              const historyRef = db.collection("credit_history").doc();
-              transaction.set(historyRef, {
-                userId,
-                profileId: pid, // Identify who lost the credit
-                courseKey,
-                amount: -amount,
-                type: "booking",
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+
+                // History Record
+                const historyRef = db.collection("credit_history").doc();
+                transaction.set(historyRef, {
+                  userId,
+                  profileId: pid,
+                  courseKey: cKey,
+                  amount: -amount,
+                  type: "booking",
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
               });
             });
           }
@@ -1095,55 +1094,68 @@ exports.cancelBookings = onCall({ cors: true }, async (request) => {
       throw new HttpsError("invalid-argument", "No bookings provided.");
 
     return db.runTransaction(async (t) => {
+      // 1. Perform ALL Reads first
       const userRef = db.collection("users").doc(request.auth.uid);
       const userSnap = await t.get(userRef);
       const userData = userSnap.data();
 
+      // Get all booking snapshots at once
+      const bRefs = bookingIds.map((id) => db.collection("bookings").doc(id));
+      const bSnaps = await Promise.all(bRefs.map((ref) => t.get(ref)));
+
       if (!userData.credits) userData.credits = {};
       if (!userData.linkedProfiles) userData.linkedProfiles = [];
 
-      const profileRefunds = {};
-      let courseKey = "";
+      const profileRefundsByCourse = {}; // Structure: { profileId: { courseKey: amount } }
 
-      for (const id of bookingIds) {
-        const bRef = db.collection("bookings").doc(id);
-        const bSnap = await t.get(bRef);
-        if (!bSnap.exists || bSnap.data().userId !== request.auth.uid)
-          throw new HttpsError("permission-denied", "Unauthorized.");
-
-        const bData = bSnap.data();
-        courseKey = getCleanCourseKey(bData.coursePath);
+      // 2. Validate and Calculate
+      bSnaps.forEach((snap, idx) => {
+        if (!snap.exists || snap.data().userId !== request.auth.uid) {
+          throw new HttpsError(
+            "permission-denied",
+            "Unauthorized or booking not found.",
+          );
+        }
+        const bData = snap.data();
+        const courseKey = getCleanCourseKey(bData.coursePath);
         const pid = bData.profileId || "main";
 
-        profileRefunds[pid] = (profileRefunds[pid] || 0) + 1;
-        t.delete(bRef);
-      }
+        if (!profileRefundsByCourse[pid]) profileRefundsByCourse[pid] = {};
+        profileRefundsByCourse[pid][courseKey] =
+          (profileRefundsByCourse[pid][courseKey] || 0) + 1;
+      });
 
-      Object.entries(profileRefunds).forEach(([pid, amount]) => {
-        if (pid === "main") {
-          userData.credits[courseKey] =
-            (userData.credits[courseKey] || 0) + amount;
-        } else {
-          const linkedIndex = userData.linkedProfiles.findIndex(
-            (p) => p.id === pid,
-          );
-          if (linkedIndex !== -1) {
-            if (!userData.linkedProfiles[linkedIndex].credits)
-              userData.linkedProfiles[linkedIndex].credits = {};
-            userData.linkedProfiles[linkedIndex].credits[courseKey] =
-              (userData.linkedProfiles[linkedIndex].credits[courseKey] || 0) +
-              amount;
+      // 3. Execute ALL Writes
+      // Delete the bookings
+      bRefs.forEach((ref) => t.delete(ref));
+
+      // Apply refunds to user document and log history
+      Object.entries(profileRefundsByCourse).forEach(([pid, courseRefunds]) => {
+        Object.entries(courseRefunds).forEach(([cKey, amount]) => {
+          if (pid === "main") {
+            userData.credits[cKey] = (userData.credits[cKey] || 0) + amount;
+          } else {
+            const linkedIndex = userData.linkedProfiles.findIndex(
+              (p) => p.id === pid,
+            );
+            if (linkedIndex !== -1) {
+              if (!userData.linkedProfiles[linkedIndex].credits)
+                userData.linkedProfiles[linkedIndex].credits = {};
+              userData.linkedProfiles[linkedIndex].credits[cKey] =
+                (userData.linkedProfiles[linkedIndex].credits[cKey] || 0) +
+                amount;
+            }
           }
-        }
 
-        const historyRef = db.collection("credit_history").doc();
-        t.set(historyRef, {
-          userId: request.auth.uid,
-          profileId: pid,
-          courseKey,
-          amount: amount,
-          type: "refund",
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          const historyRef = db.collection("credit_history").doc();
+          t.set(historyRef, {
+            userId: request.auth.uid,
+            profileId: pid,
+            courseKey: cKey,
+            amount: amount,
+            type: "refund",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
         });
       });
 
