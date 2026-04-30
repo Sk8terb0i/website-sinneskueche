@@ -11,7 +11,13 @@ import {
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "../../firebase";
-import { ChevronLeft, ChevronRight, Loader2, ChevronDown } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  ChevronDown,
+  Check,
+} from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import BookingSummary from "./BookingSummary";
 import * as S from "./PriceDisplayStyles";
@@ -54,6 +60,16 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   const [hasBookedBefore, setHasBookedBefore] = useState(false);
   const [requestedDates, setRequestedDates] = useState([]);
   const [profileHistoryMap, setProfileHistoryMap] = useState({});
+  const [activeFilters, setActiveFilters] = useState([]); // Tracks which courses are visible
+  const [activeAddonFilters, setActiveAddonFilters] = useState([]); // NEW: Tracks visible add-ons
+
+  const toggleAddonFilter = (addonId) => {
+    setActiveAddonFilters((prev) =>
+      prev.includes(addonId)
+        ? prev.filter((id) => id !== addonId)
+        : [...prev, addonId],
+    );
+  };
 
   useEffect(() => {
     if (forceExpand) {
@@ -76,29 +92,69 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   // Thematic palettes: Purple, Olive Green, Sand/Gold, Blue, Rose
   const coursePalettes = [
     {
+      // 1. PURPLE (Theme Primary)
       base: "#9960a8",
       light: "rgba(153, 96, 168, 0.25)",
-      addons: ["#7a4d86", "#b380c2", "#5c3a65"],
+      addons: [
+        "#4a2c5a", // Deep Plum
+        "#7a4d86", // Rich Orchid
+        "#9960a8", // Base Purple
+        "#b380c2", // Amethyst
+        "#caaff3", // Theme Lilac
+        "#eadaff", // Pastel Lavender
+      ],
     },
     {
+      // 2. OLIVE GREEN
       base: "#4e5f28",
       light: "rgba(78, 95, 40, 0.25)",
-      addons: ["#3e4c20", "#6b7d3f", "#2f3918"],
+      addons: [
+        "#2a3315", // Deep Forest
+        "#3e4c20", // Moss Green
+        "#4e5f28", // Base Olive
+        "#6b7d3f", // Sage
+        "#8ea35c", // Light Willow
+        "#c1cc99", // Misty Tea
+      ],
     },
     {
+      // 3. SAND / GOLD
       base: "#d4a373",
       light: "rgba(212, 163, 115, 0.3)",
-      addons: ["#b58455", "#e3bc98", "#8f6640"],
+      addons: [
+        "#8b6240", // Burnt Umber
+        "#b58455", // Ochre
+        "#d4a373", // Base Sand
+        "#e3bc98", // Wheat
+        "#f4e1d2", // Champagne
+        "#fff5e6", // Creamy Nude
+      ],
     },
     {
+      // 4. OCEAN BLUE
       base: "#457b9d",
       light: "rgba(69, 123, 157, 0.25)",
-      addons: ["#37627d", "#6a9ab8", "#294a5e"],
+      addons: [
+        "#1d3557", // Midnight Blue
+        "#37627d", // Steel Blue
+        "#457b9d", // Base Blue
+        "#6a9ab8", // Sky Blue
+        "#a8dadc", // Glacier Blue
+        "#f1faee", // Pale Frost
+      ],
     },
     {
+      // 5. ROSE / PEACH
       base: "#e5989b",
       light: "rgba(229, 152, 155, 0.3)",
-      addons: ["#b87a7c", "#eeafb2", "#895b5d"],
+      addons: [
+        "#a34e52", // Deep Coral
+        "#b87a7c", // Dusty Rose
+        "#e5989b", // Base Rose
+        "#eeafb2", // Peach
+        "#ffb4a2", // Salmon
+        "#ffcdb2", // Warm Blush
+      ],
     },
   ];
 
@@ -162,6 +218,13 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         if (isMounted) {
           setPricingMap(pricingMapObj);
           setPricing(pricingMapObj[coursePath]);
+          setActiveFilters(Object.keys(pricingMapObj));
+
+          // NEW: Initialize all add-ons as active
+          const allAddonIds = Object.values(pricingMapObj).flatMap((p) =>
+            (p.specialEvents || []).map((se) => se.id),
+          );
+          setActiveAddonFilters(allAddonIds);
         }
 
         const filtered = eSnap.docs
@@ -414,6 +477,16 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     }
   };
 
+  const toggleFilter = (link) => {
+    setActiveFilters((prev) => {
+      // Don't allow deselecting the last filter (ensure at least one is visible)
+      if (prev.includes(link) && prev.length === 1) return prev;
+      return prev.includes(link)
+        ? prev.filter((l) => l !== link)
+        : [...prev, link];
+    });
+  };
+
   const year = currentViewDate.getFullYear();
   const month = currentViewDate.getMonth();
   const monthName = currentViewDate.toLocaleString(
@@ -512,7 +585,48 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
               const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
 
               // 1. Find if an actual admin-created event exists here
-              const realEvent = availableDates.find((e) => e.date === dateStr);
+              let realEvent = availableDates.find((e) => e.date === dateStr);
+
+              // 2. Filter by Course
+              if (realEvent && !activeFilters.includes(realEvent.link)) {
+                realEvent = null;
+              }
+
+              // 3. Filter by Add-on (Fixed: Only filters if an add-on filter is actually active)
+              if (realEvent) {
+                const assigned =
+                  scheduleData?.specialAssignments?.[realEvent.id] || [];
+                const assignedIds = Array.isArray(assigned)
+                  ? assigned
+                  : [assigned];
+
+                // Get all possible add-on IDs for this specific course
+                const courseAddonIds = (
+                  pricingMap[realEvent.link]?.specialEvents || []
+                ).map((se) => se.id);
+
+                // Check if the user has any active filters that belong to THIS course
+                const activeFiltersForThisCourse = activeAddonFilters.filter(
+                  (id) => courseAddonIds.includes(id),
+                );
+
+                if (assignedIds.length > 0) {
+                  // If the user has specifically selected add-on filters for this course...
+                  if (activeFiltersForThisCourse.length > 0) {
+                    // ...then hide the date ONLY if it doesn't match any of those active filters
+                    const hasMatch = assignedIds.some((id) =>
+                      activeAddonFilters.includes(id),
+                    );
+                    if (!hasMatch) realEvent = null;
+                  }
+                } else {
+                  // If the date has NO add-ons but the user is filtering FOR specific add-ons in this course...
+                  if (activeFiltersForThisCourse.length > 0) {
+                    // ...hide the base date because it doesn't have the requested add-on
+                    realEvent = null;
+                  }
+                }
+              }
 
               // 2. Check if the date is in the past
               const cellDate = new Date(year, month, i + 1);
@@ -686,7 +800,9 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                     <div style={S.addonArcContainerStyle}>
                       {activeAddons
                         .filter(
-                          (id) => !userData?.completedAddons?.includes(id),
+                          (id) =>
+                            !userData?.completedAddons?.includes(id) &&
+                            activeAddonFilters.includes(id), // Check if add-on is active in filter
                         )
                         .map((id, idx, filteredArray) => (
                           <div
@@ -730,6 +846,20 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
               gap: "1.5rem",
             }}
           >
+            {/* NEW FILTER HEADER */}
+            <div
+              style={{
+                fontSize: "0.7rem",
+                fontWeight: "900",
+                opacity: 0.4,
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                marginBottom: "-0.5rem",
+              }}
+            >
+              {currentLang === "de" ? "Kalender filtern" : "Filter Calendar"}
+            </div>
+
             <div
               style={{
                 display: "flex",
@@ -749,6 +879,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                 .map((link) => {
                   const pData = pricingMap[link];
                   const palette = getCoursePalette(link);
+                  const isVisible = activeFilters.includes(link);
                   const validAddons =
                     pData.specialEvents?.filter(
                       (se) => !userData?.completedAddons?.includes(se.id),
@@ -766,11 +897,15 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                   return (
                     <div
                       key={link}
+                      onClick={() => toggleFilter(link)}
                       style={{
                         display: "flex",
                         flexDirection: "column",
                         gap: "8px",
                         alignItems: "flex-start",
+                        cursor: "pointer",
+                        opacity: isVisible ? 1 : 0.3,
+                        transition: "all 0.2s ease",
                       }}
                     >
                       <div
@@ -780,8 +915,29 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                           textTransform: "uppercase",
                           color: palette.base,
                           letterSpacing: "0.5px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
                         }}
                       >
+                        <div
+                          style={{
+                            width: "12px",
+                            height: "12px",
+                            borderRadius: "3px",
+                            backgroundColor: isVisible
+                              ? palette.base
+                              : "transparent",
+                            border: `2px solid ${palette.base}`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {isVisible && (
+                            <Check size={10} color="#fff" strokeWidth={4} />
+                          )}
+                        </div>
                         {title}
                       </div>
                       <div
@@ -801,18 +957,34 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                           />
                           {currentLang === "de" ? "Verfügbar" : "Available"}
                         </div>
-                        {/* Removed the "Selected" legend item here */}
-                        {validAddons.map((se) => (
-                          <div key={se.id} style={S.legendItemStyle(isMobile)}>
+                        {validAddons.map((se) => {
+                          const isAddonActive = activeAddonFilters.includes(
+                            se.id,
+                          );
+                          return (
                             <div
-                              style={S.legendIndicatorStyle(
-                                getAddonColor(se.id, link),
-                                isMobile,
-                              )}
-                            />
-                            {currentLang === "en" ? se.nameEn : se.nameDe}
-                          </div>
-                        ))}
+                              key={se.id}
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevents course toggle
+                                toggleAddonFilter(se.id);
+                              }}
+                              style={{
+                                ...S.legendItemStyle(isMobile),
+                                opacity: isAddonActive ? 1 : 0.3,
+                                cursor: "pointer",
+                                transition: "opacity 0.2s ease",
+                              }}
+                            >
+                              <div
+                                style={S.legendIndicatorStyle(
+                                  getAddonColor(se.id, link),
+                                  isMobile,
+                                )}
+                              />
+                              {currentLang === "en" ? se.nameEn : se.nameDe}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );

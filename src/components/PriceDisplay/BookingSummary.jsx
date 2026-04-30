@@ -110,16 +110,23 @@ export default function BookingSummary({
       ? `${userData?.firstName || ""} ${userData?.lastName || ""}`.trim()
       : `${guestInfo.firstName} ${guestInfo.lastName}`.trim();
 
-    if (currentName) {
+    const currentNameClean = currentName.trim();
+    if (currentNameClean) {
       setSelectedDates((prev) =>
         prev.map((date) => {
           const newAtts = [...(date.attendees || [])];
-          if (
-            newAtts.length > 0 &&
-            (!newAtts[0].name || newAtts[0].name === "Primary Booker")
-          ) {
-            newAtts[0] = { ...newAtts[0], name: currentName };
-            return { ...date, attendees: newAtts };
+          if (newAtts.length > 0) {
+            const firstNameChar = guestInfo.firstName.charAt(0);
+            // Sync if name is empty, placeholder, or looks like a partial sync of the guest info
+            const shouldSync =
+              !newAtts[0].name ||
+              newAtts[0].name === "Primary Booker" ||
+              currentNameClean.startsWith(newAtts[0].name);
+
+            if (shouldSync) {
+              newAtts[0] = { ...newAtts[0], name: currentName };
+              return { ...date, attendees: newAtts };
+            }
           }
           return date;
         }),
@@ -402,13 +409,31 @@ export default function BookingSummary({
   const remainingEligibleToPay = eligibleForCredit - usableCredits;
   const ticketsToPayCash = remainingEligibleToPay + ineligibleForCredit;
 
-  const baseTotalTicketsPrice =
-    ticketsToPayCash * parseFloat(pricing?.priceSingle || 0);
+  // Calculate the cost for individual sessions, respecting different prices per course
+  let totalIndividualCash = 0;
+  let tempUsableCredits = usableCredits;
+
+  selectedDates.forEach((d) => {
+    (d.attendees || []).forEach((att) => {
+      const coursePrice = parseFloat(pricingMap[d.link]?.priceSingle || 0);
+      const pid = att.profileId;
+
+      // Check if this specific ticket can be covered by existing credits
+      const canUseExistingCredit = pid && (profileBalances[pid] || 0) > 0;
+
+      if (canUseExistingCredit && tempUsableCredits > 0) {
+        tempUsableCredits--; // Covered by existing balance
+      } else {
+        totalIndividualCash += coursePrice; // Must pay cash
+      }
+    });
+  });
+
   const basePackOptions = [
     {
       isIndividual: true,
       size: totalTicketsSelected,
-      price: baseTotalTicketsPrice,
+      price: totalIndividualCash,
     },
     ...(pricing?.packs?.length > 0
       ? pricing.packs.map((p) => ({
@@ -465,7 +490,7 @@ export default function BookingSummary({
     }
   }, [isMixedPayment, coversEntirely]);
 
-  let finalTotalPrice = baseTotalTicketsPrice + addonCashTotal;
+  let finalTotalPrice = totalIndividualCash + addonCashTotal;
 
   const packOptions = basePackOptions.map((pack) => {
     if (pack.isIndividual) return { ...pack, price: finalTotalPrice };
@@ -477,17 +502,119 @@ export default function BookingSummary({
       ? packOptions[selectedPackIndex]
       : { size: 0, price: 0 };
 
-  const extraEligible = currentPack.isIndividual
-    ? 0
-    : Math.max(0, remainingEligibleToPay - currentPack.size);
-  const extraSessionsCount = currentPack.isIndividual
-    ? 0
-    : extraEligible + ineligibleForCredit;
-  const extraSessionsCost =
-    extraSessionsCount * parseFloat(pricing?.priceSingle || 0);
+  let finalPackPrice = parseFloat(currentPack?.price || 0) + addonCashTotal;
+  let extraItemsBreakdown = [];
+  let infoSentence = "";
 
-  let finalPackPrice =
-    parseFloat(currentPack?.price || 0) + extraSessionsCost + addonCashTotal;
+  if (selectedPackIndex !== null && !currentPack.isIndividual) {
+    let packRemaining = currentPack.size;
+    let tempUsableCredits = usableCredits;
+    const breakdownMap = {};
+
+    let hasMixedCourses = false;
+    let hasExceededPack = false;
+    let hasChargeableAddons = false;
+
+    selectedDates.forEach((d) => {
+      const isPackCourse = d.link === coursePath;
+      if (!isPackCourse) hasMixedCourses = true;
+      const coursePrice = parseFloat(pricingMap[d.link]?.priceSingle || 0);
+
+      (d.attendees || []).forEach((att) => {
+        const pid = att.profileId;
+        const canUseExistingCredit = pid && (profileBalances[pid] || 0) > 0;
+
+        if (canUseExistingCredit && tempUsableCredits > 0) {
+          tempUsableCredits--;
+        } else if (isPackCourse && packRemaining > 0) {
+          packRemaining--;
+        } else {
+          if (isPackCourse && packRemaining <= 0) hasExceededPack = true;
+          finalPackPrice += coursePrice;
+          const title =
+            typeof d.title === "object"
+              ? d.title[currentLang || "en"]
+              : d.title;
+          if (!breakdownMap[title])
+            breakdownMap[title] = {
+              count: 0,
+              price: coursePrice,
+              isFree: false,
+            };
+          breakdownMap[title].count++;
+        }
+
+        const evPricing = pricingMap[d.link] || pricing;
+        (att.selectedAddons || []).forEach((selAddon) => {
+          const addonId = typeof selAddon === "string" ? selAddon : selAddon.id;
+          const addonDef = evPricing?.specialEvents?.find(
+            (se) => se.id === addonId,
+          );
+          if (addonDef && (addonDef.price || addonDef.freeWithPack)) {
+            const isFree =
+              addonDef.freeWithPack &&
+              (usableCredits > 0 || !currentPack.isIndividual);
+            const aName =
+              currentLang === "en" ? addonDef.nameEn : addonDef.nameDe;
+            const aPrice = parseFloat(addonDef.price || 0);
+
+            if (!isFree) {
+              hasChargeableAddons = true;
+              finalPackPrice += aPrice;
+              if (!breakdownMap[aName])
+                breakdownMap[aName] = {
+                  count: 0,
+                  price: aPrice,
+                  isFree: false,
+                };
+              breakdownMap[aName].count++;
+            } else {
+              if (!breakdownMap[aName])
+                breakdownMap[aName] = { count: 0, price: 0, isFree: true };
+              breakdownMap[aName].count++;
+            }
+          }
+        });
+      });
+    });
+
+    extraItemsBreakdown = Object.entries(breakdownMap).map(([name, data]) => ({
+      name,
+      ...data,
+    }));
+
+    // Construct Dynamic Info Sentence
+    if (currentLang === "en") {
+      if (hasMixedCourses && hasExceededPack)
+        infoSentence =
+          "Selection exceeds pack size and includes different courses.";
+      else if (hasMixedCourses)
+        infoSentence =
+          "Sessions from different courses are added at single price.";
+      else if (hasExceededPack)
+        infoSentence =
+          "Selection exceeds pack size. Extra sessions added at single price.";
+      else if (hasChargeableAddons)
+        infoSentence = "Additional extras added at single price.";
+      else infoSentence = "Additional items added to your selection.";
+    } else {
+      if (hasMixedCourses && hasExceededPack)
+        infoSentence =
+          "Auswahl überschreitet Paketgrösse und beinhaltet andere Kurse.";
+      else if (hasMixedCourses)
+        infoSentence =
+          "Termine aus anderen Kursen werden zum Einzelpreis berechnet.";
+      else if (hasExceededPack)
+        infoSentence =
+          "Auswahl überschreitet Paketgrösse. Zusätzliche Termine zum Einzelpreis.";
+      else if (hasChargeableAddons)
+        infoSentence = "Zusätzliche Extras zum Einzelpreis berechnet.";
+      else
+        infoSentence = "Zusätzliche Positionen zu deiner Auswahl hinzugefügt.";
+    }
+  } else {
+    finalPackPrice = totalIndividualCash + addonCashTotal;
+  }
 
   const calculateSavings = (pack) => {
     if (pack.isIndividual) return 0;
@@ -911,6 +1038,8 @@ export default function BookingSummary({
                       {typeof d.title === "object"
                         ? d.title[currentLang || "en"]
                         : d.title}
+                      {" | "}
+                      {pricingMap[d.link]?.priceSingle || 0} CHF
                     </span>
                     <span style={{ fontWeight: "800", fontSize: "0.9rem" }}>
                       {formatDate(d.date)}
@@ -1243,24 +1372,12 @@ export default function BookingSummary({
                             onChange={(e) => {
                               const val = e.target.value;
                               const updatedAttendees = [...d.attendees];
-                              let targetName = "";
-                              let targetProfileId = val;
 
-                              // 1. Resolve Profile Identity
-                              if (val === "guest") {
-                                targetName = "";
-                                targetProfileId = null;
-                              } else if (val === "main") {
-                                targetName = `${userData.firstName} ${userData.lastName}`;
-                                targetProfileId = "main";
-                              } else {
-                                const linked = userData.linkedProfiles.find(
-                                  (p) => p.id === val,
-                                );
-                                targetName = `${linked.firstName} ${linked.lastName}`;
-                              }
+                              // Use the actual typed value as the name instead of trying to resolve an ID
+                              const targetName = val;
+                              const targetProfileId = att.profileId;
 
-                              // 2. Calculate mandatory addons specifically for THIS person
+                              // Calculate mandatory addons based on the existing profile context
                               const history =
                                 getProfileHistory(targetProfileId);
                               const rawAddons =
@@ -1277,7 +1394,6 @@ export default function BookingSummary({
                                 const def = evPricing?.specialEvents?.find(
                                   (se) => se.id === aid,
                                 );
-                                // If it's mandatory and this specific person hasn't done it/booked it
                                 if (
                                   def?.isMandatory &&
                                   !history.includes(aid)
@@ -1293,10 +1409,8 @@ export default function BookingSummary({
                                 }
                               });
 
-                              // 3. Update the attendee with their specific identity AND their specific mandatory addons
                               updatedAttendees[nameIdx] = {
                                 ...att,
-                                profileId: targetProfileId,
                                 name: targetName,
                                 selectedAddons: mandatoryForThisPerson,
                               };
@@ -1833,7 +1947,7 @@ export default function BookingSummary({
                             ? pack.size === 1
                               ? "Session"
                               : "Sessions"
-                            : "Sessions Pack"
+                            : "Session Pack"
                           : pack.isIndividual
                             ? pack.size === 1
                               ? "Termin"
@@ -1872,23 +1986,78 @@ export default function BookingSummary({
                 {formatPrice(pack.price)} CHF
               </p>
             </div>
-            {isSelected && extraSessionsCount > 0 && !pack.isIndividual && (
-              <div
+            {isSelected &&
+              extraItemsBreakdown.length > 0 &&
+              !pack.isIndividual && (
+                <div
+                  style={{
+                    marginTop: "10px",
+                    padding: "10px",
+                    backgroundColor: "rgba(28, 7, 0, 0.05)",
+                    borderRadius: "12px",
+                    fontSize: "0.7rem",
+                    color: "#1c0700",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                  }}
+                >
+                  {extraItemsBreakdown.map((item, bIdx) => (
+                    <p
+                      key={bIdx}
+                      style={{
+                        margin: 0,
+                        fontWeight: "700",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span style={{ flex: 1 }}>
+                        + {item.count}{" "}
+                        {currentLang === "en"
+                          ? item.count === 1
+                            ? "session"
+                            : "sessions"
+                          : item.count === 1
+                            ? "Termin"
+                            : "Termine"}{" "}
+                        {item.name}
+                      </span>
+                      <span
+                        style={{
+                          opacity: 0.4,
+                          minWidth: "80px",
+                          textAlign: "right",
+                        }}
+                      >
+                        {item.isFree
+                          ? currentLang === "en"
+                            ? "FREE"
+                            : "GRATIS"
+                          : `+ ${item.price} CHF`}
+                      </span>
+                    </p>
+                  ))}
+                </div>
+              )}
+
+            {isSelected && !pack.isIndividual && (
+              <p
                 style={{
-                  marginTop: "10px",
-                  padding: "8px",
-                  backgroundColor: "rgba(28, 7, 0, 0.05)",
-                  borderRadius: "8px",
                   fontSize: "0.7rem",
-                  color: "#1c0700",
+                  opacity: 0.6,
+                  marginTop: "8px",
+                  fontStyle: "italic",
+                  lineHeight: "1.4",
                 }}
               >
-                <p style={{ margin: 0, fontWeight: "700" }}>
-                  {currentLang === "en"
-                    ? `+ ${extraSessionsCount} extra session(s) @ single price`
-                    : `+ ${extraSessionsCount} zusätzliche(r) Termin(e) zum Einzelpreis`}
-                </p>
-              </div>
+                {extraItemsBreakdown.length > 0
+                  ? infoSentence
+                  : currentLang === "en"
+                    ? `The remaining ${Math.max(0, pack.size - remainingEligibleToPay)} credits will be saved to your profile.`
+                    : `Die restlichen ${Math.max(0, pack.size - remainingEligibleToPay)} Guthaben werden deinem Profil gutgeschrieben.`}
+              </p>
             )}
             {isSelected &&
               isMixedPayment &&
@@ -1908,27 +2077,6 @@ export default function BookingSummary({
                     : "Pro Tag kann nur 1 Ticket mit Guthaben bezahlt werden. Zusätzliche Tickets werden zum Einzelpreis berechnet."}
                 </p>
               )}
-            {/* --- NEW: Remaining credits info inside the selected card --- */}
-            {isSelected && !pack.isIndividual && (
-              <p
-                style={{
-                  fontSize: "0.7rem",
-                  opacity: 0.6,
-                  marginTop: "8px",
-                  fontStyle: "italic",
-                  lineHeight: "1.4",
-                }}
-              >
-                {extraSessionsCount > 0
-                  ? currentLang === "en"
-                    ? "Selection exceeds available credits and pack size. Extras added at single price."
-                    : "Auswahl überschreitet Guthaben und Kartengröße. Extras zum Einzelpreis berechnet."
-                  : currentLang === "en"
-                    ? `The remaining ${Math.max(0, pack.size - remainingEligibleToPay)} credits will be saved to your profile.`
-                    : `Die restlichen ${Math.max(0, pack.size - remainingEligibleToPay)} Guthaben werden deinem Profil gutgeschrieben.`}
-              </p>
-            )}
-            {/* ----------------------------------------------------------- */}
           </div>
         );
       })}

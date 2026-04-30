@@ -1,4 +1,11 @@
-import { CheckCircle, Mail, Ticket, CreditCard } from "lucide-react";
+import {
+  CheckCircle,
+  Mail,
+  Ticket,
+  CreditCard,
+  AlertTriangle,
+  Calendar,
+} from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import Header from "../Header/Header";
 import { useState } from "react";
@@ -13,7 +20,7 @@ export default function Success({ currentLang, setCurrentLang }) {
   const sessionId = searchParams.get("session_id");
   const redeemedCode = searchParams.get("code");
   const remainingParam = searchParams.get("remaining");
-  const mode = searchParams.get("mode"); // 'pack' or 'individual'
+  const mode = searchParams.get("mode"); // 'pack', 'individual', or 'redeem'
   const type = searchParams.get("type"); // 'credit' or 'request'
   const bookedParam = searchParams.get("booked"); // 'true' or 'false'
   const status = searchParams.get("status");
@@ -25,71 +32,100 @@ export default function Success({ currentLang, setCurrentLang }) {
       ? parseInt(remainingParam, 10)
       : null;
 
-  // Determine if dates were actually selected and booked
-  let hasBookedDates = false;
-  if (bookedParam === "true") {
-    hasBookedDates = true;
-  } else if (bookedParam === "false") {
-    hasBookedDates = false;
-  } else {
-    // Fallback for older URLs missing the parameter
-    hasBookedDates =
-      type === "credit" || mode === "individual" || mode === "redeem";
-  }
+  const hasBookedDates = bookedParam === "true";
+  const isPackPurchase = mode === "pack";
+  const isRequest = type === "request";
+  const isRedeem = mode === "redeem";
+  const isCreditBooking = type === "credit";
 
   const content = {
     en: {
       titleBooking: "booking successful",
       titlePurchase: "purchase successful",
+      titleMixed: "purchase & booking successful",
       titleRequest: "request sent",
       message: "Thank you! Your transaction was successful.",
       requestMessage: "Thank you! We have received your request.",
+
+      // Main Content
       dateConfirmation:
-        "Your selected dates are confirmed. You will receive a confirmation email shortly.",
-      packOnlyConfirmation:
-        "Your session pack is ready! You will receive a receipt via email shortly.",
+        "Your selected dates are now confirmed and blocked for you.",
+      packConfirmation: "Your new session pack has been activated.",
       requestConfirmation:
-        "Your request has been successfully submitted. We will review the dates and contact you via email shortly to confirm availability.",
-      memberPack: "Your credits have been added to your profile balance.",
-      guestPack:
-        "Since you purchased a session pack, we have sent a unique booking code to your email for future use.",
-      individualPaid: "Your session payment has been processed successfully.",
-      creditBooking: "One session has been deducted from your profile balance.",
+        "We have received your availability request. We will review the dates and contact you via email shortly.",
+
+      // Email / Location Info
+      memberCredits:
+        "Your credits have been added directly to your profile balance.",
+      guestCredits:
+        "We have sent a unique booking code to your email. You can use this code for future bookings.",
+      emailSent:
+        "A confirmation email and receipt have been sent to your inbox.",
+      spamWarning:
+        "If you don't see our email within a few minutes, please check your spam folder.",
+
+      // Breakdown Items
+      itemBooking: "Confirmed Session(s)",
+      itemPack: "Session Pack Credits",
+      itemRequest: "Availability Request",
+
+      // Secondary Info
       redeemNote:
         remainingCredits > 0
-          ? `You have ${remainingCredits} ${remainingCredits === 1 ? "session" : "sessions"} left on your code: ${redeemedCode}`
+          ? `Remaining on code ${redeemedCode}: ${remainingCredits} ${remainingCredits === 1 ? "session" : "sessions"}.`
           : `You have used the last session on your code: ${redeemedCode}.`,
-      button: "Go to Profile",
-      home: "Back to Home",
+
+      buttonProfile: "Go to Profile",
+      buttonHome: "Back to Home",
     },
     de: {
       titleBooking: "buchung erfolgreich",
       titlePurchase: "kauf erfolgreich",
+      titleMixed: "kauf & buchung erfolgreich",
       titleRequest: "anfrage gesendet",
       message: "Vielen Dank! Die Transaktion war erfolgreich.",
       requestMessage: "Vielen Dank! Wir haben deine Anfrage erhalten.",
+
+      // Main Content
       dateConfirmation:
-        "Deine gewählten Termine sind bestätigt. Du erhältst in Kürze eine Bestätigungs-E-Mail.",
-      packOnlyConfirmation:
-        "Dein Kurspaket ist bereit! Du erhältst in Kürze einen Beleg per E-Mail.",
+        "Deine gewählten Termine sind nun bestätigt und für dich reserviert.",
+      packConfirmation: "Dein neues Kurspaket wurde aktiviert.",
       requestConfirmation:
-        "Deine Anfrage wurde erfolgreich übermittelt. Wir werden die Termine prüfen und dich in Kürze per E-Mail kontaktieren, um die Verfügbarkeit zu bestätigen.",
-      memberPack: "Dein Guthaben wurde deinem Profil gutgeschrieben.",
-      guestPack:
-        "Da du eine Karte gekauft hast, haben wir dir einen Buchungscode per E-Mail gesendet.",
-      individualPaid:
-        "Deine Zahlung für den Einzeltermin wurde erfolgreich verarbeitet.",
-      creditBooking: "Der Termin wurde von deinem Profil-Guthaben abgezogen.",
+        "Wir haben deine Anfrage erhalten. Wir prüfen die Termine und kontaktieren dich in Kürze per E-Mail.",
+
+      // Email / Location Info
+      memberCredits:
+        "Dein Guthaben wurde deinem Profil-Konto direkt gutgeschrieben.",
+      guestCredits:
+        "Wir haben dir einen persönlichen Buchungscode per E-Mail gesendet. Diesen kannst du für zukünftige Buchungen nutzen.",
+      emailSent:
+        "Eine Bestätigung sowie der Beleg wurden an deine E-Mail-Adresse gesendet.",
+      spamWarning:
+        "Solltest du in den nächsten Minuten keine E-Mail erhalten, schaue bitte auch in deinen Spam-Ordner.",
+
+      // Breakdown Items
+      itemBooking: "Bestätigte Termine",
+      itemPack: "Kurspaket Guthaben",
+      itemRequest: "Verfügbarkeitsanfrage",
+
+      // Secondary Info
       redeemNote:
         remainingCredits > 0
-          ? `Du hast noch ${remainingCredits} ${remainingCredits === 1 ? "Termin" : "Termine"} auf deinem Code übrig: ${redeemedCode}`
+          ? `Restguthaben auf Code ${redeemedCode}: ${remainingCredits} ${remainingCredits === 1 ? "Termin" : "Termine"}.`
           : `Du hast den letzten Termin auf deinem Code aufgebraucht: ${redeemedCode}.`,
-      button: "Zum Profil",
-      home: "Zurück zur Startseite",
+
+      buttonProfile: "Zum Profil",
+      buttonHome: "Zurück zur Startseite",
     },
   };
 
-  const t = content[currentLang];
+  const t = content[currentLang || "en"];
+
+  // Determine the Title
+  let displayTitle = t.titlePurchase;
+  if (isRequest) displayTitle = t.titleRequest;
+  else if (hasBookedDates && isPackPurchase) displayTitle = t.titleMixed;
+  else if (hasBookedDates) displayTitle = t.titleBooking;
 
   return (
     <div
@@ -110,81 +146,85 @@ export default function Success({ currentLang, setCurrentLang }) {
           style={{ marginBottom: "2rem" }}
         />
 
-        <h1 style={styles.title}>
-          {type === "request"
-            ? t.titleRequest
-            : hasBookedDates
-              ? t.titleBooking
-              : t.titlePurchase}
-        </h1>
-        <p style={styles.message}>
-          {type === "request" ? t.requestMessage : t.message}
-        </p>
+        <h1 style={styles.title}>{displayTitle}</h1>
+        <p style={styles.message}>{isRequest ? t.requestMessage : t.message}</p>
+
+        {/* SUMMARY SECTION */}
+        <div style={styles.summaryBox}>
+          {hasBookedDates && (
+            <div style={styles.summaryItem}>
+              <Calendar size={18} color="#9960a8" />
+              <span>{t.itemBooking}</span>
+            </div>
+          )}
+          {isPackPurchase && (
+            <div style={styles.summaryItem}>
+              <Ticket size={18} color="#9960a8" />
+              <span>{t.itemPack}</span>
+            </div>
+          )}
+          {isRequest && (
+            <div style={styles.summaryItem}>
+              <Mail size={18} color="#9960a8" />
+              <span>{t.itemRequest}</span>
+            </div>
+          )}
+        </div>
+
         <p style={styles.confirmation}>
-          {type === "request"
+          {isRequest
             ? t.requestConfirmation
             : hasBookedDates
               ? t.dateConfirmation
-              : t.packOnlyConfirmation}
+              : t.packConfirmation}
         </p>
 
-        {/* SCENARIO 1: REDEEMED A PACK CODE */}
-        {redeemedCode && remainingCredits !== null && (
-          <div style={styles.infoBox}>
-            <Ticket size={20} color="#9960a8" />
-            <p style={styles.infoText}>{t.redeemNote}</p>
-          </div>
-        )}
+        {/* DETAILS BOX */}
+        <div style={styles.detailsContainer}>
+          {isPackPurchase && (
+            <div style={styles.infoRow}>
+              <Ticket size={20} color="#9960a8" />
+              <p style={styles.infoText}>
+                {currentUser ? t.memberCredits : t.guestCredits}
+              </p>
+            </div>
+          )}
 
-        {/* SCENARIO 2: BOOKED WITH PROFILE CREDITS */}
-        {type === "credit" && (
-          <div style={styles.infoBox}>
-            <Ticket size={20} color="#9960a8" />
-            <p style={styles.infoText}>{t.creditBooking}</p>
-          </div>
-        )}
+          {(isRedeem || isCreditBooking) && (
+            <div style={styles.infoRow}>
+              <Ticket size={20} color="#9960a8" />
+              <p style={styles.infoText}>
+                {isRedeem ? t.redeemNote : t.dateConfirmation}
+              </p>
+            </div>
+          )}
 
-        {/* SCENARIO 3: BOUGHT A PACK AS A GUEST */}
-        {!currentUser && mode === "pack" && sessionId && (
+          {!isRequest && (
+            <div style={styles.infoRow}>
+              <Mail size={20} color="#9960a8" />
+              <p style={styles.infoText}>{t.emailSent}</p>
+            </div>
+          )}
+
+          {/* SPAM WARNING */}
           <div
             style={{
-              ...styles.infoBox,
-              backgroundColor: "rgba(78, 95, 40, 0.1)",
-              borderColor: "rgba(78, 95, 40, 0.2)",
+              ...styles.infoRow,
+              backgroundColor: "rgba(231, 76, 60, 0.05)",
+              border: "1px solid rgba(231, 76, 60, 0.2)",
             }}
           >
-            <Mail size={20} color="#4e5f28" />
-            <p style={{ ...styles.infoText, color: "#4e5f28" }}>
-              {t.guestPack}
+            <AlertTriangle size={20} color="#e74c3c" />
+            <p style={{ ...styles.infoText, color: "#c0392b" }}>
+              {t.spamWarning}
             </p>
           </div>
-        )}
-
-        {/* SCENARIO 4: BOUGHT A PACK AS A MEMBER */}
-        {currentUser && mode === "pack" && sessionId && (
-          <div style={styles.infoBox}>
-            <Ticket size={20} color="#9960a8" />
-            <p style={styles.infoText}>{t.memberPack}</p>
-          </div>
-        )}
-
-        {/* SCENARIO 5: PAID INDIVIDUAL SESSION (Member or Guest) */}
-        {mode === "individual" && sessionId && (
-          <div
-            style={{
-              ...styles.infoBox,
-              backgroundColor: "rgba(202, 175, 243, 0.05)",
-            }}
-          >
-            <CreditCard size={20} color="#9960a8" />
-            <p style={styles.infoText}>{t.individualPaid}</p>
-          </div>
-        )}
+        </div>
 
         <div style={styles.buttonContainer}>
           {currentUser && (
             <Link to="/profile" style={styles.primaryBtn}>
-              {t.button}
+              {t.buttonProfile}
             </Link>
           )}
 
@@ -192,13 +232,13 @@ export default function Success({ currentLang, setCurrentLang }) {
             to="/"
             style={currentUser ? styles.secondaryBtn : styles.primaryBtn}
           >
-            {t.home}
+            {t.buttonHome}
           </Link>
         </div>
 
         {sessionId && (
           <p style={{ marginTop: "3rem", fontSize: "0.7rem", opacity: 0.4 }}>
-            Session ID: {sessionId}
+            Transaction ID: {sessionId}
           </p>
         )}
       </main>
@@ -214,13 +254,13 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
-    padding: "120px 20px 40px",
-    maxWidth: "600px",
+    padding: "120px 20px 60px",
+    maxWidth: "650px",
     margin: "0 auto",
   },
   title: {
     fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: "3rem",
+    fontSize: "clamp(2rem, 8vw, 3rem)",
     color: "#1c0700",
     marginBottom: "1rem",
     textTransform: "lowercase",
@@ -228,52 +268,83 @@ const styles = {
   message: {
     fontSize: "1.1rem",
     color: "#1c0700",
-    marginBottom: "0.5rem",
+    marginBottom: "1.5rem",
     fontWeight: "700",
   },
-  confirmation: {
-    fontSize: "0.95rem",
-    color: "#1c0700",
-    opacity: 0.7,
-    marginBottom: "2.5rem",
-    lineHeight: "1.5",
+  summaryBox: {
+    display: "flex",
+    gap: "15px",
+    marginBottom: "2rem",
+    flexWrap: "wrap",
+    justifyContent: "center",
   },
-  infoBox: {
-    backgroundColor: "rgba(202, 175, 243, 0.15)",
-    padding: "18px 25px",
-    borderRadius: "16px",
-    border: "1px solid #caaff3",
-    marginBottom: "2.5rem",
+  summaryItem: {
     display: "flex",
     alignItems: "center",
+    gap: "8px",
+    backgroundColor: "rgba(202, 175, 243, 0.15)",
+    padding: "6px 14px",
+    borderRadius: "100px",
+    fontSize: "0.8rem",
+    fontWeight: "800",
+    color: "#1c0700",
+    textTransform: "uppercase",
+  },
+  confirmation: {
+    fontSize: "1rem",
+    color: "#1c0700",
+    opacity: 0.8,
+    marginBottom: "2rem",
+    lineHeight: "1.5",
+  },
+  detailsContainer: {
+    width: "100%",
+    display: "flex",
+    flexDirection: "column",
     gap: "12px",
+    marginBottom: "3rem",
+  },
+  infoRow: {
+    backgroundColor: "rgba(255, 252, 227, 0.5)",
+    padding: "16px 20px",
+    borderRadius: "16px",
+    border: "1px solid rgba(28, 7, 0, 0.05)",
+    display: "flex",
+    alignItems: "center",
+    gap: "15px",
     textAlign: "left",
   },
   infoText: {
-    color: "#9960a8",
-    fontWeight: "700",
+    color: "#1c0700",
+    fontWeight: "600",
     margin: 0,
-    fontSize: "0.95rem",
+    fontSize: "0.9rem",
     lineHeight: "1.4",
+    flex: 1,
   },
   buttonContainer: {
     display: "flex",
     gap: "1rem",
     flexWrap: "wrap",
     justifyContent: "center",
+    width: "100%",
   },
   primaryBtn: {
-    padding: "1rem 2.5rem",
+    flex: 1,
+    minWidth: "200px",
+    padding: "1rem 2rem",
     backgroundColor: "#9960a8",
     color: "#fdf8e1",
     borderRadius: "100px",
     textDecoration: "none",
     fontWeight: "700",
     fontFamily: "Satoshi",
-    transition: "transform 0.2s ease",
+    textAlign: "center",
   },
   secondaryBtn: {
-    padding: "1rem 2.5rem",
+    flex: 1,
+    minWidth: "200px",
+    padding: "1rem 2rem",
     backgroundColor: "transparent",
     color: "#1c0700",
     border: "1px solid rgba(28, 7, 0, 0.2)",
@@ -281,5 +352,6 @@ const styles = {
     textDecoration: "none",
     fontWeight: "600",
     fontFamily: "Satoshi",
+    textAlign: "center",
   },
 };
