@@ -34,6 +34,12 @@ const courseMapping = {
 const getCreditKey = (path) =>
   courseMapping[path] || (path ? path.replace(/\//g, "") : "workshop");
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : dateStr;
+};
+
 export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   const { currentUser, userData } = useAuth();
   const navigate = useNavigate();
@@ -355,10 +361,11 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           id: d.id,
           date: d.date,
           time: d.time,
+          link: d.link, // Include the course link for title resolution
           attendeeName:
             att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
           profileId: att.profileId || null,
-          selectedAddons: att.selectedAddons || [], // <-- Now pulls from attendee
+          selectedAddons: att.selectedAddons || [],
         })),
       );
       const functions = getFunctions();
@@ -385,9 +392,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     try {
       const expandedDates = selectedDates.flatMap((d) =>
         (d.attendees || []).map((att, idx) => ({
-          id: d.id,
-          date: d.date,
-          time: d.time,
+          ...d, // Spreads all event data including 'link'
           attendeeName:
             att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
           profileId: att.profileId || null,
@@ -427,21 +432,60 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
       }
 
       const bookedStatus = expandedDates.length > 0 ? "true" : "false";
-      const stripe = httpsCallable(functions, "createStripeCheckout");
 
+      // 1. Improved summary resolution to ensure Course and Add-on names are found
+      const sessionSummary = expandedDates
+        .map((d) => {
+          // Find the correct course link if d.link is missing (fallback to coursePath)
+          const activeLink = d.link || coursePath;
+          const pData = pricingMap[activeLink];
+          const title =
+            pData?.courseName || activeLink.replace(/\//g, "") || "Session";
+
+          let displayStr = `${formatDate(d.date)} | ${d.time || ""} (${title})`;
+
+          // 2. Resolve Add-on names using String comparison for IDs to avoid mismatch
+          if (d.selectedAddons && d.selectedAddons.length > 0) {
+            const addonParts = d.selectedAddons.map((a) => {
+              const aid = typeof a === "string" ? a : a.id;
+              const aTime = typeof a === "object" ? a.time : null;
+
+              // Cast both IDs to strings to ensure the match works
+              const def = pData?.specialEvents?.find(
+                (se) => String(se.id) === String(aid),
+              );
+              const aName = def
+                ? currentLang === "en"
+                  ? def.nameEn
+                  : def.nameDe
+                : currentLang === "en"
+                  ? "Add-on"
+                  : "Extra";
+
+              return `+ ${aName}${aTime ? ` (${aTime})` : ""}`;
+            });
+            displayStr += " " + addonParts.join(" ");
+          }
+
+          return displayStr;
+        })
+        .join(", ");
+
+      const stripe = httpsCallable(functions, "createStripeCheckout");
       const res = await stripe({
         mode,
         packPrice: mode === "pack" ? price || 0 : 0,
         totalPrice: mode !== "pack" ? price || 0 : 0,
         packSize: typeof size === "object" ? JSON.stringify(size) : size || 0,
-        packSummary: packSummary, // NEW: Clean string for the UI
+        packSummary: packSummary,
         coursePath,
         selectedDates: expandedDates,
         guestInfo: !currentUser ? guestInfo : null,
         currentLang,
         creditsToUse,
         baseUrl,
-        successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=${bookedStatus}`,
+        // Pass summaries in URL so Success page can display them
+        successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=${bookedStatus}&packs=${encodeURIComponent(packSummary)}&sessions=${encodeURIComponent(sessionSummary)}`,
         cancelUrl: window.location.href,
       });
       if (res.data?.url) window.location.assign(res.data.url);

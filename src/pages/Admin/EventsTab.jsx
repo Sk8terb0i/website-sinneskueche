@@ -475,7 +475,7 @@ export default function EventsTab({
       setTitleDe(sel.text.de);
       setTime(
         sel.text.en.toLowerCase().includes("pottery tuesdays")
-          ? "18:30 - 21:30"
+          ? "19:00 - 21:00"
           : "",
       );
     }
@@ -1188,7 +1188,7 @@ export default function EventsTab({
                   </label>
                   <input
                     type="text"
-                    placeholder="18:30"
+                    placeholder="19:00"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
                     style={inputStyle}
