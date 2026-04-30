@@ -417,27 +417,26 @@ export default function BookingSummary({
 
         let alreadyUsedCredit = false;
         if (pid) {
-          alreadyUsedCredit = userCreditBookedIds?.includes(`${d.id}_${pid}`);
+          // Check if this profile has used a credit on this DATE (not just this event ID)
+          alreadyUsedCredit = userCreditBookedIds?.includes(`${d.date}_${pid}`);
         }
 
         if (!alreadyUsedCredit && activePackCode) {
           alreadyUsedCredit = activePackCode.redeemedEventIds?.includes(d.id);
         }
 
-        // NEW: Only enforce the 1-per-day credit limit if the profile actually has credits OR is buying a pack
+        // FIXED: Enforce the 1-per-day limit based on HISTORY, regardless of current balance.
+        // This ensures the cash price is correctly applied if a credit was already spent today.
         const hasBalance = (profileBalances[pid]?.[courseKey] || 0) > 0;
         const isBuyingPackForThis = selectedPacks.hasOwnProperty(
           d.link || coursePath,
         );
-        const shouldEnforceLimit =
-          hasBalance || isBuyingPackForThis || activePackCode;
 
-        if (
-          limitOnePerDay &&
-          shouldEnforceLimit &&
-          (profileUsage[pid][courseKey].usedDates.has(d.id) ||
-            alreadyUsedCredit)
-        ) {
+        // The limit applies if they HAVE credits OR if they have ALREADY used one today
+        const hasUsedBefore =
+          profileUsage[pid][courseKey].usedDates.has(d.id) || alreadyUsedCredit;
+
+        if (limitOnePerDay && hasUsedBefore) {
           ineligibleForCredit += 1;
         } else {
           profileUsage[pid][courseKey].usedDates.add(d.id);
@@ -1131,17 +1130,7 @@ export default function BookingSummary({
             // Check if any attendee in this date block is ineligible for credit usage
             const hasIneligibleAttendee = d.attendees.some((att) => {
               const pid = att.profileId || "main";
-              const hasUsedBefore = userCreditBookedIds?.includes(
-                `${d.id}_${pid}`,
-              );
-
-              // NEW: Only show the alert if they have credits to use OR are currently buying a new pack
-              const hasBalance = (profileBalances[pid]?.[courseKey] || 0) > 0;
-              const isBuyingPackForThis = selectedPacks.hasOwnProperty(
-                d.link || coursePath,
-              );
-
-              return hasUsedBefore && (hasBalance || isBuyingPackForThis);
+              return userCreditBookedIds?.includes(`${d.date}_${pid}`);
             });
 
             let alreadyUsedCredit = hasIneligibleAttendee;
@@ -1521,53 +1510,14 @@ export default function BookingSummary({
                                   ? "Guest Name"
                                   : "Name des Gastes"
                             }
-                            value={att.name}
+                            value={att.name || ""}
                             onChange={(e) => {
                               const val = e.target.value;
                               const updatedAttendees = [...d.attendees];
-
-                              // Use the actual typed value as the name instead of trying to resolve an ID
-                              const targetName = val;
-                              const targetProfileId = att.profileId;
-
-                              // Calculate mandatory addons based on the existing profile context
-                              const history =
-                                getProfileHistory(targetProfileId);
-                              const rawAddons =
-                                scheduleData?.specialAssignments?.[d.id];
-                              const assignedAddonIds = Array.isArray(rawAddons)
-                                ? rawAddons
-                                : rawAddons
-                                  ? [rawAddons]
-                                  : [];
-
-                              const evPricing = pricingMap[d.link] || pricing;
-                              const mandatoryForThisPerson = [];
-                              assignedAddonIds.forEach((aid) => {
-                                const def = evPricing?.specialEvents?.find(
-                                  (se) => se.id === aid,
-                                );
-                                if (
-                                  def?.isMandatory &&
-                                  !history.includes(aid)
-                                ) {
-                                  if (def.timeSlots?.length > 0) {
-                                    mandatoryForThisPerson.push({
-                                      id: aid,
-                                      time: `${def.timeSlots[0].startTime}-${def.timeSlots[0].endTime}`,
-                                    });
-                                  } else {
-                                    mandatoryForThisPerson.push(aid);
-                                  }
-                                }
-                              });
-
                               updatedAttendees[nameIdx] = {
                                 ...att,
-                                name: targetName,
-                                selectedAddons: mandatoryForThisPerson,
+                                name: val,
                               };
-
                               setSelectedDates((prev) =>
                                 prev.map((item) =>
                                   item.id === d.id
@@ -1581,12 +1531,7 @@ export default function BookingSummary({
                               padding: "8px 12px",
                               fontSize: "0.85rem",
                               backgroundColor: "rgba(255, 252, 227, 0.6)",
-                              display:
-                                currentUser &&
-                                userData?.linkedProfiles?.length > 0 &&
-                                att.profileId !== "guest"
-                                  ? "none"
-                                  : "block",
+                              marginTop: "4px",
                             }}
                           />
                         )}
@@ -2433,9 +2378,23 @@ export default function BookingSummary({
               (!currentUser && (!guestInfo.firstName || !guestInfo.email))
             }
           >
-            {currentLang === "en"
-              ? `Buy & Book (${formatPrice(Object.keys(selectedPacks).length > 0 ? finalPackPrice : finalTotalPrice)} CHF)`
-              : `Kaufen & Buchen (${formatPrice(Object.keys(selectedPacks).length > 0 ? finalPackPrice : finalTotalPrice)} CHF)`}
+            {(() => {
+              const price = formatPrice(
+                Object.keys(selectedPacks).length > 0
+                  ? finalPackPrice
+                  : finalTotalPrice,
+              );
+              const creditText =
+                usableCredits > 0
+                  ? `${usableCredits} ${currentLang === "en" ? "Credits" : "Guthaben"} + `
+                  : "";
+
+              if (currentLang === "en") {
+                return `Buy & Book (${creditText}${price} CHF)`;
+              } else {
+                return `Kaufen & Buchen (${creditText}${price} CHF)`;
+              }
+            })()}
           </button>
         </div>
       )}

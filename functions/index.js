@@ -667,7 +667,7 @@ exports.handleStripeWebhook = onRequest(
               date: d.date,
               attendeeName: d.attendeeName || "Customer",
               profileId: d.profileId || "main", // <-- NEW: Save profile to booking
-              coursePath,
+              coursePath: d.link || coursePath,
               selectedAddons: d.selectedAddons || [],
               status: "confirmed",
               lang,

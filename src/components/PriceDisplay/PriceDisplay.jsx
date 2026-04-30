@@ -347,10 +347,10 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           setProfileHistoryMap(profileBookedMap);
           setUserBookedAddonIds(allAddonIds);
 
-          // NEW: Filter specifically for bookings that used a credit, keyed by Profile ID
+          // FIXED: Map credit usage by DATE + PROFILE so the 1-per-day rule is absolute
           const creditBooked = allUserBookings
             .filter((b) => b.usedCredit)
-            .map((b) => `${b.eventId}_${b.profileId || "main"}`);
+            .map((b) => `${b.date}_${b.profileId || "main"}`);
           setUserCreditBookedIds(creditBooked);
 
           setHasBookedBefore(
@@ -368,7 +368,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     return () => {
       isMounted = false;
     };
-  }, [coursePath, currentUser]);
+  }, [coursePath, currentUser, userData]);
 
   const handleBookWithCredits = async () => {
     setIsProcessing(true);
