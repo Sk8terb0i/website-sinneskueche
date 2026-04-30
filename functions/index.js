@@ -470,7 +470,6 @@ exports.createStripeCheckout = onCall(
         packPrice,
         totalPrice,
         packSize,
-        selectedDates,
         coursePath,
         guestInfo,
         currentLang,
@@ -481,6 +480,7 @@ exports.createStripeCheckout = onCall(
         profileId,
         profileName,
         promoCode,
+        chunkCount,
       } = request.data;
       const userId = request.auth ? request.auth.uid : "GUEST_USER";
       const userEmail = request.auth
@@ -524,13 +524,23 @@ exports.createStripeCheckout = onCall(
           mode,
           packSize: packSize || 0,
           coursePath: coursePath || "unknown",
-          selectedDates: JSON.stringify(selectedDates),
           currentLang: currentLang || "en",
           origin,
           creditsToUse: creditsToUse ? creditsToUse.toString() : "0",
           profileId: profileId || "main",
           profileName: profileName || "Main User",
           promoCode: promoCode || "",
+          chunkCount: chunkCount || "0",
+          // NEW: Attach each individual chunk to Stripe metadata
+          ...(() => {
+            const chunks = {};
+            const count = parseInt(chunkCount || "0");
+            for (let i = 0; i < count; i++) {
+              chunks[`dates_chunk_${i}`] =
+                request.data[`dates_chunk_${i}`] || "";
+            }
+            return chunks;
+          })(),
         },
       });
       return { url: session.url };
@@ -576,7 +586,6 @@ exports.handleStripeWebhook = onRequest(
             guestName,
             mode,
             packSize,
-            selectedDates,
             coursePath,
             currentLang,
             origin,
@@ -584,12 +593,20 @@ exports.handleStripeWebhook = onRequest(
             profileId,
             packSummary,
             promoCode,
+            chunkCount,
           } = session.metadata;
 
           const isMultiPack = packSize && packSize.toString().startsWith("{");
           const selectedPacksMap = isMultiPack ? JSON.parse(packSize) : null;
 
-          const parsedDates = JSON.parse(selectedDates);
+          // NEW: Reassemble the full JSON string from the chunks before parsing
+          let fullDatesJson = "";
+          const count = parseInt(chunkCount || "0");
+          for (let i = 0; i < count; i++) {
+            fullDatesJson += session.metadata[`dates_chunk_${i}`] || "";
+          }
+
+          const parsedDates = JSON.parse(fullDatesJson || "[]");
           const courseKey = getCleanCourseKey(coursePath);
           const lang = currentLang || "en";
           const email = session.customer_details.email;

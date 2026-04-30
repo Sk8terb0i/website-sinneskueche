@@ -149,20 +149,42 @@ export default function BookingSummary({
   }, [guestInfo.firstName, guestInfo.lastName, currentUser, userData]);
 
   useEffect(() => {
-    const fetchTerms = async () => {
-      const sanitizedId = coursePath.replace(/\//g, "");
+    const fetchAllRelevantTerms = async () => {
+      // 1. Start with the 'general' terms document
+      const uniqueIds = new Set(["general"]);
+
+      // 2. Add IDs from sessions currently in the cart
+      selectedDates.forEach((d) => {
+        if (d.link) uniqueIds.add(d.link.replace(/\//g, ""));
+      });
+
+      // 3. Add IDs from Packs currently selected
+      Object.keys(selectedPacks).forEach((link) => {
+        uniqueIds.add(link.replace(/\//g, ""));
+      });
+
+      // 4. Fallback: Only include the base course path if the cart is completely empty
+      if (uniqueIds.size === 1 && coursePath) {
+        uniqueIds.add(coursePath.replace(/\//g, ""));
+      }
+
       try {
-        const docRef = doc(db, "course_terms", sanitizedId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setCourseTerms(docSnap.data());
-        }
+        const termsMap = {};
+        await Promise.all(
+          [...uniqueIds].map(async (id) => {
+            const tSnap = await getDoc(doc(db, "course_terms", id));
+            if (tSnap.exists()) {
+              termsMap[id] = tSnap.data();
+            }
+          }),
+        );
+        setCourseTerms(termsMap);
       } catch (err) {
-        console.error("Error fetching terms:", err);
+        console.error("Error fetching all terms:", err);
       }
     };
-    if (coursePath) fetchTerms();
-  }, [coursePath]);
+    fetchAllRelevantTerms();
+  }, [coursePath, selectedDates, selectedPacks]); // Added selectedPacks to dependency array
 
   // --- NEW: CART CLEANER ---
   // If the user's completed status changes, remove those addons from the current selection
@@ -185,7 +207,12 @@ export default function BookingSummary({
   }, [userData?.completedAddons, setSelectedDates]);
 
   const validateAndProceed = (actionFn) => {
-    if (courseTerms && !agreedToTerms) {
+    // Only require agreement if at least one of the fetched terms has content for this language
+    const hasActualTerms =
+      courseTerms &&
+      Object.values(courseTerms).some((t) => t[currentLang]?.trim());
+
+    if (hasActualTerms && !agreedToTerms) {
       setShakeTerms(true);
       setTimeout(() => setShakeTerms(false), 500);
       return;
@@ -389,14 +416,25 @@ export default function BookingSummary({
           profileUsage[pid][courseKey] = { requested: 0, usedDates: new Set() };
 
         let alreadyUsedCredit = false;
-        if (pid === "main") {
-          alreadyUsedCredit = userCreditBookedIds?.includes(d.id);
-        } else if (activePackCode) {
+        if (pid) {
+          alreadyUsedCredit = userCreditBookedIds?.includes(`${d.id}_${pid}`);
+        }
+
+        if (!alreadyUsedCredit && activePackCode) {
           alreadyUsedCredit = activePackCode.redeemedEventIds?.includes(d.id);
         }
 
+        // NEW: Only enforce the 1-per-day credit limit if the profile actually has credits OR is buying a pack
+        const hasBalance = (profileBalances[pid]?.[courseKey] || 0) > 0;
+        const isBuyingPackForThis = selectedPacks.hasOwnProperty(
+          d.link || coursePath,
+        );
+        const shouldEnforceLimit =
+          hasBalance || isBuyingPackForThis || activePackCode;
+
         if (
           limitOnePerDay &&
+          shouldEnforceLimit &&
           (profileUsage[pid][courseKey].usedDates.has(d.id) ||
             alreadyUsedCredit)
         ) {
@@ -817,9 +855,13 @@ export default function BookingSummary({
   };
 
   const renderTermsAgreement = () => {
-    if (!courseTerms) return null;
-    const termsText = currentLang === "de" ? courseTerms.de : courseTerms.en;
-    if (!termsText) return null;
+    if (!courseTerms || Object.keys(courseTerms).length === 0) return null;
+
+    // Verify there is at least one section with content to display
+    const hasAnyContent = Object.values(courseTerms).some((t) =>
+      t[currentLang]?.trim(),
+    );
+    if (!hasAnyContent) return null;
 
     return (
       <div
@@ -958,11 +1000,48 @@ export default function BookingSummary({
                   overflowY: "auto",
                   fontSize: "0.9rem",
                   lineHeight: "1.6",
-                  whiteSpace: "pre-line",
                   color: "#1c0700",
                 }}
               >
-                {termsText}
+                {Object.entries(courseTerms).map(([id, content]) => {
+                  const text = content[currentLang];
+                  if (!text) return null;
+
+                  let sectionTitle = "";
+                  if (id === "general") {
+                    sectionTitle =
+                      currentLang === "de"
+                        ? "Allgemeine Bedingungen"
+                        : "General Terms";
+                  } else {
+                    const pData = Object.values(pricingMap).find(
+                      (p) =>
+                        (p.coursePath || p.link)?.replace(/\//g, "") === id,
+                    );
+                    sectionTitle = pData?.courseName || id.toUpperCase();
+                  }
+
+                  return (
+                    <div key={id} style={{ marginBottom: "2rem" }}>
+                      <h3
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: "900",
+                          textTransform: "uppercase",
+                          color: "#9960a8",
+                          borderBottom: "1px solid rgba(153, 96, 168, 0.2)",
+                          paddingBottom: "8px",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        {sectionTitle}
+                      </h3>
+                      <div style={{ whiteSpace: "pre-wrap", opacity: 0.8 }}>
+                        {text}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <button
                 onClick={() => setShowTermsPopup(false)}
@@ -1047,10 +1126,26 @@ export default function BookingSummary({
             const canAddMore = !pricing?.hasCapacity || booked + d.count < cap;
 
             const limitOnePerDay = pricing?.limitOnePerDay ?? true;
-            let alreadyUsedCredit = false;
-            if (currentUser) {
-              alreadyUsedCredit = userCreditBookedIds?.includes(d.id);
-            } else if (activePackCode) {
+            const courseKey = getCreditKey(d.link || coursePath);
+
+            // Check if any attendee in this date block is ineligible for credit usage
+            const hasIneligibleAttendee = d.attendees.some((att) => {
+              const pid = att.profileId || "main";
+              const hasUsedBefore = userCreditBookedIds?.includes(
+                `${d.id}_${pid}`,
+              );
+
+              // NEW: Only show the alert if they have credits to use OR are currently buying a new pack
+              const hasBalance = (profileBalances[pid]?.[courseKey] || 0) > 0;
+              const isBuyingPackForThis = selectedPacks.hasOwnProperty(
+                d.link || coursePath,
+              );
+
+              return hasUsedBefore && (hasBalance || isBuyingPackForThis);
+            });
+
+            let alreadyUsedCredit = hasIneligibleAttendee;
+            if (!alreadyUsedCredit && activePackCode) {
               alreadyUsedCredit = activePackCode.redeemedEventIds?.includes(
                 d.id,
               );
@@ -1235,8 +1330,11 @@ export default function BookingSummary({
                   {d.attendees.map((att, nameIdx) => {
                     const isMultiple = d.attendees.length > 1;
 
-                    // Calculate addons for this specific attendee
-                    const rawAddons = scheduleData?.specialAssignments?.[d.id];
+                    // UPDATED: Resolve schedule specifically for this date's course link
+                    const courseSchedule = scheduleData?.[d.link || coursePath];
+                    const rawAddons =
+                      courseSchedule?.specialAssignments?.[d.id];
+
                     const assignedAddonIds = Array.isArray(rawAddons)
                       ? rawAddons
                       : rawAddons
@@ -1247,11 +1345,15 @@ export default function BookingSummary({
                     const evPricing = pricingMap[d.link] || pricing;
                     const visibleAddons = (
                       evPricing?.specialEvents || []
-                    ).filter(
-                      (se) =>
-                        assignedAddonIds.includes(se.id) &&
-                        !attHistory.includes(se.id), // Use the attendee's history instead of userData
-                    );
+                    ).filter((se) => {
+                      const isAssigned = assignedAddonIds.includes(se.id);
+                      const isAlreadyDone = attHistory.includes(se.id);
+
+                      // NEW RULE:
+                      // Show if assigned to this day AND (it's NOT mandatory OR they haven't done it yet)
+                      // This ensures repeating slots stay visible while mandatory intros disappear once done.
+                      return isAssigned && (!se.isMandatory || !isAlreadyDone);
+                    });
 
                     const isAddonsExpanded =
                       selectedDates.length === 1 && d.attendees.length === 1

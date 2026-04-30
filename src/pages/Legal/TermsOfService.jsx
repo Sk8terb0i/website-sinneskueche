@@ -15,18 +15,36 @@ export default function TermsOfService({ currentLang, setCurrentLang }) {
   // --- ADDED: Local Menu State ---
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  const [courseNamesMap, setCourseNamesMap] = useState({});
+
   const getCourseName = (id) => {
-    const allCourses = planets
-      .filter((p) => p.type === "courses")
-      .flatMap((p) => p.courses || []);
-    const match = allCourses.find((c) => c.link.replace(/\//g, "") === id);
-    return match ? match.text[currentLang] : id;
+    return courseNamesMap[id]?.[currentLang] || id;
   };
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // 1. Build a map of all course names (Base + Sub-courses)
+        const nameMap = {};
+        planets
+          .filter((p) => p.type === "courses")
+          .flatMap((p) => p.courses || [])
+          .forEach((c) => {
+            nameMap[c.link.replace(/\//g, "")] = c.text;
+          });
+
+        const ccSnap = await getDocs(collection(db, "custom_courses"));
+        ccSnap.docs.forEach((doc) => {
+          const data = doc.data();
+          nameMap[data.link.replace(/\//g, "")] = {
+            en: data.nameEn,
+            de: data.nameDe,
+          };
+        });
+        setCourseNamesMap(nameMap);
+
+        // 2. Fetch the terms
         const snap = await getDocs(collection(db, "course_terms"));
         const data = {};
         snap.docs.forEach((doc) => {

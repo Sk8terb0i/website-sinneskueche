@@ -251,8 +251,19 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           }
         }
         try {
-          const sSnap = await getDoc(doc(db, "schedules", docId));
-          if (sSnap.exists() && isMounted) setScheduleData(sSnap.data());
+          // NEW: Fetch schedules for all included courses to support multi-course assignments
+          const sSnaps = await Promise.all(
+            includedLinks.map((link) =>
+              getDoc(doc(db, "schedules", link.replace(/\//g, ""))),
+            ),
+          );
+          const schedMap = {};
+          sSnaps.forEach((snap, idx) => {
+            if (snap.exists()) schedMap[includedLinks[idx]] = snap.data();
+          });
+
+          if (isMounted) setScheduleData(schedMap);
+
           const bSnap = await getDocs(
             query(
               collection(db, "bookings"),
@@ -336,7 +347,12 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           setProfileHistoryMap(profileBookedMap);
           setUserBookedAddonIds(allAddonIds);
 
-          // Keep these for existing legacy logic if needed
+          // NEW: Filter specifically for bookings that used a credit, keyed by Profile ID
+          const creditBooked = allUserBookings
+            .filter((b) => b.usedCredit)
+            .map((b) => `${b.eventId}_${b.profileId || "main"}`);
+          setUserCreditBookedIds(creditBooked);
+
           setHasBookedBefore(
             allUserBookings.some((b) => b.coursePath === coursePath),
           );
@@ -359,10 +375,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     try {
       const expandedDates = selectedDates.flatMap((d) =>
         (d.attendees || []).map((att, idx) => ({
-          id: d.id,
-          date: d.date,
-          time: d.time,
-          link: d.link,
+          ...d,
           attendeeName:
             att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
           profileId: att.profileId || null,
@@ -370,14 +383,13 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         })),
       );
 
-      // 1. Generate the same detailed summary used in handlePayment
+      // Generate the session summary for the success page
       const sessionSummary = expandedDates
         .map((d) => {
           const activeLink = d.link || coursePath;
           const pData = pricingMap[activeLink];
           const title =
             pData?.courseName || activeLink.replace(/\//g, "") || "Session";
-
           let displayStr = `${formatDate(d.date)} | ${d.time || ""} (${title})`;
 
           if (d.selectedAddons && d.selectedAddons.length > 0) {
@@ -391,10 +403,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                 ? currentLang === "en"
                   ? def.nameEn
                   : def.nameDe
-                : currentLang === "en"
-                  ? "Add-on"
-                  : "Extra";
-
+                : "Extra";
               return `+ ${aName}${aTime ? ` (${aTime})` : ""}`;
             });
             displayStr += " " + addonParts.join(" ");
@@ -414,7 +423,6 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         baseUrl,
       });
 
-      // 2. Pass the summary in the URL so Success.jsx can display it
       navigate(
         `/success?type=credit&booked=true&sessions=${encodeURIComponent(sessionSummary)}`,
       );
@@ -427,9 +435,10 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   const handlePayment = async (mode, code, size, price, creditsToUse = 0) => {
     setIsProcessing(true);
     try {
+      // 1. Full data preservation
       const expandedDates = selectedDates.flatMap((d) =>
         (d.attendees || []).map((att, idx) => ({
-          ...d, // Spreads all event data including 'link'
+          ...d,
           attendeeName:
             att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
           profileId: att.profileId || null,
@@ -437,7 +446,6 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         })),
       );
 
-      // Generate a human-readable summary for Stripe
       let packSummary = "";
       if (mode === "pack" && typeof size === "object") {
         packSummary = Object.entries(size)
@@ -453,6 +461,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
       const functions = getFunctions();
       const baseUrl = window.location.origin;
 
+      // Handle direct code redemption
       if (mode === "redeem") {
         const redeemPack = httpsCallable(functions, "redeemPackCode");
         await redeemPack({
@@ -468,64 +477,58 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         return;
       }
 
-      const bookedStatus = expandedDates.length > 0 ? "true" : "false";
-
-      // 1. Improved summary resolution to ensure Course and Add-on names are found
+      // Generate summary for success page
       const sessionSummary = expandedDates
         .map((d) => {
-          // Find the correct course link if d.link is missing (fallback to coursePath)
           const activeLink = d.link || coursePath;
           const pData = pricingMap[activeLink];
           const title =
             pData?.courseName || activeLink.replace(/\//g, "") || "Session";
-
           let displayStr = `${formatDate(d.date)} | ${d.time || ""} (${title})`;
-
-          // 2. Resolve Add-on names using String comparison for IDs to avoid mismatch
           if (d.selectedAddons && d.selectedAddons.length > 0) {
             const addonParts = d.selectedAddons.map((a) => {
               const aid = typeof a === "string" ? a : a.id;
-              const aTime = typeof a === "object" ? a.time : null;
-
-              // Cast both IDs to strings to ensure the match works
               const def = pData?.specialEvents?.find(
                 (se) => String(se.id) === String(aid),
               );
-              const aName = def
-                ? currentLang === "en"
-                  ? def.nameEn
-                  : def.nameDe
-                : currentLang === "en"
-                  ? "Add-on"
-                  : "Extra";
-
-              return `+ ${aName}${aTime ? ` (${aTime})` : ""}`;
+              return `+ ${def ? (currentLang === "en" ? def.nameEn : def.nameDe) : "Extra"}`;
             });
             displayStr += " " + addonParts.join(" ");
           }
-
           return displayStr;
         })
         .join(", ");
 
+      // 2. STRIPE CHUNKING: Split the long JSON string into chunks of 450 characters
+      const datesJson = JSON.stringify(expandedDates);
+      const chunks = datesJson.match(/.{1,450}/g) || [];
+
+      const metadataPayload = {
+        userId: currentUser ? currentUser.uid : "GUEST_USER",
+        mode,
+        packSize: typeof size === "object" ? JSON.stringify(size) : size || 0,
+        packSummary: packSummary || "",
+        coursePath,
+        currentLang,
+        origin: baseUrl,
+        creditsToUse: creditsToUse.toString(),
+        promoCode: code || "",
+        chunkCount: chunks.length.toString(),
+      };
+
+      chunks.forEach((chunk, i) => {
+        metadataPayload[`dates_chunk_${i}`] = chunk;
+      });
+
       const stripe = httpsCallable(functions, "createStripeCheckout");
       const res = await stripe({
-        mode,
+        ...metadataPayload,
         packPrice: mode === "pack" ? price || 0 : 0,
         totalPrice: mode !== "pack" ? price || 0 : 0,
-        packSize: typeof size === "object" ? JSON.stringify(size) : size || 0,
-        packSummary: packSummary,
-        coursePath,
-        selectedDates: expandedDates,
-        guestInfo: !currentUser ? guestInfo : null,
-        currentLang,
-        creditsToUse,
-        baseUrl,
-        promoCode: code, // <-- NEW: Send the applied promo code
-        // Pass summaries in URL so Success page can display them
-        successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=${bookedStatus}&packs=${encodeURIComponent(packSummary)}&sessions=${encodeURIComponent(sessionSummary)}`,
+        successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=true&packs=${encodeURIComponent(packSummary)}&sessions=${encodeURIComponent(sessionSummary)}`,
         cancelUrl: window.location.href,
       });
+
       if (res.data?.url) window.location.assign(res.data.url);
     } catch (err) {
       console.error(err);
@@ -689,8 +692,11 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
 
               // 3. Filter by Add-on (Fixed: Only filters if an add-on filter is actually active)
               if (realEvent) {
+                // NEW: Resolve the specific schedule for this course link
+                const courseSchedule = scheduleData?.[realEvent.link];
                 const assigned =
-                  scheduleData?.specialAssignments?.[realEvent.id] || [];
+                  courseSchedule?.specialAssignments?.[realEvent.id] || [];
+
                 const assignedIds = Array.isArray(assigned)
                   ? assigned
                   : [assigned];
@@ -760,9 +766,10 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
 
               const isSelected = selectedDates.find((d) => d.id === event?.id);
 
+              const courseSchedule = scheduleData?.[event?.link || coursePath];
               const rawAddons =
-                event && scheduleData?.specialAssignments
-                  ? scheduleData.specialAssignments[event.id]
+                event && courseSchedule?.specialAssignments
+                  ? courseSchedule.specialAssignments[event.id]
                   : [];
 
               const activeAddons = Array.isArray(rawAddons)

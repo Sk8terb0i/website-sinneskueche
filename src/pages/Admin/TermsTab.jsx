@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { db } from "../../firebase";
 import { collection, getDocs, doc, setDoc } from "firebase/firestore";
 import { planets } from "../../data/planets";
-import { FileText, Save, Loader2, Globe } from "lucide-react";
+import { FileText, Save, Loader2, Globe, ChevronDown } from "lucide-react";
 import {
   sectionTitleStyle,
   cardStyle,
@@ -21,6 +21,11 @@ export default function TermsTab({
   const [savingId, setSavingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState("");
+
+  const [availableCourses, setAvailableCourses] = useState([]);
+  const [calendarGroups, setCalendarGroups] = useState({});
+  const [isCourseDropdownOpen, setIsCourseDropdownOpen] = useState(false);
+  const courseDropdownRef = useRef(null);
 
   const isFullAdmin = userRole === "admin";
   const labels = {
@@ -50,23 +55,62 @@ export default function TermsTab({
     },
   }[currentLang || "en"];
 
-  const availableCourses = Array.from(
-    new Map(
-      planets
-        .filter((p) => p.type === "courses")
-        .flatMap((p) => p.courses || [])
-        .filter((c) => c.link)
-        .map((course) => [course.link, course]),
-    ).values(),
-  ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        courseDropdownRef.current &&
+        !courseDropdownRef.current.contains(event.target)
+      ) {
+        setIsCourseDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
-    if (availableCourses.length > 0 && !selectedCourse)
-      setSelectedCourse(availableCourses[0].link.replace(/\//g, ""));
-  }, [availableCourses, selectedCourse]);
-  useEffect(() => {
+    const fetchCoursesAndGroups = async () => {
+      const cgSnap = await getDocs(collection(db, "calendar_groups"));
+      const cgMap = {};
+      cgSnap.docs.forEach((d) => (cgMap[d.id] = d.data().includedLinks || []));
+      setCalendarGroups(cgMap);
+
+      const base = Array.from(
+        new Map(
+          planets
+            .filter((p) => p.type === "courses")
+            .flatMap((p) => p.courses || [])
+            .filter((c) => c.link)
+            .map((course) => [course.link, course]),
+        ).values(),
+      );
+      try {
+        const snap = await getDocs(collection(db, "custom_courses"));
+        const custom = snap.docs.map((d) => ({
+          link: d.data().link,
+          text: { en: d.data().nameEn, de: d.data().nameDe },
+        }));
+        const combined = [...base, ...custom];
+        setAvailableCourses(
+          combined.filter(
+            (c) => isFullAdmin || allowedCourses.includes(c.link),
+          ),
+        );
+      } catch (err) {
+        setAvailableCourses(
+          base.filter((c) => isFullAdmin || allowedCourses.includes(c.link)),
+        );
+      }
+    };
+    fetchCoursesAndGroups();
     fetchTerms();
-  }, []);
+  }, [userRole, allowedCourses, isFullAdmin]);
+
+  useEffect(() => {
+    if (availableCourses.length > 0 && !selectedCourse) {
+      setSelectedCourse(availableCourses[0].link.replace(/\//g, ""));
+    }
+  }, [availableCourses, selectedCourse]);
 
   const fetchTerms = async () => {
     setLoading(true);
@@ -130,25 +174,209 @@ export default function TermsTab({
           }}
         >
           <label style={labelStyle}>{labels.select}</label>
-          <select
-            value={selectedCourse}
-            onChange={(e) => setSelectedCourse(e.target.value)}
-            style={{
-              ...inputStyle,
-              backgroundColor: "rgba(202, 175, 243, 0.1)",
-              cursor: "pointer",
-              marginBottom: 0,
-            }}
-          >
-            {availableCourses.length === 0 && (
-              <option>{labels.noCourses}</option>
+          <div style={{ position: "relative" }} ref={courseDropdownRef}>
+            <div
+              onClick={() => setIsCourseDropdownOpen(!isCourseDropdownOpen)}
+              style={{
+                ...inputStyle,
+                backgroundColor: "rgba(202, 175, 243, 0.1)",
+                cursor: "pointer",
+                marginBottom: 0,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                userSelect: "none",
+                fontWeight: "600",
+              }}
+            >
+              <span>
+                {availableCourses.length === 0
+                  ? labels.noCourses
+                  : availableCourses.find(
+                      (c) => c.link.replace(/\//g, "") === selectedCourse,
+                    )?.text[currentLang || "en"] || selectedCourse}
+              </span>
+              <ChevronDown
+                size={18}
+                style={{
+                  transform: isCourseDropdownOpen
+                    ? "rotate(180deg)"
+                    : "rotate(0deg)",
+                  transition: "transform 0.2s ease",
+                  color: "#9960a8",
+                }}
+              />
+            </div>
+
+            {isCourseDropdownOpen && (
+              <div
+                className="custom-scrollbar"
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  marginTop: "8px",
+                  backgroundColor: "#fffce3",
+                  border: "1px solid rgba(202, 175, 243, 0.4)",
+                  borderRadius: "12px",
+                  boxShadow: "0 10px 25px rgba(28, 7, 0, 0.1)",
+                  zIndex: 50,
+                  maxHeight: "350px",
+                  overflowY: "auto",
+                  padding: "8px",
+                }}
+              >
+                {(() => {
+                  const renderedLinks = new Set();
+                  const groups = [];
+
+                  const baseCourses = Array.from(
+                    new Map(
+                      planets
+                        .filter((p) => p.type === "courses")
+                        .flatMap((p) => p.courses || [])
+                        .filter((c) => c.link)
+                        .map((c) => [c.link, c]),
+                    ).values(),
+                  ).filter(
+                    (base) => isFullAdmin || allowedCourses.includes(base.link),
+                  );
+
+                  baseCourses.forEach((base) => {
+                    const baseId = base.link.replace(/\//g, "");
+                    const includedLinks = calendarGroups[baseId] || [base.link];
+
+                    const groupOptions = includedLinks
+                      .map((l) => availableCourses.find((ac) => ac.link === l))
+                      .filter(Boolean);
+
+                    if (groupOptions.length > 0) {
+                      groups.push(
+                        <div key={baseId} style={{ marginBottom: "8px" }}>
+                          <div
+                            style={{
+                              fontSize: "0.65rem",
+                              fontWeight: "900",
+                              textTransform: "uppercase",
+                              color: "#4e5f28",
+                              padding: "8px 12px 4px 12px",
+                              opacity: 0.6,
+                            }}
+                          >
+                            {base.text[currentLang || "en"]} Group
+                          </div>
+                          {groupOptions.map((opt) => {
+                            renderedLinks.add(opt.link);
+                            const optId = opt.link.replace(/\//g, "");
+                            const isSelected = selectedCourse === optId;
+                            return (
+                              <div
+                                key={optId}
+                                onClick={() => {
+                                  setSelectedCourse(optId);
+                                  setIsCourseDropdownOpen(false);
+                                }}
+                                style={{
+                                  padding: "10px 12px",
+                                  borderRadius: "8px",
+                                  cursor: "pointer",
+                                  backgroundColor: isSelected
+                                    ? "rgba(202, 175, 243, 0.2)"
+                                    : "transparent",
+                                  color: isSelected ? "#9960a8" : "#1c0700",
+                                  fontWeight: isSelected ? "bold" : "normal",
+                                  transition: "background-color 0.2s",
+                                  fontSize: "0.9rem",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                }}
+                              >
+                                <span>{opt.text[currentLang || "en"]}</span>
+                                {opt.link !== base.link && (
+                                  <span
+                                    style={{
+                                      fontSize: "0.65rem",
+                                      opacity: 0.5,
+                                      fontFamily: "monospace",
+                                    }}
+                                  >
+                                    {opt.link}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>,
+                      );
+                    }
+                  });
+
+                  const ungrouped = availableCourses.filter(
+                    (ac) => !renderedLinks.has(ac.link),
+                  );
+                  if (ungrouped.length > 0) {
+                    groups.push(
+                      <div key="ungrouped" style={{ marginBottom: "8px" }}>
+                        <div
+                          style={{
+                            fontSize: "0.65rem",
+                            fontWeight: "900",
+                            textTransform: "uppercase",
+                            color: "#ff4d4d",
+                            padding: "8px 12px 4px 12px",
+                            opacity: 0.8,
+                          }}
+                        >
+                          Unassigned Sub-Courses
+                        </div>
+                        {ungrouped.map((opt) => {
+                          const optId = opt.link.replace(/\//g, "");
+                          const isSelected = selectedCourse === optId;
+                          return (
+                            <div
+                              key={optId}
+                              onClick={() => {
+                                setSelectedCourse(optId);
+                                setIsCourseDropdownOpen(false);
+                              }}
+                              style={{
+                                padding: "10px 12px",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                                backgroundColor: isSelected
+                                  ? "rgba(202, 175, 243, 0.2)"
+                                  : "transparent",
+                                color: isSelected ? "#9960a8" : "#1c0700",
+                                fontWeight: isSelected ? "bold" : "normal",
+                                transition: "background-color 0.2s",
+                                fontSize: "0.9rem",
+                                display: "flex",
+                                flexDirection: "column",
+                              }}
+                            >
+                              <span>{opt.text[currentLang || "en"]}</span>
+                              <span
+                                style={{
+                                  fontSize: "0.65rem",
+                                  opacity: 0.5,
+                                  fontFamily: "monospace",
+                                }}
+                              >
+                                {opt.link}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>,
+                    );
+                  }
+
+                  return groups;
+                })()}
+              </div>
             )}
-            {availableCourses.map((c) => (
-              <option key={c.link} value={c.link.replace(/\//g, "")}>
-                {c.text[currentLang || "en"]}
-              </option>
-            ))}
-          </select>
+          </div>
         </div>
         {activeCourse && (
           <div
