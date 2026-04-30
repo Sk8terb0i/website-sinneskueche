@@ -116,11 +116,17 @@ export default function BookingsCard({ userId, currentLang, t, userData }) {
   // Group by Course Title, then by Date & Time & Profile
   const groupedBookings = useMemo(() => {
     const grouped = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     bookings.forEach((booking) => {
+      // NEW: Filter out past bookings
+      const bookingDate = new Date(booking.date);
+      if (bookingDate < today) return;
+
       const title = booking.courseTitle;
       const profileName = getProfileName(booking.profileId);
-      // Create a unique key that accounts for the profile so family members aren't merged
-      const dateKey = `${booking.date}_${booking.time}_${booking.profileId || "main"}`;
+      const dateKey = `${booking.date}_${booking.time}`;
       const sanitizedId = booking.coursePath?.replace(/\//g, "");
 
       if (!grouped[title]) grouped[title] = {};
@@ -128,28 +134,39 @@ export default function BookingsCard({ userId, currentLang, t, userData }) {
         grouped[title][dateKey] = {
           date: booking.date,
           time: booking.time,
-          profileName: profileName,
-          count: 0,
+          attendees: [], // NEW: Store attendees as objects {name, count}
           ids: [],
           addons: [],
         };
       }
 
-      grouped[title][dateKey].count += 1;
       grouped[title][dateKey].ids.push(booking.id);
+
+      if (profileName) {
+        // NEW: Group identical names and track their count
+        const existing = grouped[title][dateKey].attendees.find(
+          (a) => a.name === profileName,
+        );
+        if (existing) {
+          existing.count += 1;
+        } else {
+          grouped[title][dateKey].attendees.push({
+            name: profileName,
+            count: 1,
+          });
+        }
+      }
 
       if (booking.selectedAddons && Array.isArray(booking.selectedAddons)) {
         booking.selectedAddons.forEach((item) => {
           const addonId = typeof item === "object" ? item.id : item;
           const timeSlot = typeof item === "object" ? item.time : null;
-
           const meta = courseSettings[sanitizedId]?.find(
             (s) => s.id === addonId,
           );
           if (meta) {
             const baseName = currentLang === "de" ? meta.nameDe : meta.nameEn;
             const fullName = timeSlot ? `${baseName} (${timeSlot})` : baseName;
-
             if (!grouped[title][dateKey].addons.includes(fullName)) {
               grouped[title][dateKey].addons.push(fullName);
             }
@@ -216,124 +233,161 @@ export default function BookingsCard({ userId, currentLang, t, userData }) {
             <span>{labels.policyNote}</span>
           </div>
 
-          {Object.entries(groupedBookings).map(([title, dateGroups]) => (
-            <div key={title} style={styles.courseGroup}>
-              <h4 style={styles.courseGroupTitle}>{title}</h4>
-              <div style={styles.bookingsList}>
-                {Object.entries(dateGroups).map(([dateKey, groupData]) => {
-                  const dateObj = new Date(groupData.date);
-                  const daysUntil =
-                    (dateObj - new Date()) / (1000 * 60 * 60 * 24);
-                  const canCancel = daysUntil >= 5;
-                  const isConfirming = confirmingId === dateKey;
+          {Object.entries(groupedBookings).map(([title, dateGroups]) => {
+            const dateEntries = Object.entries(dateGroups);
+            const needsScroll = dateEntries.length > 4;
 
-                  return (
-                    <div key={dateKey} style={styles.bookingItem}>
-                      <div style={styles.bookingDateBox}>
-                        <span style={styles.bookingMonth}>
-                          {dateObj.toLocaleString(
-                            currentLang === "en" ? "en-US" : "de-DE",
-                            { month: "short" },
-                          )}
-                        </span>
-                        <span style={styles.bookingDay}>
-                          {dateObj.getDate()}
-                        </span>
-                      </div>
+            return (
+              <div key={title} style={styles.courseGroup}>
+                <h4 style={styles.courseGroupTitle}>{title}</h4>
+                <div
+                  className="custom-scrollbar"
+                  style={{
+                    ...styles.bookingsList,
+                    maxHeight: needsScroll ? "450px" : "none",
+                    overflowY: needsScroll ? "auto" : "visible",
+                    paddingRight: needsScroll ? "8px" : "0",
+                  }}
+                >
+                  {dateEntries.map(([dateKey, groupData]) => {
+                    const dateObj = new Date(groupData.date);
+                    const daysUntil =
+                      (dateObj - new Date()) / (1000 * 60 * 60 * 24);
+                    const canCancel = daysUntil >= 5;
+                    const isConfirming = confirmingId === dateKey;
 
-                      <div style={styles.bookingDetails}>
-                        {!isConfirming ? (
-                          <div style={styles.row}>
-                            <div>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "8px",
-                                  flexWrap: "wrap",
-                                }}
-                              >
-                                <p style={styles.bookingTitle}>
-                                  {dateObj.toLocaleDateString(
-                                    currentLang === "en" ? "en-US" : "de-DE",
-                                    {
-                                      weekday: "long",
-                                      year: "numeric",
-                                      month: "long",
-                                      day: "numeric",
-                                    },
+                    return (
+                      <div key={dateKey} style={styles.bookingItem}>
+                        <div style={styles.bookingDateBox}>
+                          <span style={styles.bookingMonth}>
+                            {dateObj.toLocaleString(
+                              currentLang === "en" ? "en-US" : "de-DE",
+                              { month: "short" },
+                            )}
+                          </span>
+                          <span style={styles.bookingDay}>
+                            {dateObj.getDate()}
+                          </span>
+                        </div>
+
+                        <div style={styles.bookingDetails}>
+                          {!isConfirming ? (
+                            <div style={styles.row}>
+                              <div style={{ width: "100%" }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "8px",
+                                    flexWrap: "wrap",
+                                    marginBottom: "4px",
+                                  }}
+                                >
+                                  <p style={styles.bookingTitle}>
+                                    {dateObj.toLocaleDateString(
+                                      currentLang === "en" ? "en-US" : "de-DE",
+                                      {
+                                        weekday: "long",
+                                        year: "numeric",
+                                        month: "long",
+                                        day: "numeric",
+                                      },
+                                    )}
+                                  </p>
+                                  {groupData.ids.length > 1 && (
+                                    <span style={styles.ticketBadge}>
+                                      {groupData.ids.length} Tickets
+                                    </span>
                                   )}
-                                </p>
-                                {groupData.count > 1 && (
-                                  <span style={styles.ticketBadge}>
-                                    {groupData.count} Tickets
-                                  </span>
-                                )}
-                                {/* Display badge if booking is for a linked profile */}
-                                {groupData.profileName && (
-                                  <span style={styles.profileBadge}>
-                                    <User size={10} color="#caaff3" />{" "}
-                                    {groupData.profileName}
-                                  </span>
-                                )}
-                              </div>
-                              <div style={styles.timeRow}>
-                                <Clock size={12} />{" "}
-                                <span>{groupData.time}</span>
-                              </div>
+                                </div>
 
-                              {groupData.addons.length > 0 && (
-                                <div style={styles.addonsWrapper}>
-                                  {groupData.addons.map((name, idx) => (
-                                    <span key={idx} style={styles.addonBadge}>
-                                      <Star
-                                        size={10}
-                                        fill="#9960a8"
-                                        color="#9960a8"
-                                      />
-                                      {name}
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: "8px",
+                                    flexWrap: "wrap",
+                                    marginBottom: "8px",
+                                  }}
+                                >
+                                  {groupData.attendees.map((att, idx) => (
+                                    <span key={idx} style={styles.profileBadge}>
+                                      <User size={10} color="#caaff3" />
+                                      {att.name}
+                                      {att.count > 1 ? ` (${att.count})` : ""}
                                     </span>
                                   ))}
                                 </div>
+
+                                <div style={styles.timeRow}>
+                                  <Clock size={12} />{" "}
+                                  <span>{groupData.time}</span>
+                                </div>
+
+                                {groupData.addons.length > 0 && (
+                                  <div style={styles.addonsWrapper}>
+                                    {groupData.addons.map((name, idx) => (
+                                      <span key={idx} style={styles.addonBadge}>
+                                        <Star
+                                          size={10}
+                                          fill="#9960a8"
+                                          color="#9960a8"
+                                        />{" "}
+                                        {name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              {canCancel && (
+                                <button
+                                  onClick={() => setConfirmingId(dateKey)}
+                                  style={{
+                                    ...styles.cancelActionBtn,
+                                    alignSelf: "flex-start",
+                                    marginTop: "10px",
+                                  }}
+                                >
+                                  {labels.cancelBtn}
+                                </button>
                               )}
                             </div>
-                            {canCancel && (
-                              <button
-                                onClick={() => setConfirmingId(dateKey)}
-                                style={styles.cancelActionBtn}
-                              >
-                                {labels.cancelBtn}
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <div style={styles.confirmView}>
-                            <span style={styles.confirmText}>
-                              {labels.confirm(groupData.count)}
-                            </span>
-                            <div style={styles.confirmActions}>
-                              <button
-                                onClick={() => handleCancelGroup(groupData.ids)}
-                                style={{ ...styles.iconBtn, color: "#4e5f28" }}
-                              >
-                                <Check size={18} />
-                              </button>
-                              <button
-                                onClick={() => setConfirmingId(null)}
-                                style={{ ...styles.iconBtn, color: "#ff4d4d" }}
-                              >
-                                <X size={18} />
-                              </button>
+                          ) : (
+                            <div style={styles.confirmView}>
+                              <span style={styles.confirmText}>
+                                {labels.confirm(groupData.ids.length)}
+                              </span>
+                              <div style={styles.confirmActions}>
+                                <button
+                                  onClick={() =>
+                                    handleCancelGroup(groupData.ids)
+                                  }
+                                  style={{
+                                    ...styles.iconBtn,
+                                    color: "#4e5f28",
+                                  }}
+                                >
+                                  <Check size={18} />
+                                </button>
+                                <button
+                                  onClick={() => setConfirmingId(null)}
+                                  style={{
+                                    ...styles.iconBtn,
+                                    color: "#ff4d4d",
+                                  }}
+                                >
+                                  <X size={18} />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </>
       )}
     </section>
