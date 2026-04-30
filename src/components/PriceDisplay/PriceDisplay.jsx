@@ -391,13 +391,26 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           attendeeName:
             att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
           profileId: att.profileId || null,
-          selectedAddons: att.selectedAddons || [], // <-- Now pulls from attendee
+          selectedAddons: att.selectedAddons || [],
         })),
       );
+
+      // Generate a human-readable summary for Stripe
+      let packSummary = "";
+      if (mode === "pack" && typeof size === "object") {
+        packSummary = Object.entries(size)
+          .map(([link, pIdx]) => {
+            const pData = pricingMap[link];
+            const pack = pData?.packs?.[pIdx];
+            const name = pData?.courseName || link.replace(/\//g, "");
+            return `${pack?.size} Session Pack (${name})`;
+          })
+          .join(" + ");
+      }
+
       const functions = getFunctions();
       const baseUrl = window.location.origin;
 
-      // INTERCEPT REDEEM MODE AND ROUTE TO CORRECT BACKEND FUNCTION
       if (mode === "redeem") {
         const redeemPack = httpsCallable(functions, "redeemPackCode");
         await redeemPack({
@@ -406,28 +419,28 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           packCode: code,
           guestInfo: !currentUser ? guestInfo : null,
           currentLang,
-          baseUrl, // PASS TO BACKEND
+          baseUrl,
         });
-        // Redeeming a code always involves booking a date
         navigate(`/success?type=credit&mode=redeem&code=${code}&booked=true`);
         setIsProcessing(false);
         return;
       }
 
       const bookedStatus = expandedDates.length > 0 ? "true" : "false";
-
       const stripe = httpsCallable(functions, "createStripeCheckout");
+
       const res = await stripe({
         mode,
         packPrice: mode === "pack" ? price || 0 : 0,
-        totalPrice: mode !== "pack" ? price || 0 : 0, // MAPS CALCULATED CASH TOTAL FROM BOOKINGSUMMARY
-        packSize: size || 0,
+        totalPrice: mode !== "pack" ? price || 0 : 0,
+        packSize: typeof size === "object" ? JSON.stringify(size) : size || 0,
+        packSummary: packSummary, // NEW: Clean string for the UI
         coursePath,
         selectedDates: expandedDates,
         guestInfo: !currentUser ? guestInfo : null,
         currentLang,
         creditsToUse,
-        baseUrl, // PASS TO BACKEND
+        baseUrl,
         successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=${bookedStatus}`,
         cancelUrl: window.location.href,
       });
@@ -1003,6 +1016,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           pricing={pricing}
           pricingMap={pricingMap}
           scheduleData={scheduleData}
+          availableDates={availableDates}
           addonBookingCounts={addonBookingCounts}
           guestInfo={guestInfo}
           setGuestInfo={setGuestInfo}

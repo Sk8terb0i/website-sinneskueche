@@ -457,7 +457,8 @@ exports.createStripeCheckout = onCall(
               product_data: {
                 name:
                   mode === "pack"
-                    ? `${packSize}-Session Pack: ${getCleanCourseKey(coursePath)}`
+                    ? request.data.packSummary ||
+                      `${packSize}-Session Pack: ${getCleanCourseKey(coursePath)}`
                     : `Sessions: ${getCleanCourseKey(coursePath)}`,
               },
               unit_amount:
@@ -535,8 +536,12 @@ exports.handleStripeWebhook = onRequest(
             currentLang,
             origin,
             creditsToUse,
-            profileId, // Target profile for Packs
+            profileId,
+            packSummary, // <-- Added
           } = session.metadata;
+
+          const isMultiPack = packSize && packSize.toString().startsWith("{");
+          const selectedPacksMap = isMultiPack ? JSON.parse(packSize) : null;
 
           const parsedDates = JSON.parse(selectedDates);
           const courseKey = getCleanCourseKey(coursePath);
@@ -629,51 +634,86 @@ exports.handleStripeWebhook = onRequest(
             });
           }
 
-          // 2. Process Additions (Pack Purchases)
-          let netIncrease = 0;
+          // 2. Process Additions (Updated for Multi-Pack Support)
+          let totalNetIncrease = 0;
           let generatedCode = null;
 
           if (mode === "pack") {
-            netIncrease = Math.max(0, parseInt(packSize) - parsedDates.length);
-            if (!isGuest) {
-              if (targetProfileId === "main") {
-                userData.credits[courseKey] =
-                  (userData.credits[courseKey] || 0) + netIncrease;
-              } else {
-                const linkedIndex = userData.linkedProfiles.findIndex(
-                  (p) => p.id === targetProfileId,
-                );
-                if (linkedIndex !== -1) {
-                  if (!userData.linkedProfiles[linkedIndex].credits)
-                    userData.linkedProfiles[linkedIndex].credits = {};
-                  userData.linkedProfiles[linkedIndex].credits[courseKey] =
-                    (userData.linkedProfiles[linkedIndex].credits[courseKey] ||
-                      0) + netIncrease;
-                }
-              }
+            // Determine which packs were bought
+            const packsToProcess = isMultiPack
+              ? Object.entries(selectedPacksMap)
+              : [[coursePath, null]]; // Fallback to legacy single course
 
-              const historyRef = db.collection("credit_history").doc();
-              transaction.set(historyRef, {
-                userId,
-                profileId: targetProfileId,
-                courseKey,
-                amount: netIncrease,
-                type: "purchase",
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-              });
-              isPackUser = true;
-            } else if (netIncrease > 0) {
-              generatedCode = generatePackCode();
-              transaction.set(db.collection("pack_codes").doc(generatedCode), {
-                code: generatedCode,
-                courseKey,
-                remainingCredits: netIncrease,
-                buyerEmail: email,
-                buyerName: guestName,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                redeemedEventIds: parsedDates.map((d) => d.id),
-              });
-              isPackGuest = true;
+            for (const [link, pIdx] of packsToProcess) {
+              const cKey = getCleanCourseKey(link);
+
+              // 1. Get the actual size of this specific pack from settings
+              const settingsSnap = await transaction.get(
+                db.collection("course_settings").doc(link.replace(/\//g, "")),
+              );
+              const sData = settingsSnap.exists ? settingsSnap.data() : {};
+              const packSizeValue = isMultiPack
+                ? sData.packs?.[pIdx]?.size || 0
+                : parseInt(packSize);
+
+              // 2. Deduct bookings specifically for THIS course
+              const courseBookingsCount = parsedDates.filter(
+                (d) => d.link === link,
+              ).length;
+              const courseNetIncrease = Math.max(
+                0,
+                packSizeValue - courseBookingsCount,
+              );
+              totalNetIncrease += courseNetIncrease;
+
+              if (!isGuest) {
+                // Update specific course credits for registered user/profile
+                if (targetProfileId === "main") {
+                  userData.credits[cKey] =
+                    (userData.credits[cKey] || 0) + courseNetIncrease;
+                } else {
+                  const linkedIndex = userData.linkedProfiles.findIndex(
+                    (p) => p.id === targetProfileId,
+                  );
+                  if (linkedIndex !== -1) {
+                    if (!userData.linkedProfiles[linkedIndex].credits)
+                      userData.linkedProfiles[linkedIndex].credits = {};
+                    userData.linkedProfiles[linkedIndex].credits[cKey] =
+                      (userData.linkedProfiles[linkedIndex].credits[cKey] ||
+                        0) + courseNetIncrease;
+                  }
+                }
+
+                // Log History per course
+                const historyRef = db.collection("credit_history").doc();
+                transaction.set(historyRef, {
+                  userId,
+                  profileId: targetProfileId,
+                  courseKey: cKey,
+                  amount: courseNetIncrease,
+                  type: "purchase",
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+                isPackUser = true;
+              } else if (courseNetIncrease > 0) {
+                // Guest Logic: Create one code per course pack
+                generatedCode = generatePackCode();
+                transaction.set(
+                  db.collection("pack_codes").doc(generatedCode),
+                  {
+                    code: generatedCode,
+                    courseKey: cKey,
+                    remainingCredits: courseNetIncrease,
+                    buyerEmail: email,
+                    buyerName: guestName,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    redeemedEventIds: parsedDates
+                      .filter((d) => d.link === link)
+                      .map((d) => d.id),
+                  },
+                );
+                isPackGuest = true;
+              }
             }
           }
 
@@ -698,10 +738,10 @@ exports.handleStripeWebhook = onRequest(
             lang,
             isGuest,
             origin,
-            packSize,
-            netIncrease,
+            packSize: packSummary || packSize, // Show clean summary in email
+            netIncrease: totalNetIncrease,
             generatedCode,
-            courseKey,
+            courseKey: packSummary || courseKey, // Use summary for subject line
             userData,
           };
         });

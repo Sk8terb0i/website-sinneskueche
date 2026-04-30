@@ -57,8 +57,9 @@ export default function BookingSummary({
   profileBalances = {},
   profileHistoryMap = {},
   pricing,
-  pricingMap = {}, // New Prop
+  pricingMap = {},
   scheduleData,
+  availableDates = [],
   addonBookingCounts,
   guestInfo,
   setGuestInfo,
@@ -95,7 +96,7 @@ export default function BookingSummary({
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
 
-  const [selectedPackIndex, setSelectedPackIndex] = useState(null);
+  const [selectedPacks, setSelectedPacks] = useState({});
 
   const [courseTerms, setCourseTerms] = useState(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -445,9 +446,7 @@ export default function BookingSummary({
         : []),
   ];
 
-  const isBuyingPack =
-    selectedPackIndex !== null &&
-    !basePackOptions[selectedPackIndex]?.isIndividual;
+  const isBuyingPack = Object.keys(selectedPacks).length > 0;
   const isUsingCredits =
     usableCredits > 0 || (activePackCode && activePackCode.remaining > 0);
   const qualifiesForFreeAddon = isBuyingPack || isUsingCredits;
@@ -482,14 +481,6 @@ export default function BookingSummary({
   const coversEntirely =
     totalTicketsSelected > 0 && ticketsToPayCash === 0 && addonCashTotal === 0;
 
-  useEffect(() => {
-    if (isMixedPayment) {
-      setSelectedPackIndex(0);
-    } else if (coversEntirely) {
-      setSelectedPackIndex(null);
-    }
-  }, [isMixedPayment, coversEntirely]);
-
   let finalTotalPrice = totalIndividualCash + addonCashTotal;
 
   const packOptions = basePackOptions.map((pack) => {
@@ -497,123 +488,103 @@ export default function BookingSummary({
     return pack;
   });
 
-  const currentPack =
-    selectedPackIndex !== null && packOptions[selectedPackIndex]
-      ? packOptions[selectedPackIndex]
-      : { size: 0, price: 0 };
-
-  let finalPackPrice = parseFloat(currentPack?.price || 0) + addonCashTotal;
+  // Initialize running totals
+  let finalPackPrice = addonCashTotal;
   let extraItemsBreakdown = [];
   let infoSentence = "";
 
-  if (selectedPackIndex !== null && !currentPack.isIndividual) {
-    let packRemaining = currentPack.size;
-    let tempUsableCredits = usableCredits;
-    const breakdownMap = {};
+  // 1. Calculate base cost of all selected packs
+  Object.entries(selectedPacks).forEach(([link, packIdx]) => {
+    const pack = pricingMap[link]?.packs?.[packIdx];
+    if (pack) finalPackPrice += parseFloat(pack.price || 0);
+  });
 
-    let hasMixedCourses = false;
-    let hasExceededPack = false;
-    let hasChargeableAddons = false;
+  // 2. Track remaining credits for NEW packs being purchased
+  const newPackRemaining = {};
+  Object.entries(selectedPacks).forEach(([link, packIdx]) => {
+    newPackRemaining[link] = parseInt(
+      pricingMap[link]?.packs?.[packIdx]?.size || 0,
+    );
+  });
 
-    selectedDates.forEach((d) => {
-      const isPackCourse = d.link === coursePath;
-      if (!isPackCourse) hasMixedCourses = true;
-      const coursePrice = parseFloat(pricingMap[d.link]?.priceSingle || 0);
+  // 3. Loop through selected sessions to apply coverage
+  const breakdownMap = {};
+  tempUsableCredits = usableCredits; // Removed 'let' to avoid redeclaration
+  let hasExceededPack = false;
+  let hasUncoveredMixedCourse = false;
 
-      (d.attendees || []).forEach((att) => {
-        const pid = att.profileId;
-        const canUseExistingCredit = pid && (profileBalances[pid] || 0) > 0;
+  selectedDates.forEach((d) => {
+    const coursePrice = parseFloat(pricingMap[d.link]?.priceSingle || 0);
+    const title =
+      typeof d.title === "object" ? d.title[currentLang || "en"] : d.title;
 
-        if (canUseExistingCredit && tempUsableCredits > 0) {
-          tempUsableCredits--;
-        } else if (isPackCourse && packRemaining > 0) {
-          packRemaining--;
-        } else {
-          if (isPackCourse && packRemaining <= 0) hasExceededPack = true;
-          finalPackPrice += coursePrice;
-          const title =
-            typeof d.title === "object"
-              ? d.title[currentLang || "en"]
-              : d.title;
-          if (!breakdownMap[title])
-            breakdownMap[title] = {
-              count: 0,
-              price: coursePrice,
-              isFree: false,
-            };
-          breakdownMap[title].count++;
-        }
+    (d.attendees || []).forEach((att) => {
+      const pid = att.profileId;
+      const canUseExistingCredit = pid && (profileBalances[pid] || 0) > 0;
 
-        const evPricing = pricingMap[d.link] || pricing;
-        (att.selectedAddons || []).forEach((selAddon) => {
-          const addonId = typeof selAddon === "string" ? selAddon : selAddon.id;
-          const addonDef = evPricing?.specialEvents?.find(
-            (se) => se.id === addonId,
-          );
-          if (addonDef && (addonDef.price || addonDef.freeWithPack)) {
-            const isFree =
-              addonDef.freeWithPack &&
-              (usableCredits > 0 || !currentPack.isIndividual);
-            const aName =
-              currentLang === "en" ? addonDef.nameEn : addonDef.nameDe;
-            const aPrice = parseFloat(addonDef.price || 0);
+      if (canUseExistingCredit && tempUsableCredits > 0) {
+        tempUsableCredits--; // Covered by Profile Balance
+      } else if (newPackRemaining[d.link] > 0) {
+        newPackRemaining[d.link]--; // Covered by NEWLY selected pack
+      } else {
+        // Not covered - Charge Single Price
+        finalPackPrice += coursePrice;
+        if (newPackRemaining.hasOwnProperty(d.link)) hasExceededPack = true;
+        else hasUncoveredMixedCourse = true;
 
-            if (!isFree) {
-              hasChargeableAddons = true;
-              finalPackPrice += aPrice;
-              if (!breakdownMap[aName])
-                breakdownMap[aName] = {
-                  count: 0,
-                  price: aPrice,
-                  isFree: false,
-                };
-              breakdownMap[aName].count++;
-            } else {
-              if (!breakdownMap[aName])
-                breakdownMap[aName] = { count: 0, price: 0, isFree: true };
-              breakdownMap[aName].count++;
-            }
+        if (!breakdownMap[title])
+          breakdownMap[title] = { count: 0, price: coursePrice, isFree: false };
+        breakdownMap[title].count++;
+      }
+
+      // Add-on Price Logic
+      const evPricing = pricingMap[d.link] || pricing;
+      (att.selectedAddons || []).forEach((selAddon) => {
+        const addonId = typeof selAddon === "string" ? selAddon : selAddon.id;
+        const addonDef = evPricing?.specialEvents?.find(
+          (se) => se.id === addonId,
+        );
+        if (addonDef && (addonDef.price || addonDef.freeWithPack)) {
+          const isFree =
+            addonDef.freeWithPack &&
+            (usableCredits > 0 || Object.keys(selectedPacks).length > 0);
+          const aName =
+            currentLang === "en" ? addonDef.nameEn : addonDef.nameDe;
+          const aPrice = parseFloat(addonDef.price || 0);
+
+          if (!isFree) {
+            finalPackPrice += aPrice;
+            if (!breakdownMap[aName])
+              breakdownMap[aName] = { count: 0, price: aPrice, isFree: false };
+            breakdownMap[aName].count++;
+          } else {
+            if (!breakdownMap[aName])
+              breakdownMap[aName] = { count: 0, price: 0, isFree: true };
+            breakdownMap[aName].count++;
           }
-        });
+        }
       });
     });
+  });
 
-    extraItemsBreakdown = Object.entries(breakdownMap).map(([name, data]) => ({
-      name,
-      ...data,
-    }));
+  extraItemsBreakdown = Object.entries(breakdownMap).map(([name, data]) => ({
+    name,
+    ...data,
+  }));
 
-    // Construct Dynamic Info Sentence
-    if (currentLang === "en") {
-      if (hasMixedCourses && hasExceededPack)
-        infoSentence =
-          "Selection exceeds pack size and includes different courses.";
-      else if (hasMixedCourses)
-        infoSentence =
-          "Sessions from different courses are added at single price.";
-      else if (hasExceededPack)
-        infoSentence =
-          "Selection exceeds pack size. Extra sessions added at single price.";
-      else if (hasChargeableAddons)
-        infoSentence = "Additional extras added at single price.";
-      else infoSentence = "Additional items added to your selection.";
-    } else {
-      if (hasMixedCourses && hasExceededPack)
-        infoSentence =
-          "Auswahl überschreitet Paketgrösse und beinhaltet andere Kurse.";
-      else if (hasMixedCourses)
-        infoSentence =
-          "Termine aus anderen Kursen werden zum Einzelpreis berechnet.";
-      else if (hasExceededPack)
-        infoSentence =
-          "Auswahl überschreitet Paketgrösse. Zusätzliche Termine zum Einzelpreis.";
-      else if (hasChargeableAddons)
-        infoSentence = "Zusätzliche Extras zum Einzelpreis berechnet.";
-      else
-        infoSentence = "Zusätzliche Positionen zu deiner Auswahl hinzugefügt.";
-    }
+  // Construct Sentence
+  if (currentLang === "en") {
+    if (hasUncoveredMixedCourse)
+      infoSentence = "Individual sessions added at single price.";
+    else if (hasExceededPack)
+      infoSentence =
+        "Selection exceeds pack size. Extra sessions added at single price.";
   } else {
-    finalPackPrice = totalIndividualCash + addonCashTotal;
+    if (hasUncoveredMixedCourse)
+      infoSentence = "Einzeltermine wurden zum Normalpreis hinzugefügt.";
+    else if (hasExceededPack)
+      infoSentence =
+        "Auswahl überschreitet Paketgrösse. Zusätzliche Termine zum Einzelpreis.";
   }
 
   const calculateSavings = (pack) => {
@@ -1824,14 +1795,12 @@ export default function BookingSummary({
   );
 
   const renderPackOption = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      {/* NEW: Pack Header with Info Icon */}
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "4px",
         }}
       >
         <span
@@ -1843,7 +1812,9 @@ export default function BookingSummary({
             textTransform: "uppercase",
           }}
         >
-          {currentLang === "en" ? "Select a Package" : "Paket wählen"}
+          {currentLang === "en"
+            ? "Purchase Session Packs"
+            : "Kurspakete wählen"}
         </span>
         <button
           onClick={() => setShowPackInfo(true)}
@@ -1853,308 +1824,177 @@ export default function BookingSummary({
             cursor: "pointer",
             color: "#9960a8",
             padding: "4px",
-            display: "flex",
           }}
         >
           <Info size={18} />
         </button>
       </div>
 
-      {packOptions.map((pack, idx) => {
-        const isSelected = selectedPackIndex === idx;
-        const savings = calculateSavings(pack);
+      {Object.keys(pricingMap)
+        .sort()
+        .map((link) => {
+          const coursePacks = pricingMap[link]?.packs || [];
+          if (coursePacks.length === 0) return null;
 
-        return (
-          <div
-            key={idx}
-            onClick={() => setSelectedPackIndex(isSelected ? null : idx)}
-            style={{
-              backgroundColor: isSelected
-                ? "rgba(202, 175, 243, 0.25)"
-                : "rgba(202, 175, 243, 0.05)",
-              borderRadius: "16px",
-              padding: "1.2rem",
-              border: isSelected
-                ? "2px solid #9960a8"
-                : "1px solid rgba(202, 175, 243, 0.3)",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-            }}
-          >
+          const matchingEvent = availableDates.find((e) => e.link === link);
+          const courseName = matchingEvent?.title
+            ? typeof matchingEvent.title === "object"
+              ? matchingEvent.title[currentLang || "en"]
+              : matchingEvent.title
+            : pricingMap[link]?.courseName || link.replace(/\//g, "");
+
+          return (
             <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
+              key={link}
+              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
             >
               <div
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "4px",
+                  fontSize: "0.65rem",
+                  fontWeight: "900",
+                  color: "#9960a8",
+                  textTransform: "uppercase",
+                  opacity: 0.8,
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  {isSelected && (
-                    <Check size={16} color="#9960a8" strokeWidth={3} />
-                  )}
-                  <p
-                    style={{
-                      fontWeight: isMobile ? "600" : "800",
-                      margin: 0,
-                      fontSize: isMobile ? "0.9rem" : "1rem",
-                    }}
-                  >
-                    {pack.isIndividual && isMixedPayment ? (
-                      ticketsToPayCash > 0 ? (
-                        <>
-                          {ticketsToPayCash}{" "}
-                          {currentLang === "en"
-                            ? ticketsToPayCash === 1
-                              ? "extra Session"
-                              : "extra Sessions"
-                            : ticketsToPayCash === 1
-                              ? "zusätzlicher Termin"
-                              : "zusätzliche Termine"}
-                          {chargeableAddonCount > 0
-                            ? currentLang === "en"
-                              ? ` + ${chargeableAddonCount} Extras`
-                              : ` + ${chargeableAddonCount} Extras`
-                            : ""}
-                        </>
-                      ) : (
-                        <>
-                          {chargeableAddonCount}{" "}
-                          {currentLang === "en"
-                            ? chargeableAddonCount === 1
-                              ? "Extra"
-                              : "Extras"
-                            : "Extras"}
-                        </>
-                      )
-                    ) : (
-                      <>
-                        {pack.size}{" "}
-                        {currentLang === "en"
-                          ? pack.isIndividual
-                            ? pack.size === 1
-                              ? "Session"
-                              : "Sessions"
-                            : "Session Pack"
-                          : pack.isIndividual
-                            ? pack.size === 1
-                              ? "Termin"
-                              : "Termine"
-                            : "er Karte"}
-                      </>
-                    )}
-                  </p>
-                </div>
-                {savings >= 1 && (
-                  <span
-                    style={{
-                      fontSize: "0.6rem",
-                      color: "#9960a8",
-                      backgroundColor: "rgba(153, 96, 168, 0.1)",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                      fontWeight: "900",
-                      width: "fit-content",
-                    }}
-                  >
-                    {currentLang === "en"
-                      ? `SAVE ${savings}%`
-                      : `${savings}% ERSPARNIS`}
-                  </span>
-                )}
+                {courseName}
               </div>
-              <p
-                style={{
-                  fontWeight: isMobile ? "600" : "700",
-                  margin: 0,
-                  color: "#4e5f28",
-                  fontSize: isMobile ? "1rem" : "1.1rem",
-                }}
-              >
-                {formatPrice(pack.price)} CHF
-              </p>
-            </div>
-            {isSelected &&
-              extraItemsBreakdown.length > 0 &&
-              !pack.isIndividual && (
-                <div
-                  style={{
-                    marginTop: "10px",
-                    padding: "10px",
-                    backgroundColor: "rgba(28, 7, 0, 0.05)",
-                    borderRadius: "12px",
-                    fontSize: "0.7rem",
-                    color: "#1c0700",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                  }}
-                >
-                  {extraItemsBreakdown.map((item, bIdx) => (
-                    <p
-                      key={bIdx}
+              {coursePacks.map((pack, pIdx) => {
+                const isSelected = selectedPacks[link] === pIdx;
+                const savings = Math.round(
+                  ((parseFloat(pricingMap[link].priceSingle) * pack.size -
+                    pack.price) /
+                    (parseFloat(pricingMap[link].priceSingle) * pack.size)) *
+                    100,
+                );
+
+                return (
+                  <div
+                    key={pIdx}
+                    onClick={() =>
+                      setSelectedPacks((prev) => {
+                        const next = { ...prev };
+                        if (isSelected) delete next[link];
+                        else next[link] = pIdx;
+                        return next;
+                      })
+                    }
+                    style={{
+                      backgroundColor: isSelected
+                        ? "rgba(202, 175, 243, 0.25)"
+                        : "rgba(202, 175, 243, 0.05)",
+                      borderRadius: "16px",
+                      padding: "1rem",
+                      border: isSelected
+                        ? "2px solid #9960a8"
+                        : "1px solid rgba(202, 175, 243, 0.15)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div
                       style={{
-                        margin: 0,
-                        fontWeight: "700",
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
                       }}
                     >
-                      <span style={{ flex: 1 }}>
-                        + {item.count}{" "}
-                        {currentLang === "en"
-                          ? item.count === 1
-                            ? "session"
-                            : "sessions"
-                          : item.count === 1
-                            ? "Termin"
-                            : "Termine"}{" "}
-                        {item.name}
-                      </span>
-                      <span
+                      <div
                         style={{
-                          opacity: 0.4,
-                          minWidth: "80px",
-                          textAlign: "right",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "2px",
                         }}
                       >
-                        {item.isFree
-                          ? currentLang === "en"
-                            ? "FREE"
-                            : "GRATIS"
-                          : `+ ${item.price} CHF`}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            fontWeight: "800",
+                            fontSize: "0.9rem",
+                          }}
+                        >
+                          {isSelected && (
+                            <Check size={14} color="#9960a8" strokeWidth={4} />
+                          )}
+                          {pack.size}{" "}
+                          {currentLang === "en" ? "Session Pack" : "er Karte"}
+                        </div>
+                        {savings > 0 && (
+                          <span
+                            style={{
+                              fontSize: "0.6rem",
+                              color: "#9960a8",
+                              fontWeight: "900",
+                            }}
+                          >
+                            {currentLang === "en"
+                              ? `SAVE ${savings}%`
+                              : `${savings}% ERSPARNIS`}
+                          </span>
+                        )}
+                      </div>
+                      <span style={{ fontWeight: "700", color: "#4e5f28" }}>
+                        {pack.price} CHF
                       </span>
-                    </p>
-                  ))}
-                </div>
-              )}
-
-            {isSelected && !pack.isIndividual && (
-              <p
-                style={{
-                  fontSize: "0.7rem",
-                  opacity: 0.6,
-                  marginTop: "8px",
-                  fontStyle: "italic",
-                  lineHeight: "1.4",
-                }}
-              >
-                {extraItemsBreakdown.length > 0
-                  ? infoSentence
-                  : currentLang === "en"
-                    ? `The remaining ${Math.max(0, pack.size - remainingEligibleToPay)} credits will be saved to your profile.`
-                    : `Die restlichen ${Math.max(0, pack.size - remainingEligibleToPay)} Guthaben werden deinem Profil gutgeschrieben.`}
-              </p>
-            )}
-            {isSelected &&
-              isMixedPayment &&
-              limitOnePerDay &&
-              pack.isIndividual && (
-                <p
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "#4e5f28",
-                    marginTop: "8px",
-                    fontStyle: "italic",
-                    lineHeight: "1.4",
-                  }}
-                >
-                  {currentLang === "en"
-                    ? "Only 1 ticket per day can be paid with a credit. Extra tickets are charged at the single price."
-                    : "Pro Tag kann nur 1 Ticket mit Guthaben bezahlt werden. Zusätzliche Tickets werden zum Einzelpreis berechnet."}
-                </p>
-              )}
-          </div>
-        );
-      })}
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px",
-          marginTop: "10px",
-        }}
-      >
-        {selectedPackIndex !== null && renderTermsAgreement()}
-        <button
-          onClick={() =>
-            selectedPackIndex !== null &&
-            validateAndProceed(() => {
-              if (currentPack.isIndividual) {
-                onPayment(
-                  "individual",
-                  activePackCode
-                    ? activePackCode.code
-                    : promoAppliesToSingle
-                      ? activePromo?.code
-                      : null,
-                  0,
-                  finalTotalPrice,
-                  usableCredits,
+                    </div>
+                  </div>
                 );
-              } else {
-                onPayment(
-                  "pack",
-                  promoAppliesToPack ? activePromo?.code : null,
-                  currentPack.size,
-                  finalPackPrice,
-                  usableCredits,
-                );
-              }
-            })
-          }
+              })}
+            </div>
+          );
+        })}
+
+      {/* Itemized Extra Charges Breakdown */}
+      {extraItemsBreakdown.length > 0 && (
+        <div
           style={{
-            ...S.primaryBtnStyle(isMobile),
             marginTop: "10px",
-            opacity:
-              selectedPackIndex === null ||
-              (currentPack.isIndividual && !hasSelection)
-                ? 0.5
-                : 1,
-            cursor:
-              selectedPackIndex === null ||
-              (currentPack.isIndividual && !hasSelection)
-                ? "not-allowed"
-                : "pointer",
+            padding: "12px",
+            backgroundColor: "rgba(28, 7, 0, 0.05)",
+            borderRadius: "12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
           }}
-          disabled={
-            selectedPackIndex === null ||
-            (!currentUser && (!guestInfo.firstName || !guestInfo.email)) ||
-            (currentPack.isIndividual && !hasSelection)
-          }
         >
-          {selectedPackIndex === null ||
-          (currentPack.isIndividual && !hasSelection)
-            ? currentLang === "en"
-              ? "Select dates or session pack"
-              : "Termine oder Paket wählen"
-            : currentPack.isIndividual
-              ? isMixedPayment
-                ? currentLang === "en"
-                  ? `Pay Balance (${formatPrice(finalTotalPrice)} CHF) + Use ${usableCredits} Credit${usableCredits !== 1 ? "s" : ""}`
-                  : `Restbetrag zahlen (${formatPrice(finalTotalPrice)} CHF) + ${usableCredits} Guthaben nutzen`
-                : currentLang === "en"
-                  ? `Pay ${formatPrice(finalTotalPrice)} CHF`
-                  : `${formatPrice(finalTotalPrice)} CHF zahlen`
-              : currentLang === "en"
-                ? `${hasSelection ? "Buy & Book" : "Buy"} (${formatPrice(finalPackPrice)} CHF)`
-                : `${hasSelection ? "Kaufen & Buchen" : "Kaufen"} (${formatPrice(finalPackPrice)} CHF)`}
-        </button>
-      </div>
+          {extraItemsBreakdown.map((item, bIdx) => (
+            <p
+              key={bIdx}
+              style={{
+                margin: 0,
+                fontWeight: "700",
+                fontSize: "0.7rem",
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              <span>
+                + {item.count}{" "}
+                {currentLang === "en"
+                  ? item.count === 1
+                    ? "session"
+                    : "sessions"
+                  : "Termin(e)"}{" "}
+                {item.name}
+              </span>
+              <span style={{ opacity: 0.5 }}>
+                {item.isFree ? "FREE" : `+ ${item.price} CHF`}
+              </span>
+            </p>
+          ))}
+          <p
+            style={{
+              margin: "4px 0 0 0",
+              fontSize: "0.65rem",
+              fontStyle: "italic",
+              opacity: 0.6,
+            }}
+          >
+            {infoSentence}
+          </p>
+        </div>
+      )}
     </div>
   );
 
@@ -2360,10 +2200,62 @@ export default function BookingSummary({
               : "Code einlösen & Buchen"}
           </button>
         </div>
-      ) : activePackCode && isMixedPayment ? (
-        <>{renderPackOption()}</>
       ) : (
-        <>{renderPackOption()}</>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "1.2rem",
+            marginTop: "1.5rem",
+          }}
+        >
+          {/* Renders the grouped packs for all courses */}
+          {renderPackOption()}
+          {renderTermsAgreement()}
+
+          <button
+            onClick={() =>
+              validateAndProceed(() => {
+                const packCount = Object.keys(selectedPacks).length;
+                if (packCount > 0) {
+                  // MODE: PACK (Sends the whole object of selected packs to the backend)
+                  onPayment(
+                    "pack",
+                    promoAppliesToPack ? activePromo?.code : null,
+                    selectedPacks,
+                    finalPackPrice,
+                    usableCredits,
+                  );
+                } else {
+                  // MODE: INDIVIDUAL (Standard single-session purchase)
+                  onPayment(
+                    "individual",
+                    promoAppliesToSingle ? activePromo?.code : null,
+                    totalTicketsSelected,
+                    finalTotalPrice,
+                    usableCredits,
+                  );
+                }
+              })
+            }
+            style={{
+              ...S.primaryBtnStyle(isMobile),
+              opacity:
+                (!hasSelection && Object.keys(selectedPacks).length === 0) ||
+                (!currentUser && (!guestInfo.firstName || !guestInfo.email))
+                  ? 0.5
+                  : 1,
+            }}
+            disabled={
+              (!hasSelection && Object.keys(selectedPacks).length === 0) ||
+              (!currentUser && (!guestInfo.firstName || !guestInfo.email))
+            }
+          >
+            {currentLang === "en"
+              ? `Buy & Book (${formatPrice(Object.keys(selectedPacks).length > 0 ? finalPackPrice : finalTotalPrice)} CHF)`
+              : `Kaufen & Buchen (${formatPrice(Object.keys(selectedPacks).length > 0 ? finalPackPrice : finalTotalPrice)} CHF)`}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -3037,10 +2929,8 @@ export default function BookingSummary({
                   )
                 ) : currentLang === "en" ? (
                   <>
-                    Credits are tied to your email address.
-                    <br />
-                    They are non-transferable and limited to one ticket per
-                    course day.
+                    Credits are tied to your email address. They are
+                    non-transferable and limited to one ticket per course day.
                   </>
                 ) : (
                   <>
