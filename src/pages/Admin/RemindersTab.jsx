@@ -226,7 +226,8 @@ export default function RemindersTab({
         "{userName}": "Jane Doe",
         "{courseName}": courseNameText,
         "{courseDate}": "15.05.2026",
-        "{courseTime}": sectionTime || "18:00",
+        "{courseTime}": "19:00", // Standard course time
+        "{addonTime}": sectionTime || "19:00 - 20:00", // New variable for specific slots
       };
       let result = str;
       Object.keys(vars).forEach((key) => {
@@ -237,24 +238,19 @@ export default function RemindersTab({
 
     let html = `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">`;
 
-    // 1. Main Message (Uses Course Time)
-    html += `<p style="white-space: pre-wrap; margin-bottom: 20px;">${replaceLocalVars(data.text, "18:00")}</p>`;
+    html += `<p style="white-space: pre-wrap; margin-bottom: 20px;">${replaceLocalVars(data.text)}</p>`;
 
-    // 2. First Timer Text (Uses Course Time)
     if (!hasMandatoryIntro && data.firstTimerText) {
       html += `<div style="margin-top: 20px; padding: 15px; background-color: rgba(202, 175, 243, 0.2); border-radius: 8px; border: 1px solid #caaff3;">`;
-      html += `<p style="margin: 0; font-size: 0.9em; white-space: pre-wrap;"><strong>${labels.first}:</strong><br/>${replaceLocalVars(data.firstTimerText, "18:00")}</p></div>`;
+      html += `<p style="margin: 0; font-size: 0.9em; white-space: pre-wrap;"><strong>${labels.first}:</strong><br/>${replaceLocalVars(data.firstTimerText)}</p></div>`;
     }
 
-    // 3. Add-on Blocks (Uses Add-on specific time)
     courseAddons.forEach((addon) => {
       if (data.addonTexts?.[addon.id]) {
         const addonName = lang === "de" ? addon.nameDe : addon.nameEn;
-
-        // Find relevant time for this specific add-on
         const relevantTime = addon.timeSlots?.[0]
           ? `${addon.timeSlots[0].startTime}-${addon.timeSlots[0].endTime}`
-          : addon.time || "18:30";
+          : addon.time || "18:30 - 19:30";
 
         html += `<div style="margin-top: 15px; padding: 15px; background-color: rgba(78, 95, 40, 0.1); border-radius: 8px; border: 1px solid #4e5f28;">`;
         html += `<p style="margin: 0; font-size: 0.9em; white-space: pre-wrap;"><strong>Extra - ${addonName}:</strong><br/>${replaceLocalVars(data.addonTexts[addon.id], relevantTime)}</p></div>`;
@@ -517,7 +513,7 @@ export default function RemindersTab({
             </div>
             <code style={{ color: "#9960a8", lineBreak: "anywhere" }}>
               {"{userName}"} , {"{courseName}"} , {"{courseDate}"} ,{" "}
-              {"{courseTime}"}
+              {"{courseTime}"} , {"{addonTime}"}
             </code>
           </div>
 

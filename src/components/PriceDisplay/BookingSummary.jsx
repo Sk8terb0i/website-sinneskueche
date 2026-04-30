@@ -668,6 +668,13 @@ export default function BookingSummary({
     } else if (activePromo.discountType === "free") {
       if (promoAppliesToSingle) finalTotalPrice = 0;
       if (promoAppliesToPack) finalPackPrice = 0;
+    } else if (activePromo.discountType === "amount") {
+      // NEW: Handle specific monetary value refunds for add-ons
+      const discount = parseFloat(activePromo.discountValue || 0);
+      if (promoAppliesToSingle)
+        finalTotalPrice = Math.max(0, finalTotalPrice - discount);
+      if (promoAppliesToPack)
+        finalPackPrice = Math.max(0, finalPackPrice - discount);
     }
   }
 
@@ -728,6 +735,22 @@ export default function BookingSummary({
           window.location.pathname ||
           ""
         ).replace(/\//g, "");
+
+        // NEW: Reject if the code has reached its maximum uses
+        if (
+          promoData.limitType === "uses" &&
+          promoData.timesUsed >= promoData.maxUses
+        ) {
+          setCodeStatus({
+            loading: false,
+            error:
+              currentLang === "en"
+                ? "This code has reached its usage limit."
+                : "Dieser Code hat sein Nutzungslimit erreicht.",
+          });
+          return;
+        }
+
         if (
           promoData.coursePath &&
           promoData.coursePath !== "all" &&

@@ -123,21 +123,21 @@ const getTemplate = async (transaction, typeId, lang) => {
     cancellation_user: {
       en: {
         subject: "Session Cancelled: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Session Cancelled</h2>\n  <p>Hi {userName},</p>\n  <p>The session for <strong>{courseKey}</strong> on <strong>{courseDate}</strong> has been cancelled.</p>\n  <p>We have automatically credited <strong>1 session</strong> back to your profile.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Session Cancelled</h2>\n  <p>Hi {userName},</p>\n  <p>The session for <strong>{courseKey}</strong> on <strong>{courseDate}</strong> has been cancelled.</p>\n  <p>We have automatically credited <strong>1 session</strong> back to your profile.</p>\n  {addonRefundHtml}\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
       },
       de: {
         subject: "Termin abgesagt: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Termin wurde abgesagt</h2>\n  <p>Hallo {userName},</p>\n  <p>Der Termin für <strong>{courseKey}</strong> am <strong>{courseDate}</strong> wurde abgesagt.</p>\n  <p>Wir haben deinem Profil automatisch <strong>1 Termin</strong> gutgeschrieben.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Termin abgesagt</h2>\n  <p>Hallo {userName},</p>\n  <p>wir müssen dir leider mitteilen, dass der Termin für <strong>{courseKey}</strong> am <strong>{courseDate}</strong> abgesagt wurde.</p>\n  <p>Wir haben deinem Profil automatisch <strong>1 Termin(e)</strong> gutgeschrieben, damit du dir ganz einfach ein neues Datum aussuchen kannst.</p>\n  {addonRefundHtml}\n  <br/><p>Liebe Grüße,<br/>Dein Atelier Sinnesküche Team</p>\n</div>`,
       },
     },
     cancellation_guest: {
       en: {
         subject: "Session Cancelled: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Session Cancelled</h2>\n  <p>Hi {userName},</p>\n  <p>The session for <strong>{courseKey}</strong> on <strong>{courseDate}</strong> has been cancelled.</p>\n  <p>As a guest, here is your unique code to redeem your refunded session on our website:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">\n    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9960a8; margin: 0;">{refundCode}</p>\n  </div>\n  <p>You can apply this code during your next checkout.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Session Cancelled</h2>\n  <p>Hi {userName},</p>\n  <p>The session for <strong>{courseKey}</strong> on <strong>{courseDate}</strong> has been cancelled.</p>\n  <p>As a guest, here is your unique code to redeem your refunded session on our website:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">\n    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9960a8; margin: 0;">{refundCode}</p>\n  </div>\n  <p>You can apply this code during your next checkout.</p>\n  {addonRefundHtml}\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
       },
       de: {
         subject: "Termin abgesagt: {courseKey}",
-        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Termin wurde abgesagt</h2>\n  <p>Hallo {userName},</p>\n  <p>Der Termin für <strong>{courseKey}</strong> am <strong>{courseDate}</strong> wurde abgesagt.</p>\n  <p>Da du als Gast gebucht hast, ist hier dein einzigartiger Code, um deinen erstatteten Termin auf unserer Website einzulösen:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">\n    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9960a8; margin: 0;">{refundCode}</p>\n  </div>\n  <p>Du kannst diesen Code bei deiner nächsten Buchung an der Kasse anwenden.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #ff4d4d;">Termin abgesagt</h2>\n  <p>Hallo {userName},</p>\n  <p>wir müssen dir leider mitteilen, dass der Termin für <strong>{courseKey}</strong> am <strong>{courseDate}</strong> abgesagt wurde.</p>\n  <p>Da du als Gast gebucht hast, haben wir einen Code für dich erstellt, mit dem du deine erstatteten Termine auf unserer Website einlösen kannst:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">\n    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9960a8; margin: 0;">{refundCode}</p>\n  </div>\n  <p>Gib diesen Code einfach bei deiner nächsten Buchung an der Kasse ein. Wir hoffen, dich bald bei uns im Studio zu sehen!</p>\n  {addonRefundHtml}\n  <br/><p>Liebe Grüße,<br/>Dein Atelier Sinnesküche Team</p>\n</div>`,
       },
     },
     instructor_availability: {
@@ -408,20 +408,29 @@ const sendCancellationEmail = async (
   date,
   lang,
   code = null,
-  amount = 1, // Added amount parameter for ticket aggregation
+  amount = 1,
   origin,
+  addonRefundValue = 0,
+  addonPromoCode = null,
 ) => {
   if (!email) return;
 
   const typeId = code ? "cancellation_guest" : "cancellation_user";
   const template = await getTemplate(transaction, typeId, lang);
 
+  const addonRefundHtml = addonPromoCode
+    ? lang === "de"
+      ? `<div style="background-color: rgba(78, 95, 40, 0.1); padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px dashed #4e5f28;"><strong>Zusätzliche Rückerstattung für Extras:</strong> Du erhältst einen Rabattcode im Wert von ${addonRefundValue} CHF für deine bezahlten Extras. Gib den Code <strong style="color: #4e5f28;">${addonPromoCode}</strong> bei deiner nächsten Buchung an der Kasse ein.</div>`
+      : `<div style="background-color: rgba(78, 95, 40, 0.1); padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px dashed #4e5f28;"><strong>Add-on Refund:</strong> You received a promo code worth ${addonRefundValue} CHF for your paid add-ons. Use code <strong style="color: #4e5f28;">${addonPromoCode}</strong> at checkout on your next booking.</div>`
+    : "";
+
   const replacements = {
     "{userName}": name,
     "{courseKey}": courseKey,
     "{courseDate}": formatDate(date),
     "{refundCode}": code || "",
-    "{refundAmount}": amount.toString(), // Passes the aggregated amount to the email
+    "{refundAmount}": amount.toString(),
+    "{addonRefundHtml}": addonRefundHtml,
   };
 
   const mailRef = db.collection("mail").doc();
@@ -469,8 +478,9 @@ exports.createStripeCheckout = onCall(
         cancelUrl,
         creditsToUse,
         baseUrl,
-        profileId, // <-- NEW
-        profileName, // <-- NEW
+        profileId,
+        profileName,
+        promoCode,
       } = request.data;
       const userId = request.auth ? request.auth.uid : "GUEST_USER";
       const userEmail = request.auth
@@ -518,8 +528,9 @@ exports.createStripeCheckout = onCall(
           currentLang: currentLang || "en",
           origin,
           creditsToUse: creditsToUse ? creditsToUse.toString() : "0",
-          profileId: profileId || "main", // <-- NEW
-          profileName: profileName || "Main User", // <-- NEW
+          profileId: profileId || "main",
+          profileName: profileName || "Main User",
+          promoCode: promoCode || "",
         },
       });
       return { url: session.url };
@@ -571,7 +582,8 @@ exports.handleStripeWebhook = onRequest(
             origin,
             creditsToUse,
             profileId,
-            packSummary, // <-- Added
+            packSummary,
+            promoCode,
           } = session.metadata;
 
           const isMultiPack = packSize && packSize.toString().startsWith("{");
@@ -588,6 +600,16 @@ exports.handleStripeWebhook = onRequest(
           let finalName = guestName;
           let userData = null;
           let userRef = null;
+
+          if (promoCode) {
+            const promoRef = db.collection("promo_codes").doc(promoCode);
+            const promoSnap = await transaction.get(promoRef);
+            if (promoSnap.exists) {
+              transaction.update(promoRef, {
+                timesUsed: admin.firestore.FieldValue.increment(1),
+              });
+            }
+          }
 
           // Fetch User Data so we can manipulate arrays
           if (!isGuest) {
@@ -1130,17 +1152,28 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
     const lang = currentLang || "en";
     const origin = baseUrl || "https://sinneskueche.ch";
 
-    // 1. Fetch bookings outside transaction to avoid read/write conflicts
+    // 1. Fetch course settings for addon prices outside the transaction
     const eventRef = db.collection("events").doc(eventId);
+    const eventSnap = await eventRef.get();
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found");
+    const eventData = eventSnap.data();
+    const courseId = (eventData.link || "").replace(/\//g, "");
+
+    const settingsSnap = await db
+      .collection("course_settings")
+      .doc(courseId)
+      .get();
+    const specialEvents = settingsSnap.exists
+      ? settingsSnap.data().specialEvents || []
+      : [];
+
     const bookingsSnap = await db
       .collection("bookings")
       .where("eventId", "==", eventId)
       .get();
 
-    // 2. Resolve every booking to its specific recipient (Main vs. Linked Profile)
+    // 2. Resolve every booking to its specific recipient and calculate add-on costs
     const individualCancellations = [];
-
-    // We pre-fetch user data to avoid lookups inside the transaction
     const userCache = {};
 
     for (const bDoc of bookingsSnap.docs) {
@@ -1152,8 +1185,20 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
         if (uSnap.exists) userCache[userId] = uSnap.data();
       }
 
-      // Use the helper to find who actually gets this specific notification
       const { email, name } = getAttendeeRecipient(bData, userCache[userId]);
+
+      let addonRefundValue = 0;
+      if (bData.selectedAddons && bData.selectedAddons.length > 0) {
+        bData.selectedAddons.forEach((addonItem) => {
+          const aid = typeof addonItem === "string" ? addonItem : addonItem.id;
+          const def = specialEvents.find((se) => String(se.id) === String(aid));
+          if (def && def.price && parseFloat(def.price) > 0) {
+            if (!(bData.usedCredit && def.freeWithPack)) {
+              addonRefundValue += parseFloat(def.price);
+            }
+          }
+        });
+      }
 
       individualCancellations.push({
         bookingRef: bDoc.ref,
@@ -1162,8 +1207,9 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
         isGuest: bData.userId === "GUEST_USER",
         email,
         name,
-        guestEmail: bData.guestEmail, // needed for guest refund code
+        guestEmail: bData.guestEmail,
         guestName: bData.guestName,
+        addonRefundValue,
       });
     }
 
@@ -1171,16 +1217,47 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
 
     // 3. Process Refunds and Deletions
     await db.runTransaction(async (transaction) => {
-      const eventSnap = await transaction.get(eventRef);
-      if (!eventSnap.exists)
-        throw new HttpsError("not-found", "Event not found");
-
-      const eventData = eventSnap.data();
       const courseKey = getCleanCourseKey(eventData.link || "");
 
+      // CRITICAL FIX: Perform all reads first!
+      // Collect all unique user references that we need to update
+      const uniqueUserRefs = {};
+      individualCancellations.forEach((item) => {
+        if (!item.isGuest) {
+          uniqueUserRefs[item.userId] = db.collection("users").doc(item.userId);
+        }
+      });
+
+      // Read all user documents concurrently
+      const userSnaps = {};
+      await Promise.all(
+        Object.entries(uniqueUserRefs).map(async ([uid, ref]) => {
+          userSnaps[uid] = await transaction.get(ref);
+        }),
+      );
+
+      // Now we can safely execute writes
       for (const item of individualCancellations) {
+        let addonPromoCode = null;
+        if (item.addonRefundValue > 0) {
+          addonPromoCode = "REF-" + generatePackCode();
+          transaction.set(db.collection("promo_codes").doc(addonPromoCode), {
+            code: addonPromoCode,
+            discountType: "amount",
+            discountValue: item.addonRefundValue,
+            applyTo: "both",
+            coursePath: "all",
+            limitType: "uses",
+            maxUses: 1,
+            timesUsed: 0,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdByRole: "system",
+            buyerEmail: item.email,
+            description: `Add-on Refund: ${item.name}`,
+          });
+        }
+
         if (item.isGuest) {
-          // Guest logic: Create a unique refund code for each ticket
           const newCode = generatePackCode();
           transaction.set(db.collection("pack_codes").doc(newCode), {
             code: newCode,
@@ -1197,19 +1274,24 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
             courseKey,
             date: eventData.date,
             code: newCode,
+            addonRefundValue: item.addonRefundValue,
+            addonPromoCode: addonPromoCode,
           });
         } else {
-          // Registered User logic
-          const userRef = db.collection("users").doc(item.userId);
-
-          // CRITICAL: Fetch the LATEST data from the transaction, not the cache
-          const userSnap = await transaction.get(userRef);
+          // Use the pre-read snapshot
+          const userSnap = userSnaps[item.userId];
           const userData = userSnap.data();
+          const userRef = uniqueUserRefs[item.userId];
 
           if (item.profileId === "main") {
             const currentCredits = userData.credits?.[courseKey] || 0;
+            // Note: Since we are reading once and writing multiple times in a loop,
+            // we must mutate the local object so subsequent loops for the same user see the update.
+            if (!userData.credits) userData.credits = {};
+            userData.credits[courseKey] = currentCredits + 1;
+
             transaction.update(userRef, {
-              [`credits.${courseKey}`]: currentCredits + 1,
+              [`credits.${courseKey}`]: userData.credits[courseKey],
             });
           } else {
             const updatedLinked = (userData.linkedProfiles || []).map((p) => {
@@ -1220,10 +1302,10 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
               }
               return p;
             });
+            userData.linkedProfiles = updatedLinked; // mutate local state
             transaction.update(userRef, { linkedProfiles: updatedLinked });
           }
 
-          // Log History for the specific profile
           const historyRef = db.collection("credit_history").doc();
           transaction.set(historyRef, {
             userId: item.userId,
@@ -1240,14 +1322,14 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
             courseKey,
             date: eventData.date,
             code: null,
+            addonRefundValue: item.addonRefundValue,
+            addonPromoCode: addonPromoCode,
           });
         }
 
-        // Delete the individual booking
         transaction.delete(item.bookingRef);
       }
 
-      // Delete the event itself
       transaction.delete(eventRef);
     });
 
@@ -1261,8 +1343,10 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
         e.date,
         lang,
         e.code,
-        1, // Each email is now per individual ticket
+        1,
         origin,
+        e.addonRefundValue,
+        e.addonPromoCode,
       ),
     );
     await Promise.all(emailPromises);
@@ -1360,8 +1444,17 @@ exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
 
       if (booking.selectedAddons && Array.isArray(booking.selectedAddons)) {
         const addonTexts = template.addonTexts || {};
-        booking.selectedAddons.forEach((addonId) => {
-          if (addonTexts[addonId]) body += "\n\n" + addonTexts[addonId];
+        booking.selectedAddons.forEach((addonItem) => {
+          // Extract the ID and the specific booked time slot
+          const aid = typeof addonItem === "object" ? addonItem.id : addonItem;
+          const aTime = typeof addonItem === "object" ? addonItem.time : "";
+
+          if (addonTexts[aid]) {
+            let addonText = addonTexts[aid];
+            // Swap out the variable for the actual time they booked
+            addonText = addonText.replace(/{addonTime}/g, aTime);
+            body += "\n\n" + addonText;
+          }
         });
       }
 

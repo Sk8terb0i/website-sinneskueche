@@ -521,6 +521,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         currentLang,
         creditsToUse,
         baseUrl,
+        promoCode: code, // <-- NEW: Send the applied promo code
         // Pass summaries in URL so Success page can display them
         successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=${bookedStatus}&packs=${encodeURIComponent(packSummary)}&sessions=${encodeURIComponent(sessionSummary)}`,
         cancelUrl: window.location.href,

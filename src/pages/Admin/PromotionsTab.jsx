@@ -342,6 +342,19 @@ export default function PromotionsTab({
                 >
                   {pc.code}
                 </div>
+                {pc.description && (
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#e74c3c",
+                      fontWeight: "bold",
+                      marginTop: "4px",
+                    }}
+                  >
+                    {pc.description} ({pc.buyerEmail})
+                  </div>
+                )}
+
                 <div
                   style={{
                     fontSize: "0.8rem",
