@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { db } from "../../firebase";
 import {
   collection,
@@ -11,7 +11,15 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { planets } from "../../data/planets";
-import { Ticket, Trash2, Clock, Hash, Percent, Star } from "lucide-react";
+import {
+  Ticket,
+  Trash2,
+  Clock,
+  Hash,
+  Percent,
+  Star,
+  ChevronDown,
+} from "lucide-react";
 import {
   formCardStyle,
   sectionTitleStyle,
@@ -32,9 +40,25 @@ export default function PromotionsTab({
   const [promoCodes, setPromoCodes] = useState([]);
   const [code, setCode] = useState("");
   const [coursePath, setCoursePath] = useState("");
+
+  const [isCourseDropdownOpen, setIsCourseDropdownOpen] = useState(false);
+  const courseDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        courseDropdownRef.current &&
+        !courseDropdownRef.current.contains(event.target)
+      ) {
+        setIsCourseDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const [applyTo, setApplyTo] = useState("both");
   const [discountType, setDiscountType] = useState("free");
-  const [discountValue, setDiscountValue] = useState(100);
+  const [discountValue, setDiscountValue] = useState(5);
   const [limitType, setLimitType] = useState("uses");
   const [maxUses, setMaxUses] = useState(1);
   const [expiryDate, setExpiryDate] = useState("");
@@ -97,20 +121,50 @@ export default function PromotionsTab({
     },
   }[currentLang || "en"];
 
-  const availableCourses = Array.from(
-    new Map(
-      planets
-        .filter((p) => p.type === "courses")
-        .flatMap((p) => p.courses || [])
-        .filter((c) => c.link)
-        .map((c) => [c.link, c]),
-    ).values(),
-  ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
+  const [availableCourses, setAvailableCourses] = useState([]);
+  const [calendarGroups, setCalendarGroups] = useState({});
 
   useEffect(() => {
+    const fetchCoursesAndGroups = async () => {
+      // 1. Fetch Calendar Groups
+      const cgSnap = await getDocs(collection(db, "calendar_groups"));
+      const cgMap = {};
+      cgSnap.docs.forEach((d) => (cgMap[d.id] = d.data().includedLinks || []));
+      setCalendarGroups(cgMap);
+
+      // 2. Fetch Base and Custom Courses
+      const base = Array.from(
+        new Map(
+          planets
+            .filter((p) => p.type === "courses")
+            .flatMap((p) => p.courses || [])
+            .filter((c) => c.link)
+            .map((c) => [c.link, c]),
+        ).values(),
+      );
+      try {
+        const snap = await getDocs(collection(db, "custom_courses"));
+        const custom = snap.docs.map((d) => ({
+          link: d.data().link,
+          text: { en: d.data().nameEn, de: d.data().nameDe },
+        }));
+        const combined = [...base, ...custom];
+        const filtered = combined.filter(
+          (c) => isFullAdmin || allowedCourses.includes(c.link),
+        );
+        setAvailableCourses(filtered);
+        if (filtered.length > 0) setCoursePath("all"); // Default to 'All Courses'
+      } catch (err) {
+        const filtered = base.filter(
+          (c) => isFullAdmin || allowedCourses.includes(c.link),
+        );
+        setAvailableCourses(filtered);
+        if (filtered.length > 0) setCoursePath("all");
+      }
+    };
+    fetchCoursesAndGroups();
     fetchCodes();
-    if (availableCourses.length > 0) setCoursePath(availableCourses[0].link);
-  }, [userRole, allowedCourses]);
+  }, [userRole, allowedCourses, isFullAdmin]);
 
   const fetchCodes = async () => {
     const q = query(
@@ -184,19 +238,234 @@ export default function PromotionsTab({
               />
             </div>
 
-            <div>
+            <div style={{ position: "relative" }} ref={courseDropdownRef}>
               <label style={labelStyle}>{labels.applyTo}</label>
-              <select
-                style={inputStyle}
-                value={coursePath}
-                onChange={(e) => setCoursePath(e.target.value)}
+              <div
+                onClick={() => setIsCourseDropdownOpen(!isCourseDropdownOpen)}
+                style={{
+                  ...inputStyle,
+                  cursor: "pointer",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  userSelect: "none",
+                  backgroundColor: "rgba(255, 252, 227, 0.4)",
+                }}
               >
-                {availableCourses.map((c) => (
-                  <option key={c.link} value={c.link}>
-                    {c.text[currentLang || "en"]}
-                  </option>
-                ))}
-              </select>
+                <span style={{ fontFamily: "monospace" }}>
+                  {coursePath === "all"
+                    ? currentLang === "en"
+                      ? "-- All Courses --"
+                      : "-- Alle Kurse --"
+                    : availableCourses.find((c) => c.link === coursePath)?.text[
+                        currentLang || "en"
+                      ] || coursePath}
+                </span>
+                <ChevronDown
+                  size={18}
+                  style={{
+                    transform: isCourseDropdownOpen
+                      ? "rotate(180deg)"
+                      : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                    color: "#1c0700",
+                    opacity: 0.5,
+                  }}
+                />
+              </div>
+
+              {isCourseDropdownOpen && (
+                <div
+                  className="custom-scrollbar"
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    marginTop: "-4px",
+                    backgroundColor: "#fffce3",
+                    border: "1px solid rgba(202, 175, 243, 0.4)",
+                    borderRadius: "12px",
+                    boxShadow: "0 10px 25px rgba(28, 7, 0, 0.1)",
+                    zIndex: 50,
+                    maxHeight: "300px",
+                    overflowY: "auto",
+                    padding: "8px",
+                  }}
+                >
+                  <div
+                    onClick={() => {
+                      setCoursePath("all");
+                      setIsCourseDropdownOpen(false);
+                    }}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      backgroundColor:
+                        coursePath === "all"
+                          ? "rgba(202, 175, 243, 0.2)"
+                          : "transparent",
+                      color: coursePath === "all" ? "#9960a8" : "#1c0700",
+                      fontWeight: coursePath === "all" ? "bold" : "normal",
+                      marginBottom: "8px",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    -- {currentLang === "en" ? "All Courses" : "Alle Kurse"} --
+                  </div>
+
+                  {(() => {
+                    const renderedLinks = new Set();
+                    const groups = [];
+
+                    const baseCourses = Array.from(
+                      new Map(
+                        planets
+                          .filter((p) => p.type === "courses")
+                          .flatMap((p) => p.courses || [])
+                          .filter((c) => c.link)
+                          .map((c) => [c.link, c]),
+                      ).values(),
+                    ).filter(
+                      (base) =>
+                        isFullAdmin || allowedCourses.includes(base.link),
+                    );
+
+                    baseCourses.forEach((base) => {
+                      const baseId = base.link.replace(/\//g, "");
+                      const includedLinks = calendarGroups[baseId] || [
+                        base.link,
+                      ];
+
+                      const groupOptions = includedLinks
+                        .map((l) =>
+                          availableCourses.find((ac) => ac.link === l),
+                        )
+                        .filter(Boolean);
+
+                      if (groupOptions.length > 0) {
+                        groups.push(
+                          <div key={baseId} style={{ marginBottom: "8px" }}>
+                            <div
+                              style={{
+                                fontSize: "0.65rem",
+                                fontWeight: "900",
+                                textTransform: "uppercase",
+                                color: "#4e5f28",
+                                padding: "8px 12px 4px 12px",
+                                opacity: 0.6,
+                              }}
+                            >
+                              {base.text[currentLang || "en"]} Group
+                            </div>
+                            {groupOptions.map((opt) => {
+                              renderedLinks.add(opt.link);
+                              const isSelected = coursePath === opt.link;
+                              return (
+                                <div
+                                  key={opt.link}
+                                  onClick={() => {
+                                    setCoursePath(opt.link);
+                                    setIsCourseDropdownOpen(false);
+                                  }}
+                                  style={{
+                                    padding: "10px 12px",
+                                    borderRadius: "8px",
+                                    cursor: "pointer",
+                                    backgroundColor: isSelected
+                                      ? "rgba(202, 175, 243, 0.2)"
+                                      : "transparent",
+                                    color: isSelected ? "#9960a8" : "#1c0700",
+                                    fontWeight: isSelected ? "bold" : "normal",
+                                    transition: "background-color 0.2s",
+                                    fontSize: "0.9rem",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                  }}
+                                >
+                                  <span>{opt.text[currentLang || "en"]}</span>
+                                  {opt.link !== base.link && (
+                                    <span
+                                      style={{
+                                        fontSize: "0.65rem",
+                                        opacity: 0.5,
+                                        fontFamily: "monospace",
+                                      }}
+                                    >
+                                      {opt.link}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>,
+                        );
+                      }
+                    });
+
+                    const ungrouped = availableCourses.filter(
+                      (ac) => !renderedLinks.has(ac.link),
+                    );
+                    if (ungrouped.length > 0) {
+                      groups.push(
+                        <div key="ungrouped" style={{ marginBottom: "8px" }}>
+                          <div
+                            style={{
+                              fontSize: "0.65rem",
+                              fontWeight: "900",
+                              textTransform: "uppercase",
+                              color: "#ff4d4d",
+                              padding: "8px 12px 4px 12px",
+                              opacity: 0.8,
+                            }}
+                          >
+                            Unassigned
+                          </div>
+                          {ungrouped.map((opt) => {
+                            const isSelected = coursePath === opt.link;
+                            return (
+                              <div
+                                key={opt.link}
+                                onClick={() => {
+                                  setCoursePath(opt.link);
+                                  setIsCourseDropdownOpen(false);
+                                }}
+                                style={{
+                                  padding: "10px 12px",
+                                  borderRadius: "8px",
+                                  cursor: "pointer",
+                                  backgroundColor: isSelected
+                                    ? "rgba(202, 175, 243, 0.2)"
+                                    : "transparent",
+                                  color: isSelected ? "#9960a8" : "#1c0700",
+                                  fontWeight: isSelected ? "bold" : "normal",
+                                  fontSize: "0.9rem",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                }}
+                              >
+                                <span>{opt.text[currentLang || "en"]}</span>
+                                <span
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    opacity: 0.5,
+                                    fontFamily: "monospace",
+                                  }}
+                                >
+                                  {opt.link}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>,
+                      );
+                    }
+
+                    return groups;
+                  })()}
+                </div>
+              )}
             </div>
 
             <div>
@@ -211,6 +480,13 @@ export default function PromotionsTab({
                       backgroundColor:
                         applyTo === type ? "#caaff3" : "transparent",
                       textTransform: "capitalize",
+                      whiteSpace: "nowrap",
+                      padding: isMobile ? "8px 4px" : "8px 12px",
+                      fontSize: isMobile ? "0.75rem" : "0.85rem",
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      lineHeight: 1,
                     }}
                   >
                     {labels[type]}
@@ -228,6 +504,13 @@ export default function PromotionsTab({
                     ...toggleOptionStyle,
                     backgroundColor:
                       discountType === "free" ? "#caaff3" : "transparent",
+                    whiteSpace: "nowrap",
+                    padding: isMobile ? "8px 4px" : "8px 12px",
+                    fontSize: isMobile ? "0.75rem" : "0.85rem",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    lineHeight: 1,
                   }}
                 >
                   {labels.free}
@@ -238,21 +521,51 @@ export default function PromotionsTab({
                     ...toggleOptionStyle,
                     backgroundColor:
                       discountType === "percent" ? "#caaff3" : "transparent",
+                    whiteSpace: "nowrap",
+                    padding: isMobile ? "8px 4px" : "8px 12px",
+                    fontSize: isMobile ? "0.75rem" : "0.85rem",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    lineHeight: 1,
                   }}
                 >
                   {labels.percent}
                 </div>
+                <div
+                  onClick={() => setDiscountType("amount")}
+                  style={{
+                    ...toggleOptionStyle,
+                    backgroundColor:
+                      discountType === "amount" ? "#caaff3" : "transparent",
+                    whiteSpace: "nowrap",
+                    padding: isMobile ? "8px 4px" : "8px 12px",
+                    fontSize: isMobile ? "0.75rem" : "0.85rem",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    lineHeight: 1,
+                  }}
+                >
+                  {currentLang === "en" ? "Amount (CHF)" : "Betrag (CHF)"}
+                </div>
               </div>
             </div>
 
-            {discountType === "percent" && (
+            {(discountType === "percent" || discountType === "amount") && (
               <div>
-                <label style={labelStyle}>{labels.discPercent}</label>
+                <label style={labelStyle}>
+                  {discountType === "percent"
+                    ? labels.discPercent
+                    : currentLang === "en"
+                      ? "Discount Amount (CHF)"
+                      : "Rabatt Betrag (CHF)"}
+                </label>
                 <input
                   style={inputStyle}
                   type="number"
                   min="1"
-                  max="99"
+                  max={discountType === "percent" ? "99" : undefined}
                   value={discountValue}
                   onChange={(e) => setDiscountValue(e.target.value)}
                 />
@@ -268,6 +581,13 @@ export default function PromotionsTab({
                     ...toggleOptionStyle,
                     backgroundColor:
                       limitType === "uses" ? "#caaff3" : "transparent",
+                    whiteSpace: "nowrap",
+                    padding: isMobile ? "8px 4px" : "8px 12px",
+                    fontSize: isMobile ? "0.75rem" : "0.85rem",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    lineHeight: 1,
                   }}
                 >
                   {labels.maxUses}
@@ -278,6 +598,13 @@ export default function PromotionsTab({
                     ...toggleOptionStyle,
                     backgroundColor:
                       limitType === "date" ? "#caaff3" : "transparent",
+                    whiteSpace: "nowrap",
+                    padding: isMobile ? "8px 4px" : "8px 12px",
+                    fontSize: isMobile ? "0.75rem" : "0.85rem",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    lineHeight: 1,
                   }}
                 >
                   {labels.expiry}
@@ -392,9 +719,23 @@ export default function PromotionsTab({
                       display: "flex",
                       alignItems: "center",
                       gap: "4px",
+                      fontWeight: "bold",
                     }}
                   >
-                    <Percent size={14} /> {pc.discountValue}% {labels.off}
+                    {pc.discountType === "percent" ? (
+                      <>
+                        <Percent size={14} /> {pc.discountValue}% {labels.off}
+                      </>
+                    ) : pc.discountType === "amount" ? (
+                      <>
+                        <Ticket size={14} /> -{pc.discountValue} CHF
+                      </>
+                    ) : (
+                      <>
+                        <Star size={14} />{" "}
+                        {currentLang === "en" ? "FREE" : "GRATIS"}
+                      </>
+                    )}
                   </span>
                   {pc.limitType === "uses" ? (
                     <span
