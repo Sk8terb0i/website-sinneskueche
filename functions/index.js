@@ -275,15 +275,26 @@ const sendBookingEmail = async (
 ) => {
   if (!mainEmail || dates.length === 0) return;
 
-  // 1. Fetch Course Settings to translate technical IDs into readable names
-  const courseId = coursePath.replace(/\//g, "");
-  const settingsRef = db.collection("course_settings").doc(courseId);
-  const settingsSnap = await (transaction
-    ? transaction.get(settingsRef)
-    : settingsRef.get());
-  const specialEvents = settingsSnap.exists
-    ? settingsSnap.data().specialEvents || []
-    : [];
+  // 1. Fetch Course Settings for all unique links involved in this booking
+  const uniqueLinks = [...new Set(dates.map((d) => d.link || coursePath))];
+  const settingsMap = {};
+  for (const link of uniqueLinks) {
+    const cId = link.replace(/\//g, "");
+    const sRef = db.collection("course_settings").doc(cId);
+    const sSnap = await (transaction ? transaction.get(sRef) : sRef.get());
+    if (sSnap.exists) {
+      settingsMap[link] = sSnap.data();
+    }
+  }
+
+  // Determine an overarching courseKey for the subject/header
+  let overarchingCourseKey = getCleanCourseKey(coursePath);
+  if (uniqueLinks.length === 1) {
+    const sData = settingsMap[uniqueLinks[0]];
+    if (sData && sData.courseName) overarchingCourseKey = sData.courseName;
+  } else {
+    overarchingCourseKey = lang === "de" ? "Deine Kurse" : "Your Courses";
+  }
 
   // 2. Group tickets by recipient (Email + Name)
   const recipientGroups = {};
@@ -298,7 +309,6 @@ const sendBookingEmail = async (
     recipientGroups[key].tickets.push(d);
   });
 
-  const courseKey = getCleanCourseKey(coursePath);
   const typeId = isGuest
     ? "booking_confirmation_guest"
     : "booking_confirmation_user";
@@ -308,51 +318,75 @@ const sendBookingEmail = async (
   for (const key in recipientGroups) {
     const { email, name, tickets } = recipientGroups[key];
 
-    const datesHtml = tickets
-      .map((d) => {
+    // Group tickets by course link to create clean headers
+    const ticketsByLink = {};
+    tickets.forEach((d) => {
+      const link = d.link || coursePath;
+      if (!ticketsByLink[link]) ticketsByLink[link] = [];
+      ticketsByLink[link].push(d);
+    });
+
+    let datesHtml = "";
+
+    for (const link in ticketsByLink) {
+      const linkTickets = ticketsByLink[link];
+      const settings = settingsMap[link] || {};
+      const courseName = settings.courseName || getCleanCourseKey(link);
+      const specialEvents = settings.specialEvents || [];
+
+      // Create a specific block for this course
+      datesHtml += `
+        <li style="margin-bottom: 15px; list-style: none; padding: 15px; background: #ffffff; border-radius: 8px; border: 1px solid #caaff3;">
+          <div style="font-size: 13px; font-weight: 900; text-transform: uppercase; color: #9960a8; margin-bottom: 8px; border-bottom: 1px dashed rgba(202, 175, 243, 0.5); padding-bottom: 8px;">${courseName}</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">`;
+
+      linkTickets.forEach((d) => {
         const fDate = formatDate(d.date);
 
-        // --- ADD-ON NAME RESOLUTION ---
+        // Resolve specific Add-on names for this course
         let addonsHtml = "";
         if (d.selectedAddons && d.selectedAddons.length > 0) {
-          addonsHtml = `<div style="font-size: 13px; color: #9960a8; margin-top: 5px;">`;
+          addonsHtml = `<div style="font-size: 13px; color: #9960a8; margin-top: 4px; padding-left: 10px;">`;
           d.selectedAddons.forEach((addon) => {
             const addonId = typeof addon === "string" ? addon : addon.id;
             const addonTime = typeof addon === "object" ? addon.time : null;
 
-            // Look for the addon in the course settings
             const match = specialEvents.find(
-              (se) => se.id === addonId.toString(),
+              (se) => String(se.id) === String(addonId),
             );
             const displayName = match
               ? lang === "de"
                 ? match.nameDe
                 : match.nameEn
-              : addonId; // Fallback to ID if not found
+              : addonId;
 
             addonsHtml += `<div>+ ${displayName}${addonTime ? ` (${addonTime})` : ""}</div>`;
           });
           addonsHtml += `</div>`;
         }
 
-        return `
-          <li style="margin-bottom: 18px; list-style: none; padding: 15px; background: #ffffff; border-radius: 8px; border: 1px solid #caaff3;">
+        datesHtml += `
+          <div style="padding: 4px 0;">
             <strong style="color: #1c0700;">${fDate}${d.time ? ` | ${d.time}` : ""}</strong>
             ${addonsHtml}
-          </li>`;
-      })
-      .join("");
+          </div>`;
+      });
+
+      datesHtml += `</div></li>`;
+    }
 
     const mailRef = db.collection("mail").doc();
     const mailData = {
       to: email,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       message: {
-        subject: replaceVars(template.subject, { "{courseKey}": courseKey }),
+        subject: replaceVars(template.subject, {
+          "{courseKey}": overarchingCourseKey,
+        }),
         html: replaceVars(template.body, {
           "{userName}": name,
-          "{courseKey}": courseKey,
-          "{datesHtml}": `<ul>${datesHtml}</ul>`,
+          "{courseKey}": overarchingCourseKey,
+          "{datesHtml}": `<ul style="margin: 0; padding: 0;">${datesHtml}</ul>`,
           "{registrationCTA}": isGuest
             ? getRegistrationCTA(lang, email, origin)
             : "",

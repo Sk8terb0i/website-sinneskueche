@@ -85,12 +85,13 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
 
   const balance = userData?.credits?.[getCreditKey(coursePath)] || 0;
 
+  // Pass the full credits object so BookingSummary can resolve by sub-course link
   const profileBalances = {
-    main: balance,
+    main: userData?.credits || {},
   };
   if (userData?.linkedProfiles) {
     userData.linkedProfiles.forEach((p) => {
-      profileBalances[p.id] = p.credits?.[getCreditKey(coursePath)] || 0;
+      profileBalances[p.id] = p.credits || {};
     });
   }
   // -----------------------------------------------------------
@@ -361,26 +362,62 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           id: d.id,
           date: d.date,
           time: d.time,
-          link: d.link, // Include the course link for title resolution
+          link: d.link,
           attendeeName:
             att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
           profileId: att.profileId || null,
           selectedAddons: att.selectedAddons || [],
         })),
       );
+
+      // 1. Generate the same detailed summary used in handlePayment
+      const sessionSummary = expandedDates
+        .map((d) => {
+          const activeLink = d.link || coursePath;
+          const pData = pricingMap[activeLink];
+          const title =
+            pData?.courseName || activeLink.replace(/\//g, "") || "Session";
+
+          let displayStr = `${formatDate(d.date)} | ${d.time || ""} (${title})`;
+
+          if (d.selectedAddons && d.selectedAddons.length > 0) {
+            const addonParts = d.selectedAddons.map((a) => {
+              const aid = typeof a === "string" ? a : a.id;
+              const aTime = typeof a === "object" ? a.time : null;
+              const def = pData?.specialEvents?.find(
+                (se) => String(se.id) === String(aid),
+              );
+              const aName = def
+                ? currentLang === "en"
+                  ? def.nameEn
+                  : def.nameDe
+                : currentLang === "en"
+                  ? "Add-on"
+                  : "Extra";
+
+              return `+ ${aName}${aTime ? ` (${aTime})` : ""}`;
+            });
+            displayStr += " " + addonParts.join(" ");
+          }
+          return displayStr;
+        })
+        .join(", ");
+
       const functions = getFunctions();
       const bookCredits = httpsCallable(functions, "bookWithCredits");
-
       const baseUrl = window.location.origin;
 
       await bookCredits({
         coursePath,
         selectedDates: expandedDates,
         currentLang,
-        baseUrl, // PASS TO BACKEND
+        baseUrl,
       });
-      // Credits always mean dates were booked
-      navigate("/success?type=credit&booked=true");
+
+      // 2. Pass the summary in the URL so Success.jsx can display it
+      navigate(
+        `/success?type=credit&booked=true&sessions=${encodeURIComponent(sessionSummary)}`,
+      );
     } catch (err) {
       console.error(err);
       setIsProcessing(false);

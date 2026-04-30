@@ -215,39 +215,54 @@ export default function RemindersTab({
 
   const generatePreview = (lang) => {
     const data = reminderData[lang];
-    let combined = `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">`;
+    const courseNameText =
+      availableCourses.find((c) => c.link.replace(/\//g, "") === selectedCourse)
+        ?.text[lang] || "Workshop";
 
-    combined += `<p style="white-space: pre-wrap;">${data.text || ""}</p>`;
+    // Helper to replace variables specifically for a given time context
+    const replaceLocalVars = (str, sectionTime) => {
+      if (!str) return "";
+      const vars = {
+        "{userName}": "Jane Doe",
+        "{courseName}": courseNameText,
+        "{courseDate}": "15.05.2026",
+        "{courseTime}": sectionTime || "18:00",
+      };
+      let result = str;
+      Object.keys(vars).forEach((key) => {
+        result = result.split(key).join(vars[key]);
+      });
+      return result;
+    };
 
-    // Only show first timer text in preview if there's no mandatory intro add-on
+    let html = `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">`;
+
+    // 1. Main Message (Uses Course Time)
+    html += `<p style="white-space: pre-wrap; margin-bottom: 20px;">${replaceLocalVars(data.text, "18:00")}</p>`;
+
+    // 2. First Timer Text (Uses Course Time)
     if (!hasMandatoryIntro && data.firstTimerText) {
-      combined += `<div style="margin-top: 20px; padding: 15px; background-color: rgba(202, 175, 243, 0.2); border-radius: 8px;">`;
-      combined += `<p style="margin: 0; font-size: 0.9em; white-space: pre-wrap;"><strong>${labels.first}:</strong><br/>${data.firstTimerText}</p></div>`;
+      html += `<div style="margin-top: 20px; padding: 15px; background-color: rgba(202, 175, 243, 0.2); border-radius: 8px; border: 1px solid #caaff3;">`;
+      html += `<p style="margin: 0; font-size: 0.9em; white-space: pre-wrap;"><strong>${labels.first}:</strong><br/>${replaceLocalVars(data.firstTimerText, "18:00")}</p></div>`;
     }
 
+    // 3. Add-on Blocks (Uses Add-on specific time)
     courseAddons.forEach((addon) => {
       if (data.addonTexts?.[addon.id]) {
         const addonName = lang === "de" ? addon.nameDe : addon.nameEn;
-        combined += `<div style="margin-top: 15px; padding: 15px; background-color: rgba(78, 95, 40, 0.1); border-radius: 8px;">`;
-        combined += `<p style="margin: 0; font-size: 0.9em; white-space: pre-wrap;"><strong>Extra - ${addonName}:</strong><br/>${data.addonTexts[addon.id]}</p></div>`;
+
+        // Find relevant time for this specific add-on
+        const relevantTime = addon.timeSlots?.[0]
+          ? `${addon.timeSlots[0].startTime}-${addon.timeSlots[0].endTime}`
+          : addon.time || "18:30";
+
+        html += `<div style="margin-top: 15px; padding: 15px; background-color: rgba(78, 95, 40, 0.1); border-radius: 8px; border: 1px solid #4e5f28;">`;
+        html += `<p style="margin: 0; font-size: 0.9em; white-space: pre-wrap;"><strong>Extra - ${addonName}:</strong><br/>${replaceLocalVars(data.addonTexts[addon.id], relevantTime)}</p></div>`;
       }
     });
 
-    combined += `</div>`;
-
-    const sampleData = {
-      "{userName}": "Jane Doe",
-      "{courseName}": "Pottery Tuesdays",
-      "{courseDate}": "15.05.2025",
-      "{courseTime}": "18:00",
-    };
-
-    let previewStr = combined;
-    Object.keys(sampleData).forEach((key) => {
-      previewStr = previewStr.split(key).join(sampleData[key]);
-    });
-
-    return previewStr;
+    html += `</div>`;
+    return html;
   };
 
   const wideInputStyle = {

@@ -34,6 +34,19 @@ import {
 import { auth, db } from "../../firebase";
 import * as S from "./PriceDisplayStyles";
 
+const getCreditKey = (path) => {
+  const mapping = {
+    "/pottery": "pottery tuesdays",
+    "/artistic-vision": "artistic vision",
+    "/get-ink": "get ink!",
+    "/singing": "vocal coaching",
+    "/extended-voice-lab": "extended voice lab",
+    "/performing-words": "performing words",
+    "/singing-basics": "singing basics weekend",
+  };
+  return mapping[path] || (path ? path.replace(/\//g, "") : "workshop");
+};
+
 const parseTime = (timeStr) => {
   if (!timeStr) return null;
   const [hours, minutes] = timeStr.split(":").map(Number);
@@ -359,17 +372,21 @@ export default function BookingSummary({
   let ineligibleForCredit = 0;
   let totalUsableUserCredits = 0;
 
+  // Structure: { profileId: { courseKey: { requested: 0, usedDates: new Set() } } }
   const profileUsage = {};
 
   selectedDates.forEach((d) => {
+    const courseKey = getCreditKey(d.link || coursePath);
+
     (d.attendees || []).forEach((att) => {
       const pid = att.profileId;
       if (!pid) {
         // Guests with no profile ID are never eligible for credits
         ineligibleForCredit += 1;
       } else {
-        if (!profileUsage[pid])
-          profileUsage[pid] = { requested: 0, usedDates: new Set() };
+        if (!profileUsage[pid]) profileUsage[pid] = {};
+        if (!profileUsage[pid][courseKey])
+          profileUsage[pid][courseKey] = { requested: 0, usedDates: new Set() };
 
         let alreadyUsedCredit = false;
         if (pid === "main") {
@@ -380,12 +397,13 @@ export default function BookingSummary({
 
         if (
           limitOnePerDay &&
-          (profileUsage[pid].usedDates.has(d.id) || alreadyUsedCredit)
+          (profileUsage[pid][courseKey].usedDates.has(d.id) ||
+            alreadyUsedCredit)
         ) {
           ineligibleForCredit += 1;
         } else {
-          profileUsage[pid].usedDates.add(d.id);
-          profileUsage[pid].requested += 1;
+          profileUsage[pid][courseKey].usedDates.add(d.id);
+          profileUsage[pid][courseKey].requested += 1;
           eligibleForCredit += 1;
         }
       }
@@ -393,16 +411,23 @@ export default function BookingSummary({
   });
 
   const totalTicketsSelected = eligibleForCredit + ineligibleForCredit;
+  const tempUsableCredits = {};
 
   if (activePackCode) {
     totalUsableUserCredits =
       activePackCode.remaining > 0
         ? Math.min(activePackCode.remaining, eligibleForCredit)
         : 0;
+    tempUsableCredits["guest"] = { all: totalUsableUserCredits };
   } else {
-    Object.entries(profileUsage).forEach(([pid, usage]) => {
-      const bal = profileBalances[pid] || 0;
-      totalUsableUserCredits += Math.min(bal, usage.requested);
+    Object.entries(profileUsage).forEach(([pid, courseUsages]) => {
+      tempUsableCredits[pid] = {};
+      Object.entries(courseUsages).forEach(([courseKey, usage]) => {
+        const bal = profileBalances[pid]?.[courseKey] || 0;
+        const usableForCourse = Math.min(bal, usage.requested);
+        tempUsableCredits[pid][courseKey] = usableForCourse;
+        totalUsableUserCredits += usableForCourse;
+      });
     });
   }
 
@@ -412,19 +437,26 @@ export default function BookingSummary({
 
   // Calculate the cost for individual sessions, respecting different prices per course
   let totalIndividualCash = 0;
-  let tempUsableCredits = usableCredits;
+  let remainingPackCodeUses = activePackCode ? totalUsableUserCredits : 0;
 
   selectedDates.forEach((d) => {
+    const courseKey = getCreditKey(d.link || coursePath);
+
     (d.attendees || []).forEach((att) => {
       const coursePrice = parseFloat(pricingMap[d.link]?.priceSingle || 0);
       const pid = att.profileId;
 
-      // Check if this specific ticket can be covered by existing credits
-      const canUseExistingCredit = pid && (profileBalances[pid] || 0) > 0;
+      let usedCredit = false;
 
-      if (canUseExistingCredit && tempUsableCredits > 0) {
-        tempUsableCredits--; // Covered by existing balance
-      } else {
+      if (activePackCode && remainingPackCodeUses > 0) {
+        usedCredit = true;
+        remainingPackCodeUses--;
+      } else if (pid && tempUsableCredits[pid]?.[courseKey] > 0) {
+        usedCredit = true;
+        tempUsableCredits[pid][courseKey]--;
+      }
+
+      if (!usedCredit) {
         totalIndividualCash += coursePrice; // Must pay cash
       }
     });
@@ -509,21 +541,46 @@ export default function BookingSummary({
 
   // 3. Loop through selected sessions to apply coverage
   const breakdownMap = {};
-  tempUsableCredits = usableCredits; // Removed 'let' to avoid redeclaration
+
+  // Re-calculate local temp tracking for the breakdown logic
+  const breakdownTempCredits = {};
+  let breakdownRemainingPackCodeUses = activePackCode
+    ? totalUsableUserCredits
+    : 0;
+
+  Object.entries(profileUsage).forEach(([pid, courseUsages]) => {
+    breakdownTempCredits[pid] = {};
+    Object.entries(courseUsages).forEach(([courseKey, usage]) => {
+      breakdownTempCredits[pid][courseKey] = Math.min(
+        profileBalances[pid]?.[courseKey] || 0,
+        usage.requested,
+      );
+    });
+  });
+
   let hasExceededPack = false;
   let hasUncoveredMixedCourse = false;
 
   selectedDates.forEach((d) => {
+    const courseKey = getCreditKey(d.link || coursePath);
     const coursePrice = parseFloat(pricingMap[d.link]?.priceSingle || 0);
     const title =
       typeof d.title === "object" ? d.title[currentLang || "en"] : d.title;
 
     (d.attendees || []).forEach((att) => {
       const pid = att.profileId;
-      const canUseExistingCredit = pid && (profileBalances[pid] || 0) > 0;
 
-      if (canUseExistingCredit && tempUsableCredits > 0) {
-        tempUsableCredits--; // Covered by Profile Balance
+      let usedCredit = false;
+      if (activePackCode && breakdownRemainingPackCodeUses > 0) {
+        usedCredit = true;
+        breakdownRemainingPackCodeUses--;
+      } else if (pid && breakdownTempCredits[pid]?.[courseKey] > 0) {
+        usedCredit = true;
+        breakdownTempCredits[pid][courseKey]--;
+      }
+
+      if (usedCredit) {
+        // Covered by existing credit
       } else if (newPackRemaining[d.link] > 0) {
         newPackRemaining[d.link]--; // Covered by NEWLY selected pack
       } else {
@@ -2744,19 +2801,39 @@ export default function BookingSummary({
                 ),
               ];
 
-              // 2. Map those IDs to their specific names and balances
-              const relevantBalances = activeProfileIds
-                .map((pid) => {
-                  const bal = profileBalances[pid] || 0;
-                  const name =
-                    pid === "main"
-                      ? userData?.firstName ||
-                        (currentLang === "en" ? "Me" : "Ich")
-                      : userData?.linkedProfiles?.find((lp) => lp.id === pid)
-                          ?.firstName || "User";
-                  return { name, bal };
-                })
-                .filter((item) => item.bal > 0); // Only show if they actually have credits
+              // 2. Find unique course keys currently in the cart
+              const activeCourseKeys = [
+                ...new Set(
+                  selectedDates.map((d) => getCreditKey(d.link || coursePath)),
+                ),
+              ];
+
+              // 3. Map those IDs to their specific names and balances for the active courses
+              const relevantBalances = [];
+              activeProfileIds.forEach((pid) => {
+                activeCourseKeys.forEach((courseKey) => {
+                  const bal = profileBalances[pid]?.[courseKey] || 0;
+                  if (bal > 0) {
+                    const name =
+                      pid === "main"
+                        ? userData?.firstName ||
+                          (currentLang === "en" ? "Me" : "Ich")
+                        : userData?.linkedProfiles?.find((lp) => lp.id === pid)
+                            ?.firstName || "User";
+                    const pDataMatch = Object.values(pricingMap).find(
+                      (p) => getCreditKey(p.coursePath || p.link) === courseKey,
+                    );
+                    const courseNameDisplay =
+                      pDataMatch?.courseName || courseKey;
+
+                    relevantBalances.push({
+                      name,
+                      bal,
+                      courseName: courseNameDisplay,
+                    });
+                  }
+                });
+              });
 
               if (relevantBalances.length === 0) return null;
 
@@ -2788,7 +2865,8 @@ export default function BookingSummary({
                       <Ticket size={14} />
                       <span>
                         {item.name}: {item.bal}{" "}
-                        {currentLang === "en" ? "credits" : "Guthaben"}
+                        {currentLang === "en" ? "credits" : "Guthaben"} (
+                        {item.courseName})
                       </span>
                     </div>
                   ))}

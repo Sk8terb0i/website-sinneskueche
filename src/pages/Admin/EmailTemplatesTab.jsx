@@ -113,16 +113,28 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
       id: "booking_confirmation_user",
       vars: ["{userName}", "{courseKey}", "{datesHtml}", "{profileUrl}"],
       defaults: {
-        en: { subject: "Confirmation: {courseKey}", body: "" },
-        de: { subject: "Bestätigung: {courseKey}", body: "" },
+        en: {
+          subject: "Booking Confirmed: {courseKey}",
+          body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">See you soon!</h2>\n  <p>Hi {userName},</p>\n  <p>Your booking for <strong>{courseKey}</strong> is confirmed. Below are your dates and any selected add-ons:</p>\n  <div style="margin: 20px 0;">{datesHtml}</div>\n  <p>Location: Sägestrasse 11, 8952 Schlieren</p>\n  <a href="{profileUrl}" style="color: #9960a8; font-weight: bold;">Manage my bookings</a>\n</div>`,
+        },
+        de: {
+          subject: "Buchung bestätigt: {courseKey}",
+          body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Wir freuen uns auf dich!</h2>\n  <p>Hallo {userName},</p>\n  <p>Deine Buchung für <strong>{courseKey}</strong> ist bestätigt. Hier sind deine Termine und gewählten Extras:</p>\n  <div style="margin: 20px 0;">{datesHtml}</div>\n  <p>Standort: Sägestrasse 11, 8952 Schlieren</p>\n  <a href="{profileUrl}" style="color: #9960a8; font-weight: bold;">Meine Buchungen verwalten</a>\n</div>`,
+        },
       },
     },
     {
       id: "booking_confirmation_guest",
       vars: ["{userName}", "{courseKey}", "{datesHtml}", "{registrationCTA}"],
       defaults: {
-        en: { subject: "Confirmation: {courseKey}", body: "" },
-        de: { subject: "Bestätigung: {courseKey}", body: "" },
+        en: {
+          subject: "Booking Confirmed: {courseKey}",
+          body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">See you soon!</h2>\n  <p>Hi {userName},</p>\n  <p>Your booking for <strong>{courseKey}</strong> is confirmed. Below are your dates and any selected add-ons:</p>\n  <div style="margin: 20px 0;">{datesHtml}</div>\n  <p>Location: Sägestrasse 11, 8952 Schlieren</p>\n  {registrationCTA}\n</div>`,
+        },
+        de: {
+          subject: "Buchung bestätigt: {courseKey}",
+          body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Wir freuen uns auf dich!</h2>\n  <p>Hallo {userName},</p>\n  <p>Deine Buchung für <strong>{courseKey}</strong> ist bestätigt. Hier sind deine Termine und gewählten Extras:</p>\n  <div style="margin: 20px 0;">{datesHtml}</div>\n  <p>Standort: Sägestrasse 11, 8952 Schlieren</p>\n  {registrationCTA}\n</div>`,
+        },
       },
     },
     {
