@@ -32,6 +32,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   const { currentUser, userData } = useAuth();
   const navigate = useNavigate();
   const [pricing, setPricing] = useState(null);
+  const [pricingMap, setPricingMap] = useState({}); // New State
   const [scheduleData, setScheduleData] = useState(null);
   const [availableDates, setAvailableDates] = useState([]);
   const [selectedDates, setSelectedDates] = useState([]);
@@ -72,19 +73,49 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   }
   // -----------------------------------------------------------
 
-  const addonColors = [
-    "#9960a8",
-    "#4e5f28",
-    "#f39c12",
-    "#e74c3c",
-    "#3498db",
-    "#1abc9c",
+  // Thematic palettes: Purple, Olive Green, Sand/Gold, Blue, Rose
+  const coursePalettes = [
+    {
+      base: "#9960a8",
+      light: "rgba(153, 96, 168, 0.25)",
+      addons: ["#7a4d86", "#b380c2", "#5c3a65"],
+    },
+    {
+      base: "#4e5f28",
+      light: "rgba(78, 95, 40, 0.25)",
+      addons: ["#3e4c20", "#6b7d3f", "#2f3918"],
+    },
+    {
+      base: "#d4a373",
+      light: "rgba(212, 163, 115, 0.3)",
+      addons: ["#b58455", "#e3bc98", "#8f6640"],
+    },
+    {
+      base: "#457b9d",
+      light: "rgba(69, 123, 157, 0.25)",
+      addons: ["#37627d", "#6a9ab8", "#294a5e"],
+    },
+    {
+      base: "#e5989b",
+      light: "rgba(229, 152, 155, 0.3)",
+      addons: ["#b87a7c", "#eeafb2", "#895b5d"],
+    },
   ];
 
-  const getAddonColor = (addonId) => {
-    if (!pricing?.specialEvents) return "#ccc";
-    const index = pricing.specialEvents.findIndex((se) => se.id === addonId);
-    return index !== -1 ? addonColors[index % addonColors.length] : "#ccc";
+  const getCoursePalette = (courseLink) => {
+    const keys = Object.keys(pricingMap).sort();
+    const idx = keys.indexOf(courseLink);
+    return idx !== -1
+      ? coursePalettes[idx % coursePalettes.length]
+      : coursePalettes[0];
+  };
+
+  const getAddonColor = (addonId, courseLink) => {
+    const palette = getCoursePalette(courseLink);
+    const pData = pricingMap[courseLink];
+    const aIdx =
+      pData?.specialEvents?.findIndex((se) => se.id === addonId) ?? -1;
+    return aIdx !== -1 ? palette.addons[aIdx % palette.addons.length] : "#ccc";
   };
 
   const getProfileHistory = (pid) => {
@@ -106,17 +137,40 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
       setLoading(true);
       const docId = coursePath.replace(/\//g, "");
       try {
-        const [pSnap, eSnap] = await Promise.all([
-          getDoc(doc(db, "course_settings", docId)),
+        const cgSnap = await getDoc(doc(db, "calendar_groups", docId));
+        let includedLinks = [coursePath];
+        if (cgSnap.exists() && cgSnap.data().includedLinks?.length > 0) {
+          includedLinks = cgSnap.data().includedLinks;
+        }
+
+        const [pMapData, eSnap] = await Promise.all([
+          Promise.all(
+            includedLinks.map(async (link) => {
+              const lId = link.replace(/\//g, "");
+              const snap = await getDoc(doc(db, "course_settings", lId));
+              return { link, data: snap.exists() ? snap.data() : null };
+            }),
+          ),
           getDocs(query(collection(db, "events"), orderBy("date", "asc"))),
         ]);
-        if (pSnap.exists() && isMounted) setPricing(pSnap.data());
+
+        const pricingMapObj = {};
+        pMapData.forEach((p) => {
+          if (p.data) pricingMapObj[p.link] = p.data;
+        });
+
+        if (isMounted) {
+          setPricingMap(pricingMapObj);
+          setPricing(pricingMapObj[coursePath]);
+        }
+
         const filtered = eSnap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((ev) => ev.link === coursePath);
+          .filter((ev) => includedLinks.includes(ev.link));
+
         if (isMounted) {
           setAvailableDates(filtered);
-          if (filtered.length > 0)
+          if (filtered.length > 0) {
             setCurrentViewDate(
               new Date(
                 new Date(filtered[0].date).getFullYear(),
@@ -124,6 +178,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                 1,
               ),
             );
+          }
         }
         try {
           const sSnap = await getDoc(doc(db, "schedules", docId));
@@ -465,18 +520,22 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
               today.setHours(0, 0, 0, 0);
               const isPast = cellDate < today;
 
-              // 3. Determine if the date is full (either via real bookings, or pending requests)
+              const evPricing = realEvent
+                ? pricingMap[realEvent.link]
+                : pricing;
+
+              // 3. Determine if the date is full
               const isRealEventFull =
                 realEvent &&
-                pricing?.hasCapacity &&
+                evPricing?.hasCapacity &&
                 (eventBookingCounts[realEvent.id] || 0) >=
-                  parseInt(pricing.capacity);
+                  parseInt(evPricing.capacity);
               const isRequestedByOther = requestedDates.includes(dateStr);
               const isFull = isRealEventFull || isRequestedByOther;
 
               // 4. Create a "Virtual Event" if we are in Request Mode and the date is valid
               let event = realEvent;
-              if (pricing?.isRequestOnly && !realEvent && !isPast) {
+              if (evPricing?.isRequestOnly && !realEvent && !isPast) {
                 event = {
                   id: `request_${dateStr}`,
                   date: dateStr,
@@ -502,6 +561,8 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                 : rawAddons
                   ? [rawAddons]
                   : [];
+
+              const palette = getCoursePalette(event?.link || coursePath);
 
               return (
                 <div
@@ -530,7 +591,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
 
                         if (!currentUser || !hasBookedBefore) {
                           activeAddons.forEach((aid) => {
-                            const def = pricing?.specialEvents?.find(
+                            const def = evPricing?.specialEvents?.find(
                               (se) => se.id === aid,
                             );
 
@@ -571,7 +632,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                                   const history = getProfileHistory("main");
 
                                   activeAddons.forEach((aid) => {
-                                    const def = pricing?.specialEvents?.find(
+                                    const def = evPricing?.specialEvents?.find(
                                       (se) => se.id === aid,
                                     );
 
@@ -598,19 +659,40 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                       }
                     });
                   }}
-                  style={S.dayStyle(!!event, !!isSelected, isMobile, isFull)}
+                  style={{
+                    ...S.dayStyle(
+                      !!event,
+                      !!isSelected,
+                      isMobile,
+                      isFull || isPast,
+                    ),
+                    backgroundColor:
+                      isFull || isPast
+                        ? "rgba(0,0,0,0.05)"
+                        : isSelected
+                          ? palette.base
+                          : event
+                            ? palette.light
+                            : "transparent",
+                    color:
+                      isFull || isPast
+                        ? "#ccc"
+                        : isSelected
+                          ? "#fffce3"
+                          : "#1c0700",
+                  }}
                 >
                   {activeAddons.length > 0 && (
                     <div style={S.addonArcContainerStyle}>
                       {activeAddons
                         .filter(
                           (id) => !userData?.completedAddons?.includes(id),
-                        ) // Filter out completed addons
+                        )
                         .map((id, idx, filteredArray) => (
                           <div
                             key={idx}
                             style={S.addonDotStyle(
-                              getAddonColor(id),
+                              getAddonColor(id, event.link),
                               Math.pow(
                                 Math.abs(idx - (filteredArray.length - 1) / 2),
                                 2,
@@ -621,56 +703,120 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                     </div>
                   )}
                   {i + 1}
-                  {/* Only show the purple dot if it's a REAL scheduled event, not a virtual request date */}
                   {event && !event.isVirtual && !isFull && (
                     <div
-                      style={S.dotStyle(
-                        !!isSelected,
-                        userBookedIds.includes(event.id),
-                        isMobile,
-                      )}
+                      style={{
+                        ...S.dotStyle(
+                          !!isSelected,
+                          userBookedIds.includes(event.id),
+                          isMobile,
+                        ),
+                        backgroundColor: userBookedIds.includes(event.id)
+                          ? "#ccc"
+                          : isSelected
+                            ? "#fffce3"
+                            : palette.base,
+                      }}
                     />
                   )}
                 </div>
               );
             })}
           </div>
-          <div style={S.legendWrapperStyle(isMobile)}>
-            <div style={S.legendStatusRowStyle(isMobile)}>
-              <div style={S.legendItemStyle(isMobile)}>
-                <div
-                  style={S.legendIndicatorStyle(
-                    "rgba(202, 175, 243, 0.4)",
-                    isMobile,
-                  )}
-                />
-                Available
-              </div>
-              <div style={S.legendItemStyle(isMobile)}>
-                <div style={S.legendIndicatorStyle("#caaff3", isMobile)} />
-                Selected
-              </div>
-              <div style={S.legendItemStyle(isMobile)}>
-                <div
-                  style={S.legendIndicatorStyle("rgba(0,0,0,0.05)", isMobile)}
-                />
-                Full
-              </div>
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-              {pricing?.specialEvents
-                ?.filter((se) => !userData?.completedAddons?.includes(se.id)) // Filter out completed addons
-                ?.map((se) => (
-                  <div key={se.id} style={S.legendItemStyle(isMobile)}>
+          <div
+            style={{
+              ...S.legendWrapperStyle(isMobile),
+              alignItems: "flex-start",
+              gap: "1.5rem",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "1.5rem",
+                width: "100%",
+              }}
+            >
+              {Object.keys(pricingMap)
+                .sort((a, b) =>
+                  a === coursePath
+                    ? -1
+                    : b === coursePath
+                      ? 1
+                      : a.localeCompare(b),
+                )
+                .map((link) => {
+                  const pData = pricingMap[link];
+                  const palette = getCoursePalette(link);
+                  const validAddons =
+                    pData.specialEvents?.filter(
+                      (se) => !userData?.completedAddons?.includes(se.id),
+                    ) || [];
+
+                  const matchingEvent = availableDates.find(
+                    (e) => e.link === link,
+                  );
+                  const title = matchingEvent?.title
+                    ? typeof matchingEvent.title === "object"
+                      ? matchingEvent.title[currentLang || "en"]
+                      : matchingEvent.title
+                    : pData.courseName || link.replace(/\//g, "");
+
+                  return (
                     <div
-                      style={S.legendIndicatorStyle(
-                        getAddonColor(se.id),
-                        isMobile,
-                      )}
-                    />
-                    {currentLang === "en" ? se.nameEn : se.nameDe}
-                  </div>
-                ))}
+                      key={link}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: "900",
+                          textTransform: "uppercase",
+                          color: palette.base,
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        {title}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "12px",
+                          rowGap: "8px",
+                        }}
+                      >
+                        <div style={S.legendItemStyle(isMobile)}>
+                          <div
+                            style={S.legendIndicatorStyle(
+                              palette.light,
+                              isMobile,
+                            )}
+                          />
+                          {currentLang === "de" ? "Verfügbar" : "Available"}
+                        </div>
+                        {/* Removed the "Selected" legend item here */}
+                        {validAddons.map((se) => (
+                          <div key={se.id} style={S.legendItemStyle(isMobile)}>
+                            <div
+                              style={S.legendIndicatorStyle(
+                                getAddonColor(se.id, link),
+                                isMobile,
+                              )}
+                            />
+                            {currentLang === "en" ? se.nameEn : se.nameDe}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </div>
@@ -683,6 +829,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           profileBalances={profileBalances}
           profileHistoryMap={profileHistoryMap}
           pricing={pricing}
+          pricingMap={pricingMap}
           scheduleData={scheduleData}
           addonBookingCounts={addonBookingCounts}
           guestInfo={guestInfo}
@@ -698,6 +845,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           userBookedIds={userBookedIds}
           userCreditBookedIds={userCreditBookedIds}
           hasBookedBefore={hasBookedBefore}
+          getAddonColor={getAddonColor}
         />
       </div>
     </div>

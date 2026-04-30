@@ -57,6 +57,7 @@ export default function BookingSummary({
   profileBalances = {},
   profileHistoryMap = {},
   pricing,
+  pricingMap = {}, // New Prop
   scheduleData,
   addonBookingCounts,
   guestInfo,
@@ -72,6 +73,7 @@ export default function BookingSummary({
   userBookedIds = [],
   userCreditBookedIds = [],
   hasBookedBefore = false,
+  getAddonColor,
 }) {
   const [isAuthExpanded, setIsAuthExpanded] = useState(false);
   const [uncheckWarning, setUncheckWarning] = useState(null);
@@ -102,21 +104,6 @@ export default function BookingSummary({
 
   const [manuallyExpandedDates, setManuallyExpandedDates] = useState({});
   const [showPackInfo, setShowPackInfo] = useState(false);
-
-  const addonColors = [
-    "#9960a8",
-    "#4e5f28",
-    "#f39c12",
-    "#e74c3c",
-    "#3498db",
-    "#1abc9c",
-  ];
-
-  const getAddonColor = (addonId) => {
-    if (!pricing?.specialEvents) return "#ccc";
-    const index = pricing.specialEvents.findIndex((se) => se.id === addonId);
-    return index !== -1 ? addonColors[index % addonColors.length] : "#ccc";
-  };
 
   useEffect(() => {
     const currentName = currentUser
@@ -238,7 +225,8 @@ export default function BookingSummary({
           return existingTime && timesOverlap(selectedTime, existingTime);
         });
         if (conflict) {
-          const conflictingAddon = pricing?.specialEvents?.find(
+          const evPricing = pricingMap[dateObj.link] || pricing;
+          const conflictingAddon = evPricing?.specialEvents?.find(
             (se) =>
               se.id === (typeof conflict === "string" ? conflict : conflict.id),
           );
@@ -284,7 +272,8 @@ export default function BookingSummary({
         }
       }
 
-      const isPrerequisiteForAnother = pricing?.specialEvents?.some(
+      const evPricing = pricingMap[dateObj.link] || pricing;
+      const isPrerequisiteForAnother = evPricing?.specialEvents?.some(
         (se) => se.requiresIntroId === addon.id,
       );
       if (isPrerequisiteForAnother && !currentUser) {
@@ -439,13 +428,14 @@ export default function BookingSummary({
   const qualifiesForFreeAddon = isBuyingPack || isUsingCredits;
 
   let addonCashTotal = 0;
-  let chargeableAddonCount = 0; // <-- NEW
+  let chargeableAddonCount = 0;
   selectedDates.forEach((d) => {
+    const evPricing = pricingMap[d.link] || pricing; // Lookup correct pricing map
     (d.attendees || []).forEach((att) => {
       if (att.selectedAddons && att.selectedAddons.length > 0) {
         att.selectedAddons.forEach((selAddon) => {
           const addonId = typeof selAddon === "string" ? selAddon : selAddon.id;
-          const addonDef = pricing?.specialEvents?.find(
+          const addonDef = evPricing?.specialEvents?.find(
             (se) => se.id === addonId,
           );
 
@@ -909,6 +899,19 @@ export default function BookingSummary({
                   }}
                 >
                   <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span
+                      style={{
+                        fontSize: "0.65rem",
+                        fontWeight: "900",
+                        color: "#9960a8",
+                        textTransform: "uppercase",
+                        marginBottom: "2px",
+                      }}
+                    >
+                      {typeof d.title === "object"
+                        ? d.title[currentLang || "en"]
+                        : d.title}
+                    </span>
                     <span style={{ fontWeight: "800", fontSize: "0.9rem" }}>
                       {formatDate(d.date)}
                     </span>
@@ -1061,7 +1064,10 @@ export default function BookingSummary({
                         : [];
                     const attHistory = getProfileHistory(att.profileId); // Fetch history for this specific person
 
-                    const visibleAddons = (pricing?.specialEvents || []).filter(
+                    const evPricing = pricingMap[d.link] || pricing;
+                    const visibleAddons = (
+                      evPricing?.specialEvents || []
+                    ).filter(
                       (se) =>
                         assignedAddonIds.includes(se.id) &&
                         !attHistory.includes(se.id), // Use the attendee's history instead of userData
@@ -1140,9 +1146,10 @@ export default function BookingSummary({
                                     ? [rawAddons]
                                     : [];
 
+                                const evPricing = pricingMap[d.link] || pricing;
                                 const mandatoryForThisPerson = [];
                                 assignedAddonIds.forEach((aid) => {
-                                  const def = pricing?.specialEvents?.find(
+                                  const def = evPricing?.specialEvents?.find(
                                     (se) => se.id === aid,
                                   );
                                   if (
@@ -1264,9 +1271,10 @@ export default function BookingSummary({
                                   ? [rawAddons]
                                   : [];
 
+                              const evPricing = pricingMap[d.link] || pricing;
                               const mandatoryForThisPerson = [];
                               assignedAddonIds.forEach((aid) => {
-                                const def = pricing?.specialEvents?.find(
+                                const def = evPricing?.specialEvents?.find(
                                   (se) => se.id === aid,
                                 );
                                 // If it's mandatory and this specific person hasn't done it/booked it
@@ -1371,7 +1379,10 @@ export default function BookingSummary({
                                 }}
                               >
                                 {visibleAddons.map((addon) => {
-                                  const addonColor = getAddonColor(addon.id);
+                                  const addonColor = getAddonColor(
+                                    addon.id,
+                                    d.link,
+                                  );
                                   const priceLabel = addon.price
                                     ? ` (+${addon.price} CHF)`
                                     : "";
@@ -2359,7 +2370,13 @@ export default function BookingSummary({
                 <>
                   <strong>
                     {(() => {
-                      const addon = pricing?.specialEvents?.find(
+                      const eventObj = selectedDates.find(
+                        (d) => d.id === uncheckWarning.eventId,
+                      );
+                      const evPricing = eventObj
+                        ? pricingMap[eventObj.link]
+                        : pricing;
+                      const addon = evPricing?.specialEvents?.find(
                         (se) => se.id === uncheckWarning.addonId,
                       );
                       return currentLang === "en"
@@ -2377,8 +2394,8 @@ export default function BookingSummary({
                         : "ist eine Voraussetzung für weiterführende Kurse. Bitte logge dich ein oder erstelle ein Profil, damit wir deinen Fortschritt speichern können."
                       : uncheckWarning.type === "missing_prerequisite"
                         ? currentLang === "en"
-                          ? `requires you to complete the "${pricing?.specialEvents?.find((se) => se.id === uncheckWarning.requiredIntroId)?.nameEn || "Intro"}" first. Please add it to your selection.`
-                          : `erfordert, dass du zuerst "${pricing?.specialEvents?.find((se) => se.id === uncheckWarning.requiredIntroId)?.nameDe || "die Einführung"}" absolvierst. Bitte füge es deiner Auswahl hinzu.`
+                          ? `requires you to complete the Intro first. Please add it to your selection.`
+                          : `erfordert, dass du zuerst die Einführung absolvierst. Bitte füge es deiner Auswahl hinzu.`
                         : currentLang === "en"
                           ? "is mandatory for first-timers. Please confirm you have booked this course before to remove it."
                           : "ist für Erstkunden obligatorisch. Bitte bestätige, dass du diesen Kurs bereits gebucht hast."}

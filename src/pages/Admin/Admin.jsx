@@ -40,9 +40,9 @@ import {
   PlusCircle,
   Trash2,
   Paintbrush,
+  CalendarDays,
 } from "lucide-react";
 
-// Components & Styles
 import Header from "../../components/Header/Header";
 import EventsTab from "./EventsTab";
 import PricingTab from "./PricingTab";
@@ -56,6 +56,8 @@ import ScheduleTab from "./ScheduleTab";
 import EmailTemplatesTab from "./EmailTemplatesTab";
 import FiringTab from "./FiringTab";
 import MessagesTab from "./MessagesTab";
+import CalendarsTab from "./CalendarsTab";
+
 import {
   loginWrapperStyle,
   loginCardStyle,
@@ -85,7 +87,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const isMobile = windowWidth < 900;
   const isCompactNav = windowWidth < 1850;
-
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const ALL_LABELS = {
@@ -118,6 +119,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       deleteGroup: "Delete Group",
       groupName: "Group Name",
       setGroupColor: "Set Group Color",
+      calendars: "Calendar Config",
     },
     de: {
       loginTitle: "Atelier Login",
@@ -148,6 +150,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       deleteGroup: "Gruppe löschen",
       groupName: "Gruppenname",
       setGroupColor: "Gruppenfarbe setzen",
+      calendars: "Kalender-Konfig",
     },
   };
 
@@ -165,6 +168,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
         name: { en: "Tools", de: "Werkzeuge" },
         items: [
           "course-management",
+          "calendars",
           "schedule",
           "reminders",
           "terms",
@@ -189,6 +193,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
     events: "events",
     profiles: "profiles",
     "course-management": "courseMgmt",
+    calendars: "calendars",
     schedule: "schedule",
     reminders: "reminders",
     terms: "terms",
@@ -201,10 +206,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
   };
 
   const getTabLabel = (tabKey, lang) => {
-    // 1. Check if user set a custom name for this tab
     const customName = navConfig?.tabSettings?.[tabKey]?.name?.[lang];
     if (customName && customName.trim() !== "") return customName;
-    // 2. Fall back to default label
     return ALL_LABELS[lang]?.[defaultTabKeys[tabKey]] || tabKey;
   };
 
@@ -223,6 +226,11 @@ export default function Admin({ currentLang, setCurrentLang }) {
       icon: <Tag size={18} />,
       label: labels.courseMgmt,
       adminOnly: false,
+    },
+    calendars: {
+      icon: <CalendarDays size={18} />,
+      label: labels.calendars,
+      adminOnly: true,
     },
     schedule: {
       icon: <CalendarClock size={18} />,
@@ -272,19 +280,17 @@ export default function Admin({ currentLang, setCurrentLang }) {
   };
 
   const [activeTab, setActiveTab] = useState(() => {
-    // Look at the normal URL search parameters instead of the hash
     const searchParams = new URLSearchParams(window.location.search);
-    const tabFromUrl = searchParams.get("tab");
-
-    if (tabFromUrl) return tabFromUrl;
-
-    return localStorage.getItem("adminActiveTab") || "events";
+    return (
+      searchParams.get("tab") ||
+      localStorage.getItem("adminActiveTab") ||
+      "events"
+    );
   });
 
-  const [defaultTab, setDefaultTab] = useState(() => {
-    return localStorage.getItem("adminDefaultTab") || "events";
-  });
-
+  const [defaultTab, setDefaultTab] = useState(
+    () => localStorage.getItem("adminDefaultTab") || "events",
+  );
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -305,13 +311,32 @@ export default function Admin({ currentLang, setCurrentLang }) {
           ) {
             setUser(currentUser);
             setAdminData(data);
-            setNavConfig(data.navConfig || DEFAULT_NAV);
+
+            // Merge newly added tabs into existing saved layouts
+            let loadedConfig = data.navConfig;
+            if (loadedConfig) {
+              const loadedItems = loadedConfig.groups.flatMap((g) => g.items);
+              DEFAULT_NAV.groups.forEach((defGroup) => {
+                defGroup.items.forEach((defItem) => {
+                  if (!loadedItems.includes(defItem)) {
+                    // Inject missing tab into its default group (or the first group as fallback)
+                    const targetGroup =
+                      loadedConfig.groups.find((g) => g.id === defGroup.id) ||
+                      loadedConfig.groups[0];
+                    if (targetGroup) targetGroup.items.push(defItem);
+                  }
+                });
+              });
+            } else {
+              loadedConfig = DEFAULT_NAV;
+            }
+
+            setNavConfig(loadedConfig);
           } else {
             setUser(null);
             setAdminData(null);
           }
         } catch (error) {
-          console.error("Admin check error:", error);
           setUser(null);
         }
       } else {
@@ -330,7 +355,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
     if (!user) return;
     setIsLoading(true);
     try {
-      await updateDoc(doc(db, "users", user.uid), { navConfig: navConfig });
+      await updateDoc(doc(db, "users", user.uid), { navConfig });
       setIsCustomizingNav(false);
     } catch (e) {
       alert("Error saving layout: " + e.message);
@@ -386,10 +411,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
         ...prev.tabSettings,
         [tabKey]: {
           ...prev.tabSettings?.[tabKey],
-          name: {
-            ...prev.tabSettings?.[tabKey]?.name,
-            [lang]: val,
-          },
+          name: { ...prev.tabSettings?.[tabKey]?.name, [lang]: val },
         },
       },
     }));
@@ -407,8 +429,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
 
   const updateGroupColor = (groupIdx, color) => {
     const newConfig = { ...navConfig };
-    const items = newConfig.groups[groupIdx].items;
-    items.forEach((tabKey) => {
+    newConfig.groups[groupIdx].items.forEach((tabKey) => {
       newConfig.tabSettings[tabKey] = {
         ...newConfig.tabSettings[tabKey],
         color,
@@ -417,7 +438,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
     setNavConfig(newConfig);
   };
 
-  // Logic to determine if a group has a uniform color
   const getGroupUniformColor = (items) => {
     if (items.length === 0) return null;
     const colors = items.map(
@@ -430,12 +450,12 @@ export default function Admin({ currentLang, setCurrentLang }) {
   useEffect(() => {
     if (!user || adminData?.role !== "admin") return;
     const unsubscribe = onSnapshot(collection(db, "rent_requests"), (snap) => {
-      const pending = snap.docs.filter((doc) => {
-        const data = doc.data();
-        return (
-          data.status === "pending" || data.status === "new" || !data.status
-        );
-      });
+      const pending = snap.docs.filter(
+        (doc) =>
+          doc.data().status === "pending" ||
+          doc.data().status === "new" ||
+          !doc.data().status,
+      );
       setPendingRentalCount(pending.length);
     });
     return () => unsubscribe();
@@ -589,16 +609,15 @@ export default function Admin({ currentLang, setCurrentLang }) {
   }
 
   const isFullAdmin = adminData.role === "admin";
-
   const visibleGroups =
     navConfig?.groups
       .map((group) => ({
         ...group,
-        items: group.items.filter((itemKey) => {
-          const meta = TAB_META[itemKey];
-          if (!meta) return false;
-          return meta.adminOnly ? isFullAdmin : true;
-        }),
+        items: group.items.filter(
+          (itemKey) =>
+            TAB_META[itemKey] &&
+            (TAB_META[itemKey].adminOnly ? isFullAdmin : true),
+        ),
       }))
       .filter((g) => g.items.length > 0) || [];
 
@@ -620,7 +639,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
         isMenuOpen={isMenuOpen}
         onMenuToggle={setIsMenuOpen}
       />
-
       <header style={{ ...headerStyle(isMobile), marginBottom: "2rem" }}>
         <div style={{ flex: 1 }}>
           <h1
@@ -634,12 +652,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
             atelier management
           </h1>
           <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
-            <p
-              style={{
-                opacity: 0.5,
-                fontSize: "0.75rem",
-              }}
-            >
+            <p style={{ opacity: 0.5, fontSize: "0.75rem" }}>
               {isFullAdmin ? labels.fullAdmin : labels.courseAdmin}:{" "}
               {adminData?.firstName || user.email}
             </p>
@@ -663,7 +676,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
                 gap: "5px",
               }}
             >
-              {isCustomizingNav ? <Check size={14} /> : <Settings size={14} />}
+              {isCustomizingNav ? <Check size={14} /> : <Settings size={14} />}{" "}
               {isCustomizingNav ? labels.save : labels.customize}
             </button>
           </div>
@@ -671,7 +684,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
       </header>
 
       {isCustomizingNav ? (
-        /* --- CUSTOMIZATION UI --- */
         <div
           style={{
             backgroundColor: "rgba(28, 7, 0, 0.03)",
@@ -799,7 +811,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
                       </button>
                     </div>
                   </div>
-
                   <div
                     style={{
                       display: "flex",
@@ -814,13 +825,10 @@ export default function Admin({ currentLang, setCurrentLang }) {
                   >
                     {group.items.map((item, iIdx) => {
                       const settings = navConfig.tabSettings?.[item] || {};
-
-                      // Fetch the default names for the placeholders
                       const defaultEn =
                         ALL_LABELS.en[defaultTabKeys[item]] || item;
                       const defaultDe =
                         ALL_LABELS.de[defaultTabKeys[item]] || item;
-
                       return (
                         <div
                           key={item}
@@ -843,14 +851,13 @@ export default function Admin({ currentLang, setCurrentLang }) {
                               flexShrink: 0,
                             }}
                           />
-
                           <div
                             style={{
                               flex: 1,
                               display: "flex",
                               flexDirection: isMobile ? "column" : "row",
                               gap: "6px",
-                              minWidth: 0, // Prevents inputs from blowing out the container width on small screens
+                              minWidth: 0,
                             }}
                           >
                             <input
@@ -882,7 +889,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
                               }}
                             />
                           </div>
-
                           <div
                             style={{
                               display: "flex",
@@ -911,7 +917,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
                                 onClick={() => moveItem(gIdx, iIdx, "up")}
                                 style={{
                                   border: "none",
-                                  background: "#edead3",
+                                  background: "#f5f5f5",
                                   borderRadius: "6px",
                                   cursor: "pointer",
                                   padding: "4px",
@@ -924,7 +930,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
                                 onClick={() => moveItem(gIdx, iIdx, "down")}
                                 style={{
                                   border: "none",
-                                  background: "#edead3",
+                                  background: "#f5f5f5",
                                   borderRadius: "6px",
                                   cursor: "pointer",
                                   padding: "4px",
@@ -963,7 +969,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
           </div>
         </div>
       ) : isCompactNav ? (
-        /* --- COMPACT SELECTOR --- */
         <div
           style={{ marginBottom: "1.5rem", position: "relative", zIndex: 100 }}
         >
@@ -987,7 +992,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
               <div
                 style={{ display: "flex", alignItems: "center", gap: "12px" }}
               >
-                {TAB_META[activeTab]?.icon} {TAB_META[activeTab]?.label}
+                {TAB_META[activeTab]?.icon}{" "}
+                {getTabLabel(activeTab, currentLang)}
                 {activeTab === "rental" && (
                   <TabBadge count={pendingRentalCount} />
                 )}
@@ -1022,7 +1028,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
               />
             </button>
           </div>
-
           {isMobileMenuOpen && (
             <div
               style={{
@@ -1108,7 +1113,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
                                 flex: 1,
                               }}
                             >
-                              {TAB_META[tabKey].icon} {TAB_META[tabKey].label}
+                              {TAB_META[tabKey].icon}{" "}
+                              {getTabLabel(tabKey, currentLang)}
                             </div>
                             {tabKey === "rental" && (
                               <TabBadge count={pendingRentalCount} />
@@ -1127,9 +1133,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
           )}
         </div>
       ) : (
-        /* --- HORIZONTAL NAV --- */
         <>
           <div
+            className="hide-scrollbar"
             style={{
               width: "100%",
               overflowX: "auto",
@@ -1138,7 +1144,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
               display: "flex",
               gap: "1.5rem",
             }}
-            className="hide-scrollbar"
           >
             {visibleGroups.map((group) => {
               const uniformColor = getGroupUniformColor(group.items);
@@ -1196,7 +1201,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
                             gap: "8px",
                           }}
                         >
-                          {TAB_META[tabKey].icon} {TAB_META[tabKey].label}
+                          {TAB_META[tabKey].icon}{" "}
+                          {getTabLabel(tabKey, currentLang)}
                           {tabKey === "rental" && (
                             <TabBadge count={pendingRentalCount} />
                           )}
@@ -1251,7 +1257,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
         </>
       )}
 
-      {/* --- TAB CONTENT AREA --- */}
       <div style={{ animation: "fadeIn 0.4s ease-out" }}>
         {activeTab === "events" && (
           <EventsTab
@@ -1275,6 +1280,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
             allowedCourses={adminData.allowedCourses || []}
             currentLang={currentLang}
           />
+        )}
+        {activeTab === "calendars" && isFullAdmin && (
+          <CalendarsTab isMobile={isMobile} currentLang={currentLang} />
         )}
         {activeTab === "schedule" && (
           <ScheduleTab
@@ -1328,13 +1336,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
         )}
       </div>
 
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .spinner { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{` @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } .hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } .spinner { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } `}</style>
     </div>
   );
 }

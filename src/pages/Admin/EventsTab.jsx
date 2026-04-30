@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { db } from "../../firebase";
 import {
   collection,
@@ -79,6 +79,16 @@ export default function EventsTab({
   const [isSavingEmails, setIsSavingEmails] = useState(false);
 
   const [expandedParticipants, setExpandedParticipants] = useState({});
+  const [availableAddons, setAvailableAddons] = useState([]);
+  const [selectedAddons, setSelectedAddons] = useState([]);
+
+  // --- NEW STATES FOR DROPDOWN & ADD-ON DISPLAY ---
+  const [calendarGroups, setCalendarGroups] = useState({});
+  const [isCourseDropdownOpen, setIsCourseDropdownOpen] = useState(false);
+  const courseDropdownRef = useRef(null);
+
+  const [schedulesMap, setSchedulesMap] = useState({});
+  const [settingsMap, setSettingsMap] = useState({});
 
   const isFullAdmin = userRole === "admin";
   const labels = {
@@ -159,22 +169,102 @@ export default function EventsTab({
   }[currentLang || "en"];
 
   const eventsCollection = collection(db, "events");
-  const availableCourses = Array.from(
-    new Map(
-      planets
-        .filter((p) => p.type === "courses")
-        .flatMap((p) => p.courses || [])
-        .filter((c) => c.link)
-        .map((course) => [course.link, course]),
-    ).values(),
-  ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
+  const [availableCourses, setAvailableCourses] = useState([]);
 
   useEffect(() => {
-    fetchEvents();
-    autoFillFirstCourse();
+    const fetchCourses = async () => {
+      const base = Array.from(
+        new Map(
+          planets
+            .filter((p) => p.type === "courses")
+            .flatMap((p) => p.courses || [])
+            .filter((c) => c.link)
+            .map((course) => [course.link, course]),
+        ).values(),
+      );
+      try {
+        const snap = await getDocs(collection(db, "custom_courses"));
+        const custom = snap.docs.map((d) => ({
+          link: d.data().link,
+          text: { en: d.data().nameEn, de: d.data().nameDe },
+        }));
+        const combined = [...base, ...custom];
+        setAvailableCourses(
+          combined.filter(
+            (c) => isFullAdmin || allowedCourses.includes(c.link),
+          ),
+        );
+      } catch (err) {
+        setAvailableCourses(
+          base.filter((c) => isFullAdmin || allowedCourses.includes(c.link)),
+        );
+      }
+    };
+    fetchCourses();
+  }, [userRole, allowedCourses, isFullAdmin]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        courseDropdownRef.current &&
+        !courseDropdownRef.current.contains(event.target)
+      ) {
+        setIsCourseDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const fetchExtraData = async () => {
+      const [cgSnap, schedSnap, setSnap] = await Promise.all([
+        getDocs(collection(db, "calendar_groups")),
+        getDocs(collection(db, "schedules")),
+        getDocs(collection(db, "course_settings")),
+      ]);
+      const cgMap = {};
+      cgSnap.docs.forEach((d) => (cgMap[d.id] = d.data().includedLinks || []));
+      setCalendarGroups(cgMap);
+
+      const sMap = {};
+      schedSnap.docs.forEach((d) => (sMap[d.id] = d.data()));
+      setSchedulesMap(sMap);
+
+      const cSetMap = {};
+      setSnap.docs.forEach((d) => (cSetMap[d.id] = d.data()));
+      setSettingsMap(cSetMap);
+    };
+    fetchExtraData();
+  }, []);
+
+  useEffect(() => {
+    if (availableCourses.length > 0) {
+      fetchEvents();
+      if (!editingId && !isCustomCourseLink && !link) {
+        handleCourseSelection(availableCourses[0].link);
+      }
+    }
     fetchRequests();
     fetchAdminSettings();
-  }, [userRole, allowedCourses]);
+  }, [availableCourses, userRole, allowedCourses]);
+
+  useEffect(() => {
+    const fetchAddons = async () => {
+      if (linkType === "course" && link) {
+        const sanitizedId = link.replace(/\//g, "");
+        const snap = await getDoc(doc(db, "course_settings", sanitizedId));
+        if (snap.exists() && snap.data().specialEvents) {
+          setAvailableAddons(snap.data().specialEvents);
+        } else {
+          setAvailableAddons([]);
+        }
+      } else {
+        setAvailableAddons([]);
+      }
+    };
+    fetchAddons();
+  }, [link, linkType]);
 
   const fetchEvents = async () => {
     const q = query(eventsCollection, orderBy("date", "asc"));
@@ -415,8 +505,23 @@ export default function EventsTab({
         if (festivalName) eventData.festivalName = festivalName;
       }
 
-      if (editingId) await setDoc(doc(db, "events", editingId), eventData);
-      else await addDoc(eventsCollection, eventData);
+      let savedEventId = editingId;
+      if (editingId) {
+        await setDoc(doc(db, "events", editingId), eventData);
+      } else {
+        const newDocRef = await addDoc(eventsCollection, eventData);
+        savedEventId = newDocRef.id;
+      }
+
+      // Automatically assign the selected addons to the schedule document
+      if (linkType === "course" && finalLink) {
+        const sanitizedId = finalLink.replace(/\//g, "");
+        await setDoc(
+          doc(db, "schedules", sanitizedId),
+          { specialAssignments: { [savedEventId]: selectedAddons } },
+          { merge: true },
+        );
+      }
 
       resetForm();
       fetchEvents();
@@ -426,7 +531,7 @@ export default function EventsTab({
     }
   };
 
-  const startEdit = (event) => {
+  const startEdit = async (event) => {
     setEditingId(event.id);
     setDate(event.date);
     setTime(event.time || "");
@@ -444,11 +549,26 @@ export default function EventsTab({
       if (availableCourses.some((c) => c.link === event.link)) {
         setLink(event.link);
         setIsCustomCourseLink(false);
+
+        // Load existing addon assignments for this event
+        const sanitizedId = event.link.replace(/\//g, "");
+        const scheduleSnap = await getDoc(doc(db, "schedules", sanitizedId));
+        if (scheduleSnap.exists()) {
+          const spAss = scheduleSnap.data().specialAssignments || {};
+          const existing = spAss[event.id] || [];
+          setSelectedAddons(Array.isArray(existing) ? existing : [existing]);
+        } else {
+          setSelectedAddons([]);
+        }
       } else {
         setExternalLink(event.link);
         setIsCustomCourseLink(true);
+        setSelectedAddons([]);
       }
-    } else setExternalLink(event.link || "");
+    } else {
+      setExternalLink(event.link || "");
+      setSelectedAddons([]);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -462,6 +582,7 @@ export default function EventsTab({
     setExternalLink("");
     setTitleEn("");
     setTitleDe("");
+    setSelectedAddons([]);
     setIsCustomCourseLink(false);
     if (linkType === "course") autoFillFirstCourse();
   };
@@ -669,6 +790,60 @@ export default function EventsTab({
                     <MapPin size={14} /> {ev.location}
                   </span>
                 )}
+
+                {/* DISPLAY ADD-ONS IF SCHEDULED */}
+                {!isEvent &&
+                  (() => {
+                    const sanitizedId = ev.link.replace(/\//g, "");
+                    const spAss =
+                      schedulesMap[sanitizedId]?.specialAssignments?.[ev.id];
+                    if (!spAss) return null;
+
+                    const addonIds = Array.isArray(spAss) ? spAss : [spAss];
+                    if (addonIds.length === 0) return null;
+
+                    const specialEvents =
+                      settingsMap[sanitizedId]?.specialEvents || [];
+
+                    return (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "6px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {addonIds.map((aid) => {
+                          const addonDef = specialEvents.find(
+                            (se) => se.id === aid,
+                          );
+                          const name = addonDef
+                            ? currentLang === "de"
+                              ? addonDef.nameDe
+                              : addonDef.nameEn
+                            : aid;
+                          return (
+                            <span
+                              key={aid}
+                              style={{
+                                fontSize: "0.7rem",
+                                fontWeight: "800",
+                                color: "#4e5f28",
+                                backgroundColor: "rgba(78, 95, 40, 0.15)",
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                            >
+                              <Star size={10} fill="#4e5f28" /> {name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
               </div>
             </div>
           </div>
@@ -1099,18 +1274,219 @@ export default function EventsTab({
               )}
 
               {linkType === "course" && !isCustomCourseLink ? (
-                <select
-                  value={link}
-                  onChange={(e) => handleCourseSelection(e.target.value)}
-                  style={inputStyle}
-                  required
-                >
-                  {availableCourses.map((c, i) => (
-                    <option key={i} value={c.link}>
-                      {c.text[currentLang || "en"]}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ position: "relative" }} ref={courseDropdownRef}>
+                  <div
+                    onClick={() =>
+                      setIsCourseDropdownOpen(!isCourseDropdownOpen)
+                    }
+                    style={{
+                      ...inputStyle,
+                      backgroundColor: "#fffce3",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      userSelect: "none",
+                    }}
+                  >
+                    <span>
+                      {availableCourses.find((c) => c.link === link)?.text[
+                        currentLang || "en"
+                      ] || "Select Course"}
+                    </span>
+                    <ChevronDown
+                      size={18}
+                      style={{
+                        transform: isCourseDropdownOpen
+                          ? "rotate(180deg)"
+                          : "rotate(0deg)",
+                        transition: "transform 0.2s ease",
+                        color: "#1c0700",
+                        opacity: 0.5,
+                      }}
+                    />
+                  </div>
+
+                  {isCourseDropdownOpen && (
+                    <div
+                      className="custom-scrollbar"
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        marginTop: "4px",
+                        backgroundColor: "#fdf8e1",
+                        border: "1px solid rgba(28,7,0,0.1)",
+                        borderRadius: "12px",
+                        boxShadow: "0 10px 25px rgba(28, 7, 0, 0.1)",
+                        zIndex: 50,
+                        maxHeight: "350px",
+                        overflowY: "auto",
+                        padding: "8px",
+                      }}
+                    >
+                      {(() => {
+                        const renderedLinks = new Set();
+                        const groups = Array.from(
+                          new Map(
+                            planets
+                              .filter((p) => p.type === "courses")
+                              .flatMap((p) => p.courses || [])
+                              .filter((c) => c.link)
+                              .map((c) => [c.link, c]),
+                          ).values(),
+                        )
+                          .filter(
+                            (base) =>
+                              isFullAdmin || allowedCourses.includes(base.link),
+                          )
+                          .map((base) => {
+                            const baseId = base.link.replace(/\//g, "");
+                            const includedLinks = calendarGroups[baseId] || [
+                              base.link,
+                            ];
+                            const groupOptions = includedLinks
+                              .map((l) =>
+                                availableCourses.find((ac) => ac.link === l),
+                              )
+                              .filter(Boolean);
+
+                            if (groupOptions.length === 0) return null;
+                            includedLinks.forEach((l) => renderedLinks.add(l));
+
+                            return (
+                              <div key={baseId} style={{ marginBottom: "8px" }}>
+                                <div
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    fontWeight: "900",
+                                    textTransform: "uppercase",
+                                    color: "#4e5f28",
+                                    padding: "8px 12px 4px 12px",
+                                    opacity: 0.6,
+                                  }}
+                                >
+                                  {base.text[currentLang || "en"]} Group
+                                </div>
+                                {groupOptions.map((opt) => {
+                                  const isSelected = link === opt.link;
+                                  return (
+                                    <div
+                                      key={opt.link}
+                                      onClick={() => {
+                                        handleCourseSelection(opt.link);
+                                        setIsCourseDropdownOpen(false);
+                                      }}
+                                      style={{
+                                        padding: "10px 12px",
+                                        borderRadius: "8px",
+                                        cursor: "pointer",
+                                        backgroundColor: isSelected
+                                          ? "rgba(202, 175, 243, 0.2)"
+                                          : "transparent",
+                                        color: isSelected
+                                          ? "#9960a8"
+                                          : "#1c0700",
+                                        fontWeight: isSelected
+                                          ? "bold"
+                                          : "normal",
+                                        transition: "background-color 0.2s",
+                                        fontSize: "0.9rem",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                      }}
+                                    >
+                                      <span>
+                                        {opt.text[currentLang || "en"]}
+                                      </span>
+                                      {opt.link !== base.link && (
+                                        <span
+                                          style={{
+                                            fontSize: "0.65rem",
+                                            opacity: 0.5,
+                                            fontFamily: "monospace",
+                                          }}
+                                        >
+                                          {opt.link}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          });
+
+                        const ungrouped = availableCourses.filter(
+                          (ac) => !renderedLinks.has(ac.link),
+                        );
+                        if (ungrouped.length > 0) {
+                          groups.push(
+                            <div
+                              key="ungrouped"
+                              style={{ marginBottom: "8px" }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: "0.65rem",
+                                  fontWeight: "900",
+                                  textTransform: "uppercase",
+                                  color: "#ff4d4d",
+                                  padding: "8px 12px 4px 12px",
+                                  opacity: 0.8,
+                                }}
+                              >
+                                Unassigned Sub-Courses
+                              </div>
+                              {ungrouped.map((opt) => {
+                                const isSelected = link === opt.link;
+                                return (
+                                  <div
+                                    key={opt.link}
+                                    onClick={() => {
+                                      handleCourseSelection(opt.link);
+                                      setIsCourseDropdownOpen(false);
+                                    }}
+                                    style={{
+                                      padding: "10px 12px",
+                                      borderRadius: "8px",
+                                      cursor: "pointer",
+                                      backgroundColor: isSelected
+                                        ? "rgba(202, 175, 243, 0.2)"
+                                        : "transparent",
+                                      color: isSelected ? "#9960a8" : "#1c0700",
+                                      fontWeight: isSelected
+                                        ? "bold"
+                                        : "normal",
+                                      transition: "background-color 0.2s",
+                                      fontSize: "0.9rem",
+                                      display: "flex",
+                                      flexDirection: "column",
+                                    }}
+                                  >
+                                    <span>{opt.text[currentLang || "en"]}</span>
+                                    <span
+                                      style={{
+                                        fontSize: "0.65rem",
+                                        opacity: 0.5,
+                                        fontFamily: "monospace",
+                                      }}
+                                    >
+                                      {opt.link}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>,
+                          );
+                        }
+
+                        return groups;
+                      })()}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <input
                   type="url"
@@ -1145,6 +1521,69 @@ export default function EventsTab({
                   style={inputStyle}
                 />
               </div>
+
+              {/* Add-on Checkboxes directly inside the form */}
+              {linkType === "course" && availableAddons.length > 0 && (
+                <div
+                  style={{
+                    backgroundColor: "rgba(202, 175, 243, 0.05)",
+                    padding: "12px",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(202, 175, 243, 0.2)",
+                  }}
+                >
+                  <label
+                    style={{
+                      ...labelStyle,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <Star size={14} color="#9960a8" /> {labels.addons}
+                  </label>
+                  <div
+                    style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}
+                  >
+                    {availableAddons.map((addon) => {
+                      const isSelected = selectedAddons.includes(addon.id);
+                      return (
+                        <button
+                          key={addon.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedAddons((prev) =>
+                              prev.includes(addon.id)
+                                ? prev.filter((id) => id !== addon.id)
+                                : [...prev, addon.id],
+                            );
+                          }}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: "100px",
+                            fontSize: "0.75rem",
+                            fontWeight: "bold",
+                            border: "1px solid",
+                            backgroundColor: isSelected
+                              ? "#4e5f28"
+                              : "transparent",
+                            borderColor: isSelected
+                              ? "#4e5f28"
+                              : "rgba(28,7,0,0.2)",
+                            color: isSelected ? "white" : "#1c0700",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                          }}
+                        >
+                          {currentLang === "de" ? addon.nameDe : addon.nameEn}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <button type="submit" style={btnStyle}>
                 {editingId ? labels.updateBtn : labels.addBtn}
               </button>
