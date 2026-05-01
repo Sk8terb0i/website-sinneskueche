@@ -11,7 +11,7 @@ const getImage = (filename) => {
 export const planets = [
   {
     id: "luca",
-    type: "courses", // Places Luca on the outer orbit
+    type: "courses",
     get icon() {
       return {
         en: getImage("luca_name.png"),
@@ -74,6 +74,25 @@ export const planets = [
         text: {
           en: "out galloping",
           de: "suche sonnenuntergang für abendgallop",
+        },
+      },
+    ],
+  },
+  {
+    id: "noe",
+    type: "courses",
+    get icon() {
+      return {
+        en: getImage("noe_name.png"),
+        de: getImage("noe_name.png"),
+        base: getImage("noe.png"),
+      };
+    },
+    courses: [
+      {
+        text: {
+          en: "horse (conceptual)",
+          de: "horse (konzeptionell)",
         },
       },
     ],

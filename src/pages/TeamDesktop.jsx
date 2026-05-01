@@ -357,8 +357,6 @@ export default function Teams({ currentLang, setCurrentLang }) {
         const y = Math.sin(rad) * radius;
 
         let baseMoonRadius = 110;
-        if (planet.assignedOrbit === "info") baseMoonRadius -= 20;
-        if (planet.assignedOrbit === "action") baseMoonRadius -= 40;
         const moonOrbitRadius = baseMoonRadius * scaleFactor;
 
         return (
@@ -399,6 +397,7 @@ export default function Teams({ currentLang, setCurrentLang }) {
                 windowSize={windowSize}
                 currentLang={currentLang}
                 scaleFactor={scaleFactor}
+                orbitRadius={moonOrbitRadius}
                 onHoverStart={() => {
                   if (hoverTimeoutRef.current) {
                     clearTimeout(hoverTimeoutRef.current);

@@ -14,6 +14,7 @@ export default function Moon({
   onHoverEnd,
   totalMoons = 1,
   scaleFactor = 1,
+  orbitRadius,
 }) {
   const navigate = useNavigate();
 
@@ -29,10 +30,14 @@ export default function Moon({
   const groupRotationOffset = (planetSeed % 100) * 0.1;
   const individualJitter = ((planetSeed + index) % 5) * 0.08;
 
-  let baseMoonRadius = 110;
-  if (planetType === "info") baseMoonRadius -= 20;
-  if (planetType === "action") baseMoonRadius -= 40;
-  const moonOrbitRadius = baseMoonRadius * scaleFactor;
+  let moonOrbitRadius = orbitRadius;
+
+  if (!moonOrbitRadius) {
+    let baseMoonRadius = 110;
+    if (planetType === "info") baseMoonRadius -= 20;
+    if (planetType === "action") baseMoonRadius -= 40;
+    moonOrbitRadius = baseMoonRadius * scaleFactor;
+  }
 
   let content = "";
   let href = null;
