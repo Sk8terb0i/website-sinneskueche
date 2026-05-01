@@ -4,6 +4,8 @@ import { AnimatePresence } from "framer-motion";
 
 import { AuthProvider } from "./contexts/AuthContext";
 
+import { syncPlanetCourseNames } from "./data/planets";
+
 import Landing from "./pages/Landing";
 import Pottery from "./pages/Pottery";
 import Singing from "./pages/Singing";
@@ -46,6 +48,10 @@ export default function App() {
     localStorage.setItem("userLanguage", currentLang);
     document.documentElement.lang = currentLang;
   }, [currentLang]);
+
+  useEffect(() => {
+    syncPlanetCourseNames();
+  }, []);
 
   const location = useLocation();
 

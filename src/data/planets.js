@@ -3,6 +3,9 @@ const planetImages = import.meta.glob("../assets/planets/*.png", {
   eager: true,
 });
 
+import { db } from "../firebase";
+import { collection, getDocs } from "firebase/firestore";
+
 // 2. Helper to get the path
 const getImage = (filename) => {
   const key = `../assets/planets/${filename}`;
@@ -283,3 +286,34 @@ export const planets = [
     ],
   },
 ];
+
+// NEW: Function to dynamically overwrite static names with Firestore names globally
+export const syncPlanetCourseNames = async () => {
+  try {
+    const snap = await getDocs(collection(db, "course_settings"));
+    const settings = {};
+    snap.docs.forEach((doc) => {
+      settings[doc.id] = doc.data();
+    });
+
+    planets.forEach((planet) => {
+      if (planet.courses) {
+        planet.courses.forEach((course) => {
+          if (course.link) {
+            // Keep the link exactly as it is, just match the ID
+            const id = course.link.replace(/\//g, "");
+            const customSetting = settings[id];
+
+            if (customSetting) {
+              // Overwrite the text object globally
+              course.text.en = customSetting.nameEn || course.text.en;
+              course.text.de = customSetting.nameDe || course.text.de;
+            }
+          }
+        });
+      }
+    });
+  } catch (err) {
+    console.error("Error syncing custom course names to planets:", err);
+  }
+};

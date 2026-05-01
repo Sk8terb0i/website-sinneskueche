@@ -59,23 +59,40 @@ export default function PackCodesTab({ isMobile, currentLang }) {
     },
   }[currentLang || "en"];
 
-  const courseKeys = Array.from(
-    new Set(
-      planets
-        .filter((p) => p.type === "courses")
-        .flatMap((p) => p.courses || [])
-        .map((c) => c.link?.replace(/\//g, ""))
-        .filter(Boolean),
-    ),
-  ).sort();
+  const [courseSettings, setCourseSettings] = useState([]); // NEW: State for dynamic courses
+
+  // Helper to ensure backward compatibility with how legacy credits were saved
+  const getCreditKeyForDB = (id) => {
+    const mapping = {
+      pottery: "pottery tuesdays",
+      "artistic-vision": "artistic vision",
+      "get-ink": "get ink!",
+      singing: "vocal coaching",
+      "extended-voice-lab": "extended voice lab",
+      "performing-words": "performing words",
+      "singing-basics": "singing basics weekend",
+    };
+    return mapping[id] || id;
+  };
+
+  // Helper to display pretty names for credits
+  const getCourseTitle = (key) => {
+    const match = courseSettings.find(
+      (c) =>
+        c.id === key || getCreditKeyForDB(c.id) === key || c.nameEn === key,
+    );
+    if (match) return currentLang === "de" ? match.nameDe : match.nameEn;
+    return key;
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [codesSnap, usersSnap, giftSnap] = await Promise.all([
+      const [codesSnap, usersSnap, giftSnap, settingsSnap] = await Promise.all([
         getDocs(query(collection(db, "pack_codes"))),
         getDocs(query(collection(db, "users"))),
         getDocs(query(collection(db, "gift_cards"))),
+        getDocs(query(collection(db, "course_settings"))), // NEW: Fetch all courses
       ]);
 
       // 1. Process User Balances (Main & Linked Profiles)
@@ -129,7 +146,15 @@ export default function PackCodesTab({ isMobile, currentLang }) {
 
       const sessionPacks = allPackCodes.filter((c) => !c.recipientName);
 
+      // Extract all courses (base + sub-courses) from settings
+      const fetchedCourses = settingsSnap.docs.map((d) => ({
+        id: d.id,
+        nameEn: d.data().nameEn || d.data().courseName || d.id,
+        nameDe: d.data().nameDe || d.data().courseName || d.id,
+      }));
+
       // 3. Update States
+      setCourseSettings(fetchedCourses);
       setGuestCodes(sessionPacks);
       setGiftCards(gifts);
       setUserCredits(usersWithCredits);
@@ -446,7 +471,7 @@ export default function PackCodesTab({ isMobile, currentLang }) {
                               letterSpacing: "0.5px",
                             }}
                           >
-                            {k}
+                            {getCourseTitle(k)}
                           </span>
                           {renderControls(v, (d) => updateBalance(u, k, d))}
                         </div>
@@ -792,11 +817,12 @@ export default function PackCodesTab({ isMobile, currentLang }) {
                     <div
                       style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}
                     >
-                      {courseKeys.map((key) => (
+                      {courseSettings.map((course) => (
                         <button
-                          key={key}
+                          key={course.id}
                           onClick={() => {
-                            updateBalance(u, key, 1);
+                            // Safely map the ID back to the legacy key to prevent breaking old logic
+                            updateBalance(u, getCreditKeyForDB(course.id), 1);
                             setIsAddModalOpen(false);
                           }}
                           style={{
@@ -811,7 +837,8 @@ export default function PackCodesTab({ isMobile, currentLang }) {
                             color: "#4e5f28",
                           }}
                         >
-                          + {key}
+                          +{" "}
+                          {currentLang === "de" ? course.nameDe : course.nameEn}
                         </button>
                       ))}
                     </div>

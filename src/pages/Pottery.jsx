@@ -89,6 +89,11 @@ export default function Pottery({ currentLang, setCurrentLang }) {
   const current = content[currentLang];
   const displayTitle = customTitle?.[currentLang] || current.title;
 
+  // NEW: Update the browser tab title dynamically
+  useEffect(() => {
+    document.title = `${displayTitle} | Atelier Sinnesküche`;
+  }, [displayTitle]);
+
   // --- ANIMATION VARIANTS ---
   const containerVariants = {
     hidden: { opacity: 0 },

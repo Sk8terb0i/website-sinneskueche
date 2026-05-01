@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
 import { Clock, Users, Mic2 } from "lucide-react";
@@ -11,6 +13,29 @@ const getImage = (filename) =>
 
 export default function ExtendedVoiceLab({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [customTitle, setCustomTitle] = useState(null);
+
+  useEffect(() => {
+    const fetchCustomTitle = async () => {
+      try {
+        const snap = await getDoc(
+          doc(db, "course_settings", "extended-voice-lab"),
+        );
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.nameEn || data.nameDe) {
+            setCustomTitle({
+              en: data.nameEn || data.courseName,
+              de: data.nameDe || data.courseName,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Could not fetch custom course title:", err);
+      }
+    };
+    fetchCustomTitle();
+  }, []);
 
   const config = {
     desktop: {
@@ -47,6 +72,14 @@ export default function ExtendedVoiceLab({ currentLang, setCurrentLang }) {
   };
 
   const icons = [getImage("hearing.png"), getImage("sing.png")];
+
+  const current = content[currentLang];
+  const displayTitle = customTitle?.[currentLang] || current.title;
+
+  // NEW: Update the browser tab title dynamically
+  useEffect(() => {
+    document.title = `${displayTitle} | Atelier Sinnesküche`;
+  }, [displayTitle]);
 
   const styles = {
     main: {
@@ -112,16 +145,12 @@ export default function ExtendedVoiceLab({ currentLang, setCurrentLang }) {
       </style>
 
       <main style={styles.main} className="main-content">
-        <CourseTitle
-          title={content[currentLang].title}
-          config={config}
-          icons={icons}
-        />
+        <CourseTitle title={displayTitle} config={config} icons={icons} />
         <p className="welcome-text" style={styles.welcomeText}>
-          {content[currentLang].welcome}
+          {current.welcome}
         </p>
         <div className="info-grid" style={styles.infoGrid}>
-          {content[currentLang].details.map((item, index) => (
+          {current.details.map((item, index) => (
             <div key={index} className="info-item" style={styles.infoItem}>
               <div style={{ display: "flex", opacity: 0.7 }}>{item.icon}</div>
               <span style={styles.infoLabel}>{item.text}</span>

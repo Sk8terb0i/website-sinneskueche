@@ -1,4 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
 import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
@@ -24,6 +26,27 @@ export default function Singing({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isBookingExpanded, setIsBookingExpanded] = useState(false);
   const bookingRef = useRef(null);
+  const [customTitle, setCustomTitle] = useState(null);
+
+  useEffect(() => {
+    const fetchCustomTitle = async () => {
+      try {
+        const snap = await getDoc(doc(db, "course_settings", "singing"));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.nameEn || data.nameDe) {
+            setCustomTitle({
+              en: data.nameEn || data.courseName,
+              de: data.nameDe || data.courseName,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Could not fetch custom course title:", err);
+      }
+    };
+    fetchCustomTitle();
+  }, []);
 
   const config = {
     desktop: {
@@ -124,7 +147,13 @@ export default function Singing({ currentLang, setCurrentLang }) {
   };
 
   const current = content[currentLang];
+  const displayTitle = customTitle?.[currentLang] || current.title;
   const icons = [getImage("hearing.png"), getImage("hearing_mic.png")];
+
+  // NEW: Update the browser tab title dynamically
+  useEffect(() => {
+    document.title = `${displayTitle} | Atelier Sinnesküche`;
+  }, [displayTitle]);
 
   const styles = {
     main: {
@@ -275,7 +304,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
 
       <main style={styles.main} className="main-content">
         <div className="course-title-wrapper">
-          <CourseTitle title={current.title} config={config} icons={icons} />
+          <CourseTitle title={displayTitle} config={config} icons={icons} />
         </div>
 
         <p className="welcome-text" style={styles.welcomeText}>
