@@ -159,9 +159,12 @@ export default function Profile({ currentLang, setCurrentLang }) {
                 (id) => id !== currentUser.uid,
               );
               const names = await Promise.all(
-                others.map(async (id) => {
+                otherIds.map(async (id) => {
                   const uDoc = await getDoc(doc(db, "users", id));
-                  return uDoc.exists() ? uDoc.data().firstName : null;
+                  // CHANGE: Return both first and last name
+                  return uDoc.exists()
+                    ? `${uDoc.data().firstName} ${uDoc.data().lastName}`
+                    : null;
                 }),
               );
               coInstructorNames = names.filter(Boolean);

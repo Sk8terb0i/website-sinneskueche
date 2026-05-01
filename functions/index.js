@@ -1788,7 +1788,7 @@ exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
       const replacements = {
         "{firstName}": firstName || "Instructor",
         "{courseKey}": courseKey,
-        "{adminUrl}": `${origin}/admin-sinneskueche?tab=schedule`,
+        "{adminUrl}": `${origin}/availability?course=${courseId.replace(/\//g, "")}`,
       };
 
       await db.collection("mail").add({

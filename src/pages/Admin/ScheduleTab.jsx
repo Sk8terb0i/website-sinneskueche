@@ -28,7 +28,13 @@ import {
   Search,
   X,
   Plus,
+  Settings,
+  Mail,
+  ListChecks,
+  CalendarHeart,
+  HelpCircle,
 } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   sectionTitleStyle,
   cardStyle,
@@ -44,6 +50,7 @@ export default function ScheduleTab({
   allowedCourses = [],
   currentLang,
 }) {
+  const { currentUser } = useAuth();
   const [selectedCourse, setSelectedCourse] = useState("");
   const [courseEvents, setCourseEvents] = useState([]);
   const [specialEvents, setSpecialEvents] = useState([]);
@@ -56,11 +63,16 @@ export default function ScheduleTab({
 
   const [selectedInstructors, setSelectedInstructors] = useState([]);
   const [instructorsPerSlot, setInstructorsPerSlot] = useState(1);
+  const [maxConsecutiveShifts, setMaxConsecutiveShifts] = useState(2);
+  const [maxShifts, setMaxShifts] = useState(0);
 
   const [assignments, setAssignments] = useState({});
   const [specialAssignments, setSpecialAssignments] = useState({});
 
-  const isFullAdmin = userRole === "admin";
+  // Instructor View State
+  const [myAvailabilities, setMyAvailabilities] = useState([]);
+
+  const isFullAdmin = userRole === "admin" || userRole === "course_admin";
   const functions = getFunctions();
 
   const labels = {
@@ -74,14 +86,16 @@ export default function ScheduleTab({
       manDesc: "Assign instructors manually to each date.",
       startMan: "Start Manual Schedule",
       status: "Status",
-      reset: "Reset",
-      confirmReset: "Reset schedule?",
+      reset: "Reset Completely",
+      confirmReset: "Reset schedule completely? All data will be lost.",
       instructors: "Course Instructors",
       noInstructors: "No instructors added yet. Search below.",
       searchPlace: "Search users to add as instructors...",
       reqAvail: "Request Availabilities",
-      saveList: "Save Instructor List",
-      assignmentsTitle: "Schedule Assignments",
+      resendReq: "Resend Requests",
+      reqSent: "Requests have been sent.",
+      saveList: "Save Configuration",
+      assignmentsTitle: "4. Review & Publish",
       instLabel: "Instructors",
       addonsLabel: "Session Add-ons",
       noAddons: "No add-ons defined",
@@ -90,7 +104,7 @@ export default function ScheduleTab({
       publish: "Publish & Email Schedule",
       noTime: "No time set",
       errAvail: "Select at least one instructor.",
-      msgUpdated: "Instructor list updated.",
+      msgUpdated: "Configuration saved successfully.",
       msgDraft: "Draft saved successfully.",
       msgErrDraft: "Error saving draft.",
       msgReq: "Availability requests sent!",
@@ -99,6 +113,27 @@ export default function ScheduleTab({
       msgPubSilent: "Schedule published (no emails sent)!",
       msgErrPub: "Error publishing: ",
       processing: "Processing...",
+
+      step1: "1. Rules & Instructors",
+      step2: "2. Collect Availabilities",
+      step3: "3. Generate Schedule",
+      maxConsecutive: "Max. Consecutive Shifts",
+      instPerSlot: "Instructors per Shift",
+      maxShiftsLabel: "Max. Total Shifts (0 = no limit)",
+      fillUnassigned: "Auto-Fill Empty Shifts",
+      regenAll: "Regenerate All Shifts",
+      availStatus1: "instructors have submitted their availabilities so far.",
+      availStatus0: "No availabilities submitted yet.",
+      waitingOn: "Waiting...",
+      submitted: "Submitted",
+
+      instViewTitle: "My Availabilities",
+      instViewDesc:
+        "Select the dates you are available to work. We will use this to generate the final schedule.",
+      availableBtn: "Available",
+      unavailableBtn: "Not Available",
+      saveMyAvail: "Submit My Availabilities",
+      msgMyAvailSaved: "Your availabilities have been saved. Thank you!",
     },
     de: {
       title: "Stundenplan Verwaltung",
@@ -111,14 +146,17 @@ export default function ScheduleTab({
       manDesc: "Kursleiter manuell den Terminen zuweisen.",
       startMan: "Manuelle Planung starten",
       status: "Status",
-      reset: "Zurücksetzen",
-      confirmReset: "Stundenplan zurücksetzen?",
+      reset: "Komplett Zurücksetzen",
+      confirmReset:
+        "Stundenplan komplett zurücksetzen? Alle Daten gehen verloren.",
       instructors: "Kursleiter",
       noInstructors: "Noch keine Kursleiter hinzugefügt. Suche unten.",
       searchPlace: "Nutzer suchen und als Kursleiter hinzufügen...",
       reqAvail: "Verfügbarkeiten anfragen",
-      saveList: "Kursleiter-Liste speichern",
-      assignmentsTitle: "Schichtzuweisungen",
+      resendReq: "Anfragen erneut senden",
+      reqSent: "Anfragen wurden gesendet.",
+      saveList: "Konfiguration speichern",
+      assignmentsTitle: "4. Prüfen & Veröffentlichen",
       instLabel: "Kursleiter",
       addonsLabel: "Session Extras",
       noAddons: "Keine Extras definiert",
@@ -127,7 +165,7 @@ export default function ScheduleTab({
       publish: "Veröffentlichen & E-Mail senden",
       noTime: "Keine Zeit",
       errAvail: "Wähle mindestens einen Kursleiter aus.",
-      msgUpdated: "Kursleiter-Liste aktualisiert.",
+      msgUpdated: "Konfiguration erfolgreich gespeichert.",
       msgDraft: "Entwurf erfolgreich gespeichert.",
       msgErrDraft: "Fehler beim Speichern des Entwurfs.",
       msgReq: "Verfügbarkeitsanfragen gesendet!",
@@ -136,6 +174,27 @@ export default function ScheduleTab({
       msgPubSilent: "Stundenplan veröffentlicht (keine E-Mails)! ",
       msgErrPub: "Fehler beim Veröffentlichen: ",
       processing: "Wird bearbeitet...",
+
+      step1: "1. Regeln & Kursleiter",
+      step2: "2. Verfügbarkeiten sammeln",
+      step3: "3. Stundenplan generieren",
+      maxConsecutive: "Max. Schichten am Stück",
+      instPerSlot: "Kursleiter pro Schicht",
+      maxShiftsLabel: "Max. Gesamtschichten (0 = kein Limit)",
+      fillUnassigned: "Leere Schichten füllen",
+      regenAll: "Alle Schichten neu generieren",
+      availStatus1: "Kursleiter haben bisher ihre Verfügbarkeiten eingetragen.",
+      availStatus0: "Noch keine Verfügbarkeiten eingetragen.",
+      waitingOn: "Wartet...",
+      submitted: "Eingereicht",
+
+      instViewTitle: "Meine Verfügbarkeiten",
+      instViewDesc:
+        "Wähle die Termine, an denen du arbeiten kannst. Diese werden genutzt, um den finalen Plan zu erstellen.",
+      availableBtn: "Verfügbar",
+      unavailableBtn: "Nicht Verfügbar",
+      saveMyAvail: "Meine Verfügbarkeiten absenden",
+      msgMyAvailSaved: "Deine Verfügbarkeiten wurden gespeichert. Danke!",
     },
   }[currentLang || "en"];
 
@@ -168,8 +227,8 @@ export default function ScheduleTab({
       );
       setAllUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     };
-    fetchUsers();
-  }, []);
+    if (isFullAdmin) fetchUsers();
+  }, [isFullAdmin]);
 
   useEffect(() => {
     if (!selectedCourse) return;
@@ -198,7 +257,7 @@ export default function ScheduleTab({
     };
 
     fetchEvents();
-    fetchSettings();
+    if (isFullAdmin) fetchSettings();
 
     const unsub = onSnapshot(doc(db, "schedules", sanitizedId), (docSnap) => {
       if (docSnap.exists()) {
@@ -208,18 +267,26 @@ export default function ScheduleTab({
         setSpecialAssignments(data.specialAssignments || {});
         setSelectedInstructors(data.instructors || []);
         setInstructorsPerSlot(data.instructorsPerSlot || 1);
+        setMaxConsecutiveShifts(data.maxConsecutiveShifts || 2);
+        setMaxShifts(data.maxShifts || 0);
       } else {
         setScheduleDoc(null);
         setAssignments({});
         setSpecialAssignments({});
         setSelectedInstructors([]);
         setInstructorsPerSlot(1);
+        setMaxConsecutiveShifts(2);
+        setMaxShifts(0);
       }
       setIsLoading(false);
     });
 
     return () => unsub();
-  }, [selectedCourse]);
+  }, [selectedCourse, isFullAdmin, currentUser]);
+
+  // ==========================================
+  // ADMIN ONLY LOGIC & VIEW
+  // ==========================================
 
   const initSchedule = async (mode) => {
     setIsProcessing(true);
@@ -231,6 +298,8 @@ export default function ScheduleTab({
         status: mode === "auto" ? "setup" : "draft",
         instructors: [],
         instructorsPerSlot: 1,
+        maxConsecutiveShifts: 2,
+        maxShifts: 0,
         availabilities: {},
         assignments: {},
         specialAssignments: {},
@@ -242,35 +311,33 @@ export default function ScheduleTab({
     setIsProcessing(false);
   };
 
-  const saveInstructorList = async () => {
+  const saveConfiguration = async () => {
     setIsProcessing(true);
     const sanitizedId = selectedCourse.replace(/\//g, "");
     const batch = writeBatch(db);
 
     try {
-      // 1. Update the master schedule document
       batch.set(
         doc(db, "schedules", sanitizedId),
         {
           instructors: selectedInstructors,
           instructorsPerSlot,
+          maxConsecutiveShifts,
+          maxShifts,
         },
         { merge: true },
       );
 
-      // 2. Automatically sync roles & course permissions for the instructors
       for (const uid of selectedInstructors) {
         const userRef = doc(db, "users", uid);
         const userData = allUsers.find((u) => u.id === uid);
         if (!userData) continue;
 
-        // Upgrade role to 'instructor' only if they are a standard 'user'
         const newRole =
           userData.role === "admin" || userData.role === "course_admin"
             ? userData.role
             : "instructor";
 
-        // Add current course to their allowed list if it's not already there
         const currentAllowed = userData.allowedCourses || [];
         const updatedAllowed = currentAllowed.includes(selectedCourse)
           ? currentAllowed
@@ -286,7 +353,7 @@ export default function ScheduleTab({
       alert(labels.msgUpdated);
     } catch (err) {
       console.error(err);
-      alert("Error updating instructors: " + err.message);
+      alert("Error updating config: " + err.message);
     }
     setIsProcessing(false);
   };
@@ -298,8 +365,6 @@ export default function ScheduleTab({
       await setDoc(
         doc(db, "schedules", sanitizedId),
         {
-          instructors: selectedInstructors, // Added to ensure list is saved
-          instructorsPerSlot, // Added to ensure slot count is saved
           assignments,
           specialAssignments,
           updatedAt: new Date().toISOString(),
@@ -323,6 +388,8 @@ export default function ScheduleTab({
         {
           instructors: selectedInstructors,
           instructorsPerSlot,
+          maxConsecutiveShifts,
+          maxShifts,
           status: "requesting",
         },
         { merge: true },
@@ -341,38 +408,61 @@ export default function ScheduleTab({
     setIsProcessing(false);
   };
 
-  const autoGenerateSchedule = async () => {
+  const autoGenerateSchedule = async (onlyUnassigned = true) => {
     setIsProcessing(true);
     const availabilities = scheduleDoc.availabilities || {};
-    const perSlot = scheduleDoc.instructorsPerSlot || 1;
-    const newAssignments = {};
+    const perSlot = instructorsPerSlot || 1;
+    const maxConsec = maxConsecutiveShifts || 2;
+    const maxShiftsLimit = maxShifts || 0;
+
+    const newAssignments = { ...(onlyUnassigned ? assignments : {}) };
 
     const shiftCount = {};
     const consecutive = {};
-    scheduleDoc.instructors.forEach((id) => {
+
+    selectedInstructors.forEach((id) => {
       shiftCount[id] = 0;
       consecutive[id] = 0;
     });
 
+    const scoreInstructor = (id) => {
+      let score = shiftCount[id];
+      if (consecutive[id] >= maxConsec) score += 1000;
+      if (maxShiftsLimit > 0 && shiftCount[id] >= maxShiftsLimit) score += 2000;
+      return score;
+    };
+
     courseEvents.forEach((ev) => {
-      let available = scheduleDoc.instructors.filter((id) =>
-        availabilities[id]?.includes(ev.id),
+      let currentAssigned = newAssignments[ev.id] || [];
+
+      if (onlyUnassigned && currentAssigned.length >= perSlot) {
+        selectedInstructors.forEach((id) => {
+          if (currentAssigned.includes(id)) {
+            consecutive[id]++;
+            shiftCount[id]++;
+          } else {
+            consecutive[id] = 0;
+          }
+        });
+        return;
+      }
+
+      const needed = perSlot - currentAssigned.length;
+
+      // STRICTLY ONLY SELECT FROM PEOPLE WHO SUBMITTED AVAILABILITY FOR THIS SLOT
+      let available = selectedInstructors.filter(
+        (id) =>
+          availabilities[id]?.includes(ev.id) && !currentAssigned.includes(id),
       );
 
-      available.sort((a, b) => {
-        if (shiftCount[a] !== shiftCount[b])
-          return shiftCount[a] - shiftCount[b];
-        return consecutive[a] - consecutive[b];
-      });
+      available.sort((a, b) => scoreInstructor(a) - scoreInstructor(b));
 
-      let preferred = available.filter((id) => consecutive[id] < 3);
-      if (preferred.length < perSlot) preferred = available;
+      const picked = available.slice(0, needed);
+      const finalAssigned = [...currentAssigned, ...picked];
+      newAssignments[ev.id] = finalAssigned;
 
-      const picked = preferred.slice(0, perSlot);
-      newAssignments[ev.id] = picked;
-
-      scheduleDoc.instructors.forEach((id) => {
-        if (picked.includes(id)) {
+      selectedInstructors.forEach((id) => {
+        if (finalAssigned.includes(id)) {
           consecutive[id]++;
           shiftCount[id]++;
         } else {
@@ -384,9 +474,14 @@ export default function ScheduleTab({
     const sanitizedId = selectedCourse.replace(/\//g, "");
     await setDoc(
       doc(db, "schedules", sanitizedId),
-      { assignments: newAssignments, status: "generated" },
+      {
+        assignments: newAssignments,
+        status: "generated",
+      },
       { merge: true },
     );
+
+    setAssignments(newAssignments);
     setIsProcessing(false);
   };
 
@@ -396,7 +491,6 @@ export default function ScheduleTab({
     try {
       const batch = writeBatch(db);
 
-      // 1. Delete existing shifts for this course to prevent old coworkers from showing up
       const oldShiftsQuery = query(
         collection(db, "work_schedule"),
         where("coursePath", "==", selectedCourse),
@@ -406,12 +500,13 @@ export default function ScheduleTab({
         batch.delete(doc.ref);
       });
 
-      // 2. Update the master schedule document
       batch.set(
         doc(db, "schedules", sanitizedId),
         {
           instructors: selectedInstructors,
           instructorsPerSlot,
+          maxConsecutiveShifts,
+          maxShifts,
           assignments,
           specialAssignments,
           status: "published",
@@ -419,7 +514,6 @@ export default function ScheduleTab({
         { merge: true },
       );
 
-      // 3. Sync individual 'work_schedule' docs for Profile.jsx visibility
       for (const eventId in assignments) {
         const instructorIds = assignments[eventId];
         for (const uid of instructorIds) {
@@ -439,7 +533,6 @@ export default function ScheduleTab({
         }
       }
 
-      // 4. Sync Instructor Roles & Permissions
       for (const uid of selectedInstructors) {
         const userRef = doc(db, "users", uid);
         const userData = allUsers.find((u) => u.id === uid);
@@ -464,7 +557,6 @@ export default function ScheduleTab({
       await batch.commit();
 
       if (sendEmail) {
-        // 5. Trigger Cloud Function for emails
         const sendSchedules = httpsCallable(functions, "sendFinalSchedules");
         await sendSchedules({
           courseId: selectedCourse,
@@ -506,21 +598,15 @@ export default function ScheduleTab({
 
   const toggleSpecialAssignment = (eventId, addonId) => {
     setSpecialAssignments((prev) => {
-      // Safely check what is currently stored for this event
       const existingData = prev[eventId];
-
-      // If it's an array, use it. If it's a string, wrap it in an array. Otherwise, empty array.
       const current = Array.isArray(existingData)
         ? existingData
         : existingData
           ? [existingData]
           : [];
-
-      // Toggle the selection
       const updated = current.includes(addonId)
         ? current.filter((id) => id !== addonId)
         : [...current, addonId];
-
       return { ...prev, [eventId]: updated };
     });
   };
@@ -534,6 +620,8 @@ export default function ScheduleTab({
           u.email?.toLowerCase().includes(userSearch.toLowerCase())),
     )
     .slice(0, 5);
+
+  const respondedCount = Object.keys(scheduleDoc?.availabilities || {}).length;
 
   if (isLoading)
     return (
@@ -669,6 +757,7 @@ export default function ScheduleTab({
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+          {/* HEADER BAR */}
           <div
             style={{
               display: "flex",
@@ -721,139 +810,609 @@ export default function ScheduleTab({
             </button>
           </div>
 
-          <div
-            style={{
-              ...cardStyle,
-              flexDirection: "column",
-              alignItems: "stretch",
-              gap: "1.5rem",
-              padding: "1.5rem",
-              backgroundColor: "#fdf8e1",
-            }}
-          >
-            <h4 style={{ margin: 0, fontSize: "1.1rem" }}>
-              {labels.instructors}
-            </h4>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-              {selectedInstructors.length === 0 && (
-                <p style={{ opacity: 0.5, fontSize: "0.85rem" }}>
-                  {labels.noInstructors}
-                </p>
-              )}
-              {selectedInstructors.map((id) => (
-                <div
-                  key={id}
+          {/* AUTO-SCHEDULER WIZARD STEPS */}
+          {scheduleDoc.mode === "auto" && (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+            >
+              {/* STEP 1: RULES & INSTRUCTORS */}
+              <div
+                style={{
+                  ...cardStyle,
+                  flexDirection: "column",
+                  alignItems: "stretch",
+                  padding: "1.5rem",
+                  backgroundColor: "#fdf8e1",
+                  borderLeft: "6px solid #caaff3",
+                }}
+              >
+                <h4
                   style={{
+                    margin: "0 0 1.2rem 0",
+                    fontSize: "1.1rem",
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
-                    padding: "6px 12px",
-                    backgroundColor: "#caaff3",
-                    borderRadius: "100px",
-                    fontSize: "0.85rem",
-                    fontWeight: "bold",
+                    color: "#1c0700",
                   }}
                 >
-                  {getUserName(id)}
-                  <X
-                    size={14}
-                    onClick={() => toggleInstructorSetup(id)}
-                    style={{ cursor: "pointer" }}
-                  />
-                </div>
-              ))}
-            </div>
+                  <Settings size={18} color="#9960a8" /> {labels.step1}
+                </h4>
 
-            <div style={{ position: "relative" }}>
-              <div style={{ position: "relative" }}>
-                <Search
-                  size={16}
-                  style={{
-                    position: "absolute",
-                    left: "12px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    opacity: 0.4,
-                  }}
-                />
-                <input
-                  placeholder={labels.searchPlace}
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  style={{
-                    ...inputStyle,
-                    paddingLeft: "36px",
-                    marginBottom: 0,
-                    backgroundColor: "rgba(255, 252, 227, 0.4)",
-                  }}
-                />
-              </div>
-
-              {userSearch && filteredUserResults.length > 0 && (
                 <div
                   style={{
-                    position: "absolute",
-                    top: "100%",
-                    left: 0,
-                    right: 0,
-                    backgroundColor: "#fdf8e1",
-                    border: "1px solid rgba(0,0,0,0.1)",
-                    borderRadius: "12px",
-                    marginTop: "4px",
-                    zIndex: 10,
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                    marginBottom: "1rem",
                   }}
                 >
-                  {filteredUserResults.map((u) => (
+                  {selectedInstructors.length === 0 && (
+                    <p style={{ opacity: 0.5, fontSize: "0.85rem", margin: 0 }}>
+                      {labels.noInstructors}
+                    </p>
+                  )}
+                  {selectedInstructors.map((id) => (
                     <div
-                      key={u.id}
-                      onClick={() => {
-                        toggleInstructorSetup(u.id);
-                        setUserSearch("");
-                      }}
+                      key={id}
                       style={{
-                        padding: "10px 14px",
-                        cursor: "pointer",
-                        borderBottom: "1px solid rgba(0,0,0,0.05)",
                         display: "flex",
-                        justifyContent: "space-between",
                         alignItems: "center",
+                        gap: "8px",
+                        padding: "6px 12px",
+                        backgroundColor: "#caaff3",
+                        borderRadius: "100px",
+                        fontSize: "0.85rem",
+                        fontWeight: "bold",
                       }}
                     >
-                      <div>
-                        <div style={{ fontWeight: "bold", fontSize: "0.9rem" }}>
-                          {u.firstName} {u.lastName}
-                        </div>
-                        <div style={{ fontSize: "0.7rem", opacity: 0.6 }}>
-                          {u.email}
-                        </div>
-                      </div>
-                      <Plus size={16} />
+                      {getUserName(id)}
+                      <X
+                        size={14}
+                        onClick={() => toggleInstructorSetup(id)}
+                        style={{ cursor: "pointer" }}
+                      />
                     </div>
                   ))}
                 </div>
-              )}
+
+                <div style={{ position: "relative", marginBottom: "1.5rem" }}>
+                  <div style={{ position: "relative" }}>
+                    <Search
+                      size={16}
+                      style={{
+                        position: "absolute",
+                        left: "12px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        opacity: 0.4,
+                      }}
+                    />
+                    <input
+                      placeholder={labels.searchPlace}
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      style={{
+                        ...inputStyle,
+                        paddingLeft: "36px",
+                        marginBottom: 0,
+                        backgroundColor: "rgba(255, 252, 227, 0.4)",
+                      }}
+                    />
+                  </div>
+
+                  {userSearch && filteredUserResults.length > 0 && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        backgroundColor: "#fdf8e1",
+                        border: "1px solid rgba(0,0,0,0.1)",
+                        borderRadius: "12px",
+                        marginTop: "4px",
+                        zIndex: 10,
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                      }}
+                    >
+                      {filteredUserResults.map((u) => (
+                        <div
+                          key={u.id}
+                          onClick={() => {
+                            toggleInstructorSetup(u.id);
+                            setUserSearch("");
+                          }}
+                          style={{
+                            padding: "10px 14px",
+                            cursor: "pointer",
+                            borderBottom: "1px solid rgba(0,0,0,0.05)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <div>
+                            <div
+                              style={{ fontWeight: "bold", fontSize: "0.9rem" }}
+                            >
+                              {u.firstName} {u.lastName}
+                            </div>
+                            <div style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                              {u.email}
+                            </div>
+                          </div>
+                          <Plus size={16} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "1rem",
+                    flexWrap: "wrap",
+                    backgroundColor: "rgba(202, 175, 243, 0.1)",
+                    padding: "1rem",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(202, 175, 243, 0.3)",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: "140px" }}>
+                    <label
+                      style={{
+                        ...labelStyle,
+                        fontSize: "0.75rem",
+                        color: "#9960a8",
+                      }}
+                    >
+                      {labels.instPerSlot}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={instructorsPerSlot}
+                      onChange={(e) =>
+                        setInstructorsPerSlot(parseInt(e.target.value) || 1)
+                      }
+                      style={{
+                        ...inputStyle,
+                        marginBottom: 0,
+                        backgroundColor: "#fffce3",
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: "140px" }}>
+                    <label
+                      style={{
+                        ...labelStyle,
+                        fontSize: "0.75rem",
+                        color: "#9960a8",
+                      }}
+                    >
+                      {labels.maxConsecutive}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={maxConsecutiveShifts}
+                      onChange={(e) =>
+                        setMaxConsecutiveShifts(parseInt(e.target.value) || 1)
+                      }
+                      style={{
+                        ...inputStyle,
+                        marginBottom: 0,
+                        backgroundColor: "#fffce3",
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: "140px" }}>
+                    <label
+                      style={{
+                        ...labelStyle,
+                        fontSize: "0.75rem",
+                        color: "#9960a8",
+                      }}
+                    >
+                      {labels.maxShiftsLabel}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={maxShifts}
+                      onChange={(e) =>
+                        setMaxShifts(parseInt(e.target.value) || 0)
+                      }
+                      style={{
+                        ...inputStyle,
+                        marginBottom: 0,
+                        backgroundColor: "#fffce3",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={saveConfiguration}
+                  style={{ ...btnStyle, fontSize: "0.85rem", padding: "10px" }}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <Loader2 size={16} className="spinner" />
+                  ) : (
+                    labels.saveList
+                  )}
+                </button>
+              </div>
+
+              {/* STEP 2: AVAILABILITIES TRACKER */}
+              <div
+                style={{
+                  ...cardStyle,
+                  flexDirection: "column",
+                  alignItems: "stretch",
+                  padding: "1.5rem",
+                  backgroundColor: "#fdf8e1",
+                  borderLeft: "6px solid #caaff3",
+                }}
+              >
+                <h4
+                  style={{
+                    margin: "0 0 1rem 0",
+                    fontSize: "1.1rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    color: "#1c0700",
+                  }}
+                >
+                  <Mail size={18} color="#9960a8" /> {labels.step2}
+                </h4>
+                <p
+                  style={{
+                    margin: "0 0 1.2rem 0",
+                    fontSize: "0.85rem",
+                    opacity: 0.8,
+                  }}
+                >
+                  {respondedCount > 0 ? (
+                    <strong>
+                      {respondedCount} / {selectedInstructors.length}
+                    </strong>
+                  ) : (
+                    ""
+                  )}{" "}
+                  {respondedCount > 0
+                    ? labels.availStatus1
+                    : labels.availStatus0}
+                </p>
+
+                {/* Visual Tracker of who responded */}
+                {selectedInstructors.length > 0 && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(150px, 1fr))",
+                      gap: "10px",
+                      marginBottom: "1.5rem",
+                    }}
+                  >
+                    {selectedInstructors.map((id) => {
+                      const hasResponded =
+                        scheduleDoc.availabilities?.hasOwnProperty(id);
+                      return (
+                        <div
+                          key={id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            padding: "10px",
+                            backgroundColor: "rgba(28,7,0,0.03)",
+                            borderRadius: "8px",
+                            border: `1px solid ${hasResponded ? "#4e5f28" : "rgba(28,7,0,0.1)"}`,
+                          }}
+                        >
+                          {hasResponded ? (
+                            <CheckCircle size={16} color="#4e5f28" />
+                          ) : (
+                            <Clock size={16} opacity={0.3} />
+                          )}
+                          <div
+                            style={{ display: "flex", flexDirection: "column" }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "0.8rem",
+                                fontWeight: "bold",
+                                color: "#1c0700",
+                              }}
+                            >
+                              {getUserName(id)}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "0.65rem",
+                                color: hasResponded
+                                  ? "#4e5f28"
+                                  : "rgba(28,7,0,0.5)",
+                              }}
+                            >
+                              {hasResponded
+                                ? labels.submitted
+                                : labels.waitingOn}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {scheduleDoc.status !== "setup" &&
+                  scheduleDoc.status !== "draft" && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        color: "#4e5f28",
+                        fontSize: "0.85rem",
+                        fontWeight: "bold",
+                        marginBottom: "1rem",
+                      }}
+                    >
+                      <CheckCircle size={16} /> {labels.reqSent}
+                    </div>
+                  )}
+
+                <button
+                  onClick={sendAvailabilityRequests}
+                  style={{
+                    ...btnStyle,
+                    padding: "10px",
+                    fontSize: "0.85rem",
+                    maxWidth: "250px",
+                  }}
+                  disabled={isProcessing || selectedInstructors.length === 0}
+                >
+                  {scheduleDoc.status !== "setup" &&
+                  scheduleDoc.status !== "draft"
+                    ? labels.resendReq
+                    : labels.reqAvail}
+                </button>
+              </div>
+
+              {/* STEP 3: GENERATE */}
+              <div
+                style={{
+                  ...cardStyle,
+                  flexDirection: "column",
+                  alignItems: "stretch",
+                  padding: "1.5rem",
+                  backgroundColor: "#fdf8e1",
+                  borderLeft: "6px solid #caaff3",
+                }}
+              >
+                <h4
+                  style={{
+                    margin: "0 0 1rem 0",
+                    fontSize: "1.1rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    color: "#1c0700",
+                  }}
+                >
+                  <Wand2 size={18} color="#9960a8" /> {labels.step3}
+                </h4>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "1rem",
+                    flexDirection: isMobile ? "column" : "row",
+                  }}
+                >
+                  <button
+                    onClick={() => autoGenerateSchedule(true)}
+                    style={{
+                      ...primaryBtnStyle(isMobile),
+                      flex: 1,
+                      margin: 0,
+                      padding: "12px",
+                      fontSize: "0.9rem",
+                    }}
+                    disabled={isProcessing || selectedInstructors.length === 0}
+                  >
+                    {isProcessing ? (
+                      <Loader2 className="spinner" size={16} />
+                    ) : (
+                      labels.fillUnassigned
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Overwrite all assignments and start from scratch?",
+                        )
+                      ) {
+                        autoGenerateSchedule(false);
+                      }
+                    }}
+                    style={{
+                      ...btnStyle,
+                      flex: 1,
+                      margin: 0,
+                      padding: "12px",
+                      fontSize: "0.9rem",
+                      borderColor: "#ff4d4d",
+                      color: "#ff4d4d",
+                      backgroundColor: "transparent",
+                    }}
+                    disabled={isProcessing || selectedInstructors.length === 0}
+                  >
+                    {isProcessing ? (
+                      <Loader2 className="spinner" size={16} />
+                    ) : (
+                      labels.regenAll
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
+          )}
 
-            {scheduleDoc.mode === "auto" && scheduleDoc.status === "setup" && (
-              <button
-                onClick={sendAvailabilityRequests}
-                style={primaryBtnStyle(isMobile)}
+          {/* MANUAL MODE INSTRUCTORS SETUP */}
+          {scheduleDoc.mode === "manual" && (
+            <div
+              style={{
+                ...cardStyle,
+                flexDirection: "column",
+                alignItems: "stretch",
+                padding: "1.5rem",
+                backgroundColor: "#fdf8e1",
+              }}
+            >
+              <h4
+                style={{
+                  margin: 0,
+                  fontSize: "1.1rem",
+                  marginBottom: "1.2rem",
+                }}
               >
-                {labels.reqAvail}
-              </button>
-            )}
-            {scheduleDoc.mode === "manual" && (
-              <button
-                onClick={saveInstructorList}
-                style={{ ...btnStyle, fontSize: "0.85rem", padding: "8px" }}
-              >
-                {labels.saveList}
-              </button>
-            )}
-          </div>
+                {labels.instructors}
+              </h4>
 
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                {selectedInstructors.length === 0 && (
+                  <p style={{ opacity: 0.5, fontSize: "0.85rem" }}>
+                    {labels.noInstructors}
+                  </p>
+                )}
+                {selectedInstructors.map((id) => (
+                  <div
+                    key={id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 12px",
+                      backgroundColor: "#caaff3",
+                      borderRadius: "100px",
+                      fontSize: "0.85rem",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {getUserName(id)}
+                    <X
+                      size={14}
+                      onClick={() => toggleInstructorSetup(id)}
+                      style={{ cursor: "pointer" }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ position: "relative", marginBottom: "1.5rem" }}>
+                <div style={{ position: "relative" }}>
+                  <Search
+                    size={16}
+                    style={{
+                      position: "absolute",
+                      left: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      opacity: 0.4,
+                    }}
+                  />
+                  <input
+                    placeholder={labels.searchPlace}
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    style={{
+                      ...inputStyle,
+                      paddingLeft: "36px",
+                      marginBottom: 0,
+                      backgroundColor: "rgba(255, 252, 227, 0.4)",
+                    }}
+                  />
+                </div>
+
+                {userSearch && filteredUserResults.length > 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      right: 0,
+                      backgroundColor: "#fdf8e1",
+                      border: "1px solid rgba(0,0,0,0.1)",
+                      borderRadius: "12px",
+                      marginTop: "4px",
+                      zIndex: 10,
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                    }}
+                  >
+                    {filteredUserResults.map((u) => (
+                      <div
+                        key={u.id}
+                        onClick={() => {
+                          toggleInstructorSetup(u.id);
+                          setUserSearch("");
+                        }}
+                        style={{
+                          padding: "10px 14px",
+                          cursor: "pointer",
+                          borderBottom: "1px solid rgba(0,0,0,0.05)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{ fontWeight: "bold", fontSize: "0.9rem" }}
+                          >
+                            {u.firstName} {u.lastName}
+                          </div>
+                          <div style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                            {u.email}
+                          </div>
+                        </div>
+                        <Plus size={16} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={saveConfiguration}
+                style={{ ...btnStyle, fontSize: "0.85rem", padding: "10px" }}
+                disabled={isProcessing}
+              >
+                {isProcessing ? (
+                  <Loader2 size={16} className="spinner" />
+                ) : (
+                  labels.saveList
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* STEP 4: ASSIGNMENTS & PUBLISH */}
           <div
             style={{
               ...cardStyle,
@@ -862,11 +1421,88 @@ export default function ScheduleTab({
               gap: "1.5rem",
               padding: isMobile ? "1rem" : "2rem",
               backgroundColor: "#fdf8e1",
+              borderLeft:
+                scheduleDoc.mode === "auto" ? "6px solid #caaff3" : "none",
             }}
           >
-            <h4 style={{ margin: 0, fontSize: "1.2rem" }}>
-              {labels.assignmentsTitle}
-            </h4>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                flexWrap: "wrap",
+                gap: "10px",
+              }}
+            >
+              <h4
+                style={{
+                  margin: "0",
+                  fontSize: "1.2rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                {scheduleDoc.mode === "auto" && (
+                  <ListChecks size={20} color="#9960a8" />
+                )}
+                {scheduleDoc.mode === "auto"
+                  ? labels.assignmentsTitle
+                  : "Schichtzuweisungen"}
+              </h4>
+
+              {scheduleDoc.mode === "auto" && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    fontSize: "0.7rem",
+                    backgroundColor: "rgba(28,7,0,0.03)",
+                    padding: "6px 12px",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontWeight: "bold",
+                      color: "#9960a8",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "10px",
+                        height: "10px",
+                        border: "2px solid #caaff3",
+                        borderRadius: "3px",
+                      }}
+                    />{" "}
+                    Available
+                  </span>
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      opacity: 0.5,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "10px",
+                        height: "10px",
+                        border: "2px dashed rgba(28,7,0,0.3)",
+                        borderRadius: "3px",
+                      }}
+                    />{" "}
+                    Unavailable
+                  </span>
+                </div>
+              )}
+            </div>
 
             <div
               style={{ display: "flex", flexDirection: "column", gap: "12px" }}
@@ -908,6 +1544,12 @@ export default function ScheduleTab({
                     >
                       {selectedInstructors.map((uid) => {
                         const isAssigned = assignments[ev.id]?.includes(uid);
+                        // In auto mode, show who is actually available based on their submission
+                        const isAvailable =
+                          scheduleDoc.mode === "auto"
+                            ? scheduleDoc.availabilities?.[uid]?.includes(ev.id)
+                            : true;
+
                         return (
                           <button
                             key={uid}
@@ -917,16 +1559,22 @@ export default function ScheduleTab({
                               borderRadius: "100px",
                               fontSize: "0.75rem",
                               fontWeight: "bold",
-                              border: "1px solid",
+                              border: isAssigned
+                                ? "2px solid #caaff3"
+                                : isAvailable
+                                  ? "2px solid #caaff3"
+                                  : "2px dashed rgba(28,7,0,0.3)",
                               transition: "all 0.2s",
                               backgroundColor: isAssigned
                                 ? "#caaff3"
                                 : "transparent",
-                              borderColor: isAssigned
-                                ? "#caaff3"
-                                : "rgba(28,7,0,0.2)",
-                              color: "#1c0700",
+                              color: isAssigned
+                                ? "#1c0700"
+                                : isAvailable
+                                  ? "#1c0700"
+                                  : "rgba(28,7,0,0.5)",
                               cursor: "pointer",
+                              opacity: !isAssigned && !isAvailable ? 0.7 : 1,
                             }}
                           >
                             {getUserName(uid)}

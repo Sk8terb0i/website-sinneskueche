@@ -26,6 +26,7 @@ import Profile from "./pages/Profile";
 import Success from "./components/Confirm/Success";
 import RegisterGuest from "./components/Profile/RegisterGuest";
 import StudentFiringForm from "./pages/StudentFiringForm";
+import InstructorAvailability from "./pages/InstructorAvailability";
 
 import PageTransition from "./components/PageTransition";
 import Footer from "./components/Footer/Footer";
@@ -321,6 +322,18 @@ export default function App() {
               element={
                 <PageTransition>
                   <StudentFiringForm />
+                </PageTransition>
+              }
+            />
+
+            <Route
+              path="/availability"
+              element={
+                <PageTransition>
+                  <InstructorAvailability
+                    currentLang={currentLang}
+                    setCurrentLang={setCurrentLang}
+                  />
                 </PageTransition>
               }
             />
