@@ -7,6 +7,7 @@ const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { logger } = require("firebase-functions"); // Added for better logging
 const admin = require("firebase-admin");
+const PDFDocument = require("pdfkit"); // ADDED FOR PDF GENERATION
 
 const stripe = require("stripe")(
   process.env.STRIPE_SECRET_KEY || "placeholder_key_for_analysis",
@@ -98,6 +99,16 @@ const getTemplate = async (transaction, typeId, lang) => {
       de: {
         subject: "Dein Code für {courseKey}",
         body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Vielen Dank für deinen Einkauf!</h2>\n  <p>Hallo {userName},</p>\n  <p>Hier ist dein Code für die {packSize}er Karte (<strong>{courseKey}</strong>):</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">{newCode}</p>\n  </div>\n  <p>Du hast noch <strong>{netIncrease} Guthaben</strong> übrig.</p>\n  {registrationCTA}\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+    },
+    pack_purchase_gift: {
+      en: {
+        subject: "Your Gift Card for {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Here is your Gift Card!</h2>\n  <p>Hi {userName},</p>\n  <p>Thank you for purchasing a {packSize}-Session Gift Card for <strong>{recipientName}</strong> (<strong>{courseKey}</strong>).</p>\n  <p>Here is the code you can forward to them:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">{newCode}</p>\n  </div>\n  <p>They can redeem this code during checkout on our website.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+      },
+      de: {
+        subject: "Dein Geschenkgutschein für {courseKey}",
+        body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Hier ist dein Geschenkgutschein!</h2>\n  <p>Hallo {userName},</p>\n  <p>Vielen Dank für den Kauf eines {packSize}er Kurspakets als Geschenk für <strong>{recipientName}</strong> (<strong>{courseKey}</strong>).</p>\n  <p>Hier ist der Code, den du weiterleiten kannst:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">{newCode}</p>\n  </div>\n  <p>Der Code kann bei der nächsten Buchung auf unserer Website eingelöst werden.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
       },
     },
     booking_confirmation_user: {
@@ -223,6 +234,138 @@ const sendUserPackEmail = async (
       html: replaceVars(template.body, replacements),
     },
   };
+  if (transaction) transaction.set(mailRef, mailData);
+  else await mailRef.set(mailData);
+};
+
+const generateGiftCardPDF = (
+  code,
+  recipientName,
+  courseKey,
+  packSize,
+  lang,
+) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: [600, 400], margin: 0 });
+      let buffers = [];
+      doc.on("data", buffers.push.bind(buffers));
+      doc.on("end", () => {
+        const pdfData = Buffer.concat(buffers);
+        resolve(pdfData.toString("base64"));
+      });
+
+      // Background
+      doc.rect(0, 0, 600, 400).fill("#fdf8e1");
+
+      // Border
+      doc.roundedRect(20, 20, 560, 360, 24).lineWidth(3).stroke("#9960a8");
+
+      // Title
+      const title = lang === "de" ? "Geschenkgutschein" : "Gift Card";
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(40)
+        .fillColor("#4e5f28")
+        .text(title, 0, 70, { align: "center" });
+
+      // Subtitle (Recipient)
+      const sub = lang === "de" ? "Für:" : "For:";
+      if (
+        recipientName &&
+        recipientName !== "Someone" &&
+        recipientName !== "Jemanden"
+      ) {
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(20)
+          .fillColor("#1c0700")
+          .text(`${sub} ${recipientName}`, 0, 135, { align: "center" });
+      }
+
+      // Course/Pack info
+      doc
+        .font("Helvetica")
+        .fontSize(14)
+        .fillColor("#1c0700")
+        .text(`${packSize} Session Pack - ${courseKey}`, 0, 175, {
+          align: "center",
+          opacity: 0.8,
+        });
+
+      // Code Box Background
+      doc.rect(150, 230, 300, 70).fillOpacity(0.5).fill("#ffffff");
+
+      // Code Box Dashed Border
+      doc.save(); // Save context before dashing
+      doc
+        .rect(150, 230, 300, 70)
+        .dash(8, { space: 6 })
+        .lineWidth(2)
+        .strokeOpacity(1)
+        .stroke("#9960a8");
+      doc.restore(); // Restore to solid lines for everything else
+
+      // Code Text
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(28)
+        .fillColor("#1c0700")
+        .text(code, 0, 252, { align: "center", characterSpacing: 10 });
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
+const sendGiftCardEmail = async (
+  transaction,
+  email,
+  name,
+  courseKey,
+  packSize,
+  newCode,
+  recipientName,
+  lang,
+) => {
+  if (!email) return;
+  const template = await getTemplate(transaction, "pack_purchase_gift", lang);
+
+  const replacements = {
+    "{userName}": name,
+    "{courseKey}": courseKey,
+    "{packSize}": packSize,
+    "{newCode}": newCode,
+    "{recipientName}": recipientName,
+  };
+
+  // Generate the PDF as a base64 string
+  const pdfBase64 = await generateGiftCardPDF(
+    newCode,
+    recipientName,
+    courseKey,
+    packSize,
+    lang,
+  );
+
+  const mailRef = db.collection("mail").doc();
+  const mailData = {
+    to: email,
+    message: {
+      subject: replaceVars(template.subject, replacements),
+      html: replaceVars(template.body, replacements),
+      attachments: [
+        {
+          filename: `GiftCard_${newCode}.pdf`,
+          content: pdfBase64,
+          encoding: "base64",
+        },
+      ],
+    },
+  };
+
   if (transaction) transaction.set(mailRef, mailData);
   else await mailRef.set(mailData);
 };
@@ -596,8 +739,13 @@ exports.handleStripeWebhook = onRequest(
             chunkCount,
           } = session.metadata;
 
-          const isMultiPack = packSize && packSize.toString().startsWith("{");
+          const isMultiPack =
+            packSize &&
+            (packSize.toString().startsWith("{") ||
+              packSize.toString().startsWith("["));
           const selectedPacksMap = isMultiPack ? JSON.parse(packSize) : null;
+          const displayPackSize =
+            packSummary || (isMultiPack ? "Session Packs" : packSize);
 
           // NEW: Reassemble the full JSON string from the chunks before parsing
           let fullDatesJson = "";
@@ -707,16 +855,37 @@ exports.handleStripeWebhook = onRequest(
           }
 
           // 2. Process Additions (Updated for Multi-Pack Support)
-          let totalNetIncrease = 0;
+          let userNetIncrease = 0;
+          let guestNetIncrease = 0;
           let generatedCode = null;
+          let giftCardsToSend = [];
 
           if (mode === "pack") {
-            // Determine which packs were bought
-            const packsToProcess = isMultiPack
-              ? Object.entries(selectedPacksMap)
-              : [[coursePath, null]]; // Fallback to legacy single course
+            let packsToProcess = [];
+            if (Array.isArray(selectedPacksMap)) {
+              packsToProcess = selectedPacksMap;
+            } else if (isMultiPack && selectedPacksMap) {
+              packsToProcess = Object.entries(selectedPacksMap).map(
+                ([k, v]) => ({
+                  link: k,
+                  packIdx: v,
+                  profileId: profileId || "main",
+                }),
+              );
+            } else {
+              packsToProcess = [
+                {
+                  link: coursePath,
+                  packIdx: null,
+                  profileId: profileId || "main",
+                },
+              ];
+            }
 
-            for (const [link, pIdx] of packsToProcess) {
+            for (const sp of packsToProcess) {
+              const link = sp.link;
+              const pIdx = sp.packIdx;
+              const targetProfileId = sp.profileId || "main";
               const cKey = getCleanCourseKey(link);
 
               // 1. Get the actual size of this specific pack from settings
@@ -736,9 +905,32 @@ exports.handleStripeWebhook = onRequest(
                 0,
                 packSizeValue - courseBookingsCount,
               );
-              totalNetIncrease += courseNetIncrease;
 
-              if (!isGuest) {
+              if (sp.isGift) {
+                const code = sp.giftCode || generatePackCode();
+                transaction.set(db.collection("pack_codes").doc(code), {
+                  code: code,
+                  courseKey: cKey,
+                  remainingCredits: courseNetIncrease,
+                  buyerEmail: email,
+                  buyerName: finalName,
+                  recipientName: sp.recipientName || "Someone",
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                  redeemedEventIds: parsedDates
+                    .filter((d) => d.link === link)
+                    .map((d) => d.id),
+                });
+
+                giftCardsToSend.push({
+                  code: code,
+                  courseKey: cKey,
+                  packSize: courseNetIncrease,
+                  recipientName: sp.recipientName || "Someone",
+                });
+              } else if (!isGuest) {
+                userNetIncrease += courseNetIncrease;
+                isPackUser = true;
+
                 // Update specific course credits for registered user/profile
                 if (targetProfileId === "main") {
                   userData.credits[cKey] =
@@ -766,8 +958,10 @@ exports.handleStripeWebhook = onRequest(
                   type: "purchase",
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
-                isPackUser = true;
               } else if (courseNetIncrease > 0) {
+                guestNetIncrease += courseNetIncrease;
+                isPackGuest = true;
+
                 // Guest Logic: Create one code per course pack
                 generatedCode = generatePackCode();
                 transaction.set(
@@ -784,7 +978,6 @@ exports.handleStripeWebhook = onRequest(
                       .map((d) => d.id),
                   },
                 );
-                isPackGuest = true;
               }
             }
           }
@@ -810,40 +1003,57 @@ exports.handleStripeWebhook = onRequest(
             lang,
             isGuest,
             origin,
-            packSize: packSummary || packSize, // Show clean summary in email
-            netIncrease: totalNetIncrease,
+            packSize: displayPackSize,
+            userNetIncrease,
+            guestNetIncrease,
             generatedCode,
-            courseKey: packSummary || courseKey, // Use summary for subject line
+            courseKey: displayPackSize,
             userData,
+            giftCards: giftCardsToSend,
           };
         });
 
         if (emailData) {
+          if (emailData.giftCards && emailData.giftCards.length > 0) {
+            for (const gc of emailData.giftCards) {
+              await sendGiftCardEmail(
+                null,
+                emailData.email,
+                emailData.finalName,
+                gc.courseKey,
+                gc.packSize,
+                gc.code,
+                gc.recipientName,
+                emailData.lang,
+              );
+            }
+          }
+
           if (emailData.parsedDates.length === 0) {
-            if (isPackUser) {
+            if (isPackUser && emailData.userNetIncrease > 0) {
               await sendUserPackEmail(
                 null,
                 emailData.email,
                 emailData.finalName,
                 emailData.courseKey,
                 emailData.packSize,
-                emailData.netIncrease,
+                emailData.userNetIncrease,
                 emailData.lang,
               );
-            } else if (isPackGuest) {
+            } else if (isPackGuest && emailData.guestNetIncrease > 0) {
               await sendGuestPackCodeEmail(
                 null,
                 emailData.email,
                 emailData.finalName,
                 emailData.courseKey,
                 emailData.packSize,
-                emailData.netIncrease,
+                emailData.guestNetIncrease,
                 emailData.generatedCode,
                 emailData.lang,
                 emailData.origin,
               );
             }
-          } else {
+          } else if (emailData.parsedDates.length > 0) {
             await sendBookingEmail(
               null,
               emailData.email,

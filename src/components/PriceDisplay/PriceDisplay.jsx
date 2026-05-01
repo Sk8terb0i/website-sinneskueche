@@ -493,12 +493,43 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
       });
 
       let packSummary = "";
-      if (mode === "pack" && typeof size === "object") {
-        packSummary = Object.entries(size)
-          .map(([link, pIdx]) => {
-            const pData = pricingMap[link];
-            const pack = pData?.packs?.[pIdx];
-            return `${pack?.size} Session Pack (${pData?.courseName || link.replace(/\//g, "")})`;
+      let modifiedSize = size;
+      let giftCodes = [];
+      let giftNames = [];
+
+      if (mode === "pack" && Array.isArray(size)) {
+        modifiedSize = size.map((sp) => {
+          if (sp.isGift) {
+            const code = Math.random()
+              .toString(36)
+              .substring(2, 10)
+              .toUpperCase();
+            giftCodes.push(code);
+            giftNames.push(
+              encodeURIComponent(
+                sp.recipientName ||
+                  (currentLang === "en" ? "Someone" : "Jemanden"),
+              ),
+            );
+            return { ...sp, giftCode: code };
+          }
+          return sp;
+        });
+
+        packSummary = modifiedSize
+          .map((sp) => {
+            const pData = pricingMap[sp.link];
+            const pack = pData?.packs?.[sp.packIdx];
+            let suffix = "";
+            if (sp.isGift)
+              suffix = ` [GIFT for ${sp.recipientName || (currentLang === "en" ? "Someone" : "Jemanden")}]`;
+            else if (
+              sp.profileId &&
+              sp.profileId !== "main" &&
+              sp.profileId !== "guest"
+            )
+              suffix = " [SUB-PROFILE]";
+            return `${pack?.size} Session Pack (${pData?.courseName || sp.link.replace(/\//g, "")})${suffix}`;
           })
           .join(" + ");
       }
@@ -547,7 +578,9 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
       const metadataPayload = {
         userId: currentUser ? currentUser.uid : "GUEST_USER",
         mode,
-        packSize: typeof size === "object" ? JSON.stringify(size) : size || 0,
+        packSize: Array.isArray(modifiedSize)
+          ? JSON.stringify(modifiedSize)
+          : modifiedSize || 0,
         packSummary: packSummary || "",
         coursePath,
         currentLang,
@@ -565,7 +598,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         ...metadataPayload,
         packPrice: mode === "pack" ? price || 0 : 0,
         totalPrice: mode !== "pack" ? price || 0 : 0,
-        successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=true&packs=${encodeURIComponent(packSummary)}&sessions=${encodeURIComponent(sessionSummary)}`,
+        successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=true&packs=${encodeURIComponent(packSummary)}&sessions=${encodeURIComponent(sessionSummary)}&giftCodes=${giftCodes.join(",")}&giftNames=${giftNames.join(",")}`,
         cancelUrl: window.location.href,
       });
       if (res.data?.url) window.location.assign(res.data.url);

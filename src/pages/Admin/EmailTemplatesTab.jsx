@@ -60,6 +60,10 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
   const typeLabels = {
     pack_purchase_user: { en: "Pack Success (User)", de: "Paketkauf (Nutzer)" },
     pack_purchase_guest: { en: "Pack Success (Guest)", de: "Paketkauf (Gast)" },
+    pack_purchase_gift: {
+      en: "Pack Success (Gift)",
+      de: "Paketkauf (Geschenk)",
+    },
     booking_confirmation_user: {
       en: "Booking Conf. (User)",
       de: "Buchung (Nutzer)",
@@ -107,6 +111,26 @@ export default function EmailTemplatesTab({ isMobile, currentLang }) {
       defaults: {
         en: { subject: "Your Code for {courseKey}", body: "" },
         de: { subject: "Dein Code für {courseKey}", body: "" },
+      },
+    },
+    {
+      id: "pack_purchase_gift",
+      vars: [
+        "{userName}",
+        "{courseKey}",
+        "{packSize}",
+        "{newCode}",
+        "{recipientName}",
+      ],
+      defaults: {
+        en: {
+          subject: "Your Gift Card for {courseKey}",
+          body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Here is your Gift Card!</h2>\n  <p>Hi {userName},</p>\n  <p>Thank you for purchasing a {packSize}-Session Gift Card for <strong>{recipientName}</strong> (<strong>{courseKey}</strong>).</p>\n  <p>Here is the code you can forward to them:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">{newCode}</p>\n  </div>\n  <p>They can redeem this code during checkout on our website.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+        },
+        de: {
+          subject: "Dein Geschenkgutschein für {courseKey}",
+          body: `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 8px;">\n  <h2 style="color: #4e5f28;">Hier ist dein Geschenkgutschein!</h2>\n  <p>Hallo {userName},</p>\n  <p>Vielen Dank für den Kauf eines {packSize}er Kurspakets als Geschenk für <strong>{recipientName}</strong> (<strong>{courseKey}</strong>).</p>\n  <p>Hier ist der Code, den du weiterleiten kannst:</p>\n  <div style="background-color: rgba(202, 175, 243, 0.2); padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; border: 1px solid #caaff3;">\n    <p style="margin: 0; font-size: 32px; font-weight: bold; color: #9960a8; letter-spacing: 4px;">{newCode}</p>\n  </div>\n  <p>Der Code kann bei der nächsten Buchung auf unserer Website eingelöst werden.</p>\n  <br/><p>Herzliche Grüße,<br/>Atelier Sinnesküche</p>\n</div>`,
+        },
       },
     },
     {

@@ -109,7 +109,7 @@ export default function BookingSummary({
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
 
-  const [selectedPacks, setSelectedPacks] = useState({});
+  const [selectedPacks, setSelectedPacks] = useState([]);
 
   const [courseTerms, setCourseTerms] = useState(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -159,8 +159,8 @@ export default function BookingSummary({
       });
 
       // 3. Add IDs from Packs currently selected
-      Object.keys(selectedPacks).forEach((link) => {
-        uniqueIds.add(link.replace(/\//g, ""));
+      selectedPacks.forEach((p) => {
+        uniqueIds.add(p.link.replace(/\//g, ""));
       });
 
       // 4. Fallback: Only include the base course path if the cart is completely empty
@@ -428,8 +428,8 @@ export default function BookingSummary({
         // FIXED: Enforce the 1-per-day limit based on HISTORY, regardless of current balance.
         // This ensures the cash price is correctly applied if a credit was already spent today.
         const hasBalance = (profileBalances[pid]?.[courseKey] || 0) > 0;
-        const isBuyingPackForThis = selectedPacks.hasOwnProperty(
-          d.link || coursePath,
+        const isBuyingPackForThis = selectedPacks.some(
+          (p) => p.link === (d.link || coursePath) && p.profileId === pid,
         );
 
         // The limit applies if they HAVE credits OR if they have ALREADY used one today
@@ -515,7 +515,7 @@ export default function BookingSummary({
         : []),
   ];
 
-  const isBuyingPack = Object.keys(selectedPacks).length > 0;
+  const isBuyingPack = selectedPacks.length > 0;
   const isUsingCredits =
     usableCredits > 0 || (activePackCode && activePackCode.remaining > 0);
   const qualifiesForFreeAddon = isBuyingPack || isUsingCredits;
@@ -563,17 +563,19 @@ export default function BookingSummary({
   let infoSentence = "";
 
   // 1. Calculate base cost of all selected packs
-  Object.entries(selectedPacks).forEach(([link, packIdx]) => {
-    const pack = pricingMap[link]?.packs?.[packIdx];
+  selectedPacks.forEach((sp) => {
+    const pack = pricingMap[sp.link]?.packs?.[sp.packIdx];
     if (pack) finalPackPrice += parseFloat(pack.price || 0);
   });
 
-  // 2. Track remaining credits for NEW packs being purchased
+  // 2. Track remaining credits for NEW packs being purchased per profile
   const newPackRemaining = {};
-  Object.entries(selectedPacks).forEach(([link, packIdx]) => {
-    newPackRemaining[link] = parseInt(
-      pricingMap[link]?.packs?.[packIdx]?.size || 0,
-    );
+  selectedPacks.forEach((sp) => {
+    const pId = sp.profileId || "guest";
+    if (!newPackRemaining[pId]) newPackRemaining[pId] = {};
+    const size = parseInt(pricingMap[sp.link]?.packs?.[sp.packIdx]?.size || 0);
+    newPackRemaining[pId][sp.link] =
+      (newPackRemaining[pId][sp.link] || 0) + size;
   });
 
   // 3. Loop through selected sessions to apply coverage
@@ -618,12 +620,15 @@ export default function BookingSummary({
 
       if (usedCredit) {
         // Covered by existing credit
-      } else if (newPackRemaining[d.link] > 0) {
-        newPackRemaining[d.link]--; // Covered by NEWLY selected pack
+      } else if (newPackRemaining[pid || "guest"]?.[d.link] > 0) {
+        newPackRemaining[pid || "guest"][d.link]--; // Covered by NEWLY selected pack for this profile
       } else {
         // Not covered - Charge Single Price
         finalPackPrice += coursePrice;
-        if (newPackRemaining.hasOwnProperty(d.link)) hasExceededPack = true;
+
+        // Check if ANY pack was purchased for this link to decide warning type
+        const hasPackForLink = selectedPacks.some((p) => p.link === d.link);
+        if (hasPackForLink) hasExceededPack = true;
         else hasUncoveredMixedCourse = true;
 
         if (!breakdownMap[title])
@@ -641,7 +646,7 @@ export default function BookingSummary({
         if (addonDef && (addonDef.price || addonDef.freeWithPack)) {
           const isFree =
             addonDef.freeWithPack &&
-            (usableCredits > 0 || Object.keys(selectedPacks).length > 0);
+            (usableCredits > 0 || selectedPacks.length > 0);
           const aName =
             currentLang === "en" ? addonDef.nameEn : addonDef.nameDe;
           const aPrice = parseFloat(addonDef.price || 0);
@@ -1936,209 +1941,584 @@ export default function BookingSummary({
     </div>
   );
 
-  const renderPackOption = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <span
+  const renderPackOption = () => {
+    // Collect profiles
+    const profiles = [];
+    if (currentUser) {
+      profiles.push({ id: "main", name: currentLang === "en" ? "Me" : "Ich" });
+      if (userData?.linkedProfiles) {
+        userData.linkedProfiles.forEach((p) =>
+          profiles.push({ id: p.id, name: p.firstName }),
+        );
+      }
+    } else {
+      profiles.push({
+        id: "guest",
+        name: currentLang === "en" ? "Guest" : "Gast",
+      });
+    }
+    // Also a gift option
+    const giftOption = {
+      id: "gift",
+      name: currentLang === "en" ? "Buy as a Gift" : "Als Geschenk kaufen",
+      isGift: true,
+    };
+    const availableProfiles = [...profiles, giftOption];
+
+    // Calculate sessions needed per profile/link to show hints
+    const sessionsNeeded = {}; // { profileId: { link: count } }
+    selectedDates.forEach((d) => {
+      d.attendees.forEach((att) => {
+        const pid = att.profileId || "guest";
+        if (!sessionsNeeded[pid]) sessionsNeeded[pid] = {};
+        sessionsNeeded[pid][d.link || coursePath] =
+          (sessionsNeeded[pid][d.link || coursePath] || 0) + 1;
+      });
+    });
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+        <div
           style={{
-            fontSize: "0.75rem",
-            fontWeight: "900",
-            letterSpacing: "1px",
-            opacity: 0.6,
-            textTransform: "uppercase",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
           }}
         >
-          {currentLang === "en"
-            ? "Purchase Session Packs"
-            : "Kurspakete wählen"}
-        </span>
-        <button
-          onClick={() => setShowPackInfo(true)}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: "#9960a8",
-            padding: "4px",
-          }}
-        >
-          <Info size={18} />
-        </button>
-      </div>
+          <span
+            style={{
+              fontSize: "0.75rem",
+              fontWeight: "900",
+              letterSpacing: "1px",
+              opacity: 0.6,
+              textTransform: "uppercase",
+            }}
+          >
+            {currentLang === "en"
+              ? "Purchase Session Packs"
+              : "Kurspakete wählen"}
+          </span>
+          <button
+            onClick={() => setShowPackInfo(true)}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#9960a8",
+              padding: "4px",
+            }}
+          >
+            <Info size={18} />
+          </button>
+        </div>
 
-      {Object.keys(pricingMap)
-        .sort()
-        .map((link) => {
-          const coursePacks = pricingMap[link]?.packs || [];
-          if (coursePacks.length === 0) return null;
+        {Object.keys(pricingMap)
+          .sort()
+          .map((link) => {
+            const coursePacks = pricingMap[link]?.packs || [];
+            if (coursePacks.length === 0) return null;
 
-          const matchingEvent = availableDates.find((e) => e.link === link);
-          const courseName = matchingEvent?.title
-            ? typeof matchingEvent.title === "object"
-              ? matchingEvent.title[currentLang || "en"]
-              : matchingEvent.title
-            : pricingMap[link]?.courseName || link.replace(/\//g, "");
+            const matchingEvent = availableDates.find((e) => e.link === link);
+            const courseName = matchingEvent?.title
+              ? typeof matchingEvent.title === "object"
+                ? matchingEvent.title[currentLang || "en"]
+                : matchingEvent.title
+              : pricingMap[link]?.courseName || link.replace(/\//g, "");
 
-          return (
-            <div
-              key={link}
-              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
-            >
+            const hasPackForCourse = selectedPacks.some((p) => p.link === link);
+
+            // Dynamic single session logic
+            const sessionsForThisCourse = selectedDates
+              .filter((d) => (d.link || coursePath) === link)
+              .reduce((acc, d) => acc + (d.attendees?.length || 1), 0);
+
+            const isSingleSelected =
+              !hasPackForCourse && sessionsForThisCourse > 0;
+
+            const singleTextEn =
+              sessionsForThisCourse > 0
+                ? `${sessionsForThisCourse} Individual Session${sessionsForThisCourse > 1 ? "s" : ""}`
+                : "Single Session(s)";
+
+            const singleTextDe =
+              sessionsForThisCourse > 0
+                ? `${sessionsForThisCourse} Einzeltermin${sessionsForThisCourse > 1 ? "e" : ""}`
+                : "Einzeltermin(e)";
+
+            return (
               <div
+                key={link}
                 style={{
-                  fontSize: "0.65rem",
-                  fontWeight: "900",
-                  color: "#9960a8",
-                  textTransform: "uppercase",
-                  opacity: 0.8,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
                 }}
               >
-                {courseName}
-              </div>
-              {coursePacks.map((pack, pIdx) => {
-                const isSelected = selectedPacks[link] === pIdx;
-                const savings = Math.round(
-                  ((parseFloat(pricingMap[link].priceSingle) * pack.size -
-                    pack.price) /
-                    (parseFloat(pricingMap[link].priceSingle) * pack.size)) *
-                    100,
-                );
+                <div
+                  style={{
+                    fontSize: "0.65rem",
+                    fontWeight: "900",
+                    color: "#9960a8",
+                    textTransform: "uppercase",
+                    opacity: 0.8,
+                  }}
+                >
+                  {courseName}
+                </div>
 
-                return (
+                {/* SINGLE SESSION BUTTON */}
+                <div
+                  onClick={() =>
+                    setSelectedPacks((prev) =>
+                      prev.filter((p) => p.link !== link),
+                    )
+                  }
+                  style={{
+                    backgroundColor: isSingleSelected
+                      ? "rgba(202, 175, 243, 0.25)"
+                      : "rgba(202, 175, 243, 0.05)",
+                    borderRadius: "16px",
+                    padding: "1rem",
+                    border: isSingleSelected
+                      ? "2px solid #9960a8"
+                      : "1px solid rgba(202, 175, 243, 0.15)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    fontWeight: "800",
+                    fontSize: "0.9rem",
+                  }}
+                >
                   <div
-                    key={pIdx}
-                    onClick={() =>
-                      setSelectedPacks((prev) => {
-                        const next = { ...prev };
-                        if (isSelected) delete next[link];
-                        else next[link] = pIdx;
-                        return next;
-                      })
-                    }
                     style={{
-                      backgroundColor: isSelected
-                        ? "rgba(202, 175, 243, 0.25)"
-                        : "rgba(202, 175, 243, 0.05)",
-                      borderRadius: "16px",
-                      padding: "1rem",
-                      border: isSelected
-                        ? "2px solid #9960a8"
-                        : "1px solid rgba(202, 175, 243, 0.15)",
-                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
                     }}
                   >
-                    <div
+                    {isSingleSelected && (
+                      <Check size={14} color="#9960a8" strokeWidth={4} />
+                    )}
+                    <span
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
+                        color: isSingleSelected
+                          ? "#1c0700"
+                          : "rgba(28,7,0,0.5)",
                       }}
                     >
+                      {currentLang === "en" ? singleTextEn : singleTextDe}
+                    </span>
+                  </div>
+                </div>
+
+                {coursePacks.map((pack, pIdx) => {
+                  const isPackTypeSelected = selectedPacks.some(
+                    (p) => p.link === link && p.packIdx === pIdx,
+                  );
+                  const savings = Math.round(
+                    ((parseFloat(pricingMap[link].priceSingle) * pack.size -
+                      pack.price) /
+                      (parseFloat(pricingMap[link].priceSingle) * pack.size)) *
+                      100,
+                  );
+
+                  return (
+                    <div
+                      key={pIdx}
+                      style={{ display: "flex", flexDirection: "column" }}
+                    >
                       <div
+                        onClick={() => {
+                          if (isPackTypeSelected) {
+                            setSelectedPacks((prev) =>
+                              prev.filter(
+                                (p) => !(p.link === link && p.packIdx === pIdx),
+                              ),
+                            );
+                          } else {
+                            setSelectedPacks((prev) => [
+                              ...prev.filter((p) => p.link !== link),
+                              {
+                                id: Date.now().toString() + Math.random(),
+                                link,
+                                packIdx: pIdx,
+                                profileId: currentUser ? "main" : "guest",
+                                isGift: false,
+                              },
+                            ]);
+                          }
+                        }}
                         style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "2px",
+                          backgroundColor: isPackTypeSelected
+                            ? "rgba(202, 175, 243, 0.25)"
+                            : "rgba(202, 175, 243, 0.05)",
+                          borderRadius: isPackTypeSelected
+                            ? "16px 16px 0 0"
+                            : "16px",
+                          padding: "1rem",
+                          border: isPackTypeSelected
+                            ? "2px solid #9960a8"
+                            : "1px solid rgba(202, 175, 243, 0.15)",
+                          borderBottom: isPackTypeSelected ? "none" : undefined,
+                          cursor: "pointer",
+                          position: "relative",
+                          zIndex: 2,
                         }}
                       >
                         <div
                           style={{
                             display: "flex",
+                            justifyContent: "space-between",
                             alignItems: "center",
-                            gap: "8px",
-                            fontWeight: "800",
-                            fontSize: "0.9rem",
                           }}
                         >
-                          {isSelected && (
-                            <Check size={14} color="#9960a8" strokeWidth={4} />
-                          )}
-                          {pack.size}{" "}
-                          {currentLang === "en" ? "Session Pack" : "er Karte"}
-                        </div>
-                        {savings > 0 && (
-                          <span
+                          <div
                             style={{
-                              fontSize: "0.6rem",
-                              color: "#9960a8",
-                              fontWeight: "900",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "2px",
                             }}
                           >
-                            {currentLang === "en"
-                              ? `SAVE ${savings}%`
-                              : `${savings}% ERSPARNIS`}
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                fontWeight: "800",
+                                fontSize: "0.9rem",
+                              }}
+                            >
+                              {isPackTypeSelected && (
+                                <Check
+                                  size={14}
+                                  color="#9960a8"
+                                  strokeWidth={4}
+                                />
+                              )}
+                              {pack.size}{" "}
+                              {currentLang === "en"
+                                ? "Session Pack"
+                                : "er Karte"}
+                            </div>
+                            {savings > 0 && (
+                              <span
+                                style={{
+                                  fontSize: "0.6rem",
+                                  color: "#9960a8",
+                                  fontWeight: "900",
+                                }}
+                              >
+                                {currentLang === "en"
+                                  ? `SAVE ${savings}%`
+                                  : `${savings}% ERSPARNIS`}
+                              </span>
+                            )}
+                          </div>
+                          <span style={{ fontWeight: "700", color: "#4e5f28" }}>
+                            {pack.price} CHF
                           </span>
-                        )}
+                        </div>
                       </div>
-                      <span style={{ fontWeight: "700", color: "#4e5f28" }}>
-                        {pack.price} CHF
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
 
-      {/* Itemized Extra Charges Breakdown */}
-      {extraItemsBreakdown.length > 0 && (
-        <div
-          style={{
-            marginTop: "10px",
-            padding: "12px",
-            backgroundColor: "rgba(28, 7, 0, 0.05)",
-            borderRadius: "12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-          }}
-        >
-          {extraItemsBreakdown.map((item, bIdx) => (
-            <p
-              key={bIdx}
-              style={{
-                margin: 0,
-                fontWeight: "700",
-                fontSize: "0.7rem",
-                display: "flex",
-                justifyContent: "space-between",
-              }}
-            >
-              <span>
-                + {item.count}{" "}
-                {currentLang === "en"
-                  ? item.count === 1
-                    ? "session"
-                    : "sessions"
-                  : "Termin(e)"}{" "}
-                {item.name}
-              </span>
-              <span style={{ opacity: 0.5 }}>
-                {item.isFree ? "FREE" : `+ ${item.price} CHF`}
-              </span>
-            </p>
-          ))}
-          <p
+                      {isPackTypeSelected && (
+                        <div
+                          style={{
+                            padding: "1rem",
+                            backgroundColor: "rgba(202, 175, 243, 0.08)",
+                            border: "2px solid #9960a8",
+                            borderTop: "none",
+                            borderBottomLeftRadius: "16px",
+                            borderBottomRightRadius: "16px",
+                            marginTop: "-2px",
+                            zIndex: 1,
+                          }}
+                        >
+                          {availableProfiles.length > 1 && (
+                            <div
+                              style={{
+                                fontSize: "0.75rem",
+                                marginBottom: "12px",
+                                fontWeight: "800",
+                                opacity: 0.7,
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              {currentLang === "en"
+                                ? "Assign Pack To:"
+                                : "Paket zuweisen an:"}
+                            </div>
+                          )}
+
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "12px",
+                            }}
+                          >
+                            {availableProfiles.map((prof, profIdx) => {
+                              const isProfSelected = selectedPacks.some(
+                                (p) =>
+                                  p.link === link &&
+                                  p.packIdx === pIdx &&
+                                  p.profileId === prof.id,
+                              );
+
+                              return (
+                                <div
+                                  key={profIdx}
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "6px",
+                                  }}
+                                >
+                                  <div
+                                    onClick={() => {
+                                      if (!isProfSelected) {
+                                        setSelectedPacks((prev) => [
+                                          ...prev.filter(
+                                            (p) =>
+                                              !(
+                                                p.link === link &&
+                                                p.profileId === prof.id
+                                              ),
+                                          ),
+                                          {
+                                            id:
+                                              Date.now().toString() +
+                                              Math.random(),
+                                            link,
+                                            packIdx: pIdx,
+                                            profileId: prof.id,
+                                            isGift: prof.isGift,
+                                          },
+                                        ]);
+                                      } else {
+                                        setSelectedPacks((prev) =>
+                                          prev.filter(
+                                            (p) =>
+                                              !(
+                                                p.link === link &&
+                                                p.packIdx === pIdx &&
+                                                p.profileId === prof.id
+                                              ),
+                                          ),
+                                        );
+                                      }
+                                    }}
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "10px",
+                                      fontSize: "0.9rem",
+                                      fontWeight: "600",
+                                      cursor: "pointer",
+                                      color: "#1c0700",
+                                      userSelect: "none",
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        width: "20px",
+                                        height: "20px",
+                                        borderRadius: "6px",
+                                        border: `2px solid ${isProfSelected ? "#9960a8" : "#caaff3"}`,
+                                        backgroundColor: isProfSelected
+                                          ? "#9960a8"
+                                          : "rgba(255, 252, 227, 0.8)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        transition:
+                                          "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {isProfSelected && (
+                                        <Check
+                                          size={16}
+                                          color="#fffce3"
+                                          strokeWidth={4}
+                                        />
+                                      )}
+                                    </div>
+                                    {prof.name}
+                                  </div>
+
+                                  {isProfSelected && (
+                                    <div
+                                      style={{
+                                        fontSize: "0.75rem",
+                                        color: "#4e5f28",
+                                        paddingLeft: "24px",
+                                        fontWeight: "600",
+                                        lineHeight: 1.4,
+                                      }}
+                                    >
+                                      {prof.isGift ? (
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: "8px",
+                                            marginTop: "4px",
+                                          }}
+                                        >
+                                          <span>
+                                            {currentLang === "en"
+                                              ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} will be sent as a gift code.`
+                                              : `${pack.size} Guthaben werden als Geschenkcode gesendet.`}
+                                          </span>
+                                          <input
+                                            type="text"
+                                            placeholder={
+                                              currentLang === "en"
+                                                ? "Recipient Name"
+                                                : "Name des Beschenkten"
+                                            }
+                                            style={{
+                                              ...S.guestInputStyle,
+                                              padding: "8px 12px",
+                                              fontSize: "0.85rem",
+                                              backgroundColor:
+                                                "rgba(255, 252, 227, 0.6)",
+                                              maxWidth: "250px",
+                                            }}
+                                            value={
+                                              selectedPacks.find(
+                                                (p) =>
+                                                  p.link === link &&
+                                                  p.packIdx === pIdx &&
+                                                  p.profileId === prof.id,
+                                              )?.recipientName || ""
+                                            }
+                                            onChange={(e) => {
+                                              setSelectedPacks((prev) =>
+                                                prev.map((p) =>
+                                                  p.link === link &&
+                                                  p.packIdx === pIdx &&
+                                                  p.profileId === prof.id
+                                                    ? {
+                                                        ...p,
+                                                        recipientName:
+                                                          e.target.value,
+                                                      }
+                                                    : p,
+                                                ),
+                                              );
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                        </div>
+                                      ) : (
+                                        (() => {
+                                          const needed =
+                                            sessionsNeeded[prof.id]?.[link] ||
+                                            0;
+                                          const existingBal =
+                                            profileBalances[prof.id]?.[
+                                              getCreditKey(link)
+                                            ] || 0;
+                                          const actualNeeds = Math.max(
+                                            0,
+                                            needed - existingBal,
+                                          );
+                                          const used = Math.min(
+                                            actualNeeds,
+                                            pack.size,
+                                          );
+                                          const added = pack.size - used;
+
+                                          const creditStrPack =
+                                            pack.size === 1
+                                              ? "credit"
+                                              : "credits";
+                                          const creditStrUsed =
+                                            used === 1 ? "credit" : "credits";
+                                          const creditStrAdded =
+                                            added === 1 ? "credit" : "credits";
+
+                                          if (used === 0) {
+                                            return currentLang === "en"
+                                              ? `${pack.size} ${creditStrPack} will be added to this profile's balance.`
+                                              : `${pack.size} Guthaben werden dem Profil hinzugefügt.`;
+                                          } else {
+                                            return currentLang === "en"
+                                              ? `Uses ${used} ${creditStrUsed} for this booking. ${added} ${creditStrAdded} will be added to balance.`
+                                              : `Nutzt ${used} Guthaben für diese Buchung. ${added} Guthaben werden dem Profil hinzugefügt.`;
+                                          }
+                                        })()
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+
+        {/* Itemized Extra Charges Breakdown */}
+        {extraItemsBreakdown.length > 0 && (
+          <div
             style={{
-              margin: "4px 0 0 0",
-              fontSize: "0.65rem",
-              fontStyle: "italic",
-              opacity: 0.6,
+              marginTop: "10px",
+              padding: "12px",
+              backgroundColor: "rgba(28, 7, 0, 0.05)",
+              borderRadius: "12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
             }}
           >
-            {infoSentence}
-          </p>
-        </div>
-      )}
-    </div>
-  );
+            {extraItemsBreakdown.map((item, bIdx) => (
+              <p
+                key={bIdx}
+                style={{
+                  margin: 0,
+                  fontWeight: "700",
+                  fontSize: "0.7rem",
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>
+                  + {item.count}{" "}
+                  {currentLang === "en"
+                    ? item.count === 1
+                      ? "session"
+                      : "sessions"
+                    : "Termin(e)"}{" "}
+                  {item.name}
+                </span>
+                <span style={{ opacity: 0.5 }}>
+                  {item.isFree ? "FREE" : `+ ${item.price} CHF`}
+                </span>
+              </p>
+            ))}
+            <p
+              style={{
+                margin: "4px 0 0 0",
+                fontSize: "0.65rem",
+                fontStyle: "italic",
+                opacity: 0.6,
+              }}
+            >
+              {infoSentence}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderPurchaseOptions = () => (
     <div
@@ -2358,7 +2738,7 @@ export default function BookingSummary({
           <button
             onClick={() =>
               validateAndProceed(() => {
-                const packCount = Object.keys(selectedPacks).length;
+                const packCount = selectedPacks.length;
                 if (packCount > 0) {
                   onPayment(
                     "pack",
@@ -2383,21 +2763,19 @@ export default function BookingSummary({
             style={{
               ...S.primaryBtnStyle(isMobile),
               opacity:
-                (!hasSelection && Object.keys(selectedPacks).length === 0) ||
+                (!hasSelection && selectedPacks.length === 0) ||
                 (!currentUser && (!guestInfo.firstName || !guestInfo.email))
                   ? 0.5
                   : 1,
             }}
             disabled={
-              (!hasSelection && Object.keys(selectedPacks).length === 0) ||
+              (!hasSelection && selectedPacks.length === 0) ||
               (!currentUser && (!guestInfo.firstName || !guestInfo.email))
             }
           >
             {(() => {
               const price = formatPrice(
-                Object.keys(selectedPacks).length > 0
-                  ? finalPackPrice
-                  : finalTotalPrice,
+                selectedPacks.length > 0 ? finalPackPrice : finalTotalPrice,
               );
               const creditText =
                 usableCredits > 0
