@@ -15,6 +15,7 @@ import {
   Star,
   Heart,
 } from "lucide-react";
+import { motion } from "framer-motion";
 
 const planetImages = import.meta.glob("../assets/planets/*.png", {
   eager: true,
@@ -154,6 +155,24 @@ export default function Singing({ currentLang, setCurrentLang }) {
   useEffect(() => {
     document.title = `${displayTitle} | Atelier Sinnesküche`;
   }, [displayTitle]);
+
+  // --- ANIMATION VARIANTS ---
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.15, delayChildren: 0.1 },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: { type: "spring", stiffness: 50, damping: 15 },
+    },
+  };
 
   const styles = {
     main: {
@@ -302,25 +321,51 @@ export default function Singing({ currentLang, setCurrentLang }) {
           .project-tag:hover { background-color: #caaff3; color: #fffce3; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(202, 175, 243, 0.3); }
       `}</style>
 
-      <main style={styles.main} className="main-content">
-        <div className="course-title-wrapper">
+      <motion.main
+        style={styles.main}
+        className="main-content"
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+      >
+        <motion.div variants={itemVariants} className="course-title-wrapper">
           <CourseTitle title={displayTitle} config={config} icons={icons} />
-        </div>
+        </motion.div>
 
-        <p className="welcome-text" style={styles.welcomeText}>
+        <motion.p
+          variants={itemVariants}
+          className="welcome-text"
+          style={styles.welcomeText}
+        >
           {current.welcome}
-        </p>
+        </motion.p>
 
-        <div className="info-grid" style={styles.infoGrid}>
+        <motion.div
+          variants={itemVariants}
+          className="info-grid"
+          style={styles.infoGrid}
+        >
           {current.details.map((item, index) => (
-            <div key={index} style={styles.infoItem}>
+            <motion.div
+              key={index}
+              style={styles.infoItem}
+              whileHover={{
+                scale: 1.03,
+                backgroundColor: "rgba(202, 175, 243, 0.25)",
+              }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
               <div style={{ display: "flex", opacity: 0.7 }}>{item.icon}</div>
               <span style={styles.infoLabel}>{item.text}</span>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
 
-        <div className="content-grid" style={styles.contentGrid}>
+        <motion.div
+          variants={itemVariants}
+          className="content-grid"
+          style={styles.contentGrid}
+        >
           <img
             src="https://s3.instrumentor.ch/p/o/32519/luca-koch_pb5ec2.jpg"
             alt="Luca Koch"
@@ -396,9 +441,10 @@ export default function Singing({ currentLang, setCurrentLang }) {
               {current.repertoireDetail}
             </p>
           </section>
-        </div>
+        </motion.div>
 
-        <div
+        <motion.div
+          variants={itemVariants}
           ref={bookingRef}
           className="booking-section"
           style={{
@@ -453,8 +499,8 @@ export default function Singing({ currentLang, setCurrentLang }) {
             forceExpand={isBookingExpanded}
           /> 
           */}
-        </div>
-      </main>
+        </motion.div>
+      </motion.main>
     </div>
   );
 }
