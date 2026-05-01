@@ -570,13 +570,18 @@ export default function BookingSummary({
 
   // 2. Track remaining credits for NEW packs being purchased per profile
   const newPackRemaining = {};
-  selectedPacks.forEach((sp) => {
-    const pId = sp.profileId || "guest";
-    if (!newPackRemaining[pId]) newPackRemaining[pId] = {};
-    const size = parseInt(pricingMap[sp.link]?.packs?.[sp.packIdx]?.size || 0);
-    newPackRemaining[pId][sp.link] =
-      (newPackRemaining[pId][sp.link] || 0) + size;
-  });
+  // FIXED: Filter out gifts so they don't count towards current user's session coverage
+  selectedPacks
+    .filter((sp) => !sp.isGift)
+    .forEach((sp) => {
+      const pId = sp.profileId || "guest";
+      if (!newPackRemaining[pId]) newPackRemaining[pId] = {};
+      const size = parseInt(
+        pricingMap[sp.link]?.packs?.[sp.packIdx]?.size || 0,
+      );
+      newPackRemaining[pId][sp.link] =
+        (newPackRemaining[pId][sp.link] || 0) + size;
+    });
 
   // 3. Loop through selected sessions to apply coverage
   const breakdownMap = {};
@@ -1190,9 +1195,12 @@ export default function BookingSummary({
                         marginBottom: "2px",
                       }}
                     >
-                      {typeof d.title === "object"
-                        ? d.title[currentLang || "en"]
-                        : d.title}
+                      {pricingMap[d.link]?.[
+                        `name${currentLang === "en" ? "En" : "De"}`
+                      ] ||
+                        (typeof d.title === "object"
+                          ? d.title[currentLang || "en"]
+                          : d.title)}
                       {" | "}
                       {pricingMap[d.link]?.priceSingle || 0} CHF
                     </span>
@@ -2019,11 +2027,13 @@ export default function BookingSummary({
             if (coursePacks.length === 0) return null;
 
             const matchingEvent = availableDates.find((e) => e.link === link);
-            const courseName = matchingEvent?.title
-              ? typeof matchingEvent.title === "object"
-                ? matchingEvent.title[currentLang || "en"]
-                : matchingEvent.title
-              : pricingMap[link]?.courseName || link.replace(/\//g, "");
+            const courseName =
+              pricingMap[link]?.[`name${currentLang === "en" ? "En" : "De"}`] ||
+              (matchingEvent?.title
+                ? typeof matchingEvent.title === "object"
+                  ? matchingEvent.title[currentLang || "en"]
+                  : matchingEvent.title
+                : pricingMap[link]?.courseName || link.replace(/\//g, ""));
 
             const hasPackForCourse = selectedPacks.some((p) => p.link === link);
 

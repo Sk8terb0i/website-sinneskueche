@@ -375,7 +375,7 @@ export default function PricingTab({
     handlePriceChange(courseId, "specialEvents", currentEvents);
   };
 
-  const savePrice = async (courseId, courseName) => {
+  const savePrice = async (courseId, fallbackName) => {
     setSavingPriceId(courseId);
     const isPerHour = priceData[courseId]?.isPerHour ?? false;
 
@@ -383,7 +383,11 @@ export default function PricingTab({
       const validPacks = (priceData[courseId]?.packs || []).filter(
         (p) => p.size !== "" && p.price !== "",
       );
+
       const dataToSave = {
+        // Ensure we preserve existing values if only one field was edited
+        nameEn: priceData[courseId]?.nameEn || activeCourse.text.en,
+        nameDe: priceData[courseId]?.nameDe || activeCourse.text.de,
         priceSingle: priceData[courseId]?.priceSingle || "",
         priceFull: validPacks[0]?.price || "",
         packSize: validPacks[0]?.size || "10",
@@ -396,7 +400,7 @@ export default function PricingTab({
         capacity: priceData[courseId]?.capacity || "",
         isVisible: priceData[courseId]?.isVisible ?? true,
         isRequestOnly: priceData[courseId]?.isRequestOnly ?? false,
-        courseName: courseName,
+        courseName: priceData[courseId]?.nameEn || fallbackName,
         specialEvents: priceData[courseId]?.specialEvents || [],
         updatedAt: new Date().toISOString(),
       };
@@ -450,9 +454,17 @@ export default function PricingTab({
               }}
             >
               <span>
-                {availableCourses.find(
-                  (c) => c.link.replace(/\//g, "") === selectedCourse,
-                )?.text[currentLang || "en"] || labels.noCourses}
+                {(() => {
+                  const active = availableCourses.find(
+                    (c) => c.link.replace(/\//g, "") === selectedCourse,
+                  );
+                  const custom = priceData[selectedCourse];
+                  return (
+                    custom?.[`name${currentLang === "en" ? "En" : "De"}`] ||
+                    active?.text[currentLang || "en"] ||
+                    labels.noCourses
+                  );
+                })()}
               </span>
               <ChevronDown
                 size={18}
@@ -688,63 +700,123 @@ export default function PricingTab({
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                gap: "10px",
+                flexDirection: "column",
+                gap: "1rem",
                 borderBottom: "1px solid rgba(28,7,0,0.05)",
                 paddingBottom: "1rem",
               }}
             >
-              <div style={{ flex: 1 }}>
-                <h4 style={{ margin: 0, fontSize: "1.2rem", color: "#1c0700" }}>
-                  {activeCourse.text[currentLang || "en"]}
-                </h4>
-                <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
-                  {labels.path} {activeCourse.link}
-                </span>
-              </div>
               <div
                 style={{
-                  ...toggleContainerStyle,
-                  width: "fit-content",
-                  padding: "2px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
-                <div
-                  onClick={() =>
-                    handlePriceChange(selectedCourse, "isVisible", true)
-                  }
+                <span
                   style={{
-                    ...toggleOptionStyle,
-                    padding: "6px 12px",
                     fontSize: "0.7rem",
-                    backgroundColor:
-                      (priceData[selectedCourse]?.isVisible ?? true)
-                        ? "#caaff3"
+                    opacity: 0.5,
+                    fontWeight: "bold",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {labels.path} {activeCourse.link}
+                </span>
+                <div
+                  style={{
+                    ...toggleContainerStyle,
+                    width: "fit-content",
+                    padding: "2px",
+                  }}
+                >
+                  <div
+                    onClick={() =>
+                      handlePriceChange(selectedCourse, "isVisible", true)
+                    }
+                    style={{
+                      ...toggleOptionStyle,
+                      padding: "6px 12px",
+                      fontSize: "0.7rem",
+                      backgroundColor:
+                        (priceData[selectedCourse]?.isVisible ?? true)
+                          ? "#caaff3"
+                          : "transparent",
+                    }}
+                  >
+                    <Eye size={14} /> {!isMobile && labels.visible}
+                  </div>
+                  <div
+                    onClick={() =>
+                      handlePriceChange(selectedCourse, "isVisible", false)
+                    }
+                    style={{
+                      ...toggleOptionStyle,
+                      padding: "6px 12px",
+                      fontSize: "0.7rem",
+                      backgroundColor: !(
+                        priceData[selectedCourse]?.isVisible ?? true
+                      )
+                        ? "#666"
                         : "transparent",
-                  }}
-                >
-                  <Eye size={14} /> {!isMobile && labels.visible}
+                      color: !(priceData[selectedCourse]?.isVisible ?? true)
+                        ? "white"
+                        : "inherit",
+                    }}
+                  >
+                    <EyeOff size={14} /> {!isMobile && labels.hidden}
+                  </div>
                 </div>
-                <div
-                  onClick={() =>
-                    handlePriceChange(selectedCourse, "isVisible", false)
-                  }
-                  style={{
-                    ...toggleOptionStyle,
-                    padding: "6px 12px",
-                    fontSize: "0.7rem",
-                    backgroundColor: !(
-                      priceData[selectedCourse]?.isVisible ?? true
-                    )
-                      ? "#666"
-                      : "transparent",
-                    color: !(priceData[selectedCourse]?.isVisible ?? true)
-                      ? "white"
-                      : "inherit",
-                  }}
-                >
-                  <EyeOff size={14} /> {!isMobile && labels.hidden}
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: isMobile ? "column" : "row",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <label
+                    style={{ ...labelStyle, fontSize: "0.65rem", opacity: 0.6 }}
+                  >
+                    {labels.nameEn}
+                  </label>
+                  <input
+                    style={{ ...inputStyle, marginBottom: 0 }}
+                    value={
+                      priceData[selectedCourse]?.nameEn ?? activeCourse.text.en
+                    }
+                    onChange={(e) =>
+                      handlePriceChange(
+                        selectedCourse,
+                        "nameEn",
+                        e.target.value,
+                      )
+                    }
+                    placeholder="Course Name (EN)"
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label
+                    style={{ ...labelStyle, fontSize: "0.65rem", opacity: 0.6 }}
+                  >
+                    {labels.nameDe}
+                  </label>
+                  <input
+                    style={{ ...inputStyle, marginBottom: 0 }}
+                    value={
+                      priceData[selectedCourse]?.nameDe ?? activeCourse.text.de
+                    }
+                    onChange={(e) =>
+                      handlePriceChange(
+                        selectedCourse,
+                        "nameDe",
+                        e.target.value,
+                      )
+                    }
+                    placeholder="Kursname (DE)"
+                  />
                 </div>
               </div>
             </div>

@@ -21,6 +21,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [closeActive, setCloseActive] = useState(false);
   const [courseVisibility, setCourseVisibility] = useState({});
+  const [courseSettings, setCourseSettings] = useState({}); // NEW: Save settings for the nav menu
 
   const [activeSenses, setActiveSenses] = useState([
     "sight",
@@ -57,6 +58,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           settingsMap[doc.id] = data;
         });
         setCourseVisibility(visibilityMap);
+        setCourseSettings(settingsMap); // NEW: Save map to state
       } catch (error) {
         console.warn("Could not fetch course settings:", error);
       }
@@ -108,22 +110,42 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           })
           .filter((item) => new Date(item.date) >= now);
 
-        const availableItems = futureItems.filter((event) => {
-          if (!event.link) return true;
+        const availableItems = futureItems
+          .map((event) => {
+            if (!event.link) return event;
+            const courseId = event.link.replace(/\//g, "");
+            const pricing = settingsMap[courseId];
 
-          const courseId = event.link.replace(/\//g, "");
+            // If Firestore has a custom name, overwrite the event title
+            if (pricing) {
+              const customName =
+                currentLang === "en" ? pricing.nameEn : pricing.nameDe;
+              if (customName) {
+                return {
+                  ...event,
+                  title:
+                    typeof event.title === "object"
+                      ? { ...event.title, [currentLang]: customName }
+                      : customName,
+                };
+              }
+            }
+            return event;
+          })
+          .filter((event) => {
+            if (!event.link) return true;
+            const courseId = event.link.replace(/\//g, "");
+            if (event.type === "course" && visibilityMap[courseId] === false) {
+              return false;
+            }
+            const pricing = settingsMap[courseId];
+            const isFull =
+              pricing?.hasCapacity &&
+              (bookingCounts[event.id] || 0) >=
+                parseInt(pricing.capacity || 99);
 
-          if (event.type === "course" && visibilityMap[courseId] === false) {
-            return false;
-          }
-
-          const pricing = settingsMap[courseId];
-          const isFull =
-            pricing?.hasCapacity &&
-            (bookingCounts[event.id] || 0) >= parseInt(pricing.capacity || 99);
-
-          return !isFull;
-        });
+            return !isFull;
+          });
 
         const rawEvents = availableItems.filter(
           (item) => item.type === "event",
@@ -255,7 +277,20 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           senses: ["touch", "sight"],
           icon: dotIconObj,
         },
-      ],
+      ].map((course) => {
+        // Look up the custom name from our fetched settings
+        const sanitizedId = course.link.replace(/\//g, "");
+        const customEn = courseSettings[sanitizedId]?.nameEn;
+        const customDe = courseSettings[sanitizedId]?.nameDe;
+
+        return {
+          ...course,
+          text: {
+            en: customEn || course.text.en,
+            de: customDe || course.text.de,
+          },
+        };
+      }),
       infoAction: [
         {
           text: { en: "about us", de: "über uns" },
@@ -284,7 +319,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         },
       ],
     }),
-    [currentLang],
+    [currentLang, courseSettings],
   );
 
   const displayItems = useMemo(() => {

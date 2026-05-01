@@ -25,6 +25,7 @@ import * as S from "./AdminStyles";
 export default function PackCodesTab({ isMobile, currentLang }) {
   const [userCredits, setUserCredits] = useState([]);
   const [guestCodes, setGuestCodes] = useState([]);
+  const [giftCards, setGiftCards] = useState([]); // NEW: State for monetary gift cards
   const [allUsers, setAllUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -38,7 +39,8 @@ export default function PackCodesTab({ isMobile, currentLang }) {
       title: "Credits & Packs",
       search: "Search...",
       users: "User Balances",
-      guests: "Guest Codes",
+      giftCards: "Gift Cards", // NEW
+      guests: "Session Pack Codes",
       addBtn: "Add Credit",
       selectUser: "Search any user...",
       loading: "Loading...",
@@ -48,6 +50,7 @@ export default function PackCodesTab({ isMobile, currentLang }) {
       title: "Guthaben & Codes",
       search: "Suchen...",
       users: "Nutzer-Guthaben",
+      giftCards: "Geschenkkarten", // NEW
       guests: "Gast-Codes",
       addBtn: "Guthaben hinzufügen",
       selectUser: "Nutzer suchen...",
@@ -69,51 +72,70 @@ export default function PackCodesTab({ isMobile, currentLang }) {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [codesSnap, usersSnap] = await Promise.all([
+      const [codesSnap, usersSnap, giftSnap] = await Promise.all([
         getDocs(query(collection(db, "pack_codes"))),
         getDocs(query(collection(db, "users"))),
+        getDocs(query(collection(db, "gift_cards"))),
       ]);
 
-      const guests = codesSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-        type: "guest",
-      }));
-
+      // 1. Process User Balances (Main & Linked Profiles)
+      const everyUser = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
       const usersWithCredits = [];
-      const everyUser = [];
 
-      usersSnap.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        const mainUser = { id: docSnap.id, ...data, isMain: true };
-        everyUser.push(mainUser);
-
-        if (data.credits && Object.values(data.credits).some((v) => v > 0)) {
-          usersWithCredits.push(mainUser);
+      everyUser.forEach((u) => {
+        // Main account credits
+        const mainCredits = u.credits || {};
+        const hasMainCredits = Object.values(mainCredits).some((v) => v > 0);
+        if (hasMainCredits) {
+          usersWithCredits.push({ ...u, isMain: true });
         }
 
-        if (data.linkedProfiles) {
-          data.linkedProfiles.forEach((lp) => {
-            const subUser = {
-              ...lp,
-              id: lp.id,
-              realSubId: lp.id,
-              parentId: docSnap.id,
-              isMain: false,
-            };
-            everyUser.push(subUser);
-            if (lp.credits && Object.values(lp.credits).some((v) => v > 0)) {
-              usersWithCredits.push(subUser);
+        // Sub-profile credits
+        if (u.linkedProfiles) {
+          u.linkedProfiles.forEach((lp) => {
+            const subCredits = lp.credits || {};
+            if (Object.values(subCredits).some((v) => v > 0)) {
+              usersWithCredits.push({
+                id: `${u.id}_${lp.id}`,
+                parentId: u.id,
+                realSubId: lp.id,
+                firstName: lp.firstName,
+                lastName: lp.lastName + " (Sub)",
+                credits: subCredits,
+                isMain: false,
+              });
             }
           });
         }
       });
 
-      setGuestCodes(guests);
+      // 2. Process Codes and Categorize
+      const allPackCodes = codesSnap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        source: "pack_codes",
+      }));
+
+      const allMonetaryGifts = giftSnap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        source: "gift_cards",
+      }));
+
+      const gifts = [
+        ...allMonetaryGifts,
+        ...allPackCodes.filter((c) => c.recipientName),
+      ];
+
+      const sessionPacks = allPackCodes.filter((c) => !c.recipientName);
+
+      // 3. Update States
+      setGuestCodes(sessionPacks);
+      setGiftCards(gifts);
       setUserCredits(usersWithCredits);
       setAllUsers(everyUser);
     } catch (error) {
-      console.error(error);
+      console.error("Error fetching admin data:", error);
     } finally {
       setIsLoading(false);
     }
@@ -167,6 +189,26 @@ export default function PackCodesTab({ isMobile, currentLang }) {
     setIsUpdating(false);
   };
 
+  const updateGiftBalance = async (codeId, delta) => {
+    setIsUpdating(true);
+    try {
+      await updateDoc(doc(db, "gift_cards", codeId), {
+        remainingBalance: increment(delta),
+      });
+      fetchData();
+    } catch (e) {
+      alert(e.message);
+    }
+    setIsUpdating(false);
+  };
+
+  const handleDeleteGift = async (id) => {
+    if (window.confirm(labels.deleteConfirm)) {
+      await deleteDoc(doc(db, "gift_cards", id));
+      fetchData();
+    }
+  };
+
   const handleDeleteGuest = async (id) => {
     if (window.confirm(labels.deleteConfirm)) {
       await deleteDoc(doc(db, "pack_codes", id));
@@ -179,6 +221,7 @@ export default function PackCodesTab({ isMobile, currentLang }) {
       const s = searchTerm.toLowerCase();
       const name = (
         item.buyerName ||
+        item.recipientName || // NEW: Search by gift recipient
         item.firstName ||
         item.name ||
         ""
@@ -414,6 +457,128 @@ export default function PackCodesTab({ isMobile, currentLang }) {
             </div>
           </div>
 
+          {/* Gift Cards Section */}
+          <div>
+            <h4
+              style={{
+                fontSize: "0.7rem",
+                fontWeight: "900",
+                opacity: 0.4,
+                textTransform: "uppercase",
+                marginBottom: "1rem",
+                letterSpacing: "1.5px",
+              }}
+            >
+              {labels.giftCards}
+            </h4>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+            >
+              {filterFn(giftCards).map((g) => (
+                <div
+                  key={g.id}
+                  style={{
+                    display: "flex",
+                    flexDirection: isMobile ? "column" : "row",
+                    justifyContent: "space-between",
+                    alignItems: isMobile ? "flex-start" : "center",
+                    padding: isMobile ? "16px 20px" : "14px 24px",
+                    backgroundColor: "#fdf8e1",
+                    borderRadius: "16px",
+                    border: "1px solid rgba(28,7,0,0.06)",
+                    gap: isMobile ? "12px" : "0",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1px",
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontWeight: "900",
+                        margin: 0,
+                        color:
+                          g.source === "gift_cards" ? "#4e5f28" : "#9960a8",
+                        letterSpacing: "1px",
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      {g.id}
+                    </p>
+                    <p
+                      style={{
+                        fontSize: "0.65rem",
+                        fontWeight: "800",
+                        opacity: 0.4,
+                        margin: 0,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {g.source === "pack_codes" ? `${g.courseKey} • ` : ""}
+                      {g.buyerName}{" "}
+                      {g.recipientName ? `→ ${g.recipientName}` : ""}
+                    </p>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: isMobile ? "space-between" : "flex-end",
+                      gap: isMobile ? "12px" : "18px",
+                      width: isMobile ? "100%" : "auto",
+                    }}
+                  >
+                    {/* Handle Monetary Updates */}
+                    {g.source === "gift_cards" ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                        }}
+                      >
+                        <span
+                          style={{ fontSize: "0.8rem", fontWeight: "bold" }}
+                        >
+                          {g.remainingBalance} CHF
+                        </span>
+                        {renderControls("", (d) =>
+                          updateGiftBalance(g.id, d * 5),
+                        )}
+                      </div>
+                    ) : (
+                      /* Handle Session Pack Gift Updates */
+                      renderControls(g.remainingCredits, (d) =>
+                        updateGuestBalance(g.id, d),
+                      )
+                    )}
+
+                    <button
+                      onClick={() =>
+                        g.source === "gift_cards"
+                          ? handleDeleteGift(g.id)
+                          : handleDeleteGuest(g.id)
+                      }
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#ff4d4d",
+                        cursor: "pointer",
+                        opacity: 0.3,
+                        padding: "4px",
+                      }}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Guest Section */}
           <div>
             <h4
@@ -473,7 +638,8 @@ export default function PackCodesTab({ isMobile, currentLang }) {
                         textTransform: "uppercase",
                       }}
                     >
-                      {g.courseKey} • {g.buyerName}
+                      {g.courseKey} • {g.buyerName}{" "}
+                      {g.recipientName ? `(For: ${g.recipientName})` : ""}
                     </p>
                   </div>
                   <div

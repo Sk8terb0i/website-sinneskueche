@@ -5,6 +5,7 @@ import { ShoppingBag, Loader2, User } from "lucide-react";
 export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
   const [selectedPackData, setSelectedPackData] = useState(null);
   const [selectedProfileId, setSelectedProfileId] = useState("main");
+  const [giftRecipient, setGiftRecipient] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Build the array of available profiles
@@ -12,6 +13,12 @@ export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
     const profiles = [
       { id: "main", name: currentLang === "de" ? "Mich" : "Me" },
     ];
+    // Add Gift Option
+    profiles.push({
+      id: "gift",
+      name: currentLang === "en" ? "Buy as a Gift" : "Als Geschenk kaufen",
+      isGift: true,
+    });
     if (userData?.linkedProfiles) {
       userData.linkedProfiles.forEach((p) => {
         profiles.push({ id: p.id, name: `${p.firstName} ${p.lastName}` });
@@ -49,16 +56,33 @@ export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
         return `${origin}${path}${path.endsWith("/") ? "" : "/"}`;
       };
 
+      const isGift = selectedProfileId === "gift";
+      const giftCode = isGift
+        ? Math.random().toString(36).substring(2, 10).toUpperCase()
+        : null;
+
       const result = await createCheckout({
         mode: "pack",
         packPrice: parseFloat(pack.price),
-        packSize: parseInt(pack.size),
+        packSize: isGift
+          ? JSON.stringify([
+              {
+                link: `/${course.id}`,
+                packIdx: course.packs.findIndex((p) => p.size === pack.size),
+                isGift: true,
+                giftCode: giftCode,
+                recipientName: giftRecipient,
+              },
+            ])
+          : parseInt(pack.size),
         coursePath: `/${course.id}`,
         selectedDates: [],
         currentLang: currentLang,
         profileId: selectedProfileId,
-        profileName: targetProfile?.name || "Main User",
-        successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}&mode=pack&booked=false`,
+        profileName: isGift
+          ? `GIFT: ${giftRecipient}`
+          : targetProfile?.name || "Main User",
+        successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}&mode=pack&booked=false${isGift ? `&giftCodes=${giftCode}&giftNames=${encodeURIComponent(giftRecipient)}` : ""}`,
         cancelUrl: window.location.href,
       });
 
@@ -104,6 +128,18 @@ export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
             ))}
           </select>
         </div>
+      )}
+
+      {selectedProfileId === "gift" && (
+        <input
+          type="text"
+          placeholder={
+            currentLang === "en" ? "Recipient Name" : "Name des Beschenkten"
+          }
+          value={giftRecipient}
+          onChange={(e) => setGiftRecipient(e.target.value)}
+          style={{ ...styles.select, marginBottom: "1rem" }}
+        />
       )}
 
       <div style={styles.row}>

@@ -80,20 +80,26 @@ export default function BookingsCard({ userId, currentLang, t, userData }) {
             const coursePath = eventData.link || bookingData.coursePath;
             const sanitizedId = coursePath.replace(/\//g, "");
 
+            let customName = null;
             if (sanitizedId && !settingsMap[sanitizedId]) {
               const sSnap = await getDoc(
                 doc(db, "course_settings", sanitizedId),
               );
               if (sSnap.exists()) {
-                settingsMap[sanitizedId] = sSnap.data().specialEvents || [];
+                const sData = sSnap.data();
+                settingsMap[sanitizedId] = sData; // Store whole object
+                customName = currentLang === "en" ? sData.nameEn : sData.nameDe;
               }
+            } else if (sanitizedId && settingsMap[sanitizedId]) {
+              const sData = settingsMap[sanitizedId];
+              customName = currentLang === "en" ? sData.nameEn : sData.nameDe;
             }
 
             return {
               id: bookingDoc.id,
               ...bookingData,
               coursePath,
-              courseTitle: getCourseTitle(coursePath),
+              courseTitle: customName || getCourseTitle(coursePath),
               time: eventData.time || "",
             };
           }),
@@ -161,7 +167,9 @@ export default function BookingsCard({ userId, currentLang, t, userData }) {
         booking.selectedAddons.forEach((item) => {
           const addonId = typeof item === "object" ? item.id : item;
           const timeSlot = typeof item === "object" ? item.time : null;
-          const meta = courseSettings[sanitizedId]?.find(
+
+          // FIX: Access .specialEvents before calling .find()
+          const meta = courseSettings[sanitizedId]?.specialEvents?.find(
             (s) => s.id === addonId,
           );
           if (meta) {

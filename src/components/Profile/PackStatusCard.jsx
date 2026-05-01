@@ -42,12 +42,28 @@ export default function PackStatusCard({
   const activeCredits = activeProfile.credits;
   const hasCredits = Object.keys(activeCredits).length > 0;
 
-  const getCourseTitle = (link) => {
+  const getCourseTitle = (key) => {
+    // 1. Try to find the pretty name in the packCourses data from Firestore
+    const sanitizedKey = key.replace(/\//g, "");
+    const fromFirestore = packCourses.find(
+      (c) => c.id === sanitizedKey || c.courseName === key || c.nameEn === key,
+    );
+
+    if (fromFirestore) {
+      return (
+        fromFirestore[`name${currentLang === "en" ? "En" : "De"}`] ||
+        fromFirestore.courseName
+      );
+    }
+
+    // 2. Fallback to planets data
     for (const planet of planets) {
-      const course = planet.courses?.find((c) => c.link === link);
+      const course = planet.courses?.find(
+        (c) => c.link === `/${sanitizedKey}` || c.text.en === key,
+      );
       if (course) return course.text[currentLang];
     }
-    return link?.replace("/", "").replace(/-/g, " ") || "course";
+    return key;
   };
 
   const handleTopUp = async (courseTitleKey, specificPack = null) => {
@@ -151,7 +167,10 @@ export default function PackStatusCard({
       ) : (
         <div style={styles.creditsList}>
           {Object.entries(activeCredits).map(([courseKey, amount]) => {
-            const isPlural = amount !== 1;
+            // FIX: Sanitize the amount to prevent "NaN" display
+            const numericAmount = isNaN(parseFloat(amount)) ? 0 : amount;
+
+            const isPlural = numericAmount !== 1;
             const sessionLabel =
               currentLang === "de"
                 ? isPlural
@@ -165,11 +184,14 @@ export default function PackStatusCard({
               <div key={courseKey} style={styles.individualCard}>
                 <div style={styles.contentSide}>
                   <div style={styles.creditsHeader}>
-                    <span style={styles.creditsTitle}>{courseKey}</span>
+                    {/* FIX: Use the helper to show the pretty name */}
+                    <span style={styles.creditsTitle}>
+                      {getCourseTitle(courseKey)}
+                    </span>
                   </div>
 
                   <div style={styles.creditsBalanceRow}>
-                    <span style={styles.creditsNumber}>{amount}</span>
+                    <span style={styles.creditsNumber}>{numericAmount}</span>
                     <span style={styles.creditsLabel}>
                       {sessionLabel} {t.remaining}
                     </span>
@@ -220,15 +242,31 @@ export default function PackStatusCard({
                 alignItems: "center",
               }}
             >
-              <h3
-                style={{
-                  ...styles.creditsTitle,
-                  fontSize: "1.4rem",
-                  marginBottom: 0,
-                }}
-              >
-                {t.buyPack}
-              </h3>
+              <div>
+                <h3
+                  style={{
+                    ...styles.creditsTitle,
+                    fontSize: "1.4rem",
+                    marginBottom: "4px",
+                  }}
+                >
+                  {t.buyPack}
+                </h3>
+                {/* Clear indicator of who the credits are for */}
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.8rem",
+                    color: "#4e5f28",
+                    fontWeight: "800",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  {currentLang === "de" ? "Zuweisung an: " : "Assigning to: "}{" "}
+                  {activeProfile.name}
+                </p>
+              </div>
               <button
                 onClick={() => setShowPackPicker(null)}
                 style={styles.iconOnlyBtn}

@@ -626,13 +626,24 @@ export default function EventsTab({
 
   const groupedCourses = scheduledCourses.reduce((acc, course) => {
     const key = course.link;
-    if (!acc[key])
+    if (!acc[key]) {
+      // Look up custom name from course_settings
+      const sanitizedId = key.replace(/\//g, "");
+      const settings = settingsMap[sanitizedId];
+      const customTitle =
+        settings?.[`name${currentLang === "en" ? "En" : "De"}`];
+
       acc[key] = {
         isGroup: true,
-        title: course.title[currentLang || "en"],
+        title:
+          customTitle ||
+          (typeof course.title === "object"
+            ? course.title[currentLang || "en"]
+            : course.title),
         link: course.link,
         dates: [],
       };
+    }
     acc[key].dates.push(course);
     return acc;
   }, {});
@@ -739,9 +750,16 @@ export default function EventsTab({
                     lineHeight: "1.2",
                   }}
                 >
-                  {typeof ev.title === "object"
-                    ? ev.title[currentLang || "en"]
-                    : ev.title}
+                  {(() => {
+                    const sanitizedId = ev.link?.replace(/\//g, "");
+                    const settings = settingsMap[sanitizedId];
+                    return (
+                      settings?.[`name${currentLang === "en" ? "En" : "De"}`] ||
+                      (typeof ev.title === "object"
+                        ? ev.title[currentLang || "en"]
+                        : ev.title)
+                    );
+                  })()}
                 </span>
 
                 {ev.festivalName && (

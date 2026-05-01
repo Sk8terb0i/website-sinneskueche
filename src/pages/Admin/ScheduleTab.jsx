@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { db } from "../../firebase";
 import {
   collection,
@@ -33,6 +33,9 @@ import {
   ListChecks,
   CalendarHeart,
   HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  Check,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -52,7 +55,11 @@ export default function ScheduleTab({
 }) {
   const { currentUser } = useAuth();
   const [selectedCourse, setSelectedCourse] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const courseDropdownRef = useRef(null);
   const [courseEvents, setCourseEvents] = useState([]);
+  const [customCourses, setCustomCourses] = useState([]); // NEW: Firestore custom courses
+  const [calendarGroups, setCalendarGroups] = useState({});
   const [specialEvents, setSpecialEvents] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [userSearch, setUserSearch] = useState("");
@@ -198,7 +205,7 @@ export default function ScheduleTab({
     },
   }[currentLang || "en"];
 
-  const availableCourses = Array.from(
+  const flatCourses = Array.from(
     new Map(
       planets
         .filter((p) => p.type === "courses")
@@ -208,6 +215,17 @@ export default function ScheduleTab({
     ).values(),
   ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
 
+  // Add custom courses to the flat list for lookup
+  customCourses.forEach((cc) => {
+    if (!flatCourses.find((fc) => fc.link === cc.link)) {
+      flatCourses.push({
+        link: cc.link,
+        text: { en: cc.nameEn, de: cc.nameDe },
+      });
+    }
+  });
+  const selectedCourseData = flatCourses.find((c) => c.link === selectedCourse);
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
     const [y, m, d] = dateStr.split("-");
@@ -215,10 +233,23 @@ export default function ScheduleTab({
   };
 
   useEffect(() => {
-    if (availableCourses.length > 0 && !selectedCourse) {
-      setSelectedCourse(availableCourses[0].link);
+    if (flatCourses.length > 0 && !selectedCourse) {
+      setSelectedCourse(flatCourses[0].link);
     }
-  }, [availableCourses, selectedCourse]);
+  }, [flatCourses, selectedCourse]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        courseDropdownRef.current &&
+        !courseDropdownRef.current.contains(event.target)
+      ) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -227,7 +258,23 @@ export default function ScheduleTab({
       );
       setAllUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     };
-    if (isFullAdmin) fetchUsers();
+
+    const fetchCustomData = async () => {
+      // Fetch custom courses
+      const ccSnap = await getDocs(collection(db, "custom_courses"));
+      setCustomCourses(ccSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+
+      // Fetch calendar groupings
+      const cgSnap = await getDocs(collection(db, "calendar_groups"));
+      const cgMap = {};
+      cgSnap.docs.forEach((d) => (cgMap[d.id] = d.data().includedLinks || []));
+      setCalendarGroups(cgMap);
+    };
+
+    if (isFullAdmin) {
+      fetchUsers();
+      fetchCustomData();
+    }
   }, [isFullAdmin]);
 
   useEffect(() => {
@@ -653,32 +700,170 @@ export default function ScheduleTab({
 
         <div
           style={{
-            backgroundColor: "#fdf8e1",
-            padding: "10px 16px",
-            borderRadius: "12px",
-            border: "1px solid rgba(28, 7, 0, 0.05)",
-            width: isMobile ? "100%" : "300px",
+            position: "relative",
+            width: isMobile ? "100%" : "320px",
+            zIndex: 1000,
           }}
+          ref={courseDropdownRef}
         >
-          <label style={{ ...labelStyle, marginBottom: "4px" }}>
+          <label
+            style={{ ...labelStyle, marginBottom: "4px", paddingLeft: "4px" }}
+          >
             {labels.course}
           </label>
-          <select
-            value={selectedCourse}
-            onChange={(e) => setSelectedCourse(e.target.value)}
+          <div
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             style={{
               ...inputStyle,
-              padding: "8px",
+              backgroundColor: "rgba(202, 175, 243, 0.1)",
+              cursor: "pointer",
               marginBottom: 0,
-              backgroundColor: "rgba(255, 252, 227, 0.4)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontWeight: "600",
+              border: isDropdownOpen
+                ? "2px solid #caaff3"
+                : "1px solid rgba(28,7,0,0.1)",
             }}
           >
-            {availableCourses.map((c) => (
-              <option key={c.link} value={c.link}>
-                {c.text[currentLang || "en"]}
-              </option>
-            ))}
-          </select>
+            <span>
+              {selectedCourseData?.text[currentLang || "en"] || "Select Course"}
+            </span>
+            <ChevronDown
+              size={18}
+              style={{
+                transform: isDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 0.2s",
+                color: "#9960a8",
+              }}
+            />
+          </div>
+
+          {isDropdownOpen && (
+            <div
+              className="custom-scrollbar"
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                marginTop: "8px",
+                backgroundColor: "#fffce3",
+                border: "1px solid rgba(202, 175, 243, 0.4)",
+                borderRadius: "12px",
+                boxShadow: "0 10px 25px rgba(28, 7, 0, 0.1)",
+                zIndex: 50,
+                maxHeight: "350px",
+                overflowY: "auto",
+                padding: "8px",
+              }}
+            >
+              {(() => {
+                const renderedLinks = new Set();
+
+                // 1. Get all base courses from the planets data
+                const baseCourses = Array.from(
+                  new Map(
+                    planets
+                      .filter((p) => p.type === "courses")
+                      .flatMap((p) => p.courses || [])
+                      .filter((c) => c.link)
+                      .map((c) => [c.link, c]),
+                  ).values(),
+                ).filter(
+                  (base) => isFullAdmin || allowedCourses.includes(base.link),
+                );
+
+                // 2. Map over each base course to create groups, matching PricingTab logic
+                return baseCourses.map((base) => {
+                  const baseId = base.link.replace(/\//g, "");
+                  const includedLinks = calendarGroups[baseId] || [base.link];
+
+                  const groupOptions = includedLinks
+                    .map((link) => {
+                      if (renderedLinks.has(link)) return null;
+
+                      // If it's the base course itself
+                      if (link === base.link) {
+                        renderedLinks.add(link);
+                        return base;
+                      }
+
+                      // If it's a custom sub-course
+                      const custom = customCourses.find(
+                        (cc) => cc.link === link,
+                      );
+                      if (custom) {
+                        renderedLinks.add(link);
+                        return {
+                          link: custom.link,
+                          text: { en: custom.nameEn, de: custom.nameDe },
+                        };
+                      }
+                      return null;
+                    })
+                    .filter(Boolean);
+
+                  if (groupOptions.length === 0) return null;
+
+                  const groupTitle = base.text[currentLang || "en"];
+
+                  return (
+                    <div key={baseId} style={{ marginBottom: "8px" }}>
+                      <div
+                        style={{
+                          fontSize: "0.65rem",
+                          fontWeight: "900",
+                          textTransform: "uppercase",
+                          color: "#4e5f28",
+                          padding: "8px 12px 4px 12px",
+                          opacity: 0.6,
+                        }}
+                      >
+                        {groupTitle} Group
+                      </div>
+                      {groupOptions.map((opt) => (
+                        <div
+                          key={opt.link}
+                          onClick={() => {
+                            setSelectedCourse(opt.link);
+                            setIsDropdownOpen(false);
+                          }}
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            fontSize: "0.9rem",
+                            backgroundColor:
+                              selectedCourse === opt.link
+                                ? "rgba(202, 175, 243, 0.2)"
+                                : "transparent",
+                            color:
+                              selectedCourse === opt.link
+                                ? "#9960a8"
+                                : "#1c0700",
+                            fontWeight:
+                              selectedCourse === opt.link ? "bold" : "normal",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          {selectedCourse === opt.link && (
+                            <Check size={14} strokeWidth={3} />
+                          )}
+                          {opt.text[currentLang || "en"]}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                });
+
+                return groups;
+              })()}
+            </div>
+          )}
         </div>
       </div>
 

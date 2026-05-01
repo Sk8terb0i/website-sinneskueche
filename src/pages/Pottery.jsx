@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import { db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
 import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
@@ -17,6 +19,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isBookingExpanded, setIsBookingExpanded] = useState(false);
   const bookingRef = useRef(null);
+  const [customTitle, setCustomTitle] = useState(null);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
@@ -24,6 +27,24 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const fetchCustomTitle = async () => {
+      try {
+        const snap = await getDoc(doc(db, "course_settings", "pottery"));
+        if (snap.exists()) {
+          const data = snap.data();
+          setCustomTitle({
+            en: data.nameEn,
+            de: data.nameDe,
+          });
+        }
+      } catch (err) {
+        console.error("Could not fetch custom course title:", err);
+      }
+    };
+    fetchCustomTitle();
   }, []);
 
   const config = {
@@ -66,6 +87,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
 
   const icons = [getImage("touch.png"), getImage("sight.png")];
   const current = content[currentLang];
+  const displayTitle = customTitle?.[currentLang] || current.title;
 
   // --- ANIMATION VARIANTS ---
   const containerVariants = {
@@ -205,7 +227,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         animate="show"
       >
         <motion.div variants={itemVariants} className="course-title-wrapper">
-          <CourseTitle title={current.title} config={config} icons={icons} />
+          <CourseTitle title={displayTitle} config={config} icons={icons} />
         </motion.div>
 
         <motion.p

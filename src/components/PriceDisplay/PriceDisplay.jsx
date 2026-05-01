@@ -225,13 +225,17 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         if (isMounted) {
           setPricingMap(pricingMapObj);
           setPricing(pricingMapObj[coursePath]);
-          setActiveFilters(Object.keys(pricingMapObj));
 
-          // NEW: Initialize all add-ons as active
-          const allAddonIds = Object.values(pricingMapObj).flatMap((p) =>
-            (p.specialEvents || []).map((se) => se.id),
+          // FORCE visibility: Show everything in the group by default,
+          // only hiding if isVisible is explicitly FALSE.
+          const allLinksInGroup = includedLinks;
+          const visibleLinks = allLinksInGroup.filter(
+            (link) => pricingMapObj[link]?.isVisible !== false,
           );
-          setActiveAddonFilters(allAddonIds);
+
+          setActiveFilters(visibleLinks);
+
+          setActiveAddonFilters([]);
         }
 
         const filtered = eSnap.docs
@@ -408,8 +412,12 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         .map((d) => {
           const activeLink = d.link || coursePath;
           const pData = pricingMap[activeLink];
+          // Prioritize custom names from Firestore
           const title =
-            pData?.courseName || activeLink.replace(/\//g, "") || "Session";
+            pData?.[`name${currentLang === "en" ? "En" : "De"}`] ||
+            pData?.courseName ||
+            activeLink.replace(/\//g, "") ||
+            "Session";
           let displayStr = `${formatDate(d.date)} | ${d.time || ""} (${title})`;
           if (d.selectedAddons && d.selectedAddons.length > 0) {
             const addonParts = d.selectedAddons.map((a) => {
@@ -754,52 +762,44 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
             {[...Array(new Date(year, month + 1, 0).getDate())].map((_, i) => {
               const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
 
-              // 1. Find if an actual admin-created event exists here
-              let realEvent = availableDates.find((e) => e.date === dateStr);
+              // 1. Find ALL events on this specific date
+              const eventsOnThisDate = availableDates.filter(
+                (e) => e.date === dateStr,
+              );
 
-              // 2. Filter by Course
-              if (realEvent && !activeFilters.includes(realEvent.link)) {
-                realEvent = null;
-              }
+              // 2. Filter these events by active course filters and add-on filters
+              const visibleEvents = eventsOnThisDate.filter((ev) => {
+                // Course Filter
+                if (!activeFilters.includes(ev.link)) return false;
 
-              // 3. Filter by Add-on (Fixed: Only filters if an add-on filter is actually active)
-              if (realEvent) {
-                // NEW: Resolve the specific schedule for this course link
-                const courseSchedule = scheduleData?.[realEvent.link];
+                // Add-on Filter
+                const courseSchedule = scheduleData?.[ev.link];
                 const assigned =
-                  courseSchedule?.specialAssignments?.[realEvent.id] || [];
-
+                  courseSchedule?.specialAssignments?.[ev.id] || [];
                 const assignedIds = Array.isArray(assigned)
                   ? assigned
                   : [assigned];
 
-                // Get all possible add-on IDs for this specific course
                 const courseAddonIds = (
-                  pricingMap[realEvent.link]?.specialEvents || []
+                  pricingMap[ev.link]?.specialEvents || []
                 ).map((se) => se.id);
-
-                // Check if the user has any active filters that belong to THIS course
                 const activeFiltersForThisCourse = activeAddonFilters.filter(
                   (id) => courseAddonIds.includes(id),
                 );
 
-                if (assignedIds.length > 0) {
-                  // If the user has specifically selected add-on filters for this course...
-                  if (activeFiltersForThisCourse.length > 0) {
-                    // ...then hide the date ONLY if it doesn't match any of those active filters
-                    const hasMatch = assignedIds.some((id) =>
-                      activeAddonFilters.includes(id),
-                    );
-                    if (!hasMatch) realEvent = null;
-                  }
-                } else {
-                  // If the date has NO add-ons but the user is filtering FOR specific add-ons in this course...
-                  if (activeFiltersForThisCourse.length > 0) {
-                    // ...hide the base date because it doesn't have the requested add-on
-                    realEvent = null;
-                  }
+                if (activeFiltersForThisCourse.length > 0) {
+                  return assignedIds.some((id) =>
+                    activeAddonFilters.includes(id),
+                  );
                 }
-              }
+                return true;
+              });
+
+              // 3. Pick the "Best" event to show as the primary dot (Prefer the exact course path if available)
+              let realEvent =
+                visibleEvents.find((ev) => ev.link === coursePath) ||
+                visibleEvents[0] ||
+                null;
 
               // 2. Check if the date is in the past
               const cellDate = new Date(year, month, i + 1);
@@ -976,7 +976,8 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                         .filter(
                           (id) =>
                             !userData?.completedAddons?.includes(id) &&
-                            activeAddonFilters.includes(id), // Check if add-on is active in filter
+                            (activeAddonFilters.length === 0 ||
+                              activeAddonFilters.includes(id)),
                         )
                         .map((id, idx, filteredArray) => (
                           <div
@@ -1062,11 +1063,13 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                   const matchingEvent = availableDates.find(
                     (e) => e.link === link,
                   );
-                  const title = matchingEvent?.title
-                    ? typeof matchingEvent.title === "object"
-                      ? matchingEvent.title[currentLang || "en"]
-                      : matchingEvent.title
-                    : pData.courseName || link.replace(/\//g, "");
+                  const title =
+                    pData?.[`name${currentLang === "en" ? "En" : "De"}`] ||
+                    (matchingEvent?.title
+                      ? typeof matchingEvent.title === "object"
+                        ? matchingEvent.title[currentLang || "en"]
+                        : matchingEvent.title
+                      : pData.courseName || link.replace(/\//g, ""));
 
                   return (
                     <div
@@ -1132,9 +1135,10 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
                           {currentLang === "de" ? "Verfügbar" : "Available"}
                         </div>
                         {validAddons.map((se) => {
-                          const isAddonActive = activeAddonFilters.includes(
-                            se.id,
-                          );
+                          // If no filters are selected, everything is "active" visually
+                          const isAddonActive =
+                            activeAddonFilters.length === 0 ||
+                            activeAddonFilters.includes(se.id);
                           return (
                             <div
                               key={se.id}
