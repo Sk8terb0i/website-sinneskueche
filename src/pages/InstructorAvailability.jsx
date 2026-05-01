@@ -37,8 +37,8 @@ export default function InstructorAvailability({
       instViewTitle: "My Availabilities",
       instViewDesc:
         "Select the dates you are available to work. We will use this to generate the final schedule.",
-      availableBtn: "Available",
-      unavailableBtn: "Not Available",
+      availableBtn: "✓ Available",
+      unavailableBtn: "Mark as Available",
       saveMyAvail: "Submit My Availabilities",
       msgMyAvailSaved: "Your availabilities have been saved. Thank you!",
       noTime: "No time set",
@@ -52,8 +52,8 @@ export default function InstructorAvailability({
       instViewTitle: "Meine Verfügbarkeiten",
       instViewDesc:
         "Wähle die Termine, an denen du arbeiten kannst. Diese werden genutzt, um den finalen Plan zu erstellen.",
-      availableBtn: "Verfügbar",
-      unavailableBtn: "Nicht Verfügbar",
+      availableBtn: "✓ Verfügbar",
+      unavailableBtn: "Als verfügbar markieren",
       saveMyAvail: "Meine Verfügbarkeiten absenden",
       msgMyAvailSaved: "Deine Verfügbarkeiten wurden gespeichert. Danke!",
       noTime: "Keine Zeit",
@@ -132,6 +132,7 @@ export default function InstructorAvailability({
       );
 
       alert(labels.msgMyAvailSaved);
+      navigate("/"); // Redirect to homepage so the user knows they are done
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -193,7 +194,7 @@ export default function InstructorAvailability({
               style={{
                 textAlign: "center",
                 padding: "4rem 2rem",
-                backgroundColor: "white",
+                backgroundColor: "#fdf8e1",
                 borderRadius: "24px",
                 border: "1px solid rgba(28,7,0,0.1)",
               }}
@@ -240,19 +241,44 @@ export default function InstructorAvailability({
               <h2>{labels.courseNotFound}</h2>
             </div>
           ) : !scheduleDoc.instructors.includes(currentUser.uid) ? (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "4rem 2rem",
-                opacity: 0.5,
-              }}
-            >
-              <h2>{labels.unauthorized}</h2>
+            <div style={{ textAlign: "center", padding: "4rem 2rem" }}>
+              <HelpCircle
+                size={48}
+                color="#ff4d4d"
+                style={{ marginBottom: "1rem", opacity: 0.5 }}
+              />
+              <h2 style={{ opacity: 0.5 }}>{labels.unauthorized}</h2>
+              <div
+                style={{
+                  marginTop: "2rem",
+                  padding: "1rem",
+                  backgroundColor: "rgba(28,7,0,0.05)",
+                  borderRadius: "12px",
+                  fontSize: "0.7rem",
+                  textAlign: "left",
+                  fontFamily: "monospace",
+                }}
+              >
+                <p style={{ margin: "0 0 5px 0" }}>
+                  <strong>Your UID:</strong> {currentUser.uid}
+                </p>
+                <p style={{ margin: "0" }}>
+                  <strong>Authorized IDs:</strong>{" "}
+                  {scheduleDoc.instructors.join(", ")}
+                </p>
+              </div>
+              <p
+                style={{ fontSize: "0.8rem", marginTop: "1rem", opacity: 0.6 }}
+              >
+                {currentLang === "en"
+                  ? "Ensure the 'Your UID' above matches one of the 'Authorized IDs' in the Admin Panel configuration."
+                  : "Stelle sicher, dass deine oben gezeigte UID mit einer der autorisierten IDs in der Admin-Konfiguration übereinstimmt."}
+              </p>
             </div>
           ) : (
             <div
               style={{
-                backgroundColor: "white",
+                backgroundColor: "#fdf8e1",
                 borderRadius: "24px",
                 padding: "2.5rem",
                 border: "1px solid rgba(28,7,0,0.1)",
@@ -349,18 +375,22 @@ export default function InstructorAvailability({
                           style={{
                             padding: "10px 20px",
                             borderRadius: "100px",
-                            fontSize: "0.9rem",
-                            fontWeight: "bold",
+                            fontSize: "0.85rem",
+                            fontWeight: "800",
                             border: "2px solid",
                             transition: "all 0.2s",
+                            // Purple background when available, subtle dash when not
                             backgroundColor: isAvail
                               ? "#caaff3"
-                              : "transparent",
+                              : "rgba(153, 96, 168, 0.05)",
                             borderColor: isAvail
-                              ? "#caaff3"
-                              : "rgba(28,7,0,0.2)",
-                            color: isAvail ? "#1c0700" : "rgba(28,7,0,0.5)",
+                              ? "#9960a8"
+                              : "rgba(153, 96, 168, 0.3)",
+                            color: isAvail ? "#1c0700" : "#9960a8",
                             cursor: "pointer",
+                            boxShadow: isAvail
+                              ? "0 2px 8px rgba(153, 96, 168, 0.2)"
+                              : "none",
                           }}
                         >
                           {isAvail

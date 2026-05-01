@@ -1777,6 +1777,8 @@ exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
   try {
     const { courseId, instructors, baseUrl } = request.data;
     const courseKey = getCleanCourseKey(courseId);
+
+    // Dynamically uses the sender's origin (localhost or live)
     const origin = baseUrl || "https://sinneskueche.ch";
 
     for (const uid of instructors) {

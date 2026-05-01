@@ -399,6 +399,7 @@ export default function ScheduleTab({
       await sendMails({
         courseId: selectedCourse,
         instructors: selectedInstructors,
+        baseUrl: window.location.origin, // NEW: Passes localhost or live URL automatically
       });
 
       alert(labels.msgReq);
@@ -411,8 +412,8 @@ export default function ScheduleTab({
   const autoGenerateSchedule = async (onlyUnassigned = true) => {
     setIsProcessing(true);
     const availabilities = scheduleDoc.availabilities || {};
-    const perSlot = instructorsPerSlot || 1;
-    const maxConsec = maxConsecutiveShifts || 2;
+    const perSlot = instructorsPerSlot || 2;
+    const maxConsec = maxConsecutiveShifts || 3;
     const maxShiftsLimit = maxShifts || 0;
 
     const newAssignments = { ...(onlyUnassigned ? assignments : {}) };
