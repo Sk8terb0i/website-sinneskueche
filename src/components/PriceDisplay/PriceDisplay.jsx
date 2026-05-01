@@ -751,14 +751,16 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
             </button>
           </div>
           <div style={S.calendarGridStyle(isMobile)}>
-            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+            {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
               <div key={i} style={S.dayOfWeekStyle(isMobile)}>
                 {d}
               </div>
             ))}
-            {[...Array(new Date(year, month, 1).getDay())].map((_, i) => (
-              <div key={i} />
-            ))}
+            {[...Array((new Date(year, month, 1).getDay() + 6) % 7)].map(
+              (_, i) => (
+                <div key={i} />
+              ),
+            )}
             {[...Array(new Date(year, month + 1, 0).getDate())].map((_, i) => {
               const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
 

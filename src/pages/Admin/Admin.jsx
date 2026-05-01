@@ -657,10 +657,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
               fontFamily: "Harmond-SemiBoldCondensed",
               fontSize: isMobile ? "2rem" : "3.5rem",
               marginBottom: "0.2rem",
-              textTransform: "lowercase",
             }}
           >
-            atelier management
+            Atelier Management
           </h1>
           <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
             <p style={{ opacity: 0.5, fontSize: "0.75rem" }}>

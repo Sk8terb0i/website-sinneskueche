@@ -94,7 +94,6 @@ export default function ExtendedVoiceLab({ currentLang, setCurrentLang }) {
     welcomeText: {
       fontSize: "0.9rem",
       fontStyle: "italic",
-      textTransform: "lowercase",
       letterSpacing: "0.15em",
       color: "#1c0700",
       opacity: 0.6,

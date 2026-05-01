@@ -562,7 +562,6 @@ export default function FiringTab({ isMobile, currentLang }) {
                 borderRadius: "100px",
                 fontSize: "0.6rem",
                 fontWeight: "900",
-                textTransform: "lowercase",
               }}
             >
               {item.stage === "bisque" ? labels.bisque : labels.glaze}
@@ -579,7 +578,6 @@ export default function FiringTab({ isMobile, currentLang }) {
                   borderRadius: "100px",
                   fontSize: "0.6rem",
                   fontWeight: "900",
-                  textTransform: "lowercase",
                 }}
               >
                 <AlertOctagon size={10} /> {labels.overdueBadge}

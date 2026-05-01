@@ -155,7 +155,6 @@ const styles = {
     alignItems: "center",
     gap: "10px",
     color: "#1c0700",
-    textTransform: "lowercase",
   },
   bookingsList: { display: "flex", flexDirection: "column", gap: "1rem" },
   bookingItem: {

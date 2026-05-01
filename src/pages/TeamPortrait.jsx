@@ -31,7 +31,7 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
   const sunSize = isMobile ? 120 : 150;
 
   // Custom offset to push/pull the system
-  const verticalOffset = isMobile ? 100 : 0;
+  const verticalOffset = isMobile ? 50 : 0;
 
   useEffect(() => {
     const handleResize = () => {

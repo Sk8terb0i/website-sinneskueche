@@ -54,7 +54,7 @@ export default function Contact({ currentLang, setCurrentLang }) {
 
   const content = {
     en: {
-      title: "contact",
+      title: "Contact",
       welcome: "Get in touch with us",
       name: "Your Name",
       email: "Your Email",
@@ -68,7 +68,7 @@ export default function Contact({ currentLang, setCurrentLang }) {
       sendAnother: "Send another message",
     },
     de: {
-      title: "kontakt",
+      title: "Kontakt",
       welcome: "Schreib uns eine Nachricht",
       name: "Dein Name",
       email: "Deine E-Mail",
@@ -123,7 +123,6 @@ export default function Contact({ currentLang, setCurrentLang }) {
     welcomeText: {
       fontSize: "0.9rem",
       fontStyle: "italic",
-      textTransform: "lowercase",
       letterSpacing: "0.15em",
       color: "#1c0700",
       opacity: 0.6,

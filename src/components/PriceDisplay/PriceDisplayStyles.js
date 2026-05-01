@@ -12,7 +12,6 @@ export const overarchingTitleStyle = (isMobile) => ({
   fontWeight: isMobile ? "400" : "bold",
   color: "#1c0700",
   textAlign: "center",
-  textTransform: "lowercase",
   margin: 0,
 });
 
@@ -46,7 +45,6 @@ export const monthLabelStyle = (isMobile) => ({
   fontSize: isMobile ? "1.8rem" : "2rem",
   fontWeight: isMobile ? "400" : "bold",
   margin: 0,
-  textTransform: "lowercase",
 });
 
 export const calendarGridStyle = (isMobile) => ({

@@ -3063,8 +3063,8 @@ export default function BookingSummary({
               ? "booking summary"
               : "buchungsübersicht"
             : currentLang === "en"
-              ? "course options"
-              : "kursoptionen"}
+              ? "Course Options"
+              : "Kursoptionen"}
         </h3>
 
         {!currentUser ? (

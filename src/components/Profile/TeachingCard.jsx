@@ -258,7 +258,6 @@ const styles = {
     fontSize: "1.3rem",
     color: "#9960a8",
     marginBottom: "0.8rem",
-    textTransform: "lowercase",
     borderBottom: "1px solid rgba(153, 96, 168, 0.1)",
     paddingBottom: "4px",
     fontWeight: isMobile ? "normal" : undefined,

@@ -112,7 +112,7 @@ export default function Rent({ currentLang, setCurrentLang }) {
   const content = {
     en: {
       title: "Rent the Atelier",
-      welcome: "a creative oasis for your independent projects",
+      welcome: "A creative oasis for your independent projects",
       details: [
         { icon: <MapPin size={18} />, text: "Central Location" },
         { icon: <Sparkles size={18} />, text: "Full Equipment" },
@@ -143,7 +143,6 @@ export default function Rent({ currentLang, setCurrentLang }) {
     welcomeText: {
       fontSize: "0.9rem",
       fontStyle: "italic",
-      textTransform: "lowercase",
       letterSpacing: "0.15em",
       color: "#1c0700",
       opacity: 0.6,

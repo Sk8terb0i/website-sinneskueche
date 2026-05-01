@@ -379,7 +379,6 @@ const styles = {
     fontFamily: "Harmond-SemiBoldCondensed",
     fontSize: "1.2rem",
     color: "#1c0700",
-    textTransform: "lowercase",
     lineHeight: 1.2,
   },
   creditsBalanceRow: {

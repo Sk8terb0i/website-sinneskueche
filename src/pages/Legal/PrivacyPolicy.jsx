@@ -18,14 +18,12 @@ export default function PrivacyPolicy({ currentLang, setCurrentLang }) {
       fontFamily: "Harmond-SemiBoldCondensed",
       fontSize: "3.5rem",
       marginBottom: "2.5rem",
-      textTransform: "lowercase",
     },
     sectionTitle: {
       fontFamily: "Harmond-SemiBoldCondensed",
       fontSize: "1.8rem",
       marginTop: "3rem",
       marginBottom: "1rem",
-      textTransform: "lowercase",
       color: "#9960a8",
     },
     text: {

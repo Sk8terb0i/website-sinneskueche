@@ -138,7 +138,6 @@ export default function RegisterShortcut({
             fontSize: "9px",
             fontWeight: window.innerWidth <= 768 ? "200" : "500",
             opacity: window.innerWidth <= 768 ? 0.75 : 0.5,
-            textTransform: "lowercase",
             letterSpacing: "0.1em",
           }}
         >

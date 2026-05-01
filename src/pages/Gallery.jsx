@@ -83,8 +83,8 @@ export default function Gallery({ currentLang, setCurrentLang }) {
   }, [isMobile, sortedImages]);
 
   const content = {
-    en: { title: "gallery", subtitle: "impressions of our creative space" },
-    de: { title: "galerie", subtitle: "einblicke in unseren kreativen ort" },
+    en: { title: "Gallery", subtitle: "Impressions of our creative space" },
+    de: { title: "Galerie", subtitle: "Einblicke in unseren kreativen Ort" },
   };
 
   return (
@@ -131,7 +131,6 @@ export default function Gallery({ currentLang, setCurrentLang }) {
           style={{
             fontSize: "0.9rem",
             fontStyle: "italic",
-            textTransform: "lowercase",
             letterSpacing: "0.15em",
             color: "#1c0700",
             opacity: 0.6,

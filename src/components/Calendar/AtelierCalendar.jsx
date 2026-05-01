@@ -92,7 +92,6 @@ export default function AtelierCalendar({
                 className={hasLink ? "calendar-link" : ""}
                 style={{
                   fontSize: isMobile ? "0.95rem" : "1.1rem",
-                  // REMOVED textTransform: "lowercase"
                   color: "inherit",
                   textDecoration: "none",
                   display: "flex",

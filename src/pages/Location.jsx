@@ -41,7 +41,7 @@ export default function Location({ currentLang, setCurrentLang }) {
 
   const content = {
     en: {
-      title: "location",
+      title: "Location",
       welcome: "How to find our studio",
       address: "Sägestrasse 11, 8952 Schlieren",
       entrance: "Rear entrance (blue door)",
@@ -51,7 +51,7 @@ export default function Location({ currentLang, setCurrentLang }) {
         "When you arrive at the building, walk around it to the back and enter the blue door. The Sinnesküche is located on the top floor and is therefore unfortunately not wheelchair accessible.",
     },
     de: {
-      title: "standort",
+      title: "Standort",
       welcome: "So findest du zu unserem Studio",
       address: "Sägestrasse 11, 8952 Schlieren",
       entrance: "Hintereingang (blaue Tür)",
@@ -85,7 +85,6 @@ export default function Location({ currentLang, setCurrentLang }) {
     welcomeText: {
       fontSize: "0.9rem",
       fontStyle: "italic",
-      textTransform: "lowercase",
       letterSpacing: "0.15em",
       color: "#1c0700",
       opacity: 0.6,

@@ -217,7 +217,6 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "10px",
-    textTransform: "lowercase",
   },
   row: {
     display: "flex",

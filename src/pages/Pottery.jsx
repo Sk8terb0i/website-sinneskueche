@@ -63,7 +63,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
   const content = {
     en: {
       title: "pottery tuesdays",
-      welcome: "Make Tuesdays your creative sanctuary",
+      welcome: "Join our creative kitchen",
       ctaFloating: "register now",
       details: [
         { icon: <Clock size={18} />, text: "18:30 - 21:30" },
@@ -74,7 +74,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     },
     de: {
       title: "pottery tuesdays",
-      welcome: "Mach den Dienstag zu deiner kreativen Auszeit",
+      welcome: "Gönn dir eine kreative Auszeit",
       ctaFloating: "jetzt buchen",
       details: [
         { icon: <Clock size={18} />, text: "18:30 - 21:30" },
@@ -127,7 +127,6 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     welcomeText: {
       fontSize: "0.95rem",
       fontStyle: "italic",
-      textTransform: "lowercase",
       letterSpacing: "0.15em",
       color: "#1c0700",
       opacity: 0.7,

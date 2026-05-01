@@ -115,7 +115,6 @@ export const forgotLinkStyle = {
   cursor: "pointer",
   fontSize: "0.65rem",
   fontWeight: "bold",
-  textTransform: "lowercase",
   padding: 0,
   opacity: 0.8,
 };

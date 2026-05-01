@@ -236,43 +236,43 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
     () => ({
       courses: [
         {
-          text: { en: "pottery tuesdays", de: "pottery tuesdays" },
+          text: { en: "Pottery Tuesdays", de: "Pottery Tuesdays" },
           link: "/pottery",
           senses: ["touch", "sight"],
           icon: dotIconObj,
         },
         {
-          text: { en: "vocal coaching", de: "gesangscoaching" },
+          text: { en: "Vocal Coaching", de: "Gesangscoaching" },
           link: "/singing",
           senses: ["hearing"],
           icon: dotIconObj,
         },
         {
-          text: { en: "artistic vision", de: "artistic vision" },
+          text: { en: "Artistic Vision", de: "Artistic Vision" },
           link: "/artistic-vision",
           senses: ["sight", "touch", "hearing", "smell", "taste"],
           icon: dotIconObj,
         },
         {
-          text: { en: "extended voice lab", de: "extended voice lab" },
+          text: { en: "Extended voice lab", de: "Extended voice lab" },
           link: "/extended-voice-lab",
           senses: ["hearing", "touch"],
           icon: dotIconObj,
         },
         {
-          text: { en: "performing words", de: "performing words" },
+          text: { en: "Performing words", de: "Performing words" },
           link: "/performing-words",
           senses: ["sight", "hearing"],
           icon: dotIconObj,
         },
         {
-          text: { en: "singing basics weekend", de: "singing basics weekend" },
+          text: { en: "Singing basics weekend", de: "Singing basics weekend" },
           link: "/singing-basics",
           senses: ["hearing"],
           icon: dotIconObj,
         },
         {
-          text: { en: "get ink!", de: "get ink!" },
+          text: { en: "get ink!", de: "Get ink!" },
           link: "/get-ink",
           senses: ["touch", "sight"],
           icon: dotIconObj,
@@ -293,27 +293,27 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
       }),
       infoAction: [
         {
-          text: { en: "about us", de: "über uns" },
+          text: { en: "About us", de: "Über uns" },
           link: "/team",
           icon: dotIconObj,
         },
         {
-          text: { en: "location", de: "standort" },
+          text: { en: "Location", de: "Standort" },
           link: "/location",
           icon: dotIconObj,
         },
         {
-          text: { en: "rent our space", de: "raum mieten" },
+          text: { en: "Rent our space", de: "Raum mieten" },
           link: "/rent",
           icon: dotIconObj,
         },
         {
-          text: { en: "contact", de: "kontakt" },
+          text: { en: "Contact", de: "Kontakt" },
           link: "/contact",
           icon: dotIconObj,
         },
         {
-          text: { en: "gallery", de: "galerie" },
+          text: { en: "Gallery", de: "Galerie" },
           link: "/gallery",
           icon: dotIconObj,
         },
@@ -430,7 +430,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
               }}
             >
               <Section
-                title={currentLang === "en" ? "upcoming" : "termine"}
+                title={currentLang === "en" ? "Upcoming" : "Termine"}
                 isOpen={isCalendarOpen}
                 toggle={() => setIsCalendarOpen(!isCalendarOpen)}
                 isMobile={false}
@@ -750,7 +750,6 @@ function Section({ title, children, isOpen, toggle, isMobile }) {
               fontFamily: "Harmond-SemiBoldCondensed",
               fontSize: isMobile ? "1.4rem" : "2rem",
               margin: 0,
-              textTransform: "lowercase",
               opacity: isOpen || isSectionActive ? 1 : 0.7,
               color: isSectionActive ? "#9960a8" : "#1c0700",
               transition: "all 0.2s ease",
@@ -831,7 +830,6 @@ const monthHeaderStyle = (isMobile) => ({
   fontSize: "1.1rem",
   color: "#9960a8",
   margin: 0,
-  textTransform: "lowercase",
 });
 
 const filterLabelStyle = {

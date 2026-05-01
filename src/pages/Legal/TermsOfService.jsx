@@ -85,7 +85,6 @@ export default function TermsOfService({ currentLang, setCurrentLang }) {
       fontFamily: "Harmond-SemiBoldCondensed",
       fontSize: "3rem",
       marginBottom: "2rem",
-      textTransform: "lowercase",
     },
     section: {
       marginBottom: "4rem",
@@ -97,7 +96,6 @@ export default function TermsOfService({ currentLang, setCurrentLang }) {
       fontSize: "1.8rem",
       marginBottom: "1rem",
       color: "#9960a8",
-      textTransform: "lowercase",
     },
     text: { whiteSpace: "pre-wrap", lineHeight: "1.7", opacity: 0.9 },
     listCard: (isActive) => ({
