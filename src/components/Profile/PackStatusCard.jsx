@@ -41,34 +41,16 @@ export default function PackStatusCard({
 
   const activeProfile =
     allProfiles.find((p) => p.id === viewingProfileId) || allProfiles[0];
-  const activeCredits = activeProfile.credits;
-  const hasCredits = Object.keys(activeCredits).length > 0;
+  const activeCredits = activeProfile.credits || {};
 
-  const getCourseTitle = (key) => {
-    // 1. Try to find the pretty name in the packCourses data from Firestore
-    const sanitizedKey = key.replace(/\//g, "");
-    const fromFirestore = packCourses.find(
-      (c) => c.id === sanitizedKey || c.courseName === key || c.nameEn === key,
-    );
+  // Filter out any courses where the credit amount is 0 or less
+  const validCredits = Object.entries(activeCredits).filter(([key, amount]) => {
+    const numericAmount = isNaN(parseFloat(amount)) ? 0 : parseFloat(amount);
+    return numericAmount > 0;
+  });
 
-    if (fromFirestore) {
-      return (
-        fromFirestore[`name${currentLang === "en" ? "En" : "De"}`] ||
-        fromFirestore.courseName
-      );
-    }
+  const hasCredits = validCredits.length > 0;
 
-    // 2. Fallback to planets data
-    for (const planet of planets) {
-      const course = planet.courses?.find(
-        (c) => c.link === `/${sanitizedKey}` || c.text.en === key,
-      );
-      if (course) return course.text[currentLang];
-    }
-    return key;
-  };
-
-  // NEW: Reliably map legacy credit names back to their correct database IDs
   const resolveCourseId = (courseKey) => {
     const reverseMapping = {
       "pottery tuesdays": "pottery",
@@ -89,7 +71,34 @@ export default function PackStatusCard({
       if (match) targetId = match.id;
     }
 
-    return targetId || courseKey;
+    // Clean up any stray slashes if it falls back to the original key
+    return targetId || courseKey.replace(/\//g, "");
+  };
+
+  const getCourseTitle = (key) => {
+    // 1. Get the actual Firestore Document ID using your mapping function
+    const targetDocId = resolveCourseId(key);
+
+    // 2. Look up the course by its ID in the dynamic Firestore data
+    const fromFirestore = packCourses.find((c) => c.id === targetDocId);
+
+    if (fromFirestore) {
+      return (
+        fromFirestore[`name${currentLang === "en" ? "En" : "De"}`] ||
+        fromFirestore.courseName
+      );
+    }
+
+    // 3. Fallback to planets data if not found in Firestore
+    const sanitizedKey = key.replace(/\//g, "");
+    for (const planet of planets) {
+      const course = planet.courses?.find(
+        (c) => c.link === `/${sanitizedKey}` || c.text.en === key,
+      );
+      if (course) return course.text[currentLang];
+    }
+
+    return key;
   };
 
   const handleTopUp = async (courseTitleKey, specificPack = null) => {
@@ -182,9 +191,8 @@ export default function PackStatusCard({
         </div>
       ) : (
         <div style={styles.creditsList}>
-          {Object.entries(activeCredits).map(([courseKey, amount]) => {
-            // FIX: Sanitize the amount to prevent "NaN" display
-            const numericAmount = isNaN(parseFloat(amount)) ? 0 : amount;
+          {validCredits.map(([courseKey, amount]) => {
+            const numericAmount = parseFloat(amount);
 
             const isPlural = numericAmount !== 1;
             const sessionLabel =
