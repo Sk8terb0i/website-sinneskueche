@@ -84,7 +84,7 @@ export default function PotteryFiringCard({ currentLang }) {
   const { currentUser, userData } = useAuth();
 
   const [step, setStep] = useState("email");
-  const [activeTab, setActiveTab] = useState("active");
+  const [activeTab, setActiveTab] = useState("ready");
   const [userCode, setUserCode] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
@@ -225,9 +225,9 @@ export default function PotteryFiringCard({ currentLang }) {
       codeTaken: "This code is already in use. Please choose another.",
       codeLength: "Code must be exactly 4 characters.",
       requiredFields: "Please fill out all fields.",
-      tab_active: "active",
-      tab_ready: "ready",
-      tab_done: "done",
+      tab_active: "Queue",
+      tab_ready: "Ready",
+      tab_done: "Done",
       adoptTitle: "Adopt a piece",
       adoptDesc: "These pieces have been abandoned. Claim one for free!",
       claimAction: "Claim piece",
@@ -276,7 +276,7 @@ export default function PotteryFiringCard({ currentLang }) {
       codeTaken: "Dieser Code ist bereits vergeben. Bitte wähle einen anderen.",
       codeLength: "Der Code muss genau 4 Zeichen lang sein.",
       requiredFields: "Bitte fülle alle Felder aus.",
-      tab_active: "Aktiv",
+      tab_active: "Warteschlange",
       tab_ready: "Bereit",
       tab_done: "Fertig",
       adoptTitle: "Stück adoptieren",
@@ -740,7 +740,7 @@ export default function PotteryFiringCard({ currentLang }) {
             )}
 
             <div style={tabNavContainer} className="hide-scrollbar">
-              {["active", "ready", "done"].map((tab) => (
+              {["ready", "active", "done"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
