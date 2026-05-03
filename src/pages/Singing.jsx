@@ -64,7 +64,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
 
   const content = {
     en: {
-      title: "singing and songwriting",
+      title: "Gesangsküche",
       welcome:
         "Find your unique sound through technical precision and creative freedom",
       ctaFloating: "register now",
@@ -105,7 +105,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
       trialCTA: "Request a free trial lesson",
     },
     de: {
-      title: "gesang und songwriting",
+      title: "Gesangsküche",
       welcome:
         "Finde deinen eigenen Klang durch technische Präzision und kreative Freiheit",
       ctaFloating: "jetzt buchen",

@@ -62,7 +62,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
 
   const content = {
     en: {
-      title: "pottery tuesdays",
+      title: "Töpferküche",
       welcome: "Join our creative kitchen",
       ctaFloating: "register now",
       details: [
@@ -73,7 +73,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       description: `A little piece of earth for your home! Clay, minerals, and glass. At our Pottery Tuesdays, you can try your hand at pottery in a welcoming atmosphere and hone your skills. It doesn’t matter how much experience you have, everyone is welcome. Unlike other pottery classes, you can visit us on Tuesdays whenever it suits you, without committing to the next few months.\n\nWe have everything here, from pottery wheels to rollers, tools, and glazes.\nThe clay and firing are also included in your ticket.\n\nCome knead the clay, and we promise that with the leftover clay on your hands, you’ll wash away some of your worries by the end.`,
     },
     de: {
-      title: "pottery tuesdays",
+      title: "Töpferküche",
       welcome: "Gönn dir eine kreative Auszeit",
       ctaFloating: "jetzt buchen",
       details: [
