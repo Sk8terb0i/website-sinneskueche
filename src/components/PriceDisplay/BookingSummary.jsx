@@ -1194,8 +1194,8 @@ export default function BookingSummary({
             }}
           >
             {currentLang === "en"
-              ? "Select a date from the calendar or choose a session pack below."
-              : "Termin im Kalender wählen oder ein Kurspaket unten hinzufügen."}
+              ? "Select a date from the calendar and/or choose a session pack below."
+              : "Termin im Kalender wählen und/oder ein Kurspaket unten hinzufügen."}
           </p>
         </div>
       ) : (
