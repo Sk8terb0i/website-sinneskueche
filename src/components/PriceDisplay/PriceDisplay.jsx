@@ -384,7 +384,8 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
       const expandedDates = selectedDates.flatMap((d) => {
         const courseKey = getCreditKey(d.link || coursePath);
         return (d.attendees || []).map((att, idx) => {
-          const pid = att.profileId || "main";
+          // FIX: Default to "guest" instead of "main" to prevent stealing credits
+          const pid = att.profileId || "guest";
           let useCredit = false;
 
           const alreadyUsedToday =
@@ -401,7 +402,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
             ...d,
             attendeeName:
               att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
-            profileId: pid,
+            profileId: att.profileId || "guest", // Ensure backend receives "guest"
             selectedAddons: att.selectedAddons || [],
             usedCredit: useCredit,
           };
@@ -487,7 +488,8 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
       const expandedDates = selectedDates.flatMap((d) => {
         const courseKey = getCreditKey(d.link || coursePath);
         return (d.attendees || []).map((att, idx) => {
-          const pid = att.profileId || "main";
+          // FIX: Default to "guest" instead of "main" to prevent stealing credits
+          const pid = att.profileId || "guest";
           let useCredit = false;
 
           const limitOnePerDay = pricing?.limitOnePerDay ?? true;
@@ -504,7 +506,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
           const limitApplies =
             limitOnePerDay && (alreadyUsedToday || activePackAlreadyUsed);
 
-          // Now it accurately flags IF a credit was used (old or new), skipping cash payments
+          // Now it accurately checks the strict profile ID isolated from the main user
           if (!limitApplies) {
             if (remainingPackCode > 0) {
               useCredit = true;
@@ -512,9 +514,9 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
             } else if (tempCredits[pid]?.[courseKey] > 0) {
               useCredit = true;
               tempCredits[pid][courseKey]--;
-            } else if (newPackRemaining[pid || "guest"]?.[d.link] > 0) {
+            } else if (newPackRemaining[pid]?.[d.link] > 0) {
               useCredit = true;
-              newPackRemaining[pid || "guest"][d.link]--;
+              newPackRemaining[pid][d.link]--;
             }
           }
           if (useCredit) usedDatesByProfile.add(`${d.date}_${pid}`);
@@ -523,10 +525,18 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
             ...d,
             attendeeName:
               att.name || (idx === 0 ? "Primary Booker" : `Guest ${idx + 1}`),
-            profileId: pid,
+            profileId: att.profileId || "guest", // Ensure backend receives "guest"
             selectedAddons: att.selectedAddons || [],
             usedCredit: useCredit,
           };
+        });
+      });
+
+      // NEW: Calculate exactly how many new credits are left over after this cart's bookings
+      let netAddedCredits = 0;
+      Object.values(newPackRemaining).forEach((courses) => {
+        Object.values(courses).forEach((rem) => {
+          netAddedCredits += rem;
         });
       });
 
@@ -636,7 +646,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         ...metadataPayload,
         packPrice: mode === "pack" ? price || 0 : 0,
         totalPrice: mode !== "pack" ? price || 0 : 0,
-        successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=true&packs=${encodeURIComponent(packSummary)}&sessions=${encodeURIComponent(sessionSummary)}&giftCodes=${giftCodes.join(",")}&giftNames=${giftNames.join(",")}`,
+        successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=true&packs=${encodeURIComponent(packSummary)}&sessions=${encodeURIComponent(sessionSummary)}&giftCodes=${giftCodes.join(",")}&giftNames=${giftNames.join(",")}&netAdded=${netAddedCredits}`,
         cancelUrl: window.location.href,
       });
       if (res.data?.url) window.location.assign(res.data.url);

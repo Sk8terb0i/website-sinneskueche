@@ -46,15 +46,47 @@ export default function Success({ currentLang, setCurrentLang }) {
       ? parseInt(remainingParam, 10)
       : null;
 
+  // --- SMART SCENARIO DETECTION ---
   const hasBookedDates = bookedParam === "true";
-  const isPackPurchase = mode === "pack";
   const isRequest = type === "request";
   const isRedeem = mode === "redeem";
+  const isCreditBooking = type === "credit" && !isRedeem;
+
+  // Catch quick top-ups from PackStatusCard that don't send a mode flag
+  const isPackFromTopUp = !mode && !type && !bookedParam;
+  const isPackPurchase = mode === "pack" || isPackFromTopUp;
 
   const hasGift = giftCodes.length > 0;
+
+  // Check if EVERY pack in the summary is a gift card (no personal credits bought)
+  const isPureGiftPurchase =
+    isPackPurchase &&
+    hasGift &&
+    packSummary &&
+    packSummary.split(" + ").every((p) => p.toUpperCase().includes("[GIFT"));
+
   const giftPacks = packSummary
-    ? packSummary.split(" + ").filter((p) => p.includes("[GIFT"))
+    ? packSummary.split(" + ").filter((p) => p.toUpperCase().includes("[GIFT"))
     : [];
+
+  // NEW: Get the exact NET credits added after deductions, falling back to the pack name if not present
+  const netAddedParam = searchParams.get("netAdded");
+  let addedCredits = 0;
+
+  if (
+    netAddedParam &&
+    netAddedParam !== "undefined" &&
+    netAddedParam !== "null"
+  ) {
+    addedCredits = parseInt(netAddedParam, 10);
+  } else if (packSummary) {
+    packSummary.split(" + ").forEach((p) => {
+      if (!p.toUpperCase().includes("[GIFT")) {
+        const match = p.trim().match(/^(\d+)/);
+        if (match) addedCredits += parseInt(match[1], 10);
+      }
+    });
+  }
 
   const handlePrintReceipt = () => {
     document.body.classList.add("print-receipt");
@@ -273,13 +305,63 @@ export default function Success({ currentLang, setCurrentLang }) {
 
           {/* NOTIFICATIONS CONTAINER */}
           <div style={styles.notificationContainer} className="no-print">
-            <div style={styles.infoRow}>
-              <Ticket size={20} color="#9960a8" />
-              <p style={styles.infoText}>
-                {currentUser ? t.memberCredits : t.guestCredits}
-              </p>
-            </div>
+            {/* SCENARIO A: Pack Purchased for Self/Sub-User */}
+            {isPackPurchase && !isPureGiftPurchase && (
+              <div style={styles.infoRow}>
+                <Ticket size={20} color="#9960a8" />
+                <p style={styles.infoText}>
+                  {currentUser
+                    ? addedCredits > 0
+                      ? currentLang === "en"
+                        ? `${addedCredits} credits have been added directly to your profile balance.`
+                        : `${addedCredits} Guthaben wurden deinem Profil-Konto direkt gutgeschrieben.`
+                      : t.memberCredits
+                    : addedCredits > 0
+                      ? currentLang === "en"
+                        ? `We have sent a code with ${addedCredits} credits to your email. You can use this code for future bookings.`
+                        : `Wir haben dir einen Code mit ${addedCredits} Guthaben per E-Mail gesendet. Diesen kannst du für zukünftige Buchungen nutzen.`
+                      : t.guestCredits}
+                </p>
+              </div>
+            )}
 
+            {/* SCENARIO B: Pure Gift Card Purchase */}
+            {isPureGiftPurchase && (
+              <div style={styles.infoRow}>
+                <Ticket size={20} color="#9960a8" />
+                <p style={styles.infoText}>
+                  {currentLang === "en"
+                    ? "Your gift card codes have been generated below and sent via email."
+                    : "Deine Geschenkgutscheine wurden unten generiert und per E-Mail versendet."}
+                </p>
+              </div>
+            )}
+
+            {/* SCENARIO C: Paid with Credits (or Redeemed a Code) */}
+            {(isCreditBooking || isRedeem) && (
+              <div style={styles.infoRow}>
+                <Ticket size={20} color="#9960a8" />
+                <p style={styles.infoText}>
+                  {currentLang === "en"
+                    ? "Credits have been successfully applied to this booking."
+                    : "Das Guthaben wurde erfolgreich für diese Buchung angewendet."}
+                </p>
+              </div>
+            )}
+
+            {/* SCENARIO D: Request Only */}
+            {isRequest && (
+              <div style={styles.infoRow}>
+                <Calendar size={20} color="#9960a8" />
+                <p style={styles.infoText}>
+                  {currentLang === "en"
+                    ? "We have received your request and will confirm availability via email."
+                    : "Wir haben deine Anfrage erhalten und bestätigen die Verfügbarkeit per E-Mail."}
+                </p>
+              </div>
+            )}
+
+            {/* DEFAULT: Emails Sent (Always shows for all completed checkouts) */}
             <div style={styles.infoRow}>
               <Mail size={20} color="#9960a8" />
               <p style={styles.infoText}>{t.emailSent}</p>
