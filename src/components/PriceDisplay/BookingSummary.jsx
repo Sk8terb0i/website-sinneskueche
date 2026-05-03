@@ -118,6 +118,8 @@ export default function BookingSummary({
 
   const [manuallyExpandedDates, setManuallyExpandedDates] = useState({});
   const [showPackInfo, setShowPackInfo] = useState(false);
+  const [expandedPacks, setExpandedPacks] = useState({});
+  const [giftPrompt, setGiftPrompt] = useState(null);
 
   useEffect(() => {
     const currentName = currentUser
@@ -475,6 +477,7 @@ export default function BookingSummary({
   // Calculate the cost for individual sessions, respecting different prices per course
   let totalIndividualCash = 0;
   let remainingPackCodeUses = activePackCode ? totalUsableUserCredits : 0;
+  let calcUsedDates = new Set(); // NEW: Track local usage to enforce limitOnePerDay
 
   selectedDates.forEach((d) => {
     const courseKey = getCreditKey(d.link || coursePath);
@@ -485,15 +488,30 @@ export default function BookingSummary({
 
       let usedCredit = false;
 
-      if (activePackCode && remainingPackCodeUses > 0) {
-        usedCredit = true;
-        remainingPackCodeUses--;
-      } else if (pid && tempUsableCredits[pid]?.[courseKey] > 0) {
-        usedCredit = true;
-        tempUsableCredits[pid][courseKey]--;
+      // NEW: Enforce limitOnePerDay identical to how eligibleForCredit was calculated
+      const alreadyUsedToday =
+        userCreditBookedIds?.includes(`${d.date}_${pid}`) ||
+        calcUsedDates.has(`${d.date}_${pid}`);
+      let activePackAlreadyUsed = false;
+      if (!alreadyUsedToday && activePackCode) {
+        activePackAlreadyUsed = activePackCode.redeemedEventIds?.includes(d.id);
+      }
+      const limitApplies =
+        limitOnePerDay && (alreadyUsedToday || activePackAlreadyUsed);
+
+      if (!limitApplies) {
+        if (activePackCode && remainingPackCodeUses > 0) {
+          usedCredit = true;
+          remainingPackCodeUses--;
+        } else if (pid && tempUsableCredits[pid]?.[courseKey] > 0) {
+          usedCredit = true;
+          tempUsableCredits[pid][courseKey]--;
+        }
       }
 
-      if (!usedCredit) {
+      if (usedCredit) {
+        calcUsedDates.add(`${d.date}_${pid}`);
+      } else {
         totalIndividualCash += coursePrice; // Must pay cash
       }
     });
@@ -561,11 +579,31 @@ export default function BookingSummary({
   let finalPackPrice = addonCashTotal;
   let extraItemsBreakdown = [];
   let infoSentence = "";
+  const breakdownMap = {}; // MOVED UP
 
   // 1. Calculate base cost of all selected packs
   selectedPacks.forEach((sp) => {
-    const pack = pricingMap[sp.link]?.packs?.[sp.packIdx];
-    if (pack) finalPackPrice += parseFloat(pack.price || 0);
+    const pData = pricingMap[sp.link];
+    const pack = pData?.packs?.[sp.packIdx];
+    if (pack) {
+      finalPackPrice += parseFloat(pack.price || 0);
+
+      const courseName = pData?.courseName || sp.link.replace(/\//g, "");
+      const packTitle =
+        currentLang === "en"
+          ? `${pack.size} Session Pack (${courseName})`
+          : `${pack.size}er Karte (${courseName})`;
+
+      if (!breakdownMap[packTitle]) {
+        breakdownMap[packTitle] = {
+          count: 0,
+          price: parseFloat(pack.price || 0),
+          isFree: false,
+          isPack: true,
+        };
+      }
+      breakdownMap[packTitle].count++;
+    }
   });
 
   // 2. Track remaining credits for NEW packs being purchased per profile
@@ -584,7 +622,7 @@ export default function BookingSummary({
     });
 
   // 3. Loop through selected sessions to apply coverage
-  const breakdownMap = {};
+  // breakdownMap initialized above
 
   // Re-calculate local temp tracking for the breakdown logic
   const breakdownTempCredits = {};
@@ -604,6 +642,7 @@ export default function BookingSummary({
 
   let hasExceededPack = false;
   let hasUncoveredMixedCourse = false;
+  let breakdownUsedDates = new Set(); // NEW: Track local usage for breakdown
 
   selectedDates.forEach((d) => {
     const courseKey = getCreditKey(d.link || coursePath);
@@ -615,18 +654,33 @@ export default function BookingSummary({
       const pid = att.profileId;
 
       let usedCredit = false;
-      if (activePackCode && breakdownRemainingPackCodeUses > 0) {
-        usedCredit = true;
-        breakdownRemainingPackCodeUses--;
-      } else if (pid && breakdownTempCredits[pid]?.[courseKey] > 0) {
-        usedCredit = true;
-        breakdownTempCredits[pid][courseKey]--;
+
+      // NEW: Enforce limitOnePerDay identically to prevent newly bought packs covering restricted days
+      const alreadyUsedToday =
+        userCreditBookedIds?.includes(`${d.date}_${pid}`) ||
+        breakdownUsedDates.has(`${d.date}_${pid}`);
+      let activePackAlreadyUsed = false;
+      if (!alreadyUsedToday && activePackCode) {
+        activePackAlreadyUsed = activePackCode.redeemedEventIds?.includes(d.id);
+      }
+      const limitApplies =
+        limitOnePerDay && (alreadyUsedToday || activePackAlreadyUsed);
+
+      if (!limitApplies) {
+        if (activePackCode && breakdownRemainingPackCodeUses > 0) {
+          usedCredit = true;
+          breakdownRemainingPackCodeUses--;
+        } else if (pid && breakdownTempCredits[pid]?.[courseKey] > 0) {
+          usedCredit = true;
+          breakdownTempCredits[pid][courseKey]--;
+        } else if (newPackRemaining[pid || "guest"]?.[d.link] > 0) {
+          usedCredit = true;
+          newPackRemaining[pid || "guest"][d.link]--; // Covered by NEWLY selected pack for this profile
+        }
       }
 
       if (usedCredit) {
-        // Covered by existing credit
-      } else if (newPackRemaining[pid || "guest"]?.[d.link] > 0) {
-        newPackRemaining[pid || "guest"][d.link]--; // Covered by NEWLY selected pack for this profile
+        breakdownUsedDates.add(`${d.date}_${pid}`);
       } else {
         // Not covered - Charge Single Price
         finalPackPrice += coursePrice;
@@ -1069,6 +1123,33 @@ export default function BookingSummary({
     );
   };
 
+  const getAvailableProfiles = () => {
+    const profiles = [];
+    if (currentUser) {
+      profiles.push({
+        id: "main",
+        name: userData?.firstName || (currentLang === "en" ? "Me" : "Ich"),
+      });
+      if (userData?.linkedProfiles) {
+        userData.linkedProfiles.forEach((p) =>
+          profiles.push({ id: p.id, name: p.firstName }),
+        );
+      }
+    } else {
+      profiles.push({
+        id: "guest",
+        name: currentLang === "en" ? "Guest" : "Gast",
+      });
+    }
+    profiles.push({
+      id: "gift",
+      name: currentLang === "en" ? "Buy as a Gift" : "Als Geschenk kaufen",
+      isGift: true,
+    });
+    return profiles;
+  };
+  const availableProfiles = getAvailableProfiles();
+
   const renderSelectionSummary = () => (
     <div
       style={{
@@ -1093,7 +1174,7 @@ export default function BookingSummary({
         {currentLang === "en" ? "Your Selection" : "Deine Auswahl"}
       </h4>
 
-      {!hasSelection ? (
+      {!hasSelection && selectedPacks.length === 0 ? (
         <div
           style={{
             padding: "0.85rem",
@@ -1113,8 +1194,8 @@ export default function BookingSummary({
             }}
           >
             {currentLang === "en"
-              ? "Select a date from the calendar to book a single session."
-              : "Termin im Kalender wählen, um einen Einzelkurs zu buchen."}
+              ? "Select a date from the calendar or choose a session pack below."
+              : "Termin im Kalender wählen oder ein Kurspaket unten hinzufügen."}
           </p>
         </div>
       ) : (
@@ -1366,10 +1447,14 @@ export default function BookingSummary({
                       const isAssigned = assignedAddonIds.includes(se.id);
                       const isAlreadyDone = attHistory.includes(se.id);
 
-                      // NEW RULE:
-                      // Show if assigned to this day AND (it's NOT mandatory OR they haven't done it yet)
-                      // This ensures repeating slots stay visible while mandatory intros disappear once done.
-                      return isAssigned && (!se.isMandatory || !isAlreadyDone);
+                      // Hide if it's mandatory OR a prerequisite for something else, AND they've already done it
+                      const isPrerequisite = evPricing?.specialEvents?.some(
+                        (other) => other.requiresIntroId === se.id,
+                      );
+                      const hideBecauseDone =
+                        isAlreadyDone && (se.isMandatory || isPrerequisite);
+
+                      return isAssigned && !hideBecauseDone;
                     });
 
                     const isAddonsExpanded =
@@ -1510,8 +1595,8 @@ export default function BookingSummary({
                               }}
                             >
                               <option value="main">
-                                {currentLang === "en" ? "Me" : "Ich"} (
-                                {userData.firstName})
+                                {userData.firstName ||
+                                  (currentLang === "en" ? "Me" : "Ich")}
                               </option>
                               {userData.linkedProfiles.map((p) => (
                                 <option key={p.id} value={p.id}>
@@ -1944,46 +2029,144 @@ export default function BookingSummary({
               </div>
             );
           })}
+
+          {/* RENDER NEWLY ADDED PACKS IN THE CART */}
+          {selectedPacks.length > 0 && (
+            <div
+              style={{
+                marginTop: hasSelection ? "1rem" : "0",
+                borderTop: hasSelection
+                  ? "1px dashed rgba(28,7,0,0.1)"
+                  : "none",
+                paddingTop: hasSelection ? "1rem" : "0",
+              }}
+            >
+              <h5
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: "900",
+                  color: "#9960a8",
+                  textTransform: "uppercase",
+                  marginBottom: "10px",
+                  opacity: 0.8,
+                }}
+              >
+                {currentLang === "en" ? "Selected Packs" : "Ausgewählte Pakete"}
+              </h5>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+              >
+                {selectedPacks.map((sp) => {
+                  const pData = pricingMap[sp.link];
+                  const packDef = pData?.packs?.[sp.packIdx];
+                  const courseName =
+                    pData?.courseName || sp.link.replace(/\//g, "");
+                  const profName = sp.isGift
+                    ? currentLang === "en"
+                      ? "Gift"
+                      : "Geschenk"
+                    : availableProfiles.find((p) => p.id === sp.profileId)
+                        ?.name || sp.profileId;
+
+                  return (
+                    <div
+                      key={sp.id}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        backgroundColor: "rgba(202, 175, 243, 0.08)",
+                        padding: "12px",
+                        borderRadius: "12px",
+                        border: "1px solid rgba(202, 175, 243, 0.2)",
+                        gap: "6px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "0.85rem",
+                            fontWeight: "800",
+                            color: "#1c0700",
+                          }}
+                        >
+                          {packDef?.size} Session Pack - {courseName}
+                        </span>
+                        <button
+                          onClick={() =>
+                            setSelectedPacks((prev) =>
+                              prev.filter((p) => p.id !== sp.id),
+                            )
+                          }
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#1c0700",
+                            opacity: 0.4,
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          <XCircle size={18} />
+                        </button>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: "0.75rem",
+                          opacity: 0.8,
+                          fontWeight: "600",
+                        }}
+                      >
+                        <span>
+                          {currentLang === "en" ? "For:" : "Für:"} {profName}
+                        </span>
+                        <span>{packDef?.price} CHF</span>
+                      </div>
+                      {sp.isGift && (
+                        <input
+                          placeholder={
+                            currentLang === "en"
+                              ? "Recipient Name"
+                              : "Name des Beschenkten"
+                          }
+                          value={sp.recipientName || ""}
+                          onChange={(e) =>
+                            setSelectedPacks((prev) =>
+                              prev.map((p) =>
+                                p.id === sp.id
+                                  ? { ...p, recipientName: e.target.value }
+                                  : p,
+                              ),
+                            )
+                          }
+                          style={{
+                            ...S.guestInputStyle,
+                            padding: "8px 12px",
+                            fontSize: "0.8rem",
+                            marginTop: "4px",
+                            backgroundColor: "rgba(255, 252, 227, 0.6)",
+                          }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 
   const renderPackOption = () => {
-    // Collect profiles
-    const profiles = [];
-    if (currentUser) {
-      profiles.push({ id: "main", name: currentLang === "en" ? "Me" : "Ich" });
-      if (userData?.linkedProfiles) {
-        userData.linkedProfiles.forEach((p) =>
-          profiles.push({ id: p.id, name: p.firstName }),
-        );
-      }
-    } else {
-      profiles.push({
-        id: "guest",
-        name: currentLang === "en" ? "Guest" : "Gast",
-      });
-    }
-    // Also a gift option
-    const giftOption = {
-      id: "gift",
-      name: currentLang === "en" ? "Buy as a Gift" : "Als Geschenk kaufen",
-      isGift: true,
-    };
-    const availableProfiles = [...profiles, giftOption];
-
-    // Calculate sessions needed per profile/link to show hints
-    const sessionsNeeded = {}; // { profileId: { link: count } }
-    selectedDates.forEach((d) => {
-      d.attendees.forEach((att) => {
-        const pid = att.profileId || "guest";
-        if (!sessionsNeeded[pid]) sessionsNeeded[pid] = {};
-        sessionsNeeded[pid][d.link || coursePath] =
-          (sessionsNeeded[pid][d.link || coursePath] || 0) + 1;
-      });
-    });
-
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
         <div
@@ -2123,9 +2306,7 @@ export default function BookingSummary({
                 </div>
 
                 {coursePacks.map((pack, pIdx) => {
-                  const isPackTypeSelected = selectedPacks.some(
-                    (p) => p.link === link && p.packIdx === pIdx,
-                  );
+                  const isPackExpanded = expandedPacks[`${link}_${pIdx}`];
                   const savings = Math.round(
                     ((parseFloat(pricingMap[link].priceSingle) * pack.size -
                       pack.price) /
@@ -2140,37 +2321,23 @@ export default function BookingSummary({
                     >
                       <div
                         onClick={() => {
-                          if (isPackTypeSelected) {
-                            setSelectedPacks((prev) =>
-                              prev.filter(
-                                (p) => !(p.link === link && p.packIdx === pIdx),
-                              ),
-                            );
-                          } else {
-                            setSelectedPacks((prev) => [
-                              ...prev.filter((p) => p.link !== link),
-                              {
-                                id: Date.now().toString() + Math.random(),
-                                link,
-                                packIdx: pIdx,
-                                profileId: currentUser ? "main" : "guest",
-                                isGift: false,
-                              },
-                            ]);
-                          }
+                          setExpandedPacks((prev) => ({
+                            ...prev,
+                            [`${link}_${pIdx}`]: !prev[`${link}_${pIdx}`],
+                          }));
                         }}
                         style={{
-                          backgroundColor: isPackTypeSelected
+                          backgroundColor: isPackExpanded
                             ? "rgba(202, 175, 243, 0.25)"
                             : "rgba(202, 175, 243, 0.05)",
-                          borderRadius: isPackTypeSelected
+                          borderRadius: isPackExpanded
                             ? "16px 16px 0 0"
                             : "16px",
                           padding: "1rem",
-                          border: isPackTypeSelected
+                          border: isPackExpanded
                             ? "2px solid #9960a8"
                             : "1px solid rgba(202, 175, 243, 0.15)",
-                          borderBottom: isPackTypeSelected ? "none" : undefined,
+                          borderBottom: isPackExpanded ? "none" : undefined,
                           cursor: "pointer",
                           position: "relative",
                           zIndex: 2,
@@ -2199,12 +2366,10 @@ export default function BookingSummary({
                                 fontSize: "0.9rem",
                               }}
                             >
-                              {isPackTypeSelected && (
-                                <Check
-                                  size={14}
-                                  color="#9960a8"
-                                  strokeWidth={4}
-                                />
+                              {isPackExpanded ? (
+                                <ChevronUp size={16} color="#9960a8" />
+                              ) : (
+                                <ChevronDown size={16} color="#9960a8" />
                               )}
                               {pack.size}{" "}
                               {currentLang === "en"
@@ -2231,7 +2396,7 @@ export default function BookingSummary({
                         </div>
                       </div>
 
-                      {isPackTypeSelected && (
+                      {isPackExpanded && (
                         <div
                           style={{
                             padding: "1rem",
@@ -2255,8 +2420,8 @@ export default function BookingSummary({
                               }}
                             >
                               {currentLang === "en"
-                                ? "Assign Pack To:"
-                                : "Paket zuweisen an:"}
+                                ? "Add Pack To Profile:"
+                                : "Paket hinzufügen für:"}
                             </div>
                           )}
 
@@ -2268,13 +2433,6 @@ export default function BookingSummary({
                             }}
                           >
                             {availableProfiles.map((prof, profIdx) => {
-                              const isProfSelected = selectedPacks.some(
-                                (p) =>
-                                  p.link === link &&
-                                  p.packIdx === pIdx &&
-                                  p.profileId === prof.id,
-                              );
-
                               return (
                                 <div
                                   key={profIdx}
@@ -2286,37 +2444,29 @@ export default function BookingSummary({
                                 >
                                   <div
                                     onClick={() => {
-                                      if (!isProfSelected) {
-                                        setSelectedPacks((prev) => [
-                                          ...prev.filter(
-                                            (p) =>
-                                              !(
-                                                p.link === link &&
-                                                p.profileId === prof.id
-                                              ),
-                                          ),
-                                          {
-                                            id:
-                                              Date.now().toString() +
-                                              Math.random(),
-                                            link,
-                                            packIdx: pIdx,
-                                            profileId: prof.id,
-                                            isGift: prof.isGift,
-                                          },
-                                        ]);
-                                      } else {
-                                        setSelectedPacks((prev) =>
-                                          prev.filter(
-                                            (p) =>
-                                              !(
-                                                p.link === link &&
-                                                p.packIdx === pIdx &&
-                                                p.profileId === prof.id
-                                              ),
-                                          ),
-                                        );
+                                      if (prof.isGift) {
+                                        setGiftPrompt({
+                                          link,
+                                          packIdx: pIdx,
+                                          profileId: prof.id,
+                                          isGift: true,
+                                          recipientName: "",
+                                        });
+                                        return;
                                       }
+                                      setSelectedPacks((prev) => [
+                                        ...prev,
+                                        {
+                                          id:
+                                            Date.now().toString() +
+                                            Math.random(),
+                                          link,
+                                          packIdx: pIdx,
+                                          profileId: prof.id,
+                                          isGift: false,
+                                          recipientName: "",
+                                        },
+                                      ]);
                                     }}
                                     style={{
                                       display: "flex",
@@ -2330,139 +2480,47 @@ export default function BookingSummary({
                                     }}
                                   >
                                     <div
+                                      className="plus-btn-anim"
                                       style={{
                                         width: "20px",
                                         height: "20px",
                                         borderRadius: "6px",
-                                        border: `2px solid ${isProfSelected ? "#9960a8" : "#caaff3"}`,
-                                        backgroundColor: isProfSelected
-                                          ? "#9960a8"
-                                          : "rgba(255, 252, 227, 0.8)",
+                                        border: "2px solid #caaff3",
+                                        backgroundColor:
+                                          "rgba(255, 252, 227, 0.8)",
                                         display: "flex",
                                         alignItems: "center",
                                         justifyContent: "center",
-                                        transition:
-                                          "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                                         flexShrink: 0,
                                       }}
                                     >
-                                      {isProfSelected && (
-                                        <Check
-                                          size={16}
-                                          color="#fffce3"
-                                          strokeWidth={4}
-                                        />
-                                      )}
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="#9960a8"
+                                        strokeWidth="3"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
+                                        <line
+                                          x1="12"
+                                          y1="5"
+                                          x2="12"
+                                          y2="19"
+                                        ></line>
+                                        <line
+                                          x1="5"
+                                          y1="12"
+                                          x2="19"
+                                          y2="12"
+                                        ></line>
+                                      </svg>
                                     </div>
                                     {prof.name}
                                   </div>
-
-                                  {isProfSelected && (
-                                    <div
-                                      style={{
-                                        fontSize: "0.75rem",
-                                        color: "#4e5f28",
-                                        paddingLeft: "24px",
-                                        fontWeight: "600",
-                                        lineHeight: 1.4,
-                                      }}
-                                    >
-                                      {prof.isGift ? (
-                                        <div
-                                          style={{
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            gap: "8px",
-                                            marginTop: "4px",
-                                          }}
-                                        >
-                                          <span>
-                                            {currentLang === "en"
-                                              ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} will be sent as a gift code.`
-                                              : `${pack.size} Guthaben werden als Geschenkcode gesendet.`}
-                                          </span>
-                                          <input
-                                            type="text"
-                                            placeholder={
-                                              currentLang === "en"
-                                                ? "Recipient Name"
-                                                : "Name des Beschenkten"
-                                            }
-                                            style={{
-                                              ...S.guestInputStyle,
-                                              padding: "8px 12px",
-                                              fontSize: "0.85rem",
-                                              backgroundColor:
-                                                "rgba(255, 252, 227, 0.6)",
-                                              maxWidth: "250px",
-                                            }}
-                                            value={
-                                              selectedPacks.find(
-                                                (p) =>
-                                                  p.link === link &&
-                                                  p.packIdx === pIdx &&
-                                                  p.profileId === prof.id,
-                                              )?.recipientName || ""
-                                            }
-                                            onChange={(e) => {
-                                              setSelectedPacks((prev) =>
-                                                prev.map((p) =>
-                                                  p.link === link &&
-                                                  p.packIdx === pIdx &&
-                                                  p.profileId === prof.id
-                                                    ? {
-                                                        ...p,
-                                                        recipientName:
-                                                          e.target.value,
-                                                      }
-                                                    : p,
-                                                ),
-                                              );
-                                            }}
-                                            onClick={(e) => e.stopPropagation()}
-                                          />
-                                        </div>
-                                      ) : (
-                                        (() => {
-                                          const needed =
-                                            sessionsNeeded[prof.id]?.[link] ||
-                                            0;
-                                          const existingBal =
-                                            profileBalances[prof.id]?.[
-                                              getCreditKey(link)
-                                            ] || 0;
-                                          const actualNeeds = Math.max(
-                                            0,
-                                            needed - existingBal,
-                                          );
-                                          const used = Math.min(
-                                            actualNeeds,
-                                            pack.size,
-                                          );
-                                          const added = pack.size - used;
-
-                                          const creditStrPack =
-                                            pack.size === 1
-                                              ? "credit"
-                                              : "credits";
-                                          const creditStrUsed =
-                                            used === 1 ? "credit" : "credits";
-                                          const creditStrAdded =
-                                            added === 1 ? "credit" : "credits";
-
-                                          if (used === 0) {
-                                            return currentLang === "en"
-                                              ? `${pack.size} ${creditStrPack} will be added to this profile's balance.`
-                                              : `${pack.size} Guthaben werden dem Profil hinzugefügt.`;
-                                          } else {
-                                            return currentLang === "en"
-                                              ? `Uses ${used} ${creditStrUsed} for this booking. ${added} ${creditStrAdded} will be added to balance.`
-                                              : `Nutzt ${used} Guthaben für diese Buchung. ${added} Guthaben werden dem Profil hinzugefügt.`;
-                                          }
-                                        })()
-                                      )}
-                                    </div>
-                                  )}
                                 </div>
                               );
                             })}
@@ -2502,11 +2560,13 @@ export default function BookingSummary({
               >
                 <span>
                   + {item.count}{" "}
-                  {currentLang === "en"
-                    ? item.count === 1
-                      ? "session"
-                      : "sessions"
-                    : "Termin(e)"}{" "}
+                  {item.isPack
+                    ? "x"
+                    : currentLang === "en"
+                      ? item.count === 1
+                        ? "session"
+                        : "sessions"
+                      : "Termin(e)"}{" "}
                   {item.name}
                 </span>
                 <span style={{ opacity: 0.5 }}>
@@ -3039,6 +3099,19 @@ export default function BookingSummary({
         .shake-animation {
           animation: shake 0.4s ease-in-out;
         }
+        .plus-btn-anim {
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .plus-btn-anim:hover {
+          transform: scale(1.1);
+          background-color: #9960a8 !important;
+        }
+        .plus-btn-anim:hover svg {
+          stroke: #fffce3 !important;
+        }
+        .plus-btn-anim:active {
+          transform: scale(0.95);
+        }
       `}</style>
 
       <div
@@ -3555,6 +3628,115 @@ export default function BookingSummary({
               }}
             >
               {currentLang === "en" ? "Got it" : "Verstanden"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM GIFT NAME PROMPT MODAL */}
+      {giftPrompt && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(28, 7, 0, 0.4)",
+            zIndex: 30000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={() => setGiftPrompt(null)}
+        >
+          <div
+            style={{
+              backgroundColor: "#fffce3",
+              maxWidth: "350px",
+              width: "100%",
+              borderRadius: "24px",
+              padding: "2rem",
+              boxShadow: "0 20px 40px rgba(28, 7, 0, 0.2)",
+              position: "relative",
+              border: "1px solid #caaff3",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setGiftPrompt(null)}
+              style={{
+                position: "absolute",
+                top: "16px",
+                right: "16px",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                opacity: 0.4,
+              }}
+            >
+              <X size={20} />
+            </button>
+            <h3
+              style={{
+                margin: 0,
+                fontFamily: "Harmond-SemiBoldCondensed",
+                fontSize: "1.5rem",
+                color: "#1c0700",
+              }}
+            >
+              {currentLang === "en" ? "Gift Details" : "Geschenk-Details"}
+            </h3>
+            <p style={{ margin: 0, fontSize: "0.85rem", opacity: 0.7 }}>
+              {currentLang === "en"
+                ? "Who is this gift for?"
+                : "Für wen ist dieses Geschenk?"}
+            </p>
+            <input
+              autoFocus
+              type="text"
+              placeholder={
+                currentLang === "en" ? "Recipient Name" : "Name des Beschenkten"
+              }
+              style={{
+                ...S.guestInputStyle,
+                padding: "12px",
+                fontSize: "0.9rem",
+                backgroundColor: "rgba(255, 252, 227, 0.6)",
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setSelectedPacks((prev) => [
+                    ...prev,
+                    {
+                      ...giftPrompt,
+                      id: Date.now().toString() + Math.random(),
+                    },
+                  ]);
+                  setGiftPrompt(null);
+                }
+              }}
+              onChange={(e) =>
+                setGiftPrompt({ ...giftPrompt, recipientName: e.target.value })
+              }
+              value={giftPrompt.recipientName || ""}
+            />
+            <button
+              onClick={() => {
+                setSelectedPacks((prev) => [
+                  ...prev,
+                  { ...giftPrompt, id: Date.now().toString() + Math.random() },
+                ]);
+                setGiftPrompt(null);
+              }}
+              style={{ ...S.primaryBtnStyle(isMobile), marginTop: "0.5rem" }}
+            >
+              {currentLang === "en" ? "Add to Cart" : "Hinzufügen"}
             </button>
           </div>
         </div>
