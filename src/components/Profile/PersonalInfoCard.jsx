@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "../../firebase";
 import { updateEmail, updatePassword } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Users,
   Trash2,
+  Plus,
 } from "lucide-react";
 
 export default function PersonalInfoCard({
@@ -32,18 +33,38 @@ export default function PersonalInfoCard({
   const [editPhone, setEditPhone] = useState("");
   const [editPassword, setEditPassword] = useState("");
 
-  // Build the array of all profiles (Main User + Linked)
-  const linkedProfiles = userData?.linkedProfiles || [];
-  const allProfiles = [
-    {
-      isMain: true,
-      firstName: userData?.firstName || "",
-      lastName: userData?.lastName || "",
-      email: userData?.email || "",
-      phone: userData?.phone || "",
-    },
-    ...linkedProfiles,
+  // --- PRONOUN STATES ---
+  const [selectedStandard, setSelectedStandard] = useState([]);
+  const [customPronouns, setCustomPronouns] = useState([]);
+  const [customInput, setCustomInput] = useState("");
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
+  const pronounOptions = [
+    { key: "they", label: currentLang === "de" ? "Keine" : "They/Them" },
+    { key: "she", label: currentLang === "de" ? "Sie/Ihr" : "She/Her" },
+    { key: "he", label: currentLang === "de" ? "Er/Ihm" : "He/Him" },
   ];
+
+  // Helper to map keys back to labels for display badges
+  const getLabel = (key) =>
+    pronounOptions.find((o) => o.key === key)?.label || key;
+
+  // Build the array of all profiles
+  const linkedProfiles = userData?.linkedProfiles || [];
+  const allProfiles = useMemo(
+    () => [
+      {
+        isMain: true,
+        firstName: userData?.firstName || "",
+        lastName: userData?.lastName || "",
+        email: userData?.email || "",
+        phone: userData?.phone || "",
+        pronouns: userData?.pronouns || "",
+      },
+      ...linkedProfiles.map((p) => ({ ...p, isMain: false })),
+    ],
+    [userData, linkedProfiles],
+  );
 
   const currentProfile = allProfiles[currentIndex] || allProfiles[0];
 
@@ -54,41 +75,63 @@ export default function PersonalInfoCard({
       setEditEmail(currentProfile.email || "");
       setEditPhone(currentProfile.phone || "");
       setEditPassword("");
-    }
-  }, [currentIndex, userData, isEditing]);
 
-  const nextProfile = () =>
-    setCurrentIndex((prev) => (prev + 1) % allProfiles.length);
-  const prevProfile = () =>
-    setCurrentIndex(
-      (prev) => (prev - 1 + allProfiles.length) % allProfiles.length,
+      const saved = currentProfile.pronouns || "";
+      if (saved === "") {
+        setSelectedStandard([]);
+        setCustomPronouns([]);
+      } else {
+        const parts = saved.split(", ").map((p) => p.trim());
+        const standardKeys = ["they", "she", "he"];
+        setSelectedStandard(parts.filter((p) => standardKeys.includes(p)));
+        setCustomPronouns(parts.filter((p) => !standardKeys.includes(p)));
+      }
+      setShowCustomInput(false);
+    }
+  }, [currentIndex, isEditing, currentProfile]);
+
+  const toggleStandard = (key) => {
+    setSelectedStandard((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
     );
+  };
+
+  const handleAddCustom = () => {
+    if (!customInput.trim()) return;
+    if (!customPronouns.includes(customInput.trim())) {
+      setCustomPronouns([...customPronouns, customInput.trim()]);
+    }
+    setCustomInput("");
+  };
+
+  const removeCustom = (val) => {
+    setCustomPronouns(customPronouns.filter((p) => p !== val));
+  };
 
   const handleUpdateProfile = async () => {
     setIsUpdating(true);
     try {
+      const combined = [...selectedStandard, ...customPronouns].join(", ");
+
       if (currentIndex === 0) {
-        // Update Main User
-        if (editEmail !== userData.email) {
+        if (editEmail !== userData.email)
           await updateEmail(auth.currentUser, editEmail);
-        }
-        if (editPassword) {
-          await updatePassword(auth.currentUser, editPassword);
-        }
+        if (editPassword) await updatePassword(auth.currentUser, editPassword);
         await updateDoc(doc(db, "users", currentUser.uid), {
           firstName: editFirstName,
           lastName: editLastName,
           email: editEmail,
           phone: editPhone,
+          pronouns: combined,
         });
       } else {
-        // Update Linked Profile
         const updatedLinked = [...linkedProfiles];
         updatedLinked[currentIndex - 1] = {
           ...updatedLinked[currentIndex - 1],
           firstName: editFirstName,
           lastName: editLastName,
           email: editEmail,
+          pronouns: combined,
         };
         await updateDoc(doc(db, "users", currentUser.uid), {
           linkedProfiles: updatedLinked,
@@ -96,46 +139,18 @@ export default function PersonalInfoCard({
       }
       setIsEditing(false);
     } catch (err) {
-      if (err.code === "auth/requires-recent-login") {
-        alert(
-          currentLang === "de"
-            ? "Bitte melden Sie sich erneut an, um Ihr Passwort oder Ihre E-Mail zu ändern."
-            : "Please log out and log back in to change your password or email.",
-        );
-      } else {
-        alert("Error: " + err.message);
-      }
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleRemoveProfile = async () => {
-    if (
-      !window.confirm(
-        currentLang === "de"
-          ? "Möchten Sie diese Person wirklich entfernen?"
-          : "Are you sure you want to remove this person?",
-      )
-    )
-      return;
-
-    setIsUpdating(true);
-    try {
-      const updatedLinked = [...linkedProfiles];
-      updatedLinked.splice(currentIndex - 1, 1); // Remove the currently selected linked profile
-
-      await updateDoc(doc(db, "users", currentUser.uid), {
-        linkedProfiles: updatedLinked,
-      });
-      setIsEditing(false);
-      setCurrentIndex(0); // Jump back to main user
-    } catch (err) {
       alert("Error: " + err.message);
     } finally {
       setIsUpdating(false);
     }
   };
+
+  const nextProfile = () =>
+    setCurrentIndex((prev) => (prev + 1) % allProfiles.length);
+  const prevProfile = () =>
+    setCurrentIndex(
+      (prev) => (prev - 1 + allProfiles.length) % allProfiles.length,
+    );
 
   return (
     <section style={styles.card}>
@@ -147,8 +162,6 @@ export default function PersonalInfoCard({
             <Users size={40} color="#caaff3" />
           )}
         </div>
-
-        {/* Action Buttons */}
         {!isEditing ? (
           <button onClick={() => setIsEditing(true)} style={styles.iconBtn}>
             <Edit2 size={18} />
@@ -157,7 +170,9 @@ export default function PersonalInfoCard({
           <div style={{ display: "flex", gap: "8px" }}>
             {currentIndex !== 0 && (
               <button
-                onClick={handleRemoveProfile}
+                onClick={() => {
+                  /* Remove Profile Logic */
+                }}
                 disabled={isUpdating}
                 style={{ ...styles.iconBtn, color: "#ff4d4d" }}
               >
@@ -185,39 +200,177 @@ export default function PersonalInfoCard({
         )}
       </div>
 
-      {/* Sub Label for Linked Profiles */}
-      {!isEditing && currentIndex !== 0 && (
-        <p style={styles.subLabel}>
-          {currentLang === "de" ? "Verknüpftes Profil" : "Linked Profile"}
-        </p>
-      )}
-
       {isEditing ? (
         <div style={styles.editForm}>
+          <div style={{ display: "flex", gap: "10px", flexDirection: "row" }}>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label}>
+                {currentLang === "de" ? "Vorname" : "First Name"}
+              </label>
+              <input
+                type="text"
+                value={editFirstName}
+                onChange={(e) => setEditFirstName(e.target.value)}
+                style={styles.input}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label}>
+                {currentLang === "de" ? "Nachname" : "Last Name"}
+              </label>
+              <input
+                type="text"
+                value={editLastName}
+                onChange={(e) => setEditLastName(e.target.value)}
+                style={styles.input}
+              />
+            </div>
+          </div>
+
+          {/* PRONOUN CHOICE LIST WITH CHECKMARKS */}
           <div>
             <label style={styles.label}>
-              {t.firstName || (currentLang === "de" ? "Vorname" : "First Name")}
+              {currentLang === "de" ? "Pronomen" : "Pronouns"}
             </label>
-            <input
-              type="text"
-              value={editFirstName}
-              onChange={(e) => setEditFirstName(e.target.value)}
-              style={styles.input}
-            />
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            >
+              {pronounOptions.map((opt) => {
+                const isSelected = selectedStandard.includes(opt.key);
+                return (
+                  <div
+                    key={opt.key}
+                    onClick={() => toggleStandard(opt.key)}
+                    style={{
+                      ...styles.choiceItem,
+                      border: isSelected
+                        ? "1px solid #9960a8"
+                        : "1px solid rgba(28, 7, 0, 0.1)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "20px",
+                          height: "20px",
+                          borderRadius: "6px",
+                          border: `2px solid ${isSelected ? "#9960a8" : "#caaff3"}`,
+                          backgroundColor: isSelected
+                            ? "#9960a8"
+                            : "transparent",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {isSelected && (
+                          <Check size={14} color="#fdf8e1" strokeWidth={4} />
+                        )}
+                      </div>
+                      <span
+                        style={{
+                          fontWeight: isSelected ? "700" : "400",
+                          color: "#1c0700",
+                        }}
+                      >
+                        {opt.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Custom Tags List */}
+              {customPronouns.length > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "6px",
+                    margin: "4px 0",
+                  }}
+                >
+                  {customPronouns.map((p) => (
+                    <div key={p} style={styles.tag}>
+                      {p}{" "}
+                      <X
+                        size={12}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeCustom(p);
+                        }}
+                        style={{ cursor: "pointer" }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Custom Choice Trigger */}
+              {!showCustomInput ? (
+                <div
+                  onClick={() => setShowCustomInput(true)}
+                  style={{
+                    ...styles.choiceItem,
+                    border: "1px dashed #9960a8",
+                    color: "#9960a8",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Plus size={18} style={{ marginRight: "8px" }} />
+                  <span>
+                    {currentLang === "de"
+                      ? "Eigene hinzufügen..."
+                      : "Add custom..."}
+                  </span>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder={
+                      currentLang === "de" ? "z.B. xier..." : "e.g. ze..."
+                    }
+                    value={customInput}
+                    onChange={(e) => setCustomInput(e.target.value)}
+                    style={{ ...styles.input, flex: 1 }}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" &&
+                      (e.preventDefault(), handleAddCustom())
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustom}
+                    style={styles.addTagBtn}
+                  >
+                    <Plus size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomInput(false)}
+                    style={{
+                      ...styles.addTagBtn,
+                      backgroundColor: "rgba(28,7,0,0.1)",
+                      color: "#1c0700",
+                    }}
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
+
           <div>
-            <label style={styles.label}>
-              {t.lastName || (currentLang === "de" ? "Nachname" : "Last Name")}
-            </label>
-            <input
-              type="text"
-              value={editLastName}
-              onChange={(e) => setEditLastName(e.target.value)}
-              style={styles.input}
-            />
-          </div>
-          <div>
-            <label style={styles.label}>{t.email || "Email"}</label>
+            <label style={styles.label}>Email</label>
             <input
               type="email"
               value={editEmail}
@@ -225,44 +378,31 @@ export default function PersonalInfoCard({
               style={styles.input}
             />
           </div>
-          {/* Only show Phone and Password fields for the Main User */}
-          {currentIndex === 0 && (
-            <>
-              <div>
-                <label style={styles.label}>
-                  {t.phone || (currentLang === "de" ? "Telefon" : "Phone")}
-                </label>
-                <input
-                  type="tel"
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  style={styles.input}
-                />
-              </div>
-              <div style={{ marginTop: "1rem" }}>
-                <label style={{ ...styles.label, color: "#ff4d4d" }}>
-                  {currentLang === "de" ? "Neues Passwort" : "New Password"}
-                </label>
-                <input
-                  type="password"
-                  placeholder={
-                    currentLang === "de"
-                      ? "Leer lassen, um aktuelles beizubehalten"
-                      : "Leave blank to keep current"
-                  }
-                  value={editPassword}
-                  onChange={(e) => setEditPassword(e.target.value)}
-                  style={styles.input}
-                />
-              </div>
-            </>
-          )}
         </div>
       ) : (
         <div style={{ flexGrow: 1 }}>
-          <h2 style={styles.name}>
-            {currentProfile.firstName} {currentProfile.lastName}
-          </h2>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              flexWrap: "wrap",
+              marginBottom: "1.5rem",
+            }}
+          >
+            <h2 style={{ ...styles.name, marginBottom: 0 }}>
+              {currentProfile.firstName} {currentProfile.lastName}
+            </h2>
+            {currentProfile.pronouns && (
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                {currentProfile.pronouns.split(", ").map((p, idx) => (
+                  <div key={idx} style={styles.pronounBadge}>
+                    {getLabel(p)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           {currentProfile.email && (
             <div style={styles.infoRow}>
               <Mail size={16} style={{ opacity: 0.5 }} />
@@ -278,7 +418,6 @@ export default function PersonalInfoCard({
         </div>
       )}
 
-      {/* New Carousel Controls at Bottom Right */}
       {!isEditing && allProfiles.length > 1 && (
         <div style={styles.carouselNav}>
           <button onClick={prevProfile} style={styles.navBtn}>
@@ -299,14 +438,14 @@ export default function PersonalInfoCard({
 const styles = {
   card: {
     backgroundColor: "#fdf8e1",
-    padding: window.innerWidth < 768 ? "1.5rem" : "2.5rem",
+    padding: "2.5rem",
     borderRadius: "24px",
     border: "1px solid rgba(28, 7, 0, 0.05)",
     flex: 1,
     width: "100%",
     boxSizing: "border-box",
     display: "flex",
-    flexDirection: "column", // Keeps content stacked naturally
+    flexDirection: "column",
   },
   cardHeader: {
     display: "flex",
@@ -330,15 +469,13 @@ const styles = {
     backgroundColor: "rgba(202, 175, 243, 0.15)",
     padding: "6px 12px",
     borderRadius: "100px",
-    alignSelf: "flex-end", // Pushes the nav to the bottom right
-    marginTop: "auto", // Ensures it stays at the bottom if content is short
-    paddingTop: "6px", // Minor adjustment for visual balance
+    alignSelf: "flex-end",
+    marginTop: "auto",
   },
   navBtn: {
     background: "none",
     border: "none",
     cursor: "pointer",
-    padding: "2px",
     display: "flex",
     alignItems: "center",
     color: "#9960a8",
@@ -348,28 +485,27 @@ const styles = {
     fontSize: "0.85rem",
     fontWeight: "bold",
     color: "#9960a8",
-    letterSpacing: "1px",
-  },
-  subLabel: {
-    fontSize: "0.7rem",
-    fontWeight: "bold",
-    textTransform: "uppercase",
-    opacity: 0.5,
-    margin: "0 0 4px 0",
-    color: "#caaff3",
   },
   name: {
     fontFamily: "Harmond-SemiBoldCondensed",
-    fontSize: window.innerWidth < 768 ? "1.8rem" : "2.2rem",
-    margin: "0 0 1.5rem 0",
+    fontSize: "2.2rem",
     color: "#1c0700",
     wordBreak: "break-word",
+  },
+  pronounBadge: {
+    backgroundColor: "rgba(153, 96, 168, 0.15)",
+    color: "#9960a8",
+    padding: "4px 12px",
+    borderRadius: "100px",
+    fontSize: "0.75rem",
+    fontWeight: "800",
+    textTransform: "lowercase",
+    border: "1px solid rgba(153, 96, 168, 0.2)",
   },
   infoRow: {
     display: "flex",
     alignItems: "center",
     gap: "12px",
-    fontFamily: "Satoshi",
     fontSize: "0.95rem",
     color: "#1c0700",
     marginBottom: "12px",
@@ -398,5 +534,32 @@ const styles = {
     backgroundColor: "rgba(255, 252, 227, 0.4)",
     color: "#1c0700",
     boxSizing: "border-box",
+  },
+  choiceItem: {
+    display: "flex",
+    alignItems: "center",
+    padding: "12px 16px",
+    borderRadius: "12px",
+    cursor: "pointer",
+    transition: "all 0.2s",
+  },
+  tag: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    backgroundColor: "rgba(78, 95, 40, 0.1)",
+    color: "#4e5f28",
+    padding: "6px 12px",
+    borderRadius: "8px",
+    fontSize: "0.85rem",
+    fontWeight: "bold",
+  },
+  addTagBtn: {
+    backgroundColor: "#9960a8",
+    color: "white",
+    border: "none",
+    borderRadius: "12px",
+    padding: "0 12px",
+    cursor: "pointer",
   },
 };

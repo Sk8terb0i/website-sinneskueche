@@ -8,7 +8,16 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
-import { Loader2, BookOpen, Users, Clock, Star } from "lucide-react";
+import {
+  Loader2,
+  BookOpen,
+  Users,
+  Clock,
+  Star,
+  ChevronDown,
+  ChevronRight,
+  User,
+} from "lucide-react";
 
 const courseMapping = {
   "/pottery": "pottery tuesdays",
@@ -23,6 +32,19 @@ const courseMapping = {
 const getCleanCourseKey = (path) =>
   courseMapping[path] || (path ? path.replace(/\//g, "") : "workshop");
 
+const formatPronouns = (pronouns, currentLang) => {
+  if (!pronouns) return "";
+  const mapping = {
+    they: currentLang === "de" ? "Keine" : "They/Them",
+    she: currentLang === "de" ? "Sie/Ihr" : "She/Her",
+    he: currentLang === "de" ? "Er/Ihm" : "He/Him",
+  };
+  return pronouns
+    .split(", ")
+    .map((p) => mapping[p.trim()] || p)
+    .join(", ");
+};
+
 export default function TeachingCard({
   teachingEvents,
   isScheduleLoading,
@@ -32,6 +54,11 @@ export default function TeachingCard({
 }) {
   const [enrichedEvents, setEnrichedEvents] = useState([]);
   const [loadingMetadata, setLoadingMetadata] = useState(false);
+  const [expandedEvents, setExpandedEvents] = useState({});
+
+  const toggleExpand = (eventId) => {
+    setExpandedEvents((prev) => ({ ...prev, [eventId]: !prev[eventId] }));
+  };
 
   useEffect(() => {
     const enrichData = async () => {
@@ -40,16 +67,16 @@ export default function TeachingCard({
       try {
         const enriched = await Promise.all(
           teachingEvents.map(async (ev) => {
-            // Check if ID comes from 'events' (doc id) or 'work_schedule' (field eventId)
             const actualEventId = ev.fromEventsTable ? ev.id : ev.eventId;
             const courseLink = ev.link || ev.coursePath || "";
             const sanitizedId = courseLink.replace(/\//g, "");
 
             let studentCount = 0;
+            let participantGroups = [];
             let addonSummary = [];
+            const coworkerList = ev.fullCoInstructors || [];
 
             if (actualEventId) {
-              // 1. Get participant count
               const bSnap = await getDocs(
                 query(
                   collection(db, "bookings"),
@@ -58,37 +85,106 @@ export default function TeachingCard({
               );
               studentCount = bSnap.size;
 
-              // 2. Aggregate add-ons
-              const addonCounts = {};
-              bSnap.docs.forEach((d) => {
-                const data = d.data();
-                if (data.selectedAddons) {
-                  data.selectedAddons.forEach((aid) => {
-                    addonCounts[aid] = (addonCounts[aid] || 0) + 1;
+              const settingsSnap = await getDoc(
+                doc(db, "course_settings", sanitizedId),
+              );
+              const specialEvents = settingsSnap.exists()
+                ? settingsSnap.data().specialEvents || []
+                : [];
+
+              // Resolve attendee details exactly like EventsTab.jsx
+              const userDetails = await Promise.all(
+                bSnap.docs.map(async (bDoc) => {
+                  const b = bDoc.data();
+                  let baseInfo = {
+                    firstName: "Unknown",
+                    lastName: "User",
+                    email: "N/A",
+                    pronouns: "",
+                  };
+
+                  if (b.userId === "GUEST_USER") {
+                    baseInfo = {
+                      firstName: b.guestName || "Guest",
+                      lastName: "(Guest)",
+                      email: b.guestEmail || "N/A",
+                      isGuest: true,
+                      pronouns: "",
+                    };
+                  } else {
+                    const userSnap = await getDoc(doc(db, "users", b.userId));
+                    if (userSnap.exists()) {
+                      const fullUserData = userSnap.data();
+                      baseInfo = { ...fullUserData };
+                      if (
+                        b.profileId &&
+                        b.profileId !== "main" &&
+                        fullUserData.linkedProfiles
+                      ) {
+                        const sub = fullUserData.linkedProfiles.find(
+                          (p) => p.id === b.profileId,
+                        );
+                        if (sub) baseInfo.pronouns = sub.pronouns || "";
+                      }
+                    }
+                  }
+
+                  const addonNames = (b.selectedAddons || []).map((item) => {
+                    const aid = typeof item === "object" ? item.id : item;
+                    const time = typeof item === "object" ? item.time : null;
+                    const match = specialEvents.find(
+                      (se) => String(se.id) === String(aid),
+                    );
+                    const baseName = match
+                      ? currentLang === "de"
+                        ? match.nameDe
+                        : match.nameEn
+                      : aid;
+                    return time ? `${baseName} (${time})` : baseName;
                   });
+
+                  return {
+                    ...baseInfo,
+                    ticketName:
+                      b.attendeeName || b.guestName || baseInfo.firstName,
+                    addons: addonNames,
+                  };
+                }),
+              );
+
+              const groupedMap = {};
+              const summaryMap = {};
+
+              userDetails.forEach((u) => {
+                const key = u.email;
+                if (!groupedMap[key]) {
+                  groupedMap[key] = { ...u, tickets: [] };
                 }
+                // Push every ticket individually (don't merge names) so addons stay linked to the right ticket row
+                groupedMap[key].tickets.push({
+                  name: u.ticketName,
+                  addons: u.addons,
+                  pronouns: u.pronouns,
+                });
+
+                u.addons.forEach((aName) => {
+                  summaryMap[aName] = (summaryMap[aName] || 0) + 1;
+                });
               });
 
-              // 3. Map add-on IDs to display names
-              if (Object.keys(addonCounts).length > 0) {
-                const sSnap = await getDoc(
-                  doc(db, "course_settings", sanitizedId),
-                );
-                if (sSnap.exists()) {
-                  const defs = sSnap.data().specialEvents || [];
-                  addonSummary = Object.entries(addonCounts).map(
-                    ([id, count]) => {
-                      const def = defs.find((s) => s.id === id);
-                      const name =
-                        currentLang === "de" ? def?.nameDe : def?.nameEn;
-                      return { name: name || id, count };
-                    },
-                  );
-                }
-              }
+              participantGroups = Object.values(groupedMap);
+              addonSummary = Object.entries(summaryMap).map(
+                ([name, count]) => ({ name, count }),
+              );
             }
 
-            return { ...ev, studentCount, addonSummary };
+            return {
+              ...ev,
+              studentCount,
+              participantGroups,
+              fullCoInstructors: coworkerList,
+              addonSummary,
+            };
           }),
         );
         setEnrichedEvents(enriched);
@@ -98,7 +194,6 @@ export default function TeachingCard({
         setLoadingMetadata(false);
       }
     };
-
     enrichData();
   }, [teachingEvents, currentLang]);
 
@@ -112,7 +207,7 @@ export default function TeachingCard({
     return grouped;
   }, [enrichedEvents]);
 
-  if (isScheduleLoading) {
+  if (isScheduleLoading)
     return (
       <section style={styles.card}>
         <div style={styles.emptyState}>
@@ -120,15 +215,13 @@ export default function TeachingCard({
         </div>
       </section>
     );
-  }
-
   if (teachingEvents.length === 0) return null;
 
   return (
     <section style={styles.card}>
       <h3 style={styles.sectionHeading(isMobile)}>
         <BookOpen size={20} color="#4e5f28" />
-        <span style={{ lineHeight: 1 }}>{t.teachingTitle}</span>
+        <span>{t.teachingTitle}</span>
       </h3>
 
       {loadingMetadata && enrichedEvents.length === 0 ? (
@@ -142,8 +235,7 @@ export default function TeachingCard({
             <div style={styles.bookingsList}>
               {events.map((event) => {
                 const dateObj = new Date(event.date);
-                const hasCoInstructors =
-                  event.coInstructorNames && event.coInstructorNames.length > 0;
+                const isExpanded = expandedEvents[event.id];
 
                 return (
                   <div key={event.id} style={styles.bookingItem}>
@@ -162,9 +254,8 @@ export default function TeachingCard({
                         <div
                           style={{
                             display: "flex",
+                            justifyContent: "space-between",
                             alignItems: "center",
-                            gap: "8px",
-                            flexWrap: "wrap",
                           }}
                         >
                           <p style={styles.bookingTitle(isMobile)}>
@@ -178,46 +269,200 @@ export default function TeachingCard({
                               },
                             )}
                           </p>
-                          <span style={styles.studentBadge}>
-                            {event.studentCount || 0}{" "}
-                            {currentLang === "en" ? "booked" : "gebucht"}
-                          </span>
+                          <button
+                            onClick={() => toggleExpand(event.id)}
+                            style={styles.expandToggle}
+                          >
+                            <span style={styles.studentBadge}>
+                              {event.studentCount || 0}{" "}
+                              {currentLang === "en" ? "booked" : "gebucht"}
+                            </span>
+                            {isExpanded ? (
+                              <ChevronDown size={18} />
+                            ) : (
+                              <ChevronRight size={18} />
+                            )}
+                          </button>
                         </div>
 
                         <div style={styles.infoRow}>
                           <div style={styles.metaItem}>
-                            <Clock size={12} />{" "}
+                            <Clock size={12} />
                             <span>{event.time || "--:--"}</span>
                           </div>
                           <div style={styles.metaItem}>
                             <Users size={12} />
-                            <span
+                            <div
                               style={{
-                                fontWeight: hasCoInstructors ? "800" : "500",
-                                color: hasCoInstructors ? "#9960a8" : "inherit",
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: "4px",
+                                alignItems: "center",
                               }}
                             >
-                              {hasCoInstructors
-                                ? `${t.workingWith} ${event.coInstructorNames.join(", ")}`
-                                : t.workingAlone}
-                            </span>
+                              {event.fullCoInstructors?.length > 0 ? (
+                                <>
+                                  <span style={{ opacity: 0.7 }}>
+                                    {t.workingWith}
+                                  </span>
+                                  {event.fullCoInstructors.map((co, ci) => (
+                                    <div
+                                      key={ci}
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          fontWeight: "800",
+                                          color: "#9960a8",
+                                        }}
+                                      >
+                                        {co.name}
+                                      </span>
+                                      {co.pronouns && (
+                                        <span style={styles.pronounSmallBadge}>
+                                          {formatPronouns(
+                                            co.pronouns,
+                                            currentLang,
+                                          )}
+                                        </span>
+                                      )}
+                                      {ci <
+                                      event.fullCoInstructors.length - 1 ? (
+                                        <span style={{ opacity: 0.4 }}>,</span>
+                                      ) : (
+                                        ""
+                                      )}
+                                    </div>
+                                  ))}
+                                </>
+                              ) : (
+                                <span style={{ fontWeight: "600" }}>
+                                  {t.workingAlone}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
+                        {/* UPFRONT SUMMARY: Always visible */}
                         {event.addonSummary?.length > 0 && (
-                          <div style={styles.addonsRow}>
-                            <Star size={12} fill="#9960a8" color="#9960a8" />
-                            <div style={styles.addonsList}>
-                              {event.addonSummary.map((addon, idx) => (
-                                <span key={idx} style={styles.addonText}>
-                                  {/* Changed format here */}
-                                  {addon.name} ({addon.count})
-                                  {idx < event.addonSummary.length - 1
-                                    ? ", "
-                                    : ""}
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "8px",
+                              marginTop: "12px",
+                            }}
+                          >
+                            {event.addonSummary.map((addon, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  ...styles.addonSummaryPill,
+                                  backgroundColor: "rgba(153, 96, 168, 0.08)",
+                                  border: "1px solid rgba(153, 96, 168, 0.15)",
+                                }}
+                              >
+                                <Star
+                                  size={12}
+                                  fill="#9960a8"
+                                  color="#9960a8"
+                                />
+                                <span
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: "900",
+                                  }}
+                                >
+                                  {addon.name}{" "}
                                 </span>
-                              ))}
-                            </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {/* EXPANDABLE PARTICIPANT PANEL */}
+                        {isExpanded && event.participantGroups?.length > 0 && (
+                          <div style={styles.participantPanel}>
+                            {event.participantGroups.map((group, i) => (
+                              <div
+                                key={i}
+                                style={{
+                                  ...styles.userRowGroup,
+                                  backgroundColor: "rgba(28, 7, 0, 0.02)",
+                                  padding: "8px",
+                                  borderRadius: "12px",
+                                  marginBottom: "4px",
+                                  border: "1px solid rgba(28,7,0,0.05)",
+                                }}
+                              >
+                                <div style={styles.participantGroupHeader}>
+                                  <span
+                                    style={{
+                                      fontWeight: "800",
+                                      color: "#9960a8",
+                                      fontSize: "0.65rem",
+                                    }}
+                                  >
+                                    {group.email}
+                                  </span>
+                                </div>
+                                {group.tickets.map((tk, ti) => (
+                                  <div key={ti} style={styles.participantRow}>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "10px",
+                                        flex: 1,
+                                      }}
+                                    >
+                                      <User size={14} opacity={0.5} />
+                                      <span
+                                        style={{
+                                          fontWeight: "700",
+                                          color: "#1c0700",
+                                          fontSize: "0.9rem",
+                                        }}
+                                      >
+                                        {tk.name}{" "}
+                                        {tk.count > 1 && (
+                                          <span style={{ color: "#9960a8" }}>
+                                            ({tk.count})
+                                          </span>
+                                        )}
+                                      </span>
+                                      {tk.pronouns && (
+                                        <span style={styles.pronounSmallBadge}>
+                                          {formatPronouns(
+                                            tk.pronouns,
+                                            currentLang,
+                                          )}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={styles.ticketAddonList}>
+                                      {tk.addons.map((an, ai) => (
+                                        <span
+                                          key={ai}
+                                          style={styles.addonBadge}
+                                        >
+                                          <Star
+                                            size={10}
+                                            fill="#caaff3"
+                                            color="#caaff3"
+                                          />{" "}
+                                          {an}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -250,7 +495,6 @@ const styles = {
     alignItems: "center",
     gap: "10px",
     color: "#1c0700",
-    fontWeight: isMobile ? "normal" : undefined,
   }),
   courseGroup: { marginBottom: "1.5rem" },
   courseGroupTitle: (isMobile) => ({
@@ -260,16 +504,15 @@ const styles = {
     marginBottom: "0.8rem",
     borderBottom: "1px solid rgba(153, 96, 168, 0.1)",
     paddingBottom: "4px",
-    fontWeight: isMobile ? "normal" : undefined,
   }),
   bookingsList: { display: "flex", flexDirection: "column", gap: "0.8rem" },
   bookingItem: {
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: "1rem",
-    padding: "0.8rem",
+    padding: "1.2rem",
     backgroundColor: "#fffce3",
-    borderRadius: "16px",
+    borderRadius: "20px",
     border: "1px solid rgba(28, 7, 0, 0.05)",
   },
   bookingDateBox: {
@@ -298,52 +541,112 @@ const styles = {
   bookingTitle: (isMobile) => ({
     margin: 0,
     fontFamily: "Satoshi",
-    fontWeight: isMobile ? "500" : "700",
-    fontSize: "0.95rem",
+    fontWeight: "700",
+    fontSize: "1rem",
     color: "#1c0700",
   }),
-  infoRow: { display: "flex", gap: "12px", marginTop: "2px", flexWrap: "wrap" },
+  expandToggle: {
+    background: "none",
+    border: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    cursor: "pointer",
+    color: "#9960a8",
+  },
+  infoRow: {
+    display: "flex",
+    gap: "12px",
+    marginTop: "4px",
+    flexWrap: "wrap",
+    opacity: 0.6,
+  },
   metaItem: {
     display: "flex",
     alignItems: "center",
     gap: "4px",
     fontSize: "0.8rem",
-    opacity: 0.6,
   },
   studentBadge: {
     backgroundColor: "rgba(78, 95, 40, 0.1)",
     color: "#4e5f28",
-    fontSize: "0.65rem",
+    fontSize: "0.7rem",
     fontWeight: "900",
-    padding: "2px 8px",
+    padding: "3px 10px",
     borderRadius: "100px",
     textTransform: "uppercase",
   },
-  addonsRow: {
+
+  addonSummaryPill: {
     display: "flex",
     alignItems: "center",
     gap: "6px",
-    marginTop: "6px",
-    padding: "6px 10px",
-    backgroundColor: "rgba(153, 96, 168, 0.05)",
+    backgroundColor: "rgba(153, 96, 168, 0.08)",
+    padding: "4px 10px",
     borderRadius: "8px",
-    width: "fit-content",
-    border: "1px solid rgba(153, 96, 168, 0.1)",
-  },
-  addonsList: {
-    display: "flex",
-    gap: "8px",
-    flexWrap: "wrap",
-  },
-  addonText: {
     fontSize: "0.75rem",
     fontWeight: "700",
     color: "#9960a8",
+    border: "1px solid rgba(153, 96, 168, 0.1)",
   },
-  row: {
+
+  participantPanel: {
+    marginTop: "1rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    borderTop: "1px dashed rgba(28,7,0,0.1)",
+    paddingTop: "1rem",
+  },
+  participantGroupHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    fontSize: "0.7rem",
+    opacity: 0.6,
+    padding: "0 8px 4px 8px",
+    borderBottom: "1px solid rgba(28,7,0,0.05)",
+    marginBottom: "8px",
+  },
+  participantRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "4px 8px",
+  },
+  groupIndicator: {
+    width: "2px",
+    height: "20px",
+    backgroundColor: "#caaff3",
+    borderRadius: "2px",
+  },
+  ticketAddonList: {
     display: "flex",
     flexDirection: "column",
     gap: "4px",
+    alignItems: "flex-end",
   },
+  addonBadge: {
+    fontSize: "0.6rem",
+    fontWeight: "800",
+    color: "#9960a8",
+    backgroundColor: "rgba(202, 175, 243, 0.12)",
+    padding: "3px 10px",
+    borderRadius: "6px",
+    display: "flex",
+    alignItems: "center",
+    gap: "5px",
+    whiteSpace: "nowrap",
+  },
+  pronounSmallBadge: {
+    backgroundColor: "rgba(153, 96, 168, 0.1)",
+    color: "#9960a8",
+    padding: "1px 6px",
+    borderRadius: "4px",
+    fontSize: "0.6rem",
+    fontWeight: "800",
+    marginLeft: "4px",
+  },
+
+  row: { display: "flex", flexDirection: "column", gap: "4px" },
   emptyState: { padding: "1rem", textAlign: "center" },
 };

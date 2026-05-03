@@ -407,17 +407,42 @@ export default function EventsTab({
 
       const userDetails = await Promise.all(
         event.bookings.map(async (b) => {
-          let baseInfo =
-            b.userId === "GUEST_USER"
-              ? {
-                  firstName: b.guestName || "Guest",
-                  lastName: "(Guest)",
-                  email: b.guestEmail || "Email not found",
-                  isGuest: true,
-                }
-              : (await getDoc(doc(db, "users", b.userId))).exists()
-                ? (await getDoc(doc(db, "users", b.userId))).data()
-                : { firstName: "Unknown", lastName: "User", email: "N/A" };
+          let baseInfo = {
+            firstName: "Unknown",
+            lastName: "User",
+            email: "N/A",
+            pronouns: "",
+          };
+
+          if (b.userId === "GUEST_USER") {
+            baseInfo = {
+              firstName: b.guestName || "Guest",
+              lastName: "(Guest)",
+              email: b.guestEmail || "Email not found",
+              isGuest: true,
+              pronouns: "",
+            };
+          } else {
+            const userSnap = await getDoc(doc(db, "users", b.userId));
+            if (userSnap.exists()) {
+              const fullUserData = userSnap.data();
+              baseInfo = { ...fullUserData };
+
+              // NEW: Resolve pronouns for the specific attendee (main vs sub-profile)
+              if (
+                b.profileId &&
+                b.profileId !== "main" &&
+                fullUserData.linkedProfiles
+              ) {
+                const subProfile = fullUserData.linkedProfiles.find(
+                  (p) => p.id === b.profileId,
+                );
+                if (subProfile) baseInfo.pronouns = subProfile.pronouns || "";
+              } else {
+                baseInfo.pronouns = fullUserData.pronouns || "";
+              }
+            }
+          }
 
           const addonNames = (b.selectedAddons || []).map((item) => {
             const addonId = typeof item === "object" ? item.id : item;
@@ -447,14 +472,19 @@ export default function EventsTab({
             ...u,
             ticketCount: 1,
             tickets: [
-              { name: u.attendeeName || u.firstName, addons: u.addons },
-            ], // Store individual ticket info
+              {
+                name: u.attendeeName || u.firstName,
+                addons: u.addons,
+                pronouns: u.pronouns, // <-- Added
+              },
+            ],
           };
         } else {
           groupedUsersMap[key].ticketCount += 1;
           groupedUsersMap[key].tickets.push({
             name: u.attendeeName || u.firstName,
             addons: u.addons,
+            pronouns: u.pronouns, // <-- Added
           });
         }
       });
@@ -1014,15 +1044,57 @@ export default function EventsTab({
                           />
                         )}
                         <User size={14} opacity={0.5} />
-                        <span
+                        <div
                           style={{
-                            fontWeight: "700",
-                            fontSize: "0.9rem",
-                            color: "#1c0700",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
                           }}
                         >
-                          {t.name}
-                        </span>
+                          <span
+                            style={{
+                              fontWeight: "700",
+                              fontSize: "0.9rem",
+                              color: "#1c0700",
+                            }}
+                          >
+                            {t.name}
+                          </span>
+                          {t.pronouns && (
+                            <span
+                              style={{
+                                backgroundColor: "rgba(153, 96, 168, 0.12)",
+                                color: "#9960a8",
+                                padding: "2px 8px",
+                                borderRadius: "100px",
+                                fontSize: "0.65rem",
+                                fontWeight: "800",
+                                textTransform: "lowercase",
+                                border: "1px solid rgba(153, 96, 168, 0.2)",
+                              }}
+                            >
+                              {(() => {
+                                // Match the labels used in the profile page
+                                const mapping = {
+                                  they:
+                                    currentLang === "de"
+                                      ? "Keine"
+                                      : "They/Them",
+                                  she:
+                                    currentLang === "de"
+                                      ? "Sie/Ihr"
+                                      : "She/Her",
+                                  he:
+                                    currentLang === "de" ? "Er/Ihm" : "He/Him",
+                                };
+                                return t.pronouns
+                                  .split(", ")
+                                  .map((p) => mapping[p.trim()] || p)
+                                  .join(", ");
+                              })()}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {t.addons?.length > 0 && (

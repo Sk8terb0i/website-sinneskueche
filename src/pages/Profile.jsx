@@ -153,22 +153,30 @@ export default function Profile({ currentLang, setCurrentLang }) {
 
         const enriched = await Promise.all(
           rawEvents.map(async (ev) => {
-            let coInstructorNames = [];
+            let fullCoInstructors = [];
+
             if (ev.instructors) {
+              // SCENARIO 1: IDs are already on the event object
               const others = ev.instructors.filter(
                 (id) => id !== currentUser.uid,
               );
-              const names = await Promise.all(
-                otherIds.map(async (id) => {
+              fullCoInstructors = await Promise.all(
+                others.map(async (id) => {
+                  // FIXED: changed otherIds to others
                   const uDoc = await getDoc(doc(db, "users", id));
-                  // CHANGE: Return both first and last name
-                  return uDoc.exists()
-                    ? `${uDoc.data().firstName} ${uDoc.data().lastName}`
-                    : null;
+                  if (uDoc.exists()) {
+                    const d = uDoc.data();
+                    return {
+                      name:
+                        `${d.firstName || ""} ${d.lastName || ""}`.trim() || id,
+                      pronouns: d.pronouns || "",
+                    };
+                  }
+                  return null;
                 }),
               );
-              coInstructorNames = names.filter(Boolean);
             } else {
+              // SCENARIO 2: Find coworkers based on same date and course path
               const othersSnap = await getDocs(
                 query(
                   collection(db, "work_schedule"),
@@ -179,15 +187,27 @@ export default function Profile({ currentLang, setCurrentLang }) {
               const otherIds = othersSnap.docs
                 .map((d) => d.data().userId)
                 .filter((id) => id !== currentUser.uid);
-              const names = await Promise.all(
+
+              fullCoInstructors = await Promise.all(
                 otherIds.map(async (id) => {
                   const uDoc = await getDoc(doc(db, "users", id));
-                  return uDoc.exists() ? uDoc.data().firstName : null;
+                  if (uDoc.exists()) {
+                    const d = uDoc.data();
+                    return {
+                      name:
+                        `${d.firstName || ""} ${d.lastName || ""}`.trim() || id,
+                      pronouns: d.pronouns || "",
+                    };
+                  }
+                  return null;
                 }),
               );
-              coInstructorNames = names.filter(Boolean);
             }
-            return { ...ev, coInstructorNames };
+            // Pass the clean array of objects to the TeachingCard
+            return {
+              ...ev,
+              fullCoInstructors: fullCoInstructors.filter(Boolean),
+            };
           }),
         );
         setTeachingEvents(

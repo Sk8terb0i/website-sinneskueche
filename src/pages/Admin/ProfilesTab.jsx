@@ -571,16 +571,53 @@ export default function ProfilesTab({
                             style={{
                               margin: 0,
                               fontSize: "1.1rem",
-                              fontFamily: "Harmond-SemiBoldCondensed",
+                              fontFamily: "Satoshi",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              flexWrap: "wrap",
                             }}
                           >
                             {u.firstName || "Unnamed"} {u.lastName || ""}
+                            {/* NEW: Pronoun Badge */}
+                            {u.pronouns && (
+                              <span
+                                style={{
+                                  backgroundColor: "rgba(153, 96, 168, 0.12)",
+                                  color: "#9960a8",
+                                  padding: "2px 8px",
+                                  borderRadius: "100px",
+                                  fontSize: "0.6rem",
+                                  fontWeight: "900",
+                                  textTransform: "lowercase",
+                                  border: "1px solid rgba(153, 96, 168, 0.2)",
+                                }}
+                              >
+                                {u.pronouns
+                                  .split(", ")
+                                  .map((p) =>
+                                    p === "they"
+                                      ? currentLang === "de"
+                                        ? "Keine"
+                                        : "They/Them"
+                                      : p === "she"
+                                        ? currentLang === "de"
+                                          ? "Sie/Ihr"
+                                          : "She/Her"
+                                        : p === "he"
+                                          ? currentLang === "de"
+                                            ? "Er/Ihm"
+                                            : "He/Him"
+                                          : p,
+                                  )
+                                  .join(", ")}
+                              </span>
+                            )}
                             {!u.isMain && (
                               <span
                                 style={{
                                   fontSize: "0.6rem",
                                   color: "#9960a8",
-                                  marginLeft: "8px",
                                   backgroundColor: "rgba(255,255,255,0.7)",
                                   padding: "2px 6px",
                                   borderRadius: "4px",
