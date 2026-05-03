@@ -765,18 +765,18 @@ exports.handleStripeWebhook = onRequest(
           let finalName = guestName;
           let userData = null;
           let userRef = null;
+          let promoRef = null;
+          let promoExists = false;
 
+          // ==========================================
+          // PHASE 1: ALL READS (Must happen first!)
+          // ==========================================
           if (promoCode) {
-            const promoRef = db.collection("promo_codes").doc(promoCode);
+            promoRef = db.collection("promo_codes").doc(promoCode);
             const promoSnap = await transaction.get(promoRef);
-            if (promoSnap.exists) {
-              transaction.update(promoRef, {
-                timesUsed: admin.firestore.FieldValue.increment(1),
-              });
-            }
+            promoExists = promoSnap.exists;
           }
 
-          // Fetch User Data so we can manipulate arrays
           if (!isGuest) {
             userRef = db.collection("users").doc(userId);
             const userSnap = await transaction.get(userRef);
@@ -788,80 +788,8 @@ exports.handleStripeWebhook = onRequest(
             }
           }
 
-          // 1. Process Deductions using the explicit flags from the frontend
-          const profileDeductions = {};
-
-          parsedDates.forEach((d) => {
-            const isCreditBooking = d.usedCredit || false;
-            const courseKey = getCleanCourseKey(d.link || coursePath);
-
-            if (isCreditBooking && !isGuest) {
-              const pid = d.profileId || "main";
-              profileDeductions[pid] = profileDeductions[pid] || {};
-              profileDeductions[pid][courseKey] =
-                (profileDeductions[pid][courseKey] || 0) + 1;
-            }
-
-            // Create booking doc
-            transaction.set(db.collection("bookings").doc(), {
-              userId,
-              guestName: isGuest ? guestName : null,
-              guestEmail: isGuest ? email : null,
-              eventId: d.id,
-              date: d.date,
-              attendeeName: d.attendeeName || "Customer",
-              profileId: d.profileId || "main", // <-- NEW: Save profile to booking
-              coursePath: d.link || coursePath,
-              selectedAddons: d.selectedAddons || [],
-              status: "confirmed",
-              lang,
-              usedCredit: isCreditBooking,
-              timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            });
-          });
-
-          // Apply existing credit deductions
-          if (!isGuest && Object.keys(profileDeductions).length > 0) {
-            Object.entries(profileDeductions).forEach(([pid, courses]) => {
-              Object.entries(courses).forEach(([cKey, amount]) => {
-                if (pid === "main") {
-                  userData.credits[cKey] =
-                    (userData.credits[cKey] || 0) - amount;
-                } else {
-                  const linkedIndex = userData.linkedProfiles.findIndex(
-                    (p) => p.id === pid,
-                  );
-                  if (linkedIndex !== -1) {
-                    if (!userData.linkedProfiles[linkedIndex].credits)
-                      userData.linkedProfiles[linkedIndex].credits = {};
-                    userData.linkedProfiles[linkedIndex].credits[cKey] =
-                      (userData.linkedProfiles[linkedIndex].credits[cKey] ||
-                        0) - amount;
-                  }
-                }
-
-                // History Record
-                const historyRef = db.collection("credit_history").doc();
-                transaction.set(historyRef, {
-                  userId,
-                  profileId: pid,
-                  courseKey: cKey,
-                  amount: -amount,
-                  type: "booking",
-                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                });
-              });
-            });
-          }
-
-          // 2. Process Additions (Updated for Multi-Pack Support)
-          let userNetIncrease = 0;
-          let guestNetIncrease = 0;
-          let generatedCode = null;
-          let giftCardsToSend = [];
-
+          let packsToProcess = [];
           if (mode === "pack") {
-            let packsToProcess = [];
             if (Array.isArray(selectedPacksMap)) {
               packsToProcess = selectedPacksMap;
             } else if (isMultiPack && selectedPacksMap) {
@@ -881,30 +809,122 @@ exports.handleStripeWebhook = onRequest(
                 },
               ];
             }
+          }
 
+          const settingsMap = {};
+          for (const sp of packsToProcess) {
+            if (!settingsMap[sp.link]) {
+              const sRef = db
+                .collection("course_settings")
+                .doc(sp.link.replace(/\//g, ""));
+              const sSnap = await transaction.get(sRef);
+              settingsMap[sp.link] = sSnap.exists ? sSnap.data() : {};
+            }
+          }
+
+          // ==========================================
+          // PHASE 2: ALL WRITES
+          // ==========================================
+          if (promoExists) {
+            transaction.update(promoRef, {
+              timesUsed: admin.firestore.FieldValue.increment(1),
+            });
+          }
+
+          const profileDeductions = {};
+          parsedDates.forEach((d) => {
+            const isCreditBooking = d.usedCredit || false;
+            const cKey = getCleanCourseKey(d.link || coursePath);
+
+            if (isCreditBooking && !isGuest) {
+              const pid = d.profileId || "main";
+              profileDeductions[pid] = profileDeductions[pid] || {};
+              profileDeductions[pid][cKey] =
+                (profileDeductions[pid][cKey] || 0) + 1;
+            }
+
+            transaction.set(db.collection("bookings").doc(), {
+              userId,
+              guestName: isGuest ? guestName : null,
+              guestEmail: isGuest ? email : null,
+              eventId: d.id,
+              date: d.date,
+              attendeeName: d.attendeeName || "Customer",
+              profileId: d.profileId || "main",
+              coursePath: d.link || coursePath,
+              selectedAddons: d.selectedAddons || [],
+              status: "confirmed",
+              lang,
+              usedCredit: isCreditBooking,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          });
+
+          if (!isGuest && Object.keys(profileDeductions).length > 0) {
+            Object.entries(profileDeductions).forEach(([pid, courses]) => {
+              Object.entries(courses).forEach(([cKey, amount]) => {
+                if (pid === "main") {
+                  userData.credits[cKey] =
+                    (userData.credits[cKey] || 0) - amount;
+                } else {
+                  const linkedIndex = userData.linkedProfiles.findIndex(
+                    (p) => p.id === pid,
+                  );
+                  if (linkedIndex !== -1) {
+                    if (!userData.linkedProfiles[linkedIndex].credits)
+                      userData.linkedProfiles[linkedIndex].credits = {};
+                    userData.linkedProfiles[linkedIndex].credits[cKey] =
+                      (userData.linkedProfiles[linkedIndex].credits[cKey] ||
+                        0) - amount;
+                  }
+                }
+
+                const historyRef = db.collection("credit_history").doc();
+                transaction.set(historyRef, {
+                  userId,
+                  profileId: pid,
+                  courseKey: cKey,
+                  amount: -amount,
+                  type: "booking",
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+              });
+            });
+          }
+
+          let userNetIncrease = 0;
+          let guestNetIncrease = 0;
+          let generatedCode = null;
+          let giftCardsToSend = [];
+
+          // NEW: Track exactly how many credits guests actually used
+          // so we don't double-subtract from their generated code later.
+          let guestUsedCreditsTracker = {};
+          parsedDates.forEach((d) => {
+            if (d.usedCredit)
+              guestUsedCreditsTracker[d.link] =
+                (guestUsedCreditsTracker[d.link] || 0) + 1;
+          });
+
+          if (mode === "pack") {
             for (const sp of packsToProcess) {
               const link = sp.link;
               const pIdx = sp.packIdx;
               const targetProfileId = sp.profileId || "main";
               const cKey = getCleanCourseKey(link);
+              const sData = settingsMap[link] || {};
 
-              // 1. Get the actual size of this specific pack from settings
-              const settingsSnap = await transaction.get(
-                db.collection("course_settings").doc(link.replace(/\//g, "")),
-              );
-              const sData = settingsSnap.exists ? settingsSnap.data() : {};
-              const packSizeValue = isMultiPack
-                ? sData.packs?.[pIdx]?.size || 0
-                : parseInt(packSize);
+              let packSizeValue = parseInt(packSize || 0);
+              if (isMultiPack) {
+                packSizeValue = parseInt(
+                  sData.packs?.[pIdx]?.size || sData.packSize || 0,
+                );
+              }
 
-              // 2. Deduct bookings specifically for THIS course
-              const courseBookingsCount = parsedDates.filter(
-                (d) => d.link === link,
-              ).length;
-              const courseNetIncrease = Math.max(
-                0,
-                packSizeValue - courseBookingsCount,
-              );
+              // FIXED: We add the FULL pack size here.
+              // Any session that used a credit was already flagged with usedCredit=true
+              // and safely deducted via profileDeductions above!
+              const courseNetIncrease = packSizeValue;
 
               if (sp.isGift) {
                 const code = sp.giftCode || generatePackCode();
@@ -917,7 +937,7 @@ exports.handleStripeWebhook = onRequest(
                   recipientName: sp.recipientName || "Someone",
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
                   redeemedEventIds: parsedDates
-                    .filter((d) => d.link === link)
+                    .filter((d) => d.link === link && d.usedCredit)
                     .map((d) => d.id),
                 });
 
@@ -931,7 +951,6 @@ exports.handleStripeWebhook = onRequest(
                 userNetIncrease += courseNetIncrease;
                 isPackUser = true;
 
-                // Update specific course credits for registered user/profile
                 if (targetProfileId === "main") {
                   userData.credits[cKey] =
                     (userData.credits[cKey] || 0) + courseNetIncrease;
@@ -948,7 +967,6 @@ exports.handleStripeWebhook = onRequest(
                   }
                 }
 
-                // Log History per course
                 const historyRef = db.collection("credit_history").doc();
                 transaction.set(historyRef, {
                   userId,
@@ -959,22 +977,31 @@ exports.handleStripeWebhook = onRequest(
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
               } else if (courseNetIncrease > 0) {
+                // GUEST LOGIC: Guests don't have user profiles, so we must manually
+                // subtract their used credits from the code we generate for them.
+                const availableToSubtract = Math.min(
+                  courseNetIncrease,
+                  guestUsedCreditsTracker[link] || 0,
+                );
+                guestUsedCreditsTracker[link] =
+                  (guestUsedCreditsTracker[link] || 0) - availableToSubtract;
+                const guestNet = courseNetIncrease - availableToSubtract;
+
                 guestNetIncrease += courseNetIncrease;
                 isPackGuest = true;
 
-                // Guest Logic: Create one code per course pack
                 generatedCode = generatePackCode();
                 transaction.set(
                   db.collection("pack_codes").doc(generatedCode),
                   {
                     code: generatedCode,
                     courseKey: cKey,
-                    remainingCredits: courseNetIncrease,
+                    remainingCredits: guestNet, // Give them what's actually left
                     buyerEmail: email,
                     buyerName: guestName,
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     redeemedEventIds: parsedDates
-                      .filter((d) => d.link === link)
+                      .filter((d) => d.link === link && d.usedCredit)
                       .map((d) => d.id),
                   },
                 );
@@ -982,7 +1009,6 @@ exports.handleStripeWebhook = onRequest(
             }
           }
 
-          // 3. Save the modified user document
           if (!isGuest && userRef) {
             transaction.update(userRef, {
               credits: userData.credits,

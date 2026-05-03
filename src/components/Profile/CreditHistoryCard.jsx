@@ -17,16 +17,34 @@ export default function CreditHistoryCard({
     const fetchHistory = async () => {
       setIsLoading(true);
       try {
-        const constraints = [
-          where("userId", "==", userId),
-          orderBy("createdAt", "desc"),
-        ];
+        // 1. Helper to clean up any stray slashes, spaces, or capitals
+        const cleanKey = (key) =>
+          (key || "").replace(/\//g, "").toLowerCase().trim();
 
-        if (courseKey) {
-          constraints.push(where("courseKey", "==", courseKey));
+        const reverseMapping = {
+          "pottery tuesdays": "pottery",
+          "artistic vision": "artistic-vision",
+          "get ink!": "get-ink",
+          "vocal coaching": "singing",
+          "extended voice lab": "extended-voice-lab",
+          "performing words": "performing-words",
+          "singing basics weekend": "singing-basics",
+        };
+
+        const inputKey = cleanKey(courseKey);
+        const targetId = reverseMapping[inputKey] || inputKey;
+
+        const validKeys = new Set([inputKey, targetId]);
+
+        for (const [legacy, id] of Object.entries(reverseMapping)) {
+          if (id === targetId) validKeys.add(cleanKey(legacy));
         }
 
-        const q = query(collection(db, "credit_history"), ...constraints);
+        // 2. Fetch ALL history for this user (NO orderBy to prevent Firebase Index Errors!)
+        const q = query(
+          collection(db, "credit_history"),
+          where("userId", "==", userId),
+        );
         const snap = await getDocs(q);
 
         let fetchedHistory = snap.docs.map((doc) => ({
@@ -34,7 +52,16 @@ export default function CreditHistoryCard({
           ...doc.data(),
         }));
 
-        // Filter locally to ensure backward compatibility with older docs that have no profileId
+        // 3. Filter history locally using our super-clean keys matching BOTH fields
+        if (courseKey) {
+          fetchedHistory = fetchedHistory.filter(
+            (item) =>
+              validKeys.has(cleanKey(item.courseKey)) ||
+              validKeys.has(cleanKey(item.coursePath)),
+          );
+        }
+
+        // 4. Filter locally to ensure backward compatibility with older docs
         if (profileId === "main") {
           fetchedHistory = fetchedHistory.filter(
             (item) => !item.profileId || item.profileId === "main",
@@ -44,6 +71,13 @@ export default function CreditHistoryCard({
             (item) => item.profileId === profileId,
           );
         }
+
+        // 5. SORT LOCALLY: This safely orders everything by date without breaking Firebase
+        fetchedHistory.sort((a, b) => {
+          const timeA = a.createdAt?.seconds || 0;
+          const timeB = b.createdAt?.seconds || 0;
+          return timeB - timeA; // Newest first
+        });
 
         setHistory(fetchedHistory);
       } catch (error) {

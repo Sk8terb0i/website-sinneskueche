@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { ShoppingBag, Loader2, User } from "lucide-react";
+import { ShoppingBag, Loader2, User, PlusCircle, XCircle } from "lucide-react";
 
 export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
-  const [selectedPackData, setSelectedPackData] = useState(null);
+  const [selectedCoursePack, setSelectedCoursePack] = useState("");
+  const [cart, setCart] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState("main");
   const [giftRecipient, setGiftRecipient] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -37,11 +38,45 @@ export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
     }, {});
   }, [packCourses]);
 
-  const handleBuy = async () => {
-    if (!selectedPackData) return;
-    const { course, pack } = selectedPackData;
+  const handleAddToCart = () => {
+    if (!selectedCoursePack) return;
+    const [courseId, packSize] = selectedCoursePack.split("|");
+    const course = packCourses.find((c) => c.id === courseId);
+    const packIdx = course?.packs?.findIndex(
+      (p) => String(p.size) === String(packSize),
+    );
+    const pack = course?.packs?.[packIdx];
     const targetProfile = allProfiles.find((p) => p.id === selectedProfileId);
 
+    if (course && pack) {
+      setCart((prev) => [
+        ...prev,
+        {
+          id: Date.now() + Math.random(),
+          course,
+          pack,
+          packIdx,
+          profileId: selectedProfileId,
+          profileName: targetProfile?.name || "Unknown",
+          isGift: selectedProfileId === "gift",
+          recipientName: giftRecipient,
+        },
+      ]);
+      setGiftRecipient("");
+    }
+  };
+
+  const handleRemoveFromCart = (id) => {
+    setCart((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const totalPrice = cart.reduce(
+    (sum, item) => sum + parseFloat(item.pack.price),
+    0,
+  );
+
+  const handleBuy = async () => {
+    if (cart.length === 0) return;
     setIsProcessing(true);
     const functions = getFunctions();
     const createCheckout = httpsCallable(functions, "createStripeCheckout");
@@ -56,33 +91,68 @@ export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
         return `${origin}${path}${path.endsWith("/") ? "" : "/"}`;
       };
 
-      const isGift = selectedProfileId === "gift";
-      const giftCode = isGift
-        ? Math.random().toString(36).substring(2, 10).toUpperCase()
-        : null;
+      let giftCodes = [];
+      let giftNames = [];
+
+      const modifiedSize = cart.map((item) => {
+        if (item.isGift) {
+          const code = Math.random()
+            .toString(36)
+            .substring(2, 10)
+            .toUpperCase();
+          giftCodes.push(code);
+          giftNames.push(
+            encodeURIComponent(
+              item.recipientName ||
+                (currentLang === "en" ? "Someone" : "Jemanden"),
+            ),
+          );
+          return {
+            link: `/${item.course.id}`,
+            packIdx: item.packIdx,
+            profileId: "guest", // Webhook handles guest assignment if it's a gift code
+            isGift: true,
+            giftCode: code,
+            recipientName:
+              item.recipientName ||
+              (currentLang === "en" ? "Someone" : "Jemanden"),
+          };
+        }
+        return {
+          link: `/${item.course.id}`,
+          packIdx: item.packIdx,
+          profileId: item.profileId,
+          isGift: false,
+          recipientName: "",
+        };
+      });
+
+      const packSummary = cart
+        .map((item) => {
+          const cName =
+            item.course[`name${currentLang === "en" ? "En" : "De"}`] ||
+            item.course.courseName;
+          let suffix = "";
+          if (item.isGift) {
+            suffix = ` [GIFT for ${item.recipientName || (currentLang === "en" ? "Someone" : "Jemanden")}]`;
+          } else if (item.profileId !== "main" && item.profileId !== "guest") {
+            suffix = ` [SUB-PROFILE]`;
+          }
+          return `${item.pack.size} Session Pack (${cName})${suffix}`;
+        })
+        .join(" + ");
 
       const result = await createCheckout({
         mode: "pack",
-        packPrice: parseFloat(pack.price),
-        packSize: isGift
-          ? JSON.stringify([
-              {
-                link: `/${course.id}`,
-                packIdx: course.packs.findIndex((p) => p.size === pack.size),
-                isGift: true,
-                giftCode: giftCode,
-                recipientName: giftRecipient,
-              },
-            ])
-          : parseInt(pack.size),
-        coursePath: `/${course.id}`,
+        packPrice: totalPrice,
+        packSize: JSON.stringify(modifiedSize),
+        packSummary: packSummary,
+        coursePath: `/${cart[0].course.id}`,
         selectedDates: [],
         currentLang: currentLang,
-        profileId: selectedProfileId,
-        profileName: isGift
-          ? `GIFT: ${giftRecipient}`
-          : targetProfile?.name || "Main User",
-        successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}&mode=pack&booked=false${isGift ? `&giftCodes=${giftCode}&giftNames=${encodeURIComponent(giftRecipient)}` : ""}`,
+        profileId: "main",
+        profileName: userData?.firstName || "Main User",
+        successUrl: `${getBaseUrl()}#/success?session_id={CHECKOUT_SESSION_ID}&mode=pack&booked=false${giftCodes.length > 0 ? `&giftCodes=${giftCodes.join(",")}&giftNames=${giftNames.join(",")}` : ""}`,
         cancelUrl: window.location.href,
       });
 
@@ -144,58 +214,111 @@ export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
 
       <div style={styles.row}>
         <select
-          value={
-            selectedPackData
-              ? `${selectedPackData.course.id}|${selectedPackData.pack.size}`
-              : ""
-          }
-          onChange={(e) => {
-            const val = e.target.value;
-            if (!val) {
-              setSelectedPackData(null);
-              return;
-            }
-            const [courseId, packSize] = val.split("|");
-            const course = packCourses.find((c) => c.id === courseId);
-            const pack = course?.packs?.find(
-              (p) => String(p.size) === String(packSize),
-            );
-            setSelectedPackData(course && pack ? { course, pack } : null);
-          }}
+          value={selectedCoursePack}
+          onChange={(e) => setSelectedCoursePack(e.target.value)}
           style={styles.select}
         >
           <option value="">{t.selectCourse || "Select a course"}</option>
           {Object.entries(groupedPacks).map(([courseName, courses]) => (
             <optgroup key={courseName} label={courseName}>
               {courses.map((courseDoc) =>
-                (courseDoc.packs || []).map((p, idx) => (
-                  <option
-                    key={`${courseDoc.id}-${p.size}-${idx}`}
-                    value={`${courseDoc.id}|${p.size}`}
-                  >
-                    {p.size} {currentLang === "de" ? "Paket" : "Pack"} ·{" "}
-                    {p.price} CHF
-                  </option>
-                )),
+                (courseDoc.packs || []).map((p, idx) => {
+                  const dynamicCourseName =
+                    courseDoc[`name${currentLang === "en" ? "En" : "De"}`] ||
+                    courseName;
+                  return (
+                    <option
+                      key={`${courseDoc.id}-${p.size}-${idx}`}
+                      value={`${courseDoc.id}|${p.size}`}
+                    >
+                      {p.size} {currentLang === "de" ? "Paket" : "Pack"} ·{" "}
+                      {dynamicCourseName} · {p.price} CHF
+                    </option>
+                  );
+                }),
               )}
             </optgroup>
           ))}
         </select>
         <button
-          onClick={handleBuy}
-          disabled={!selectedPackData || isProcessing}
+          onClick={handleAddToCart}
+          disabled={
+            !selectedCoursePack ||
+            (selectedProfileId === "gift" && !giftRecipient.trim())
+          }
           style={{
-            ...styles.buyBtn,
-            opacity: !selectedPackData || isProcessing ? 0.7 : 1,
+            ...styles.addBtn,
+            opacity:
+              !selectedCoursePack ||
+              (selectedProfileId === "gift" && !giftRecipient.trim())
+                ? 0.5
+                : 1,
           }}
         >
-          {isProcessing ? (
-            <Loader2 className="spinner" size={18} />
-          ) : (
-            t.buyNow || "Buy Now"
-          )}
+          <PlusCircle size={20} />
+          {currentLang === "en" ? "Add" : "Hinzufügen"}
         </button>
       </div>
+
+      {/* CART SECTION */}
+      {cart.length > 0 && (
+        <div style={styles.cartContainer}>
+          <h4 style={styles.cartTitle}>
+            {currentLang === "en" ? "Selected Packs" : "Ausgewählte Pakete"}
+          </h4>
+          <div style={styles.cartList}>
+            {cart.map((item) => {
+              const cName =
+                item.course[`name${currentLang === "en" ? "En" : "De"}`] ||
+                item.course.courseName;
+              return (
+                <div key={item.id} style={styles.cartItem}>
+                  <div style={styles.cartItemTop}>
+                    <span style={styles.cartItemName}>
+                      {item.pack.size} Session Pack - {cName}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveFromCart(item.id)}
+                      style={styles.removeBtn}
+                    >
+                      <XCircle size={18} />
+                    </button>
+                  </div>
+                  <div style={styles.cartItemDetails}>
+                    <span>
+                      {currentLang === "en" ? "For:" : "Für:"}{" "}
+                      {item.isGift
+                        ? `${currentLang === "en" ? "Gift" : "Geschenk"} (${item.recipientName})`
+                        : item.profileName}
+                    </span>
+                    <span>{item.pack.price} CHF</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={styles.totalRow}>
+            <span>Total:</span>
+            <span>{totalPrice} CHF</span>
+          </div>
+          <button
+            onClick={handleBuy}
+            disabled={isProcessing}
+            style={{
+              ...styles.buyBtn,
+              opacity: isProcessing ? 0.7 : 1,
+              marginTop: "1rem",
+              width: "100%",
+            }}
+          >
+            {isProcessing ? (
+              <Loader2 className="spinner" size={18} />
+            ) : (
+              `${currentLang === "en" ? "Checkout" : "Kaufen"} (${totalPrice} CHF)`
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -245,5 +368,84 @@ const styles = {
     cursor: "pointer",
     width: window.innerWidth < 480 ? "100%" : "auto",
     transition: "opacity 0.2s",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+  },
+  addBtn: {
+    padding: "12px 20px",
+    borderRadius: "12px",
+    border: "1px solid rgba(153, 96, 168, 0.3)",
+    background: "rgba(202, 175, 243, 0.15)",
+    color: "#9960a8",
+    fontWeight: "bold",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
+    transition: "opacity 0.2s",
+  },
+  cartContainer: {
+    marginTop: "1.5rem",
+    borderTop: "1px dashed rgba(28,7,0,0.1)",
+    paddingTop: "1.5rem",
+  },
+  cartTitle: {
+    fontSize: "0.85rem",
+    fontWeight: "900",
+    color: "#9960a8",
+    textTransform: "uppercase",
+    marginBottom: "1rem",
+    marginTop: 0,
+    opacity: 0.8,
+  },
+  cartList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+  cartItem: {
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: "rgba(202, 175, 243, 0.08)",
+    padding: "12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(202, 175, 243, 0.2)",
+    gap: "6px",
+  },
+  cartItemTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  cartItemName: {
+    fontSize: "0.9rem",
+    fontWeight: "800",
+    color: "#1c0700",
+  },
+  removeBtn: {
+    background: "none",
+    border: "none",
+    color: "#1c0700",
+    opacity: 0.4,
+    cursor: "pointer",
+    padding: 0,
+  },
+  cartItemDetails: {
+    display: "flex",
+    justifyContent: "space-between",
+    fontSize: "0.8rem",
+    opacity: 0.8,
+    fontWeight: "600",
+  },
+  totalRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: "1rem",
+    fontSize: "1.1rem",
+    fontWeight: "900",
+    color: "#4e5f28",
   },
 };

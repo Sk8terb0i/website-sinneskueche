@@ -331,7 +331,7 @@ export default function PackStatusCard({
               profileId={viewingProfileId}
               t={{
                 ...t,
-                historyTitle: `${getCourseTitle(`/${selectedHistoryCourse}`)} ${t.credits}`,
+                historyTitle: `${getCourseTitle(selectedHistoryCourse)} ${t.credits}`,
               }}
             />
             <button

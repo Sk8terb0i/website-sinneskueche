@@ -468,23 +468,53 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
       let remainingPackCode = packRemainingCount;
       let usedDatesByProfile = new Set();
 
+      // NEW: Track new packs being bought right now so we can flag them correctly
+      const newPackRemaining = {};
+      if (mode === "pack" && Array.isArray(size)) {
+        size
+          .filter((sp) => !sp.isGift)
+          .forEach((sp) => {
+            const pId = sp.profileId || "guest";
+            if (!newPackRemaining[pId]) newPackRemaining[pId] = {};
+            const packSize = parseInt(
+              pricingMap[sp.link]?.packs?.[sp.packIdx]?.size || 0,
+            );
+            newPackRemaining[pId][sp.link] =
+              (newPackRemaining[pId][sp.link] || 0) + packSize;
+          });
+      }
+
       const expandedDates = selectedDates.flatMap((d) => {
         const courseKey = getCreditKey(d.link || coursePath);
         return (d.attendees || []).map((att, idx) => {
           const pid = att.profileId || "main";
           let useCredit = false;
 
+          const limitOnePerDay = pricing?.limitOnePerDay ?? true;
           const alreadyUsedToday =
             userCreditBookedIds.includes(`${d.date}_${pid}`) ||
             usedDatesByProfile.has(`${d.date}_${pid}`);
 
-          if (!alreadyUsedToday) {
+          let activePackAlreadyUsed = false;
+          if (!alreadyUsedToday && activePackCode) {
+            activePackAlreadyUsed = activePackCode.redeemedEventIds?.includes(
+              d.id,
+            );
+          }
+          const limitApplies =
+            limitOnePerDay && (alreadyUsedToday || activePackAlreadyUsed);
+
+          // Now it accurately flags IF a credit was used (old or new), skipping cash payments
+          if (!limitApplies) {
             if (remainingPackCode > 0) {
               useCredit = true;
               remainingPackCode--;
             } else if (tempCredits[pid]?.[courseKey] > 0) {
               useCredit = true;
               tempCredits[pid][courseKey]--;
+            } else if (newPackRemaining[pid || "guest"]?.[d.link] > 0) {
+              useCredit = true;
+              newPackRemaining[pid || "guest"][d.link]--;
             }
           }
           if (useCredit) usedDatesByProfile.add(`${d.date}_${pid}`);
