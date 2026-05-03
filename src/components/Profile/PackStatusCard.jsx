@@ -21,7 +21,8 @@ export default function PackStatusCard({
     const profiles = [
       {
         id: "main",
-        name: currentLang === "de" ? "Mein Guthaben" : "My Credits",
+        // Show the user's first name, fallback to "Me" / "Ich" if missing
+        name: userData?.firstName || (currentLang === "de" ? "Ich" : "Me"),
         credits: userData?.credits || {},
       },
     ];
@@ -29,7 +30,8 @@ export default function PackStatusCard({
       userData.linkedProfiles.forEach((p) => {
         profiles.push({
           id: p.id,
-          name: `${p.firstName}'s ${currentLang === "de" ? "Guthaben" : "Credits"}`,
+          // Just show the sub-profile's first name
+          name: p.firstName,
           credits: p.credits || {},
         });
       });
@@ -66,20 +68,38 @@ export default function PackStatusCard({
     return key;
   };
 
-  const handleTopUp = async (courseTitleKey, specificPack = null) => {
-    let targetDocId = null;
-    for (const planet of planets) {
-      const found = planet.courses?.find(
-        (c) => c.text.en === courseTitleKey || c.text.de === courseTitleKey,
+  // NEW: Reliably map legacy credit names back to their correct database IDs
+  const resolveCourseId = (courseKey) => {
+    const reverseMapping = {
+      "pottery tuesdays": "pottery",
+      "artistic vision": "artistic-vision",
+      "get ink!": "get-ink",
+      "vocal coaching": "singing",
+      "extended voice lab": "extended-voice-lab",
+      "performing words": "performing-words",
+      "singing basics weekend": "singing-basics",
+    };
+
+    let targetId = reverseMapping[courseKey.toLowerCase()];
+
+    if (!targetId) {
+      const match = packCourses.find(
+        (c) => c.courseName === courseKey || c.nameEn === courseKey,
       );
-      if (found) {
-        targetDocId = found.link.replace(/\//g, "");
-        break;
-      }
+      if (match) targetId = match.id;
     }
 
+    return targetId || courseKey;
+  };
+
+  const handleTopUp = async (courseTitleKey, specificPack = null) => {
+    const targetDocId = resolveCourseId(courseTitleKey);
     const coursePricing = packCourses.find((c) => c.id === targetDocId);
-    if (!coursePricing) return;
+
+    if (!coursePricing) {
+      console.error("Pricing not found for:", targetDocId);
+      return;
+    }
 
     const packToBuy =
       specificPack || (coursePricing.packs ? coursePricing.packs[0] : null);
@@ -112,17 +132,13 @@ export default function PackStatusCard({
   };
 
   const onPlusClick = (courseKey) => {
-    let targetDocId = null;
-    for (const planet of planets) {
-      const found = planet.courses?.find(
-        (c) => c.text.en === courseKey || c.text.de === courseKey,
-      );
-      if (found) {
-        targetDocId = found.link.replace(/\//g, "");
-        break;
-      }
-    }
+    const targetDocId = resolveCourseId(courseKey);
     const coursePricing = packCourses.find((c) => c.id === targetDocId);
+
+    if (!coursePricing) {
+      console.error("Pricing not found for:", targetDocId);
+      return;
+    }
 
     if (coursePricing?.packs?.length > 1) {
       setShowPackPicker({ courseKey, packs: coursePricing.packs });

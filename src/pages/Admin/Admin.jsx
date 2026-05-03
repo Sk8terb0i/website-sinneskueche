@@ -86,7 +86,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
 
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const isMobile = windowWidth < 900;
-  const isCompactNav = windowWidth < 1850;
+  const isCompactNav = windowWidth < 1200;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const ALL_LABELS = {
@@ -1145,14 +1145,14 @@ export default function Admin({ currentLang, setCurrentLang }) {
       ) : (
         <>
           <div
-            className="hide-scrollbar"
+            className="custom-x-scrollbar"
             style={{
               width: "100%",
               overflowX: "auto",
-              paddingBottom: "10px",
+              paddingBottom: "12px", // Slight increase to fit the scrollbar nicely
               marginBottom: "1rem",
               display: "flex",
-              gap: "1.5rem",
+              gap: "clamp(0.5rem, 1.5vw, 1.5rem)", // Responsive gap between groups
             }}
           >
             {visibleGroups.map((group) => {
@@ -1163,12 +1163,13 @@ export default function Admin({ currentLang, setCurrentLang }) {
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: "8px",
+                    gap: "clamp(4px, 0.6vw, 8px)", // Responsive vertical gap
+                    flexShrink: 0, // CRITICAL: Forces tabs to keep their shape and trigger the scrollbar
                   }}
                 >
                   <span
                     style={{
-                      fontSize: "9px",
+                      fontSize: "clamp(8px, 0.7vw, 9px)", // Responsive label font
                       fontWeight: "900",
                       textTransform: "uppercase",
                       opacity: 0.4,
@@ -1182,9 +1183,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
                       ...tabContainerStyle,
                       backgroundColor: "rgba(28, 7, 0, 0.04)",
                       borderRadius: "100px",
-                      padding: "4px",
+                      padding: "clamp(2px, 0.4vw, 4px)", // Responsive padding
                       display: "flex",
-                      gap: "4px",
+                      gap: "clamp(2px, 0.4vw, 4px)", // Responsive gap between buttons
                       border: uniformColor
                         ? `2px solid ${uniformColor}`
                         : "none",
@@ -1208,10 +1209,22 @@ export default function Admin({ currentLang, setCurrentLang }) {
                             color: "#1c0700",
                             display: "flex",
                             alignItems: "center",
-                            gap: "8px",
+                            whiteSpace: "nowrap", // Keep text on one line
+                            gap: "clamp(4px, 0.6vw, 8px)", // Responsive icon gap
+                            padding:
+                              "clamp(6px, 0.8vw, 10px) clamp(10px, 1.2vw, 16px)", // Responsive button padding
+                            fontSize: "clamp(12px, 0.9vw, 14px)", // Responsive button text
                           }}
                         >
-                          {TAB_META[tabKey].icon}{" "}
+                          {/* Force icons to shrink slightly on smaller desktop screens */}
+                          <div
+                            style={{
+                              display: "flex",
+                              transform: "scale(clamp(0.85, 1vw, 1))",
+                            }}
+                          >
+                            {TAB_META[tabKey].icon}
+                          </div>
                           {getTabLabel(tabKey, currentLang)}
                           {tabKey === "rental" && (
                             <TabBadge count={pendingRentalCount} />
@@ -1347,7 +1360,20 @@ export default function Admin({ currentLang, setCurrentLang }) {
         )}
       </div>
 
-      <style>{` @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } .hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } .spinner { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } `}</style>
+      <style>{` 
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } 
+        .hide-scrollbar::-webkit-scrollbar { display: none; } 
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } 
+        
+        /* Custom Horizontal Scrollbar */
+        .custom-x-scrollbar::-webkit-scrollbar { height: 6px; }
+        .custom-x-scrollbar::-webkit-scrollbar-track { background: rgba(28, 7, 0, 0.05); border-radius: 10px; }
+        .custom-x-scrollbar::-webkit-scrollbar-thumb { background: rgba(153, 96, 168, 0.4); border-radius: 10px; }
+        .custom-x-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(153, 96, 168, 0.8); }
+        
+        .spinner { animation: spin 1s linear infinite; } 
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } 
+      `}</style>
     </div>
   );
 }

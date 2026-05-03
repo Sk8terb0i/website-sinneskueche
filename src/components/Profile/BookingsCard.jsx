@@ -202,14 +202,14 @@ export default function BookingsCard({ userId, currentLang, t, userData }) {
 
   const labels = {
     en: {
-      cancelBtn: "cancel booking",
-      policyNote: "cancellations are possible up to 5 days before the start.",
-      confirm: (count) => `confirm cancellation? (+${count} credits)`,
+      cancelBtn: "Cancel booking",
+      policyNote: "Cancellations are possible up to 5 days before the start.",
+      confirm: (count) => `Confirm cancellation? (+${count} credits)`,
     },
     de: {
-      cancelBtn: "termin stornieren",
-      policyNote: "stornierungen sind bis zu 5 tage vor beginn möglich.",
-      confirm: (count) => `stornierung bestätigen? (+${count} guthaben)`,
+      cancelBtn: "Termin stornieren",
+      policyNote: "Stornierungen sind bis zu 5 Tage vor Beginn möglich.",
+      confirm: (count) => `Stornierung bestätigen? (+${count} Guthaben)`,
     },
   }[currentLang];
 

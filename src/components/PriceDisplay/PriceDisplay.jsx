@@ -99,72 +99,72 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   // Thematic palettes: Purple, Olive Green, Sand/Gold, Blue, Rose
   const coursePalettes = [
     {
-      // 1. PURPLE (Theme Primary)
-      base: "#9960a8",
-      light: "rgba(153, 96, 168, 0.25)",
-      addons: [
-        "#4a2c5a", // Deep Plum
-        "#7a4d86", // Rich Orchid
-        "#9960a8", // Base Purple
-        "#b380c2", // Amethyst
-        "#caaff3", // Theme Lilac
-        "#eadaff", // Pastel Lavender
-      ],
-    },
-    {
-      // 2. OLIVE GREEN
+      // 2. OLIVE GREEN - Paired with rich berry, sandy orange, and ocean blue
       base: "#4e5f28",
       light: "rgba(78, 95, 40, 0.25)",
       addons: [
-        "#2a3315", // Deep Forest
-        "#3e4c20", // Moss Green
         "#4e5f28", // Base Olive
-        "#6b7d3f", // Sage
-        "#8ea35c", // Light Willow
-        "#c1cc99", // Misty Tea
+        "#9b2226", // Deep Burgundy
+        "#f4a261", // Sandy Orange
+        "#457b9d", // Ocean Blue
+        "#6d6875", // Muted Plum
+        "#e9d8a6", // Pale Yellow
       ],
     },
     {
-      // 3. SAND / GOLD
+      // 1. PURPLE (Theme Primary) - Paired with warm sunset tones and teal
+      base: "#9960a8",
+      light: "rgba(153, 96, 168, 0.25)",
+      addons: [
+        "#9960a8", // Base Purple
+        "#e76f51", // Terracotta
+        "#e9c46a", // Warm Gold
+        "#2a9d8f", // Deep Teal
+        "#1d3557", // Midnight Navy
+        "#ffb4a2", // Soft Melon
+      ],
+    },
+
+    {
+      // 3. SAND / GOLD - Paired with forest green, brick red, and violet
       base: "#d4a373",
       light: "rgba(212, 163, 115, 0.3)",
       addons: [
-        "#8b6240", // Burnt Umber
-        "#b58455", // Ochre
         "#d4a373", // Base Sand
-        "#e3bc98", // Wheat
-        "#f4e1d2", // Champagne
-        "#fff5e6", // Creamy Nude
+        "#3a5a40", // Hunter Green
+        "#bc4749", // Brick Red
+        "#3d5a80", // Deep Denim Blue
+        "#81b29a", // Soft Sage
+        "#5e548e", // Dusty Violet
       ],
     },
     {
-      // 4. OCEAN BLUE
+      // 4. OCEAN BLUE - Paired with rust, vanilla, and dark olive
       base: "#457b9d",
       light: "rgba(69, 123, 157, 0.25)",
       addons: [
-        "#1d3557", // Midnight Blue
-        "#37627d", // Steel Blue
         "#457b9d", // Base Blue
-        "#6a9ab8", // Sky Blue
-        "#a8dadc", // Glacier Blue
-        "#f1faee", // Pale Frost
+        "#e07a5f", // Rust / Coral
+        "#f2cc8f", // Vanilla
+        "#283618", // Dark Olive
+        "#9c6644", // Warm Brown
+        "#c1121f", // Deep Ruby Red
       ],
     },
     {
-      // 5. ROSE / PEACH
+      // 5. ROSE / PEACH - Paired with deep teal, ochre, and slate
       base: "#e5989b",
       light: "rgba(229, 152, 155, 0.3)",
       addons: [
-        "#a34e52", // Deep Coral
-        "#b87a7c", // Dusty Rose
         "#e5989b", // Base Rose
-        "#eeafb2", // Peach
-        "#ffb4a2", // Salmon
-        "#ffcdb2", // Warm Blush
+        "#006d77", // Deep Teal
+        "#dda15e", // Ochre / Caramel
+        "#8d99ae", // Slate Grey
+        "#582f0e", // Dark Chocolate
+        "#83c5be", // Light Mint
       ],
     },
   ];
-
   const getCoursePalette = (courseLink) => {
     const keys = Object.keys(pricingMap).sort();
     const idx = keys.indexOf(courseLink);

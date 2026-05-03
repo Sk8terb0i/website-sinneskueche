@@ -1624,35 +1624,39 @@ exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
       .where("status", "==", "confirmed")
       .get();
 
+    if (bookingsSnap.empty) continue;
+
+    // NEW: Fetch course settings so we can display the actual names of the Extras
+    const settingsSnap = await db
+      .collection("course_settings")
+      .doc(courseId)
+      .get();
+    const specialEvents = settingsSnap.exists
+      ? settingsSnap.data().specialEvents || []
+      : [];
+
     for (const bDoc of bookingsSnap.docs) {
       const booking = bDoc.data();
       if (booking.reminderSent) continue;
 
-      // 1. Fetch full userData once to allow helper to look up linked profiles
       let userData = null;
       if (booking.userId !== "GUEST_USER") {
         const uSnap = await db.collection("users").doc(booking.userId).get();
         if (uSnap.exists) userData = uSnap.data();
       }
 
-      // 2. Use helper to find who actually gets this specific reminder
-      // This resolves the linked profile email/name or falls back to the main account
       const { email, name } = getAttendeeRecipient(booking, userData);
 
-      // 3. Determine isFirstTimer status
       let isFirstTimer = booking.userId === "GUEST_USER";
       if (userData) {
         const pid = booking.profileId || "main";
-
-        // Check if THIS profile has booked this course before
         const prevBookings = await db
           .collection("bookings")
           .where("userId", "==", booking.userId)
-          .where("profileId", "==", pid) // <-- CRITICAL FIX: Filter by profile
+          .where("profileId", "==", pid)
           .where("coursePath", "==", booking.coursePath)
           .limit(2)
           .get();
-
         isFirstTimer = prevBookings.size <= 1;
       }
 
@@ -1674,34 +1678,55 @@ exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
         "{courseTime}": courseTime,
       };
 
-      let subject = replaceVars(template.subject || "", replacements);
-      let body = replaceVars(template.text || "", replacements);
+      const subject = replaceVars(template.subject || "", replacements);
+
+      // HELPER: Replaces variables AND safely converts line breaks to HTML breaks for emails
+      const safeFormat = (text) =>
+        replaceVars(text || "", replacements).replace(/\n/g, "<br/>");
+
+      // BUILD HTML EMAIL (Mirroring the Admin Preview exactly)
+      let htmlBody = `<div style="font-family: Arial, sans-serif; color: #1c0700; max-width: 600px; margin: 0 auto; background-color: #fffce3; padding: 30px; border-radius: 12px; border: 1px solid #caaff3;">`;
+      htmlBody += `<p style="margin-bottom: 20px; line-height: 1.6;">${safeFormat(template.text)}</p>`;
 
       if (isFirstTimer && template.firstTimerText) {
-        body += "\n\n" + template.firstTimerText;
+        const ftLabel =
+          lang === "de" ? "Info für Neukunden" : "First Timer Info";
+        htmlBody += `<div style="margin-top: 20px; padding: 15px; background-color: rgba(202, 175, 243, 0.2); border-radius: 8px; border: 1px solid #caaff3;">`;
+        htmlBody += `<p style="margin: 0; font-size: 0.9em; line-height: 1.6;"><strong>${ftLabel}:</strong><br/><br/>${safeFormat(template.firstTimerText)}</p></div>`;
       }
 
       if (booking.selectedAddons && Array.isArray(booking.selectedAddons)) {
         const addonTexts = template.addonTexts || {};
         booking.selectedAddons.forEach((addonItem) => {
-          // Extract the ID and the specific booked time slot
           const aid = typeof addonItem === "object" ? addonItem.id : addonItem;
           const aTime = typeof addonItem === "object" ? addonItem.time : "";
 
           if (addonTexts[aid]) {
-            let addonText = addonTexts[aid];
-            // Swap out the variable for the actual time they booked
-            addonText = addonText.replace(/{addonTime}/g, aTime);
-            body += "\n\n" + addonText;
+            let addonText = addonTexts[aid].replace(/{addonTime}/g, aTime);
+
+            // Get the specific name of the extra
+            const def = specialEvents.find(
+              (se) => String(se.id) === String(aid),
+            );
+            const addonName = def
+              ? lang === "de"
+                ? def.nameDe
+                : def.nameEn
+              : aid;
+
+            htmlBody += `<div style="margin-top: 15px; padding: 15px; background-color: rgba(78, 95, 40, 0.1); border-radius: 8px; border: 1px dashed #4e5f28;">`;
+            htmlBody += `<p style="margin: 0; font-size: 0.9em; line-height: 1.6;"><strong>Extra: ${addonName}</strong><br/><br/>${safeFormat(addonText)}</p></div>`;
           }
         });
       }
+
+      htmlBody += `</div>`;
 
       await db.collection("mail").add({
         to: email,
         message: {
           subject,
-          html: `<div style="font-family: Arial; background: #fffce3; padding: 30px; color: #1c0700; border-radius: 12px; border: 1px solid #caaff3;"><div style="white-space: pre-wrap;">${body}</div></div>`,
+          html: htmlBody,
         },
       });
       await bDoc.ref.update({ reminderSent: true });
