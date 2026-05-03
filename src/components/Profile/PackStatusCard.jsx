@@ -1,6 +1,14 @@
 import React, { useState, useMemo } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { Ticket, PlusCircle, Loader2, Info, X, Users } from "lucide-react";
+import {
+  Ticket,
+  PlusCircle,
+  Loader2,
+  Info,
+  X,
+  Users,
+  User,
+} from "lucide-react";
 import CreditHistoryCard from "./CreditHistoryCard";
 import { planets } from "../../data/planets";
 
@@ -171,17 +179,20 @@ export default function PackStatusCard({
         </h2>
 
         {allProfiles.length > 1 && (
-          <select
-            value={viewingProfileId}
-            onChange={(e) => setViewingProfileId(e.target.value)}
-            style={styles.profileSelect}
-          >
-            {allProfiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <User size={16} color="#9960a8" />
+            <select
+              value={viewingProfileId}
+              onChange={(e) => setViewingProfileId(e.target.value)}
+              style={styles.profileSelect}
+            >
+              {allProfiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
       </div>
 
@@ -361,14 +372,16 @@ const styles = {
     opacity: 0.8,
   },
   profileSelect: {
-    padding: "6px 12px",
-    borderRadius: "100px",
-    border: "1px solid rgba(153, 96, 168, 0.3)",
-    background: "rgba(202, 175, 243, 0.1)",
-    color: "#9960a8",
+    padding: "8px 12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(28, 7, 0, 0.1)",
+    background: "#fffce3",
+    color: "#1c0700",
     fontFamily: "Satoshi",
-    fontWeight: "bold",
-    fontSize: "0.85rem",
+    fontWeight: "normal",
+    fontSize: "0.9rem",
+    width: "auto",
+    boxSizing: "border-box",
     outline: "none",
     cursor: "pointer",
   },

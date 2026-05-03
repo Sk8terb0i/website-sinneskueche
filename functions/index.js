@@ -892,13 +892,10 @@ exports.handleStripeWebhook = onRequest(
             });
           }
 
-          let userNetIncrease = 0;
-          let guestNetIncrease = 0;
-          let generatedCode = null;
           let giftCardsToSend = [];
+          let userPacksToSend = [];
+          let guestPacksToSend = [];
 
-          // NEW: Track exactly how many credits guests actually used
-          // so we don't double-subtract from their generated code later.
           let guestUsedCreditsTracker = {};
           parsedDates.forEach((d) => {
             if (d.usedCredit)
@@ -914,6 +911,12 @@ exports.handleStripeWebhook = onRequest(
               const cKey = getCleanCourseKey(link);
               const sData = settingsMap[link] || {};
 
+              // Get the proper translated course name for the email
+              const dynamicCourseName =
+                sData[`name${lang === "en" ? "En" : "De"}`] ||
+                sData.courseName ||
+                cKey;
+
               let packSizeValue = parseInt(packSize || 0);
               if (isMultiPack) {
                 packSizeValue = parseInt(
@@ -921,9 +924,6 @@ exports.handleStripeWebhook = onRequest(
                 );
               }
 
-              // FIXED: We add the FULL pack size here.
-              // Any session that used a credit was already flagged with usedCredit=true
-              // and safely deducted via profileDeductions above!
               const courseNetIncrease = packSizeValue;
 
               if (sp.isGift) {
@@ -943,13 +943,12 @@ exports.handleStripeWebhook = onRequest(
 
                 giftCardsToSend.push({
                   code: code,
-                  courseKey: cKey,
+                  courseKey: dynamicCourseName,
                   packSize: courseNetIncrease,
                   recipientName: sp.recipientName || "Someone",
                 });
               } else if (!isGuest) {
-                userNetIncrease += courseNetIncrease;
-                isPackUser = true;
+                let recipientName = finalName;
 
                 if (targetProfileId === "main") {
                   userData.credits[cKey] =
@@ -964,6 +963,9 @@ exports.handleStripeWebhook = onRequest(
                     userData.linkedProfiles[linkedIndex].credits[cKey] =
                       (userData.linkedProfiles[linkedIndex].credits[cKey] ||
                         0) + courseNetIncrease;
+                    // Grab the sub-user's actual name for the email!
+                    recipientName =
+                      userData.linkedProfiles[linkedIndex].firstName;
                   }
                 }
 
@@ -976,9 +978,17 @@ exports.handleStripeWebhook = onRequest(
                   type: "purchase",
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
+
+                // Queue the specific email to be sent
+                if (courseNetIncrease > 0) {
+                  userPacksToSend.push({
+                    name: recipientName,
+                    courseKey: dynamicCourseName,
+                    packSize: packSizeValue,
+                    netIncrease: courseNetIncrease,
+                  });
+                }
               } else if (courseNetIncrease > 0) {
-                // GUEST LOGIC: Guests don't have user profiles, so we must manually
-                // subtract their used credits from the code we generate for them.
                 const availableToSubtract = Math.min(
                   courseNetIncrease,
                   guestUsedCreditsTracker[link] || 0,
@@ -987,16 +997,13 @@ exports.handleStripeWebhook = onRequest(
                   (guestUsedCreditsTracker[link] || 0) - availableToSubtract;
                 const guestNet = courseNetIncrease - availableToSubtract;
 
-                guestNetIncrease += courseNetIncrease;
-                isPackGuest = true;
-
-                generatedCode = generatePackCode();
+                const generatedCode = generatePackCode();
                 transaction.set(
                   db.collection("pack_codes").doc(generatedCode),
                   {
                     code: generatedCode,
                     courseKey: cKey,
-                    remainingCredits: guestNet, // Give them what's actually left
+                    remainingCredits: guestNet,
                     buyerEmail: email,
                     buyerName: guestName,
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1005,6 +1012,15 @@ exports.handleStripeWebhook = onRequest(
                       .map((d) => d.id),
                   },
                 );
+
+                // Queue the specific guest email
+                guestPacksToSend.push({
+                  name: guestName,
+                  courseKey: dynamicCourseName,
+                  packSize: packSizeValue,
+                  netIncrease: guestNet,
+                  code: generatedCode,
+                });
               }
             }
           }
@@ -1029,17 +1045,16 @@ exports.handleStripeWebhook = onRequest(
             lang,
             isGuest,
             origin,
-            packSize: displayPackSize,
-            userNetIncrease,
-            guestNetIncrease,
-            generatedCode,
-            courseKey: displayPackSize,
             userData,
             giftCards: giftCardsToSend,
+            userPacks: userPacksToSend,
+            guestPacks: guestPacksToSend,
           };
         });
 
+        // 3. SEND ALL QUEUED EMAILS
         if (emailData) {
+          // Send Gift Cards
           if (emailData.giftCards && emailData.giftCards.length > 0) {
             for (const gc of emailData.giftCards) {
               await sendGiftCardEmail(
@@ -1055,31 +1070,40 @@ exports.handleStripeWebhook = onRequest(
             }
           }
 
-          if (emailData.parsedDates.length === 0) {
-            if (isPackUser && emailData.userNetIncrease > 0) {
+          // Send User Pack Receipts
+          if (emailData.userPacks && emailData.userPacks.length > 0) {
+            for (const up of emailData.userPacks) {
               await sendUserPackEmail(
                 null,
                 emailData.email,
-                emailData.finalName,
-                emailData.courseKey,
-                emailData.packSize,
-                emailData.userNetIncrease,
+                up.name,
+                up.courseKey,
+                up.packSize,
+                up.netIncrease,
                 emailData.lang,
               );
-            } else if (isPackGuest && emailData.guestNetIncrease > 0) {
+            }
+          }
+
+          // Send Guest Pack Codes
+          if (emailData.guestPacks && emailData.guestPacks.length > 0) {
+            for (const gp of emailData.guestPacks) {
               await sendGuestPackCodeEmail(
                 null,
                 emailData.email,
-                emailData.finalName,
-                emailData.courseKey,
-                emailData.packSize,
-                emailData.guestNetIncrease,
-                emailData.generatedCode,
+                gp.name,
+                gp.courseKey,
+                gp.packSize,
+                gp.netIncrease,
+                gp.code,
                 emailData.lang,
                 emailData.origin,
               );
             }
-          } else if (emailData.parsedDates.length > 0) {
+          }
+
+          // Send Booking Confirmation (No longer mutually exclusive!)
+          if (emailData.parsedDates.length > 0) {
             await sendBookingEmail(
               null,
               emailData.email,
