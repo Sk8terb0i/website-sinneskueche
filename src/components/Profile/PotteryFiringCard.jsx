@@ -225,7 +225,7 @@ export default function PotteryFiringCard({ currentLang }) {
       codeTaken: "This code is already in use. Please choose another.",
       codeLength: "Code must be exactly 4 characters.",
       requiredFields: "Please fill out all fields.",
-      tab_active: "Queue",
+      tab_active: "Queued",
       tab_ready: "Ready",
       tab_done: "Done",
       adoptTitle: "Adopt a piece",
