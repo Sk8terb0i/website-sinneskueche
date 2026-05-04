@@ -2461,18 +2461,12 @@ export default function BookingSummary({
                           zIndex: 2,
                         }}
                       >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
+                        {isMobile ? (
                           <div
                             style={{
                               display: "flex",
+                              justifyContent: "space-between",
                               alignItems: "center",
-                              gap: "10px",
                             }}
                           >
                             <div
@@ -2480,8 +2474,6 @@ export default function BookingSummary({
                                 display: "flex",
                                 alignItems: "center",
                                 gap: "8px",
-                                fontWeight: "800",
-                                fontSize: "0.9rem",
                               }}
                             >
                               {isPackExpanded ? (
@@ -2489,34 +2481,117 @@ export default function BookingSummary({
                               ) : (
                                 <ChevronUp size={16} color="#9960a8" />
                               )}
-                              <span>
-                                {pack.size}{" "}
-                                {currentLang === "en"
-                                  ? "Session Pack"
-                                  : "er Karte"}
-                              </span>
-                            </div>
-                            {savings > 0 && (
-                              <span
+                              <div
                                 style={{
-                                  fontSize: "0.65rem",
-                                  color: "#9960a8",
-                                  backgroundColor: "rgba(153, 96, 168, 0.15)",
-                                  padding: "2px 8px",
-                                  borderRadius: "100px",
-                                  fontWeight: "900",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "flex-start",
+                                  gap: "4px",
                                 }}
                               >
-                                {currentLang === "en"
-                                  ? `SAVE ${savings}%`
-                                  : `${savings}% ERSPARNIS`}
-                              </span>
-                            )}
+                                <span
+                                  style={{
+                                    fontWeight: "800",
+                                    fontSize: "0.85rem",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {pack.size}{" "}
+                                  {currentLang === "en"
+                                    ? "Session Pack"
+                                    : "er Karte"}
+                                </span>
+                                {savings > 0 && (
+                                  <span
+                                    style={{
+                                      fontSize: "0.6rem",
+                                      color: "#9960a8",
+                                      backgroundColor:
+                                        "rgba(153, 96, 168, 0.15)",
+                                      padding: "2px 8px",
+                                      borderRadius: "100px",
+                                      fontWeight: "900",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {currentLang === "en"
+                                      ? `SAVE ${savings}%`
+                                      : `${savings}% ERSPARNIS`}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <span
+                              style={{
+                                fontWeight: "800",
+                                color: "#4e5f28",
+                                fontSize: "0.95rem",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {pack.price} CHF
+                            </span>
                           </div>
-                          <span style={{ fontWeight: "700", color: "#4e5f28" }}>
-                            {pack.price} CHF
-                          </span>
-                        </div>
+                        ) : (
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "10px",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                  fontWeight: "800",
+                                  fontSize: "0.9rem",
+                                }}
+                              >
+                                {isPackExpanded ? (
+                                  <ChevronDown size={16} color="#9960a8" />
+                                ) : (
+                                  <ChevronUp size={16} color="#9960a8" />
+                                )}
+                                <span>
+                                  {pack.size}{" "}
+                                  {currentLang === "en"
+                                    ? "Session Pack"
+                                    : "er Karte"}
+                                </span>
+                              </div>
+                              {savings > 0 && (
+                                <span
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    color: "#9960a8",
+                                    backgroundColor: "rgba(153, 96, 168, 0.15)",
+                                    padding: "2px 8px",
+                                    borderRadius: "100px",
+                                    fontWeight: "900",
+                                  }}
+                                >
+                                  {currentLang === "en"
+                                    ? `SAVE ${savings}%`
+                                    : `${savings}% ERSPARNIS`}
+                                </span>
+                              )}
+                            </div>
+                            <span
+                              style={{ fontWeight: "700", color: "#4e5f28" }}
+                            >
+                              {pack.price} CHF
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {isPackExpanded && (
@@ -2659,7 +2734,7 @@ export default function BookingSummary({
                                       <span>
                                         {currentLang === "en"
                                           ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} as gift code.`
-                                          : `${pack.size} Guthaben als Geschenkcode.`}
+                                          : `${pack.size} ${pack.size === 1 ? "Kredit" : "Kredite"} als Geschenkcode.`}
                                       </span>
                                     ) : (
                                       (() => {
@@ -2698,23 +2773,33 @@ export default function BookingSummary({
                                         );
                                         const added = pack.size - used;
 
-                                        const creditStrPack =
-                                          pack.size === 1
-                                            ? "credit"
-                                            : "credits";
-                                        const creditStrUsed =
-                                          used === 1 ? "credit" : "credits";
-                                        const creditStrAdded =
-                                          added === 1 ? "credit" : "credits";
+                                        const isGuestProfile =
+                                          !currentUser || prof.id === "guest";
 
                                         if (used === 0) {
+                                          if (isGuestProfile) {
+                                            return currentLang === "en"
+                                              ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} will be sent to you as a code.`
+                                              : `${pack.size} ${pack.size === 1 ? "Kredit" : "Kredite"} ${pack.size === 1 ? "wird" : "werden"} dir als Code zugesendet.`;
+                                          } else {
+                                            return currentLang === "en"
+                                              ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} will be added to your profile balance.`
+                                              : `${pack.size} ${pack.size === 1 ? "Kredit" : "Kredite"} ${pack.size === 1 ? "wird" : "werden"} deinem Profilguthaben hinzugefügt.`;
+                                          }
+                                        } else if (added === 0) {
                                           return currentLang === "en"
-                                            ? `${pack.size} ${creditStrPack} will be added to balance.`
-                                            : `${pack.size} Guthaben werden dem Profil hinzugefügt.`;
+                                            ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"}.`
+                                            : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt.`;
                                         } else {
-                                          return currentLang === "en"
-                                            ? `Uses ${used} for cart. ${added} added to balance.`
-                                            : `Nutzt ${used} für den Warenkorb. ${added} Guthaben hinzugefügt.`;
+                                          if (isGuestProfile) {
+                                            return currentLang === "en"
+                                              ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"} and ${added} will be sent to you as a code.`
+                                              : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt und ${added} ${added === 1 ? "Kredit" : "Kredite"} ${added === 1 ? "wird" : "werden"} dir als Code zugesendet.`;
+                                          } else {
+                                            return currentLang === "en"
+                                              ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"} and ${added} will be added to your profile balance.`
+                                              : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt und ${added} ${added === 1 ? "Kredit" : "Kredite"} ${added === 1 ? "wird" : "werden"} deinem Profilguthaben hinzugefügt.`;
+                                          }
                                         }
                                       })()
                                     )}
