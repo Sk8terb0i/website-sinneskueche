@@ -35,16 +35,18 @@ export default function PersonalInfoCard({
 
   // --- PRONOUN STATES ---
   const [selectedStandard, setSelectedStandard] = useState([]);
-  const [customPronouns, setCustomPronouns] = useState([]);
-  const [customInput, setCustomInput] = useState("");
+  const [stdOverride, setStdOverride] = useState(""); // Holds the "other language" version for They/Them
+  const [customPronouns, setCustomPronouns] = useState([]); // Array of { en: string, de: string }
+  const [customEn, setCustomEn] = useState("");
+  const [customDe, setCustomDe] = useState("");
+  const [isSame, setIsSame] = useState(false);
   const [showCustomInput, setShowCustomInput] = useState(false);
 
   const pronounOptions = [
-    { key: "they", label: currentLang === "de" ? "Keine" : "They/Them" },
-    { key: "she", label: currentLang === "de" ? "Sie/Ihr" : "She/Her" },
-    { key: "he", label: currentLang === "de" ? "Er/Ihm" : "He/Him" },
+    { key: "they", en: "They/Them", de: "Keine" },
+    { key: "she", en: "She/Her", de: "Sie/Ihr" },
+    { key: "he", en: "He/Him", de: "Er/Ihm" },
   ];
-
   // Helper to map keys back to labels for display badges
   const getLabel = (key) =>
     pronounOptions.find((o) => o.key === key)?.label || key;
@@ -111,7 +113,22 @@ export default function PersonalInfoCard({
   const handleUpdateProfile = async () => {
     setIsUpdating(true);
     try {
-      const combined = [...selectedStandard, ...customPronouns].join(", ");
+      const stdParts = selectedStandard.map((key) => {
+        const opt = pronounOptions.find((o) => o.key === key);
+        // Use override if this is the neutral key, otherwise standard
+        const enVal =
+          key === "they" && currentLang === "de" && stdOverride
+            ? stdOverride
+            : opt.en;
+        const deVal =
+          key === "they" && currentLang === "en" && stdOverride
+            ? stdOverride
+            : opt.de;
+        return `${enVal} / ${deVal}`;
+      });
+
+      const customParts = customPronouns.map((p) => `${p.en} / ${p.de}`);
+      const combined = [...stdParts, ...customParts].join(", ");
 
       if (currentIndex === 0) {
         if (editEmail !== userData.email)
@@ -237,51 +254,56 @@ export default function PersonalInfoCard({
             >
               {pronounOptions.map((opt) => {
                 const isSelected = selectedStandard.includes(opt.key);
+                const isNeutral = opt.key === "they";
+
                 return (
-                  <div
-                    key={opt.key}
-                    onClick={() => toggleStandard(opt.key)}
-                    style={{
-                      ...styles.choiceItem,
-                      border: isSelected
-                        ? "1px solid #9960a8"
-                        : "1px solid rgba(28, 7, 0, 0.1)",
-                    }}
-                  >
+                  <div key={opt.key}>
                     <div
+                      onClick={() => toggleStandard(opt.key)}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
+                        ...styles.choiceItem,
+                        border: isSelected
+                          ? "1px solid #9960a8"
+                          : "1px solid rgba(28, 7, 0, 0.1)",
                       }}
                     >
                       <div
                         style={{
-                          width: "20px",
-                          height: "20px",
-                          borderRadius: "6px",
-                          border: `2px solid ${isSelected ? "#9960a8" : "#caaff3"}`,
-                          backgroundColor: isSelected
-                            ? "#9960a8"
-                            : "transparent",
                           display: "flex",
                           alignItems: "center",
-                          justifyContent: "center",
+                          gap: "12px",
                         }}
                       >
-                        {isSelected && (
-                          <Check size={14} color="#fdf8e1" strokeWidth={4} />
-                        )}
+                        {/* ... existing checkbox div ... */}
+                        <span
+                          style={{ fontWeight: isSelected ? "700" : "400" }}
+                        >
+                          {currentLang === "de" ? opt.de : opt.en}
+                        </span>
                       </div>
-                      <span
-                        style={{
-                          fontWeight: isSelected ? "700" : "400",
-                          color: "#1c0700",
-                        }}
-                      >
-                        {opt.label}
-                      </span>
                     </div>
+
+                    {/* Reciprocal Customization for Neutral Pronouns */}
+                    {isSelected && isNeutral && (
+                      <div style={{ marginLeft: "32px", marginTop: "8px" }}>
+                        <label style={{ ...styles.label, fontSize: "0.5rem" }}>
+                          {currentLang === "de"
+                            ? "Englische Version (Standard: They/Them)"
+                            : "German version (Default: Keine)"}
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={
+                            currentLang === "de"
+                              ? "e.g. They/Them..."
+                              : "z.B. xier..."
+                          }
+                          value={stdOverride}
+                          onChange={(e) => setStdOverride(e.target.value)}
+                          style={{ ...styles.input, padding: "8px" }}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -316,12 +338,7 @@ export default function PersonalInfoCard({
               {!showCustomInput ? (
                 <div
                   onClick={() => setShowCustomInput(true)}
-                  style={{
-                    ...styles.choiceItem,
-                    border: "1px dashed #9960a8",
-                    color: "#9960a8",
-                    justifyContent: "center",
-                  }}
+                  style={{ ...styles.choiceItem, border: "1px dashed #9960a8" }}
                 >
                   <Plus size={18} style={{ marginRight: "8px" }} />
                   <span>
@@ -331,39 +348,92 @@ export default function PersonalInfoCard({
                   </span>
                 </div>
               ) : (
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <input
-                    autoFocus
-                    type="text"
-                    placeholder={
-                      currentLang === "de" ? "z.B. xier..." : "e.g. ze..."
-                    }
-                    value={customInput}
-                    onChange={(e) => setCustomInput(e.target.value)}
-                    style={{ ...styles.input, flex: 1 }}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" &&
-                      (e.preventDefault(), handleAddCustom())
-                    }
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCustom}
-                    style={styles.addTagBtn}
-                  >
-                    <Plus size={20} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowCustomInput(false)}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                    padding: "12px",
+                    border: "1px solid rgba(28,7,0,0.1)",
+                    borderRadius: "12px",
+                  }}
+                >
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={styles.label}>English</label>
+                      <input
+                        value={customEn}
+                        onChange={(e) => setCustomEn(e.target.value)}
+                        style={styles.input}
+                      />
+                    </div>
+                    {!isSame && (
+                      <div style={{ flex: 1 }}>
+                        <label style={styles.label}>Deutsch</label>
+                        <input
+                          value={customDe}
+                          onChange={(e) => setCustomDe(e.target.value)}
+                          style={styles.input}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div
+                    onClick={() => setIsSame(!isSame)}
                     style={{
-                      ...styles.addTagBtn,
-                      backgroundColor: "rgba(28,7,0,0.1)",
-                      color: "#1c0700",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      cursor: "pointer",
+                      opacity: 0.7,
                     }}
                   >
-                    <X size={20} />
-                  </button>
+                    <div
+                      style={{
+                        width: 14,
+                        height: 14,
+                        border: "1px solid #9960a8",
+                        borderRadius: 3,
+                        backgroundColor: isSame ? "#9960a8" : "transparent",
+                      }}
+                    >
+                      {isSame && <Check size={12} color="white" />}
+                    </div>
+                    <span style={{ fontSize: "0.7rem" }}>
+                      {currentLang === "de"
+                        ? "Keine Übersetzung"
+                        : "No translation needed"}
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      onClick={() => {
+                        const entry = {
+                          en: customEn,
+                          de: isSame ? customEn : customDe,
+                        };
+                        setCustomPronouns([...customPronouns, entry]);
+                        setCustomEn("");
+                        setCustomDe("");
+                        setIsSame(false);
+                      }}
+                      style={{ ...styles.addTagBtn, flex: 1, padding: "8px" }}
+                    >
+                      {currentLang === "de" ? "Hinzufügen" : "Add"}
+                    </button>
+                    <button
+                      onClick={() => setShowCustomInput(false)}
+                      style={{
+                        ...styles.addTagBtn,
+                        backgroundColor: "#eee",
+                        color: "#000",
+                      }}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
