@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db } from "../../firebase";
-import { updateEmail, updatePassword } from "firebase/auth";
+// Fixed: Added verifyBeforeUpdateEmail and removed deprecated updateEmail
+import { updatePassword, verifyBeforeUpdateEmail } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import {
   User,
@@ -35,8 +36,8 @@ export default function PersonalInfoCard({
 
   // --- PRONOUN STATES ---
   const [selectedStandard, setSelectedStandard] = useState([]);
-  const [stdOverride, setStdOverride] = useState(""); // Holds the "other language" version for They/Them
-  const [customPronouns, setCustomPronouns] = useState([]); // Array of { en: string, de: string }
+  const [stdOverride, setStdOverride] = useState("");
+  const [customPronouns, setCustomPronouns] = useState([]);
   const [customEn, setCustomEn] = useState("");
   const [customDe, setCustomDe] = useState("");
   const [isSame, setIsSame] = useState(false);
@@ -47,11 +48,10 @@ export default function PersonalInfoCard({
     { key: "she", en: "She/Her", de: "Sie/Ihr" },
     { key: "he", en: "He/Him", de: "Er/Ihm" },
   ];
-  // Helper to map keys back to labels for display badges
+
   const getLabel = (key) =>
     pronounOptions.find((o) => o.key === key)?.label || key;
 
-  // Build the array of all profiles
   const linkedProfiles = userData?.linkedProfiles || [];
   const allProfiles = useMemo(
     () => [
@@ -84,9 +84,24 @@ export default function PersonalInfoCard({
         setCustomPronouns([]);
       } else {
         const parts = saved.split(", ").map((p) => p.trim());
-        const standardKeys = ["they", "she", "he"];
-        setSelectedStandard(parts.filter((p) => standardKeys.includes(p)));
-        setCustomPronouns(parts.filter((p) => !standardKeys.includes(p)));
+        const newSelected = [];
+        const newCustom = [];
+
+        parts.forEach((part) => {
+          // Check if this string matches a standard option (e.g., "She/Her / Sie/Ihr")
+          const match = pronounOptions.find(
+            (opt) => `${opt.en} / ${opt.de}` === part,
+          );
+          if (match) {
+            newSelected.push(match.key);
+          } else {
+            // If it doesn't match, it's a custom pronoun; split it back into EN/DE
+            const [en, de] = part.split(" / ");
+            newCustom.push({ en: en || part, de: de || en || part });
+          }
+        });
+        setSelectedStandard(newSelected);
+        setCustomPronouns(newCustom);
       }
       setShowCustomInput(false);
     }
@@ -98,14 +113,6 @@ export default function PersonalInfoCard({
     );
   };
 
-  const handleAddCustom = () => {
-    if (!customInput.trim()) return;
-    if (!customPronouns.includes(customInput.trim())) {
-      setCustomPronouns([...customPronouns, customInput.trim()]);
-    }
-    setCustomInput("");
-  };
-
   const removeCustom = (val) => {
     setCustomPronouns(customPronouns.filter((p) => p !== val));
   };
@@ -115,7 +122,6 @@ export default function PersonalInfoCard({
     try {
       const stdParts = selectedStandard.map((key) => {
         const opt = pronounOptions.find((o) => o.key === key);
-        // Use override if this is the neutral key, otherwise standard
         const enVal =
           key === "they" && currentLang === "de" && stdOverride
             ? stdOverride
@@ -131,13 +137,22 @@ export default function PersonalInfoCard({
       const combined = [...stdParts, ...customParts].join(", ");
 
       if (currentIndex === 0) {
-        if (editEmail !== userData.email)
-          await updateEmail(auth.currentUser, editEmail);
+        // 1. Handle Email Change Securely with verifyBeforeUpdateEmail
+        if (editEmail !== userData.email) {
+          await verifyBeforeUpdateEmail(auth.currentUser, editEmail);
+          alert(
+            currentLang === "de"
+              ? "Bitte bestätige deine neue E-Mail-Adresse über den Link, den wir dir geschickt haben."
+              : "Please confirm your new email via the link sent to your inbox.",
+          );
+        }
+
         if (editPassword) await updatePassword(auth.currentUser, editPassword);
+
+        // 2. Update Firestore (Note: email is omitted here to wait for verification)
         await updateDoc(doc(db, "users", currentUser.uid), {
           firstName: editFirstName,
           lastName: editLastName,
-          email: editEmail,
           phone: editPhone,
           pronouns: combined,
         });
@@ -156,7 +171,15 @@ export default function PersonalInfoCard({
       }
       setIsEditing(false);
     } catch (err) {
-      alert("Error: " + err.message);
+      if (err.code === "auth/requires-recent-login") {
+        alert(
+          currentLang === "de"
+            ? "Bitte logge dich erneut ein, um diese sensible Änderung vorzunehmen."
+            : "Please log in again to make this sensitive change.",
+        );
+      } else {
+        alert("Error: " + err.message);
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -188,7 +211,7 @@ export default function PersonalInfoCard({
             {currentIndex !== 0 && (
               <button
                 onClick={() => {
-                  /* Remove Profile Logic */
+                  /* Remove Profile logic here */
                 }}
                 disabled={isUpdating}
                 style={{ ...styles.iconBtn, color: "#ff4d4d" }}
@@ -244,7 +267,6 @@ export default function PersonalInfoCard({
             </div>
           </div>
 
-          {/* PRONOUN CHOICE LIST WITH CHECKMARKS */}
           <div>
             <label style={styles.label}>
               {currentLang === "de" ? "Pronomen" : "Pronouns"}
@@ -274,7 +296,22 @@ export default function PersonalInfoCard({
                           gap: "12px",
                         }}
                       >
-                        {/* ... existing checkbox div ... */}
+                        <div
+                          style={{
+                            width: 20,
+                            height: 20,
+                            border: "1px solid #9960a8",
+                            borderRadius: "50%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: isSelected
+                              ? "#9960a8"
+                              : "transparent",
+                          }}
+                        >
+                          {isSelected && <Check size={14} color="white" />}
+                        </div>
                         <span
                           style={{ fontWeight: isSelected ? "700" : "400" }}
                         >
@@ -283,7 +320,6 @@ export default function PersonalInfoCard({
                       </div>
                     </div>
 
-                    {/* Reciprocal Customization for Neutral Pronouns */}
                     {isSelected && isNeutral && (
                       <div style={{ marginLeft: "32px", marginTop: "8px" }}>
                         <label style={{ ...styles.label, fontSize: "0.5rem" }}>
@@ -308,7 +344,6 @@ export default function PersonalInfoCard({
                 );
               })}
 
-              {/* Custom Tags List */}
               {customPronouns.length > 0 && (
                 <div
                   style={{
@@ -318,9 +353,9 @@ export default function PersonalInfoCard({
                     margin: "4px 0",
                   }}
                 >
-                  {customPronouns.map((p) => (
-                    <div key={p} style={styles.tag}>
-                      {p}{" "}
+                  {customPronouns.map((p, idx) => (
+                    <div key={idx} style={styles.tag}>
+                      {p.en} / {p.de}{" "}
                       <X
                         size={12}
                         onClick={(e) => {
@@ -334,7 +369,6 @@ export default function PersonalInfoCard({
                 </div>
               )}
 
-              {/* Custom Choice Trigger */}
               {!showCustomInput ? (
                 <div
                   onClick={() => setShowCustomInput(true)}
@@ -448,6 +482,22 @@ export default function PersonalInfoCard({
               style={styles.input}
             />
           </div>
+
+          {/* Fixed: Added Phone Number input field back to the Edit Form */}
+          {currentIndex === 0 && (
+            <div>
+              <label style={styles.label}>
+                {currentLang === "de" ? "Telefonnummer" : "Phone Number"}
+              </label>
+              <input
+                type="tel"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+                style={styles.input}
+                placeholder="+41..."
+              />
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ flexGrow: 1 }}>
@@ -467,7 +517,8 @@ export default function PersonalInfoCard({
               <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                 {currentProfile.pronouns.split(", ").map((p, idx) => (
                   <div key={idx} style={styles.pronounBadge}>
-                    {getLabel(p)}
+                    {/* Splits "EN / DE" and picks the one matching currentLang */}
+                    {p.split(" / ")[currentLang === "de" ? 1 : 0]}
                   </div>
                 ))}
               </div>
