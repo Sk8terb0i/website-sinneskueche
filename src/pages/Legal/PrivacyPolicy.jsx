@@ -35,71 +35,71 @@ export default function PrivacyPolicy({ currentLang, setCurrentLang }) {
 
   const content = {
     en: {
-      title: "privacy policy",
+      title: "Privacy Policy",
       intro:
         "Your privacy is a priority at Sinnesküche. This policy explains how we handle your data when you visit our site or book a course.",
       sections: [
         {
-          t: "1. responsible party",
+          t: "1. Responsible party",
           c: "Responsible for data processing: Atelier Sinnesküche, Sägestrasse 11, 8952 Schlieren, Switzerland. For any questions, contact us at hallo@sinneskueche.ch.",
         },
         {
-          t: "2. data we collect",
+          t: "2. Data we collect",
           c: "When you create a profile, we store your name, email address, and phone number in Firebase (Google Cloud). This data is used exclusively to manage your account and bookings. We do not share this personal profile data with third parties for marketing purposes.",
         },
         {
-          t: "3. payments (stripe)",
+          t: "3. Payments (stripe)",
           c: "Payments are processed via Stripe. To facilitate your booking, necessary data is shared with Stripe. We do not store your credit card details on our servers; Stripe acts as an independent controller for this financial data.",
         },
         {
-          t: "4. communication (brevo)",
+          t: "4. Communication (brevo)",
           c: "We use Brevo to send automated booking confirmations and essential updates. Your email address is shared with Brevo solely for the purpose of delivering these service-related messages.",
         },
         {
-          t: "5. analytics & maps",
+          t: "5. Analytics & maps",
           c: "To improve our website, we use Google Analytics. We also use embedded Google Maps to help you find our location. These services may collect your IP address and use cookies to track usage behavior.",
         },
         {
-          t: "6. data retention",
+          t: "6. Data retention",
           c: "Your profile and associated data will be automatically deleted after 2 years of account inactivity. You may also request deletion at any time.",
         },
         {
-          t: "7. your rights",
+          t: "7. Your rights",
           c: "You have the right to access, correct, or delete your personal data. Please reach out to hallo@sinneskueche.ch to exercise these rights.",
         },
       ],
     },
     de: {
-      title: "datenschutzerklärung",
+      title: "Datenschutzerklärung",
       intro:
         "Ihre Privatsphäre hat bei der Sinnesküche Priorität. Diese Richtlinie erklärt, wie wir mit Ihren Daten umgehen.",
       sections: [
         {
-          t: "1. verantwortliche stelle",
+          t: "1. Verantwortliche Stelle",
           c: "Verantwortlich für die Datenverarbeitung: Atelier Sinnesküche, Sägestrasse 11, 8952 Schlieren, Schweiz. Bei Fragen wenden Sie sich an hallo@sinneskueche.ch.",
         },
         {
-          t: "2. erhobene daten",
+          t: "2. Erhobene Daten",
           c: "Wenn Sie ein Profil erstellen, speichern wir Ihren Namen, Ihre E-Mail-Adresse und Ihre Telefonnummer in Firebase (Google Cloud). Diese Daten werden ausschliesslich zur Verwaltung Ihres Kontos und Ihrer Buchungen verwendet. Wir geben diese Profildaten nicht zu Marketingzwecken an Dritte weiter.",
         },
         {
-          t: "3. zahlungen (stripe)",
+          t: "3. Zahlungen (stripe)",
           c: "Zahlungen werden über Stripe abgewickelt. Zur Durchführung Ihrer Buchung werden notwendige Daten an Stripe übermittelt. Wir speichern keine Kreditkartendaten auf unseren Servern.",
         },
         {
-          t: "4. kommunikation (brevo)",
+          t: "4. Kommunikation (brevo)",
           c: "Wir nutzen Brevo für den Versand automatisierter Buchungsbestätigungen. Ihre E-Mail-Adresse wird ausschliesslich zum Zweck der Zustellung dieser Servicenachrichten an Brevo weitergegeben.",
         },
         {
-          t: "5. analyse & karten",
+          t: "5. Analyse & Karten",
           c: "Zur Verbesserung unserer Website nutzen wir Google Analytics. Zudem verwenden wir Google Maps zur Darstellung unseres Standorts. Diese Dienste können Ihre IP-Adresse erfassen und Cookies zur Analyse verwenden.",
         },
         {
-          t: "6. datenaufbewahrung",
+          t: "6. Datenaufbewahrung",
           c: "Ihr Profil und die damit verbundenen Daten werden nach 2 Jahren Inaktivität automatisch gelöscht. Sie können auch jederzeit eine Löschung beantragen.",
         },
         {
-          t: "7. ihre rechte",
+          t: "7. Ihre Rechte",
           c: "Sie haben das Recht auf Auskunft, Berichtigung oder Löschung Ihrer Daten. Kontaktieren Sie uns hierfür unter hallo@sinneskueche.ch.",
         },
       ],

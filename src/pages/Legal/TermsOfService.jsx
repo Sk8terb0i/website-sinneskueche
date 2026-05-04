@@ -138,8 +138,41 @@ export default function TermsOfService({ currentLang, setCurrentLang }) {
         ) : (
           <>
             <h1 style={styles.title}>
-              {currentLang === "en" ? "terms & conditions" : "agb"}
+              {currentLang === "en" ? "Terms & Conditions" : "AGB"}
             </h1>
+
+            {/* --- LEGAL NOTICE & CONTACT SECTION --- */}
+            <div style={styles.section}>
+              <h2 style={styles.courseTitle}>
+                {currentLang === "en"
+                  ? "Legal Notice & Contact"
+                  : "Impressum & Kontakt"}
+              </h2>
+              <div style={styles.text}>
+                <strong>Luca Koch</strong>
+                <br />
+                Atelier Sinnesküche
+                <br />
+                {currentLang === "en" ? "Sole Proprietorship" : "Einzelfirma"}
+                <br />
+                <br />
+                Sägestrasse 11
+                <br />
+                8952 Schlieren
+                <br />
+                Schweiz
+                <br />
+                <br />
+                <a
+                  href="mailto:salut@sinneskueche.ch"
+                  style={{ color: "inherit", textDecoration: "underline" }}
+                >
+                  salut@sinneskueche.ch
+                </a>
+                <br />
+                079 281 70 75
+              </div>
+            </div>
 
             {allTerms["general"] && (
               <div style={styles.section}>
