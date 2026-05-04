@@ -647,8 +647,13 @@ export default function BookingSummary({
   selectedDates.forEach((d) => {
     const courseKey = getCreditKey(d.link || coursePath);
     const coursePrice = parseFloat(pricingMap[d.link]?.priceSingle || 0);
+
+    const pData = pricingMap[d.link || coursePath];
+    const dynamicName =
+      pData?.[`name${currentLang === "en" ? "En" : "De"}`] || pData?.courseName;
     const title =
-      typeof d.title === "object" ? d.title[currentLang || "en"] : d.title;
+      dynamicName ||
+      (typeof d.title === "object" ? d.title[currentLang || "en"] : d.title);
 
     (d.attendees || []).forEach((att) => {
       const pid = att.profileId;
@@ -1364,8 +1369,64 @@ export default function BookingSummary({
                         {d.count}
                       </span>
                       <button
-                        onClick={() =>
-                          canAddMore &&
+                        onClick={() => {
+                          if (!canAddMore) return;
+
+                          let nextPid = "guest";
+                          let nextName = "";
+
+                          if (currentUser && userData) {
+                            const usedPids = d.attendees.map(
+                              (a) => a.profileId || "guest",
+                            );
+                            if (!usedPids.includes("main")) {
+                              nextPid = "main";
+                              nextName =
+                                `${userData.firstName || ""} ${userData.lastName || ""}`.trim();
+                            } else if (userData.linkedProfiles) {
+                              const availLinked = userData.linkedProfiles.find(
+                                (p) => !usedPids.includes(p.id),
+                              );
+                              if (availLinked) {
+                                nextPid = availLinked.id;
+                                nextName =
+                                  `${availLinked.firstName || ""} ${availLinked.lastName || ""}`.trim();
+                              }
+                            }
+                          }
+
+                          // Compute mandatory addons for the newly selected profile
+                          const evPricing = pricingMap[d.link] || pricing;
+                          const courseSchedule =
+                            scheduleData?.[d.link || coursePath];
+                          const rawAddons =
+                            courseSchedule?.specialAssignments?.[d.id];
+                          const activeAddons = Array.isArray(rawAddons)
+                            ? rawAddons
+                            : rawAddons
+                              ? [rawAddons]
+                              : [];
+                          const history = getProfileHistory(
+                            nextPid === "guest" ? null : nextPid,
+                          );
+
+                          const autoAddons = [];
+                          activeAddons.forEach((aid) => {
+                            const def = evPricing?.specialEvents?.find(
+                              (se) => se.id === aid,
+                            );
+                            if (def?.isMandatory && !history.includes(aid)) {
+                              if (def.timeSlots?.length > 0) {
+                                autoAddons.push({
+                                  id: aid,
+                                  time: `${def.timeSlots[0].startTime}-${def.timeSlots[0].endTime}`,
+                                });
+                              } else {
+                                autoAddons.push(aid);
+                              }
+                            }
+                          });
+
                           setSelectedDates((prev) =>
                             prev.map((item) =>
                               item.id === d.id
@@ -1374,13 +1435,18 @@ export default function BookingSummary({
                                     count: item.count + 1,
                                     attendees: [
                                       ...item.attendees,
-                                      { profileId: null, name: "" },
+                                      {
+                                        profileId:
+                                          nextPid === "guest" ? null : nextPid,
+                                        name: nextName,
+                                        selectedAddons: autoAddons,
+                                      },
                                     ],
                                   }
                                 : item,
                             ),
-                          )
-                        }
+                          );
+                        }}
                         disabled={!canAddMore}
                         style={{
                           border: "none",
@@ -2167,6 +2233,41 @@ export default function BookingSummary({
   );
 
   const renderPackOption = () => {
+    // Calculate sessions needed per profile/link, strictly enforcing the 1-per-day limit
+    const sessionsNeeded = {}; // { profileId: { link: count } }
+    const localUsedDates = new Set();
+
+    selectedDates.forEach((d) => {
+      (d.attendees || []).forEach((att) => {
+        const pid = att.profileId || "guest";
+        const link = d.link || coursePath;
+
+        // Check if the 1-per-day limit applies for this specific date and profile
+        const limitOnePerDay = pricing?.limitOnePerDay ?? true;
+        const alreadyUsedToday =
+          userCreditBookedIds?.includes(`${d.date}_${pid}`) ||
+          localUsedDates.has(`${d.date}_${pid}`);
+
+        let activePackAlreadyUsed = false;
+        if (!alreadyUsedToday && activePackCode) {
+          activePackAlreadyUsed = activePackCode.redeemedEventIds?.includes(
+            d.id,
+          );
+        }
+
+        const limitApplies =
+          limitOnePerDay && (alreadyUsedToday || activePackAlreadyUsed);
+
+        // If the limit applies, they are FORCED to pay cash for this session,
+        // meaning it does NOT consume a credit from their balance or newly selected packs.
+        if (!limitApplies) {
+          if (!sessionsNeeded[pid]) sessionsNeeded[pid] = {};
+          sessionsNeeded[pid][link] = (sessionsNeeded[pid][link] || 0) + 1;
+          localUsedDates.add(`${d.date}_${pid}`);
+        }
+      });
+    });
+
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
         <div
@@ -2520,6 +2621,81 @@ export default function BookingSummary({
                                       </svg>
                                     </div>
                                     {prof.name}
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      fontSize: "0.75rem",
+                                      color: "#4e5f28",
+                                      paddingLeft: "30px",
+                                      fontWeight: "600",
+                                      lineHeight: 1.4,
+                                      marginTop: "-4px",
+                                    }}
+                                  >
+                                    {prof.isGift ? (
+                                      <span>
+                                        {currentLang === "en"
+                                          ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} as gift code.`
+                                          : `${pack.size} Guthaben als Geschenkcode.`}
+                                      </span>
+                                    ) : (
+                                      (() => {
+                                        const needed =
+                                          sessionsNeeded[prof.id]?.[link] || 0;
+                                        const packsInCartForProf =
+                                          selectedPacks.filter(
+                                            (p) =>
+                                              p.link === link &&
+                                              p.profileId === prof.id,
+                                          );
+                                        const pendingCreditsInCart =
+                                          packsInCartForProf.reduce(
+                                            (sum, p) =>
+                                              sum +
+                                              (pricingMap[link]?.packs?.[
+                                                p.packIdx
+                                              ]?.size || 0),
+                                            0,
+                                          );
+
+                                        const existingBal =
+                                          profileBalances[prof.id]?.[
+                                            getCreditKey(link)
+                                          ] || 0;
+                                        const totalAvailable =
+                                          existingBal + pendingCreditsInCart;
+
+                                        const actualNeeds = Math.max(
+                                          0,
+                                          needed - totalAvailable,
+                                        );
+                                        const used = Math.min(
+                                          actualNeeds,
+                                          pack.size,
+                                        );
+                                        const added = pack.size - used;
+
+                                        const creditStrPack =
+                                          pack.size === 1
+                                            ? "credit"
+                                            : "credits";
+                                        const creditStrUsed =
+                                          used === 1 ? "credit" : "credits";
+                                        const creditStrAdded =
+                                          added === 1 ? "credit" : "credits";
+
+                                        if (used === 0) {
+                                          return currentLang === "en"
+                                            ? `${pack.size} ${creditStrPack} will be added to balance.`
+                                            : `${pack.size} Guthaben werden dem Profil hinzugefügt.`;
+                                        } else {
+                                          return currentLang === "en"
+                                            ? `Uses ${used} for cart. ${added} added to balance.`
+                                            : `Nutzt ${used} für den Warenkorb. ${added} Guthaben hinzugefügt.`;
+                                        }
+                                      })()
+                                    )}
                                   </div>
                                 </div>
                               );
@@ -3352,47 +3528,60 @@ export default function BookingSummary({
 
             {/* DYNAMIC BALANCE DISPLAY */}
             {(() => {
-              // 1. Find all unique profile IDs currently in the cart
-              const activeProfileIds = [
-                ...new Set(
-                  selectedDates.flatMap((d) =>
-                    d.attendees.map((a) => a.profileId || "main"),
-                  ),
-                ),
-              ];
+              // 1. Build a strict set of which profile is taking/buying which course
+              const activePairs = new Set();
 
-              // 2. Find unique course keys currently in the cart
-              const activeCourseKeys = [
-                ...new Set(
-                  selectedDates.map((d) => getCreditKey(d.link || coursePath)),
-                ),
-              ];
-
-              // 3. Map those IDs to their specific names and balances for the active courses
-              const relevantBalances = [];
-              activeProfileIds.forEach((pid) => {
-                activeCourseKeys.forEach((courseKey) => {
-                  const bal = profileBalances[pid]?.[courseKey] || 0;
-                  if (bal > 0) {
-                    const name =
-                      pid === "main"
-                        ? userData?.firstName ||
-                          (currentLang === "en" ? "Me" : "Ich")
-                        : userData?.linkedProfiles?.find((lp) => lp.id === pid)
-                            ?.firstName || "User";
-                    const pDataMatch = Object.values(pricingMap).find(
-                      (p) => getCreditKey(p.coursePath || p.link) === courseKey,
-                    );
-                    const courseNameDisplay =
-                      pDataMatch?.courseName || courseKey;
-
-                    relevantBalances.push({
-                      name,
-                      bal,
-                      courseName: courseNameDisplay,
-                    });
+              selectedDates.forEach((d) => {
+                const courseKey = getCreditKey(d.link || coursePath);
+                (d.attendees || []).forEach((a) => {
+                  const pid = a.profileId || "guest";
+                  if (pid !== "guest") {
+                    activePairs.add(`${pid}:::${courseKey}`);
                   }
                 });
+              });
+
+              selectedPacks.forEach((sp) => {
+                if (!sp.isGift) {
+                  const courseKey = getCreditKey(sp.link || coursePath);
+                  const pid = sp.profileId || "guest";
+                  if (pid !== "guest") {
+                    activePairs.add(`${pid}:::${courseKey}`);
+                  }
+                }
+              });
+
+              // 2. Map those exact pairings to their specific balances
+              const relevantBalances = [];
+
+              activePairs.forEach((pair) => {
+                const [pid, courseKey] = pair.split(":::");
+                const bal = profileBalances[pid]?.[courseKey] || 0;
+
+                if (bal > 0) {
+                  const name =
+                    pid === "main"
+                      ? userData?.firstName ||
+                        (currentLang === "en" ? "Me" : "Ich")
+                      : userData?.linkedProfiles?.find((lp) => lp.id === pid)
+                          ?.firstName || "User";
+
+                  const matchedEntry = Object.entries(pricingMap).find(
+                    ([link]) => getCreditKey(link) === courseKey,
+                  );
+                  const pDataMatch = matchedEntry ? matchedEntry[1] : null;
+
+                  const dynamicName =
+                    pDataMatch?.[`name${currentLang === "en" ? "En" : "De"}`];
+                  const courseNameDisplay =
+                    dynamicName || pDataMatch?.courseName || courseKey;
+
+                  relevantBalances.push({
+                    name,
+                    bal,
+                    courseName: courseNameDisplay,
+                  });
+                }
               });
 
               if (relevantBalances.length === 0) return null;
