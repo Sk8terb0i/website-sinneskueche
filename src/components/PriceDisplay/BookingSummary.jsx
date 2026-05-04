@@ -3175,8 +3175,8 @@ export default function BookingSummary({
             }}
           >
             {currentLang === "en"
-              ? `Book with ${totalTicketsSelected} Credits`
-              : `Mit ${totalTicketsSelected} Guthaben buchen`}
+              ? `Book with ${totalTicketsSelected} ${totalTicketsSelected === 1 ? "credit" : "credits"}`
+              : `Mit ${totalTicketsSelected} ${totalTicketsSelected === 1 ? "Kredit" : "Krediten"} buchen`}
           </button>
           <button
             onClick={() => setShowStripeAlternative(!showStripeAlternative)}
