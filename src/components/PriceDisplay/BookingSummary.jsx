@@ -3,6 +3,7 @@ import {
   Ticket,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Loader2,
   Calendar,
   CheckCircle,
@@ -89,6 +90,7 @@ export default function BookingSummary({
   hasBookedBefore = false,
   getAddonColor,
 }) {
+  const [bookingStep, setBookingStep] = useState(1);
   const [isAuthExpanded, setIsAuthExpanded] = useState(false);
   const [uncheckWarning, setUncheckWarning] = useState(null);
   const [isRegistering, setIsRegistering] = useState(false);
@@ -120,6 +122,12 @@ export default function BookingSummary({
   const [showPackInfo, setShowPackInfo] = useState(false);
   const [expandedPacks, setExpandedPacks] = useState({});
   const [giftPrompt, setGiftPrompt] = useState(null);
+
+  useEffect(() => {
+    if (selectedDates.length === 0) {
+      setBookingStep(1);
+    }
+  }, [selectedDates.length]);
 
   useEffect(() => {
     const currentName = currentUser
@@ -186,11 +194,9 @@ export default function BookingSummary({
       }
     };
     fetchAllRelevantTerms();
-  }, [coursePath, selectedDates, selectedPacks]); // Added selectedPacks to dependency array
+  }, [coursePath, selectedDates, selectedPacks]);
 
-  // --- NEW: CART CLEANER ---
-  // If the user's completed status changes, remove those addons from the current selection
-  // to prevent hidden time conflicts or double-booking.
+  // --- CART CLEANER ---
   useEffect(() => {
     if (userData?.completedAddons?.length > 0 && selectedDates.length > 0) {
       setSelectedDates((prev) =>
@@ -209,7 +215,6 @@ export default function BookingSummary({
   }, [userData?.completedAddons, setSelectedDates]);
 
   const validateAndProceed = (actionFn) => {
-    // Only require agreement if at least one of the fetched terms has content for this language
     const hasActualTerms =
       courseTerms &&
       Object.values(courseTerms).some((t) => t[currentLang]?.trim());
@@ -228,7 +233,6 @@ export default function BookingSummary({
     return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : dateStr;
   };
 
-  // Update in BookingSummary.jsx
   const getProfileHistory = (pid) => {
     if (!pid || pid === "guest") return [];
 
@@ -240,7 +244,6 @@ export default function BookingSummary({
       completed = linked?.completedAddons || [];
     }
 
-    // Use optional chaining to prevent crashes
     const alreadyBooked = profileHistoryMap?.[pid]?.addons || [];
 
     return [...new Set([...completed, ...alreadyBooked])];
@@ -267,7 +270,6 @@ export default function BookingSummary({
         const conflict = att?.selectedAddons?.find((a) => {
           const addonId = typeof a === "string" ? a : a.id;
 
-          // Use the helper to check THIS specific attendee's history
           const history = getProfileHistory(att.profileId);
           if (history.includes(addonId)) return false;
 
@@ -283,7 +285,7 @@ export default function BookingSummary({
           setUncheckWarning({
             type: "time_conflict",
             eventId,
-            attendeeIndex, // <-- NEW
+            attendeeIndex,
             addonId: addon.id,
             conflictingName:
               currentLang === "en"
@@ -314,7 +316,7 @@ export default function BookingSummary({
           setUncheckWarning({
             type: "missing_prerequisite",
             eventId,
-            attendeeIndex, // <-- NEW
+            attendeeIndex,
             addonId: addon.id,
             requiredIntroId: addon.requiresIntroId,
           });
@@ -336,7 +338,6 @@ export default function BookingSummary({
         return;
       }
     } else {
-      // Check the history for THIS specific profile ID
       const history = getProfileHistory(att.profileId);
       const isFirstTimerForAddon = !history.includes(addon.id);
 
@@ -395,13 +396,39 @@ export default function BookingSummary({
 
   const hasSelection = selectedDates.length > 0;
 
+  const getAvailableProfiles = () => {
+    const profiles = [];
+    if (currentUser) {
+      profiles.push({
+        id: "main",
+        name: userData?.firstName || (currentLang === "en" ? "Me" : "Ich"),
+      });
+      if (userData?.linkedProfiles) {
+        userData.linkedProfiles.forEach((p) =>
+          profiles.push({ id: p.id, name: p.firstName }),
+        );
+      }
+    } else {
+      profiles.push({
+        id: "guest",
+        name: currentLang === "en" ? "Guest" : "Gast",
+      });
+    }
+    profiles.push({
+      id: "gift",
+      name: currentLang === "en" ? "Buy as a Gift" : "Als Geschenk kaufen",
+      isGift: true,
+    });
+    return profiles;
+  };
+  const availableProfiles = getAvailableProfiles();
+
   // --- CREDIT & PAYMENT LOGIC ---
   const limitOnePerDay = pricing?.limitOnePerDay ?? true;
   let eligibleForCredit = 0;
   let ineligibleForCredit = 0;
   let totalUsableUserCredits = 0;
 
-  // Structure: { profileId: { courseKey: { requested: 0, usedDates: new Set() } } }
   const profileUsage = {};
 
   selectedDates.forEach((d) => {
@@ -410,7 +437,6 @@ export default function BookingSummary({
     (d.attendees || []).forEach((att) => {
       const pid = att.profileId;
       if (!pid) {
-        // Guests with no profile ID are never eligible for credits
         ineligibleForCredit += 1;
       } else {
         if (!profileUsage[pid]) profileUsage[pid] = {};
@@ -419,7 +445,6 @@ export default function BookingSummary({
 
         let alreadyUsedCredit = false;
         if (pid) {
-          // Check if this profile has used a credit on this DATE (not just this event ID)
           alreadyUsedCredit = userCreditBookedIds?.includes(`${d.date}_${pid}`);
         }
 
@@ -427,14 +452,11 @@ export default function BookingSummary({
           alreadyUsedCredit = activePackCode.redeemedEventIds?.includes(d.id);
         }
 
-        // FIXED: Enforce the 1-per-day limit based on HISTORY, regardless of current balance.
-        // This ensures the cash price is correctly applied if a credit was already spent today.
         const hasBalance = (profileBalances[pid]?.[courseKey] || 0) > 0;
         const isBuyingPackForThis = selectedPacks.some(
           (p) => p.link === (d.link || coursePath) && p.profileId === pid,
         );
 
-        // The limit applies if they HAVE credits OR if they have ALREADY used one today
         const hasUsedBefore =
           profileUsage[pid][courseKey].usedDates.has(d.id) || alreadyUsedCredit;
 
@@ -474,10 +496,9 @@ export default function BookingSummary({
   const remainingEligibleToPay = eligibleForCredit - usableCredits;
   const ticketsToPayCash = remainingEligibleToPay + ineligibleForCredit;
 
-  // Calculate the cost for individual sessions, respecting different prices per course
   let totalIndividualCash = 0;
   let remainingPackCodeUses = activePackCode ? totalUsableUserCredits : 0;
-  let calcUsedDates = new Set(); // NEW: Track local usage to enforce limitOnePerDay
+  let calcUsedDates = new Set();
 
   selectedDates.forEach((d) => {
     const courseKey = getCreditKey(d.link || coursePath);
@@ -488,7 +509,6 @@ export default function BookingSummary({
 
       let usedCredit = false;
 
-      // NEW: Enforce limitOnePerDay identical to how eligibleForCredit was calculated
       const alreadyUsedToday =
         userCreditBookedIds?.includes(`${d.date}_${pid}`) ||
         calcUsedDates.has(`${d.date}_${pid}`);
@@ -512,7 +532,7 @@ export default function BookingSummary({
       if (usedCredit) {
         calcUsedDates.add(`${d.date}_${pid}`);
       } else {
-        totalIndividualCash += coursePrice; // Must pay cash
+        totalIndividualCash += coursePrice;
       }
     });
   });
@@ -541,7 +561,7 @@ export default function BookingSummary({
   let addonCashTotal = 0;
   let chargeableAddonCount = 0;
   selectedDates.forEach((d) => {
-    const evPricing = pricingMap[d.link] || pricing; // Lookup correct pricing map
+    const evPricing = pricingMap[d.link] || pricing;
     (d.attendees || []).forEach((att) => {
       if (att.selectedAddons && att.selectedAddons.length > 0) {
         att.selectedAddons.forEach((selAddon) => {
@@ -554,8 +574,8 @@ export default function BookingSummary({
             if (addonDef.freeWithPack && qualifiesForFreeAddon) {
               addonCashTotal += 0;
             } else {
-              addonCashTotal += parseFloat(addonDef.price); // Calculated per attendee
-              chargeableAddonCount++; // Count for the UI text later
+              addonCashTotal += parseFloat(addonDef.price);
+              chargeableAddonCount++;
             }
           }
         });
@@ -575,11 +595,10 @@ export default function BookingSummary({
     return pack;
   });
 
-  // Initialize running totals
   let finalPackPrice = addonCashTotal;
   let extraItemsBreakdown = [];
   let infoSentence = "";
-  const breakdownMap = {}; // MOVED UP
+  const breakdownMap = {};
 
   // 1. Calculate base cost of all selected packs
   selectedPacks.forEach((sp) => {
@@ -600,15 +619,25 @@ export default function BookingSummary({
           price: parseFloat(pack.price || 0),
           isFree: false,
           isPack: true,
+          details: [],
         };
       }
       breakdownMap[packTitle].count++;
+
+      // Now we just use the variable directly!
+      const personName = sp.isGift
+        ? sp.recipientName || (currentLang === "en" ? "Gift" : "Geschenk")
+        : availableProfiles.find((p) => p.id === sp.profileId)?.name ||
+          sp.profileId;
+
+      breakdownMap[packTitle].details.push({
+        person: personName,
+      });
     }
   });
 
   // 2. Track remaining credits for NEW packs being purchased per profile
   const newPackRemaining = {};
-  // FIXED: Filter out gifts so they don't count towards current user's session coverage
   selectedPacks
     .filter((sp) => !sp.isGift)
     .forEach((sp) => {
@@ -621,10 +650,6 @@ export default function BookingSummary({
         (newPackRemaining[pId][sp.link] || 0) + size;
     });
 
-  // 3. Loop through selected sessions to apply coverage
-  // breakdownMap initialized above
-
-  // Re-calculate local temp tracking for the breakdown logic
   const breakdownTempCredits = {};
   let breakdownRemainingPackCodeUses = activePackCode
     ? totalUsableUserCredits
@@ -642,7 +667,7 @@ export default function BookingSummary({
 
   let hasExceededPack = false;
   let hasUncoveredMixedCourse = false;
-  let breakdownUsedDates = new Set(); // NEW: Track local usage for breakdown
+  let breakdownUsedDates = new Set();
 
   selectedDates.forEach((d) => {
     const courseKey = getCreditKey(d.link || coursePath);
@@ -657,10 +682,8 @@ export default function BookingSummary({
 
     (d.attendees || []).forEach((att) => {
       const pid = att.profileId;
-
       let usedCredit = false;
 
-      // NEW: Enforce limitOnePerDay identically to prevent newly bought packs covering restricted days
       const alreadyUsedToday =
         userCreditBookedIds?.includes(`${d.date}_${pid}`) ||
         breakdownUsedDates.has(`${d.date}_${pid}`);
@@ -680,27 +703,52 @@ export default function BookingSummary({
           breakdownTempCredits[pid][courseKey]--;
         } else if (newPackRemaining[pid || "guest"]?.[d.link] > 0) {
           usedCredit = true;
-          newPackRemaining[pid || "guest"][d.link]--; // Covered by NEWLY selected pack for this profile
+          newPackRemaining[pid || "guest"][d.link]--;
         }
       }
 
+      const mapKey = usedCredit ? `${title}_credit` : title;
+
       if (usedCredit) {
         breakdownUsedDates.add(`${d.date}_${pid}`);
-      } else {
-        // Not covered - Charge Single Price
-        finalPackPrice += coursePrice;
 
-        // Check if ANY pack was purchased for this link to decide warning type
+        if (!breakdownMap[mapKey])
+          breakdownMap[mapKey] = {
+            displayName: title,
+            count: 0,
+            price: 0,
+            isFree: false,
+            isCredit: true,
+            details: [],
+          };
+        breakdownMap[mapKey].count++;
+        breakdownMap[mapKey].details.push({
+          date: d.date,
+          time: d.time,
+          person: att.name || (currentLang === "en" ? "Guest" : "Gast"),
+        });
+      } else {
+        finalPackPrice += coursePrice;
         const hasPackForLink = selectedPacks.some((p) => p.link === d.link);
         if (hasPackForLink) hasExceededPack = true;
         else hasUncoveredMixedCourse = true;
 
-        if (!breakdownMap[title])
-          breakdownMap[title] = { count: 0, price: coursePrice, isFree: false };
-        breakdownMap[title].count++;
+        if (!breakdownMap[mapKey])
+          breakdownMap[mapKey] = {
+            displayName: title,
+            count: 0,
+            price: coursePrice,
+            isFree: false,
+            details: [],
+          };
+        breakdownMap[mapKey].count++;
+        breakdownMap[mapKey].details.push({
+          date: d.date,
+          time: d.time,
+          person: att.name || (currentLang === "en" ? "Guest" : "Gast"),
+        });
       }
 
-      // Add-on Price Logic
       const evPricing = pricingMap[d.link] || pricing;
       (att.selectedAddons || []).forEach((selAddon) => {
         const addonId = typeof selAddon === "string" ? selAddon : selAddon.id;
@@ -715,15 +763,38 @@ export default function BookingSummary({
             currentLang === "en" ? addonDef.nameEn : addonDef.nameDe;
           const aPrice = parseFloat(addonDef.price || 0);
 
+          let selectedTime =
+            typeof selAddon === "object" ? selAddon.time : null;
+
           if (!isFree) {
             finalPackPrice += aPrice;
             if (!breakdownMap[aName])
-              breakdownMap[aName] = { count: 0, price: aPrice, isFree: false };
+              breakdownMap[aName] = {
+                count: 0,
+                price: aPrice,
+                isFree: false,
+                details: [],
+              };
             breakdownMap[aName].count++;
+            breakdownMap[aName].details.push({
+              date: d.date,
+              time: selectedTime,
+              person: att.name || (currentLang === "en" ? "Guest" : "Gast"),
+            });
           } else {
             if (!breakdownMap[aName])
-              breakdownMap[aName] = { count: 0, price: 0, isFree: true };
+              breakdownMap[aName] = {
+                count: 0,
+                price: 0,
+                isFree: true,
+                details: [],
+              };
             breakdownMap[aName].count++;
+            breakdownMap[aName].details.push({
+              date: d.date,
+              time: selectedTime,
+              person: att.name || (currentLang === "en" ? "Guest" : "Gast"),
+            });
           }
         }
       });
@@ -731,11 +802,10 @@ export default function BookingSummary({
   });
 
   extraItemsBreakdown = Object.entries(breakdownMap).map(([name, data]) => ({
-    name,
+    name: data.displayName || name,
     ...data,
   }));
 
-  // Construct Sentence
   if (currentLang === "en") {
     if (hasUncoveredMixedCourse)
       infoSentence = "Individual sessions added at single price.";
@@ -775,7 +845,6 @@ export default function BookingSummary({
       if (promoAppliesToSingle) finalTotalPrice = 0;
       if (promoAppliesToPack) finalPackPrice = 0;
     } else if (activePromo.discountType === "amount") {
-      // NEW: Handle specific monetary value refunds for add-ons
       const discount = parseFloat(activePromo.discountValue || 0);
       if (promoAppliesToSingle)
         finalTotalPrice = Math.max(0, finalTotalPrice - discount);
@@ -842,7 +911,6 @@ export default function BookingSummary({
           ""
         ).replace(/\//g, "");
 
-        // NEW: Reject if the code has reached its maximum uses
         if (
           promoData.limitType === "uses" &&
           promoData.timesUsed >= promoData.maxUses
@@ -885,7 +953,7 @@ export default function BookingSummary({
           setActivePackCode({
             code: upperCode,
             remaining: packData.remainingCredits,
-            redeemedEventIds: packData.redeemedEventIds || [], // Track which events this code was used for
+            redeemedEventIds: packData.redeemedEventIds || [],
           });
           setCodeStatus({ loading: false, error: "" });
           return;
@@ -925,7 +993,6 @@ export default function BookingSummary({
   const renderTermsAgreement = () => {
     if (!courseTerms || Object.keys(courseTerms).length === 0) return null;
 
-    // Verify there is at least one section with content to display
     const hasAnyContent = Object.values(courseTerms).some((t) =>
       t[currentLang]?.trim(),
     );
@@ -1128,33 +1195,6 @@ export default function BookingSummary({
     );
   };
 
-  const getAvailableProfiles = () => {
-    const profiles = [];
-    if (currentUser) {
-      profiles.push({
-        id: "main",
-        name: userData?.firstName || (currentLang === "en" ? "Me" : "Ich"),
-      });
-      if (userData?.linkedProfiles) {
-        userData.linkedProfiles.forEach((p) =>
-          profiles.push({ id: p.id, name: p.firstName }),
-        );
-      }
-    } else {
-      profiles.push({
-        id: "guest",
-        name: currentLang === "en" ? "Guest" : "Gast",
-      });
-    }
-    profiles.push({
-      id: "gift",
-      name: currentLang === "en" ? "Buy as a Gift" : "Als Geschenk kaufen",
-      isGift: true,
-    });
-    return profiles;
-  };
-  const availableProfiles = getAvailableProfiles();
-
   const renderSelectionSummary = () => (
     <div
       style={{
@@ -1223,14 +1263,12 @@ export default function BookingSummary({
             const limitOnePerDay = pricing?.limitOnePerDay ?? true;
             const courseKey = getCreditKey(d.link || coursePath);
 
-            // Check if any attendee in this date block is ineligible for credit usage
             const hasIneligibleAttendee = d.attendees.some((att) => {
               const pid = att.profileId || "main";
               const hasUsedTodayInHistory = userCreditBookedIds?.includes(
                 `${d.date}_${pid}`,
               );
 
-              // Only show the alert if they ACTUALLY have credits to use or are buying a pack
               const hasBalance = (profileBalances[pid]?.[courseKey] || 0) > 0;
               const isBuyingPackForThis = selectedPacks.hasOwnProperty(
                 d.link || coursePath,
@@ -1395,7 +1433,6 @@ export default function BookingSummary({
                             }
                           }
 
-                          // Compute mandatory addons for the newly selected profile
                           const evPricing = pricingMap[d.link] || pricing;
                           const courseSchedule =
                             scheduleData?.[d.link || coursePath];
@@ -1481,7 +1518,6 @@ export default function BookingSummary({
                     </button>
                   </div>
                 </div>
-                {/* Attendee & Add-ons List */}
                 <div
                   style={{
                     display: "flex",
@@ -1493,8 +1529,6 @@ export default function BookingSummary({
                 >
                   {d.attendees.map((att, nameIdx) => {
                     const isMultiple = d.attendees.length > 1;
-
-                    // UPDATED: Resolve schedule specifically for this date's course link
                     const courseSchedule = scheduleData?.[d.link || coursePath];
                     const rawAddons =
                       courseSchedule?.specialAssignments?.[d.id];
@@ -1504,7 +1538,7 @@ export default function BookingSummary({
                       : rawAddons
                         ? [rawAddons]
                         : [];
-                    const attHistory = getProfileHistory(att.profileId); // Fetch history for this specific person
+                    const attHistory = getProfileHistory(att.profileId);
 
                     const evPricing = pricingMap[d.link] || pricing;
                     const visibleAddons = (
@@ -1512,14 +1546,11 @@ export default function BookingSummary({
                     ).filter((se) => {
                       const isAssigned = assignedAddonIds.includes(se.id);
                       const isAlreadyDone = attHistory.includes(se.id);
-
-                      // Hide if it's mandatory OR a prerequisite for something else, AND they've already done it
                       const isPrerequisite = evPricing?.specialEvents?.some(
                         (other) => other.requiresIntroId === se.id,
                       );
                       const hideBecauseDone =
                         isAlreadyDone && (se.isMandatory || isPrerequisite);
-
                       return isAssigned && !hideBecauseDone;
                     });
 
@@ -1543,7 +1574,6 @@ export default function BookingSummary({
                               : "none",
                         }}
                       >
-                        {/* Attendee Identity Select/Input */}
                         {isMultiple && (
                           <label
                             style={{
@@ -1569,7 +1599,6 @@ export default function BookingSummary({
                                 let targetName = "";
                                 let targetProfileId = val;
 
-                                // 1. Resolve Identity based on selection
                                 if (val === "guest") {
                                   targetName = "";
                                   targetProfileId = null;
@@ -1583,7 +1612,6 @@ export default function BookingSummary({
                                   targetName = `${linked.firstName} ${linked.lastName}`;
                                 }
 
-                                // 2. Calculate mandatory addons specifically for THIS person
                                 const history =
                                   getProfileHistory(targetProfileId);
                                 const rawAddons =
@@ -1617,12 +1645,10 @@ export default function BookingSummary({
                                   }
                                 });
 
-                                // 3. MERGE logic: Keep existing manual addons if the new person hasn't done them
                                 const currentManualAddons = (
                                   att.selectedAddons || []
                                 ).filter((a) => {
                                   const aid = typeof a === "string" ? a : a.id;
-                                  // Keep it if it's NOT already in the new mandatory list AND the person hasn't done it before
                                   const isMandatoryNow =
                                     mandatoryForThisPerson.some(
                                       (m) =>
@@ -1634,7 +1660,6 @@ export default function BookingSummary({
                                   );
                                 });
 
-                                // 4. Update the attendee with merged list
                                 updatedAttendees[nameIdx] = {
                                   ...att,
                                   profileId: targetProfileId,
@@ -1715,7 +1740,6 @@ export default function BookingSummary({
                           />
                         )}
 
-                        {/* Attendee-Specific Add-ons */}
                         {visibleAddons.length > 0 && (
                           <div style={{ marginTop: "4px" }}>
                             <div
@@ -1755,9 +1779,9 @@ export default function BookingSummary({
                                   : "Verfügbare Extras"}
                               </p>
                               {isAddonsExpanded ? (
-                                <ChevronUp size={14} color="#9960a8" />
-                              ) : (
                                 <ChevronDown size={14} color="#9960a8" />
+                              ) : (
+                                <ChevronUp size={14} color="#9960a8" />
                               )}
                             </div>
 
@@ -2096,7 +2120,6 @@ export default function BookingSummary({
             );
           })}
 
-          {/* RENDER NEWLY ADDED PACKS IN THE CART */}
           {selectedPacks.length > 0 && (
             <div
               style={{
@@ -2233,8 +2256,7 @@ export default function BookingSummary({
   );
 
   const renderPackOption = () => {
-    // Calculate sessions needed per profile/link, strictly enforcing the 1-per-day limit
-    const sessionsNeeded = {}; // { profileId: { link: count } }
+    const sessionsNeeded = {};
     const localUsedDates = new Set();
 
     selectedDates.forEach((d) => {
@@ -2242,7 +2264,6 @@ export default function BookingSummary({
         const pid = att.profileId || "guest";
         const link = d.link || coursePath;
 
-        // Check if the 1-per-day limit applies for this specific date and profile
         const limitOnePerDay = pricing?.limitOnePerDay ?? true;
         const alreadyUsedToday =
           userCreditBookedIds?.includes(`${d.date}_${pid}`) ||
@@ -2258,8 +2279,6 @@ export default function BookingSummary({
         const limitApplies =
           limitOnePerDay && (alreadyUsedToday || activePackAlreadyUsed);
 
-        // If the limit applies, they are FORCED to pay cash for this session,
-        // meaning it does NOT consume a credit from their balance or newly selected packs.
         if (!limitApplies) {
           if (!sessionsNeeded[pid]) sessionsNeeded[pid] = {};
           sessionsNeeded[pid][link] = (sessionsNeeded[pid][link] || 0) + 1;
@@ -2321,7 +2340,6 @@ export default function BookingSummary({
 
             const hasPackForCourse = selectedPacks.some((p) => p.link === link);
 
-            // Dynamic single session logic
             const sessionsForThisCourse = selectedDates
               .filter((d) => (d.link || coursePath) === link)
               .reduce((acc, d) => acc + (d.attendees?.length || 1), 0);
@@ -2360,7 +2378,6 @@ export default function BookingSummary({
                   {courseName}
                 </div>
 
-                {/* SINGLE SESSION BUTTON */}
                 <div
                   onClick={() =>
                     setSelectedPacks((prev) =>
@@ -2454,8 +2471,8 @@ export default function BookingSummary({
                           <div
                             style={{
                               display: "flex",
-                              flexDirection: "column",
-                              gap: "2px",
+                              alignItems: "center",
+                              gap: "10px",
                             }}
                           >
                             <div
@@ -2468,20 +2485,25 @@ export default function BookingSummary({
                               }}
                             >
                               {isPackExpanded ? (
-                                <ChevronUp size={16} color="#9960a8" />
-                              ) : (
                                 <ChevronDown size={16} color="#9960a8" />
+                              ) : (
+                                <ChevronUp size={16} color="#9960a8" />
                               )}
-                              {pack.size}{" "}
-                              {currentLang === "en"
-                                ? "Session Pack"
-                                : "er Karte"}
+                              <span>
+                                {pack.size}{" "}
+                                {currentLang === "en"
+                                  ? "Session Pack"
+                                  : "er Karte"}
+                              </span>
                             </div>
                             {savings > 0 && (
                               <span
                                 style={{
-                                  fontSize: "0.6rem",
+                                  fontSize: "0.65rem",
                                   color: "#9960a8",
+                                  backgroundColor: "rgba(153, 96, 168, 0.15)",
+                                  padding: "2px 8px",
+                                  borderRadius: "100px",
                                   fontWeight: "900",
                                 }}
                               >
@@ -2710,73 +2732,130 @@ export default function BookingSummary({
             );
           })}
 
-        {/* Itemized Extra Charges Breakdown */}
         {extraItemsBreakdown.length > 0 && (
           <div
             style={{
               marginTop: "10px",
-              padding: "12px",
-              backgroundColor: "rgba(28, 7, 0, 0.05)",
-              borderRadius: "12px",
+              padding: "16px",
+              backgroundColor: "rgba(28, 7, 0, 0.03)",
+              borderRadius: "16px",
+              border: "1px solid rgba(28, 7, 0, 0.08)",
               display: "flex",
               flexDirection: "column",
-              gap: "8px",
+              gap: "10px",
             }}
           >
-            {extraItemsBreakdown.map((item, bIdx) => (
-              <p
-                key={bIdx}
-                style={{
-                  margin: 0,
-                  fontWeight: "700",
-                  fontSize: "0.7rem",
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span>
-                  + {item.count}{" "}
-                  {item.isPack
-                    ? "x"
-                    : currentLang === "en"
-                      ? item.count === 1
-                        ? "session"
-                        : "sessions"
-                      : "Termin(e)"}{" "}
-                  {item.name}
-                </span>
-                <span style={{ opacity: 0.5 }}>
-                  {item.isFree ? "FREE" : `+ ${item.price} CHF`}
-                </span>
-              </p>
-            ))}
-            <p
+            <h4
               style={{
-                margin: "4px 0 0 0",
-                fontSize: "0.65rem",
-                fontStyle: "italic",
-                opacity: 0.6,
+                margin: "0",
+                fontSize: "0.85rem",
+                color: "#1c0700",
+                opacity: 0.9,
+                borderBottom: "1px solid rgba(28,7,0,0.1)",
+                paddingBottom: "8px",
               }}
             >
-              {infoSentence}
-            </p>
+              {currentLang === "en" ? "Receipt Summary" : "Buchungsdetails"}
+            </h4>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+            >
+              {extraItemsBreakdown.map((item, bIdx) => (
+                <div
+                  key={bIdx}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontWeight: "800",
+                      fontSize: "0.75rem",
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span>
+                      {item.count}{" "}
+                      {item.isPack
+                        ? "x"
+                        : currentLang === "en"
+                          ? item.count === 1
+                            ? "Session"
+                            : "Sessions"
+                          : item.count === 1
+                            ? "Termin"
+                            : "Termine"}{" "}
+                      {item.name}
+                    </span>
+                    <span style={{ opacity: 0.8, color: "#4e5f28" }}>
+                      {item.isCredit
+                        ? currentLang === "en"
+                          ? "Paid with credit"
+                          : "Mit Guthaben bezahlt"
+                        : item.isFree
+                          ? "FREE"
+                          : `+ ${formatPrice(item.price * item.count)} CHF`}
+                    </span>
+                  </p>
+                  {item.details && item.details.length > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "3px",
+                        paddingLeft: "8px",
+                        borderLeft: "2px solid rgba(153, 96, 168, 0.3)",
+                        marginLeft: "4px",
+                      }}
+                    >
+                      {item.details.map((det, dIdx) => (
+                        <span
+                          key={dIdx}
+                          style={{
+                            fontSize: "0.65rem",
+                            opacity: 0.7,
+                            color: "#1c0700",
+                          }}
+                        >
+                          <span style={{ fontWeight: "700" }}>
+                            {det.person}
+                          </span>
+                          {det.date
+                            ? ` | ${formatDate(det.date)}${det.time ? ` ${det.time}` : ""}`
+                            : ""}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {infoSentence && (
+              <p
+                style={{
+                  margin: "4px 0 0 0",
+                  fontSize: "0.65rem",
+                  fontStyle: "italic",
+                  opacity: 0.6,
+                  borderTop: "1px dashed rgba(28,7,0,0.1)",
+                  paddingTop: "10px",
+                }}
+              >
+                {infoSentence}
+              </p>
+            )}
           </div>
         )}
       </div>
     );
   };
 
-  const renderPurchaseOptions = () => (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "1rem",
-        marginTop: "0.5rem",
-      }}
-    >
-      {!currentUser && renderSelectionSummary()}
-
+  const renderPurchaseOptionsContent = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <div
         style={{
           backgroundColor: "rgba(202, 175, 243, 0.1)",
@@ -2958,29 +3037,109 @@ export default function BookingSummary({
               validateAndProceed(() => onPayment("redeem", activePackCode.code))
             }
             style={{ ...S.primaryBtnStyle(isMobile), marginTop: "10px" }}
-            disabled={
-              (!currentUser && (!guestInfo.firstName || !guestInfo.email)) ||
-              !hasSelection
-            }
           >
             {currentLang === "en"
               ? "Redeem Code & Book"
               : "Code einlösen & Buchen"}
           </button>
         </div>
+      ) : coversEntirely && !activePackCode ? (
+        <>
+          {renderTermsAgreement()}
+          <button
+            onClick={() => validateAndProceed(onBookCredits)}
+            style={{
+              ...S.creditBtnStyle(isMobile),
+              padding: "14px",
+              marginTop: "10px",
+            }}
+          >
+            {currentLang === "en"
+              ? `Book with ${totalTicketsSelected} Credits`
+              : `Mit ${totalTicketsSelected} Guthaben buchen`}
+          </button>
+          <button
+            onClick={() => setShowStripeAlternative(!showStripeAlternative)}
+            style={{
+              background: "none",
+              border: "none",
+              textDecoration: "underline",
+              color: "#4e5f28",
+              cursor: "pointer",
+              fontSize: "0.8rem",
+              textAlign: "left",
+              padding: "4px 0",
+            }}
+          >
+            {currentLang === "en"
+              ? "Or pay with card"
+              : "Oder mit Karte zahlen"}
+          </button>
+          {showStripeAlternative && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "1.2rem",
+                marginTop: "1.5rem",
+              }}
+            >
+              {renderPackOption()}
+              {renderTermsAgreement()}
+              <button
+                onClick={() =>
+                  validateAndProceed(() => {
+                    const packCount = selectedPacks.length;
+                    if (packCount > 0) {
+                      onPayment(
+                        "pack",
+                        promoAppliesToPack ? activePromo?.code : null,
+                        selectedPacks,
+                        finalPackPrice,
+                        usableCredits,
+                        activePackCode,
+                      );
+                    } else {
+                      onPayment(
+                        "individual",
+                        promoAppliesToSingle ? activePromo?.code : null,
+                        totalTicketsSelected,
+                        finalTotalPrice,
+                        usableCredits,
+                        activePackCode,
+                      );
+                    }
+                  })
+                }
+                style={{ ...S.primaryBtnStyle(isMobile) }}
+              >
+                {(() => {
+                  const price = formatPrice(
+                    selectedPacks.length > 0 ? finalPackPrice : finalTotalPrice,
+                  );
+                  const creditText =
+                    usableCredits > 0
+                      ? `${usableCredits} ${currentLang === "en" ? (usableCredits === 1 ? "Credit" : "Credits") : "Guthaben"} + `
+                      : "";
+                  return currentLang === "en"
+                    ? `Buy & Book (${creditText}${price} CHF)`
+                    : `Kaufen & Buchen (${creditText}${price} CHF)`;
+                })()}
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             gap: "1.2rem",
-            marginTop: "1.5rem",
+            marginTop: "0.5rem",
           }}
         >
-          {/* Renders the grouped packs for all courses */}
           {renderPackOption()}
           {renderTermsAgreement()}
-
           <button
             onClick={() =>
               validateAndProceed(() => {
@@ -3006,18 +3165,7 @@ export default function BookingSummary({
                 }
               })
             }
-            style={{
-              ...S.primaryBtnStyle(isMobile),
-              opacity:
-                (!hasSelection && selectedPacks.length === 0) ||
-                (!currentUser && (!guestInfo.firstName || !guestInfo.email))
-                  ? 0.5
-                  : 1,
-            }}
-            disabled={
-              (!hasSelection && selectedPacks.length === 0) ||
-              (!currentUser && (!guestInfo.firstName || !guestInfo.email))
-            }
+            style={{ ...S.primaryBtnStyle(isMobile) }}
           >
             {(() => {
               const price = formatPrice(
@@ -3025,14 +3173,11 @@ export default function BookingSummary({
               );
               const creditText =
                 usableCredits > 0
-                  ? `${usableCredits} ${currentLang === "en" ? "Credits" : "Guthaben"} + `
+                  ? `${usableCredits} ${currentLang === "en" ? (usableCredits === 1 ? "Credit" : "Credits") : "Guthaben"} + `
                   : "";
-
-              if (currentLang === "en") {
-                return `Buy & Book (${creditText}${price} CHF)`;
-              } else {
-                return `Kaufen & Buchen (${creditText}${price} CHF)`;
-              }
+              return currentLang === "en"
+                ? `Buy & Book (${creditText}${price} CHF)`
+                : `Kaufen & Buchen (${creditText}${price} CHF)`;
             })()}
           </button>
         </div>
@@ -3040,60 +3185,83 @@ export default function BookingSummary({
     </div>
   );
 
-  const renderRequestOption = () => (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "1rem",
-        marginTop: "0.5rem",
-      }}
-    >
-      {!currentUser && renderSelectionSummary()}
+  const renderBalanceDisplay = () => {
+    const activePairs = new Set();
+    selectedDates.forEach((d) => {
+      const courseKey = getCreditKey(d.link || coursePath);
+      (d.attendees || []).forEach((a) => {
+        const pid = a.profileId || "guest";
+        if (pid !== "guest") activePairs.add(`${pid}:::${courseKey}`);
+      });
+    });
+    selectedPacks.forEach((sp) => {
+      if (!sp.isGift) {
+        const courseKey = getCreditKey(sp.link || coursePath);
+        const pid = sp.profileId || "guest";
+        if (pid !== "guest") activePairs.add(`${pid}:::${courseKey}`);
+      }
+    });
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        {renderTermsAgreement()}
-        <button
-          onClick={() => validateAndProceed(onRequestSubmit)}
-          style={{
-            ...S.primaryBtnStyle(isMobile),
-            marginTop: "10px",
-            opacity:
-              !hasSelection ||
-              (!currentUser && (!guestInfo.firstName || !guestInfo.email))
-                ? 0.5
-                : 1,
-            cursor:
-              !hasSelection ||
-              (!currentUser && (!guestInfo.firstName || !guestInfo.email))
-                ? "not-allowed"
-                : "pointer",
-          }}
-          disabled={
-            !hasSelection ||
-            (!currentUser && (!guestInfo.firstName || !guestInfo.email))
-          }
-        >
-          {currentLang === "en"
-            ? "Request Selected Dates"
-            : "Ausgewählte Termine anfragen"}
-        </button>
-        <p
-          style={{
-            fontSize: "0.75rem",
-            opacity: 0.6,
-            textAlign: "center",
-            fontStyle: "italic",
-            marginTop: "4px",
-          }}
-        >
-          {currentLang === "en"
-            ? "No payment required yet. We will confirm availability via email."
-            : "Noch keine Zahlung erforderlich. Wir bestätigen die Verfügbarkeit per E-Mail."}
-        </p>
+    const relevantBalances = [];
+    activePairs.forEach((pair) => {
+      const [pid, courseKey] = pair.split(":::");
+      const bal = profileBalances[pid]?.[courseKey] || 0;
+      if (bal > 0) {
+        const name =
+          pid === "main"
+            ? userData?.firstName || (currentLang === "en" ? "Me" : "Ich")
+            : userData?.linkedProfiles?.find((lp) => lp.id === pid)
+                ?.firstName || "User";
+        const matchedEntry = Object.entries(pricingMap).find(
+          ([link]) => getCreditKey(link) === courseKey,
+        );
+        const pDataMatch = matchedEntry ? matchedEntry[1] : null;
+        const dynamicName =
+          pDataMatch?.[`name${currentLang === "en" ? "En" : "De"}`];
+        const courseNameDisplay =
+          dynamicName || pDataMatch?.courseName || courseKey;
+        relevantBalances.push({ name, bal, courseName: courseNameDisplay });
+      }
+    });
+
+    if (relevantBalances.length === 0) return null;
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          marginBottom: "0.5rem",
+        }}
+      >
+        {relevantBalances.map((item, idx) => (
+          <div
+            key={idx}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              backgroundColor: "rgba(78, 95, 40, 0.1)",
+              color: "#4e5f28",
+              padding: "6px 14px",
+              borderRadius: "100px",
+              fontSize: "0.8rem",
+              width: "fit-content",
+              fontWeight: "600",
+            }}
+          >
+            <Ticket size={14} />
+            <span>
+              {item.name}: {item.bal}{" "}
+              {currentLang === "en" ? "credits" : "Guthaben"} ({item.courseName}
+              )
+            </span>
+          </div>
+        ))}
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div style={S.bookingCardStyle(isMobile, true)}>
@@ -3223,14 +3391,12 @@ export default function BookingSummary({
               )}
             </p>
 
-            {/* The confirm button only shows for the 'mandatory' type (first-timers) */}
             {uncheckWarning.type !== "login_required" &&
               uncheckWarning.type !== "login_required_prerequisite" &&
               uncheckWarning.type !== "missing_prerequisite" &&
               uncheckWarning.type !== "time_conflict" && (
                 <button
                   onClick={async () => {
-                    // If the user is logged in, mark this specific addon as completed in their profile
                     if (currentUser) {
                       try {
                         await updateDoc(doc(db, "users", currentUser.uid), {
@@ -3240,8 +3406,6 @@ export default function BookingSummary({
                         console.error("Error updating user progress:", e);
                       }
                     }
-
-                    // Execute the removal and close the modal
                     executeToggleAddon(
                       uncheckWarning.eventId,
                       uncheckWarning.attendeeIndex,
@@ -3288,6 +3452,13 @@ export default function BookingSummary({
         .plus-btn-anim:active {
           transform: scale(0.95);
         }
+        @keyframes fadeInStep {
+          from { opacity: 0; transform: translateY(5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .step-fade-in {
+          animation: fadeInStep 0.3s ease-out;
+        }
       `}</style>
 
       <div
@@ -3308,58 +3479,188 @@ export default function BookingSummary({
           }}
         >
           {hasSelection
-            ? currentLang === "en"
-              ? "booking summary"
-              : "buchungsübersicht"
+            ? bookingStep === 1
+              ? currentLang === "en"
+                ? "Booking Summary"
+                : "Buchungsübersicht"
+              : currentLang === "en"
+                ? "Checkout"
+                : "Kasse"
             : currentLang === "en"
               ? "Course Options"
               : "Kursoptionen"}
         </h3>
 
-        {!currentUser ? (
-          <div style={{ marginBottom: "1.5rem" }}>
-            <button
-              onClick={() => setIsAuthExpanded(!isAuthExpanded)}
-              style={{
-                background: "none",
-                border: "none",
-                padding: "10px 0",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                color: "#4e5f28",
-                fontSize: "0.9rem",
-                fontWeight: "700",
-              }}
-            >
-              {isAuthExpanded ? (
-                <ChevronDown size={18} />
-              ) : (
-                <ChevronRight size={18} />
-              )}
-              {currentLang === "en"
-                ? "Login or Register"
-                : "Einloggen oder Registrieren"}
-            </button>
-            {isAuthExpanded && (
-              <div
-                style={{
-                  padding: "1.2rem",
-                  backgroundColor: "rgba(28, 7, 0, 0.03)",
-                  borderRadius: "16px",
-                  marginBottom: "1.5rem",
-                }}
-              >
-                <form
-                  onSubmit={handleInlineAuth}
+        {/* STEP 1: SUMMARY & DETAILS */}
+        {(!hasSelection || bookingStep === 1) && (
+          <div
+            className="step-fade-in"
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
+            {/* LOGIN / GUEST FORM */}
+            {!currentUser && (
+              <div style={{ marginBottom: "0.5rem" }}>
+                <button
+                  onClick={() => setIsAuthExpanded(!isAuthExpanded)}
                   style={{
+                    background: "none",
+                    border: "none",
+                    padding: "10px 0",
+                    cursor: "pointer",
                     display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
+                    alignItems: "center",
+                    gap: "6px",
+                    color: "#4e5f28",
+                    fontSize: "0.9rem",
+                    fontWeight: "700",
                   }}
                 >
-                  {isRegistering && (
+                  {isAuthExpanded ? (
+                    <ChevronDown size={18} />
+                  ) : (
+                    <ChevronRight size={18} />
+                  )}
+                  {currentLang === "en"
+                    ? "Login or Register"
+                    : "Einloggen oder Registrieren"}
+                </button>
+                {isAuthExpanded && (
+                  <div
+                    style={{
+                      padding: "1.2rem",
+                      backgroundColor: "rgba(28, 7, 0, 0.03)",
+                      borderRadius: "16px",
+                      marginBottom: "1.5rem",
+                    }}
+                  >
+                    <form
+                      onSubmit={handleInlineAuth}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                      }}
+                    >
+                      {isRegistering && (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: isMobile ? "column" : "row",
+                            gap: "10px",
+                          }}
+                        >
+                          <input
+                            type="text"
+                            placeholder={
+                              currentLang === "en" ? "First Name" : "Vorname"
+                            }
+                            required
+                            style={{ ...S.guestInputStyle, flex: 1 }}
+                            value={firstName}
+                            onChange={(e) => setFirstName(e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            placeholder={
+                              currentLang === "en" ? "Last Name" : "Nachname"
+                            }
+                            required
+                            style={{ ...S.guestInputStyle, flex: 1 }}
+                            value={lastName}
+                            onChange={(e) => setLastName(e.target.value)}
+                          />
+                        </div>
+                      )}
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        required
+                        style={S.guestInputStyle}
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                      <input
+                        type="password"
+                        placeholder={
+                          currentLang === "en" ? "Password" : "Passwort"
+                        }
+                        required
+                        style={S.guestInputStyle}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                      {authError && (
+                        <p
+                          style={{
+                            fontSize: "0.7rem",
+                            color: "#1c0700",
+                            opacity: 0.7,
+                          }}
+                        >
+                          {authError}
+                        </p>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={authLoading}
+                        style={S.primaryBtnStyle(isMobile)}
+                      >
+                        {authLoading ? (
+                          <Loader2 size={16} className="spinner" />
+                        ) : isRegistering ? (
+                          currentLang === "en" ? (
+                            "Register"
+                          ) : (
+                            "Registrieren"
+                          )
+                        ) : currentLang === "en" ? (
+                          "Login"
+                        ) : (
+                          "Einloggen"
+                        )}
+                      </button>
+                    </form>
+                    <button
+                      onClick={() => setIsRegistering(!isRegistering)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#9960a8",
+                        fontSize: "0.75rem",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        marginTop: "12px",
+                      }}
+                    >
+                      {isRegistering
+                        ? currentLang === "en"
+                          ? "Already have an account?"
+                          : "Bereits ein Konto?"
+                        : currentLang === "en"
+                          ? "Need an account?"
+                          : "Noch kein Konto?"}
+                    </button>
+                  </div>
+                )}
+                {!isAuthExpanded && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                      marginBottom: "1.5rem",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: "900",
+                        letterSpacing: "1px",
+                        opacity: 0.6,
+                      }}
+                    >
+                      {currentLang === "en" ? "Guest details" : "Gast-Details"}
+                    </span>
                     <div
                       style={{
                         display: "flex",
@@ -3372,305 +3673,167 @@ export default function BookingSummary({
                         placeholder={
                           currentLang === "en" ? "First Name" : "Vorname"
                         }
-                        required
                         style={{ ...S.guestInputStyle, flex: 1 }}
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
+                        value={guestInfo.firstName}
+                        onChange={(e) =>
+                          setGuestInfo({
+                            ...guestInfo,
+                            firstName: e.target.value,
+                          })
+                        }
                       />
                       <input
                         type="text"
                         placeholder={
                           currentLang === "en" ? "Last Name" : "Nachname"
                         }
-                        required
                         style={{ ...S.guestInputStyle, flex: 1 }}
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
+                        value={guestInfo.lastName}
+                        onChange={(e) =>
+                          setGuestInfo({
+                            ...guestInfo,
+                            lastName: e.target.value,
+                          })
+                        }
                       />
                     </div>
-                  )}
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    required
-                    style={S.guestInputStyle}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                  <input
-                    type="password"
-                    placeholder={currentLang === "en" ? "Password" : "Passwort"}
-                    required
-                    style={S.guestInputStyle}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                  {authError && (
-                    <p
-                      style={{
-                        fontSize: "0.7rem",
-                        color: "#1c0700",
-                        opacity: 0.7,
-                      }}
-                    >
-                      {authError}
-                    </p>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={authLoading}
-                    style={S.primaryBtnStyle(isMobile)}
-                  >
-                    {authLoading ? (
-                      <Loader2 size={16} className="spinner" />
-                    ) : isRegistering ? (
-                      currentLang === "en" ? (
-                        "Register"
-                      ) : (
-                        "Registrieren"
-                      )
-                    ) : currentLang === "en" ? (
-                      "Login"
-                    ) : (
-                      "Einloggen"
-                    )}
-                  </button>
-                </form>
-                <button
-                  onClick={() => setIsRegistering(!isRegistering)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#9960a8",
-                    fontSize: "0.75rem",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                    marginTop: "12px",
-                  }}
-                >
-                  {isRegistering
-                    ? currentLang === "en"
-                      ? "Already have an account?"
-                      : "Bereits ein Konto?"
-                    : currentLang === "en"
-                      ? "Need an account?"
-                      : "Noch kein Konto?"}
-                </button>
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      style={S.guestInputStyle}
+                      value={guestInfo.email}
+                      onChange={(e) =>
+                        setGuestInfo({ ...guestInfo, email: e.target.value })
+                      }
+                    />
+                  </div>
+                )}
               </div>
             )}
-            {!isAuthExpanded && (
+
+            {renderSelectionSummary()}
+            {currentUser && renderBalanceDisplay()}
+
+            {hasSelection ? (
+              <button
+                onClick={() => setBookingStep(2)}
+                style={{ ...S.primaryBtnStyle(isMobile), marginTop: "0.5rem" }}
+                disabled={
+                  !currentUser && (!guestInfo.firstName || !guestInfo.email)
+                }
+              >
+                {currentLang === "en" ? "Continue" : "Weiter"}
+              </button>
+            ) : pricing?.isRequestOnly ? (
               <div
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "12px",
-                  marginBottom: "1.5rem",
+                  gap: "10px",
                 }}
               >
-                <span
+                {renderTermsAgreement()}
+                <button
+                  disabled={true}
+                  style={{
+                    ...S.primaryBtnStyle(isMobile),
+                    marginTop: "10px",
+                    opacity: 0.5,
+                    cursor: "not-allowed",
+                  }}
+                >
+                  {currentLang === "en"
+                    ? "Request Selected Dates"
+                    : "Ausgewählte Termine anfragen"}
+                </button>
+                <p
                   style={{
                     fontSize: "0.75rem",
-                    fontWeight: "900",
-                    letterSpacing: "1px",
                     opacity: 0.6,
+                    textAlign: "center",
+                    fontStyle: "italic",
+                    marginTop: "4px",
                   }}
                 >
-                  {currentLang === "en" ? "Guest details" : "Gast-Details"}
-                </span>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: isMobile ? "column" : "row",
-                    gap: "10px",
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder={
-                      currentLang === "en" ? "First Name" : "Vorname"
-                    }
-                    style={{ ...S.guestInputStyle, flex: 1 }}
-                    value={guestInfo.firstName}
-                    onChange={(e) =>
-                      setGuestInfo({ ...guestInfo, firstName: e.target.value })
-                    }
-                  />
-                  <input
-                    type="text"
-                    placeholder={
-                      currentLang === "en" ? "Last Name" : "Nachname"
-                    }
-                    style={{ ...S.guestInputStyle, flex: 1 }}
-                    value={guestInfo.lastName}
-                    onChange={(e) =>
-                      setGuestInfo({ ...guestInfo, lastName: e.target.value })
-                    }
-                  />
-                </div>
-                <input
-                  type="email"
-                  placeholder="Email"
-                  style={S.guestInputStyle}
-                  value={guestInfo.email}
-                  onChange={(e) =>
-                    setGuestInfo({ ...guestInfo, email: e.target.value })
-                  }
-                />
+                  {currentLang === "en"
+                    ? "No payment required yet. We will confirm availability via email."
+                    : "Noch keine Zahlung erforderlich. Wir bestätigen die Verfügbarkeit per E-Mail."}
+                </p>
               </div>
+            ) : (
+              renderPurchaseOptionsContent()
             )}
-            {pricing?.isRequestOnly
-              ? renderRequestOption()
-              : renderPurchaseOptions()}
           </div>
-        ) : (
-          <>
-            {renderSelectionSummary()}
+        )}
 
-            {/* DYNAMIC BALANCE DISPLAY */}
-            {(() => {
-              // 1. Build a strict set of which profile is taking/buying which course
-              const activePairs = new Set();
+        {/* STEP 2: CHECKOUT & PACKS */}
+        {hasSelection && bookingStep === 2 && (
+          <div
+            className="step-fade-in"
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
+            <button
+              onClick={() => setBookingStep(1)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#1c0700",
+                opacity: 0.6,
+                cursor: "pointer",
+                textAlign: "left",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                fontSize: "0.85rem",
+                fontWeight: "bold",
+                padding: 0,
+                marginBottom: "0.5rem",
+              }}
+            >
+              <ChevronLeft size={16} />{" "}
+              {currentLang === "en"
+                ? "Back to Selection"
+                : "Zurück zur Auswahl"}
+            </button>
 
-              selectedDates.forEach((d) => {
-                const courseKey = getCreditKey(d.link || coursePath);
-                (d.attendees || []).forEach((a) => {
-                  const pid = a.profileId || "guest";
-                  if (pid !== "guest") {
-                    activePairs.add(`${pid}:::${courseKey}`);
-                  }
-                });
-              });
-
-              selectedPacks.forEach((sp) => {
-                if (!sp.isGift) {
-                  const courseKey = getCreditKey(sp.link || coursePath);
-                  const pid = sp.profileId || "guest";
-                  if (pid !== "guest") {
-                    activePairs.add(`${pid}:::${courseKey}`);
-                  }
-                }
-              });
-
-              // 2. Map those exact pairings to their specific balances
-              const relevantBalances = [];
-
-              activePairs.forEach((pair) => {
-                const [pid, courseKey] = pair.split(":::");
-                const bal = profileBalances[pid]?.[courseKey] || 0;
-
-                if (bal > 0) {
-                  const name =
-                    pid === "main"
-                      ? userData?.firstName ||
-                        (currentLang === "en" ? "Me" : "Ich")
-                      : userData?.linkedProfiles?.find((lp) => lp.id === pid)
-                          ?.firstName || "User";
-
-                  const matchedEntry = Object.entries(pricingMap).find(
-                    ([link]) => getCreditKey(link) === courseKey,
-                  );
-                  const pDataMatch = matchedEntry ? matchedEntry[1] : null;
-
-                  const dynamicName =
-                    pDataMatch?.[`name${currentLang === "en" ? "En" : "De"}`];
-                  const courseNameDisplay =
-                    dynamicName || pDataMatch?.courseName || courseKey;
-
-                  relevantBalances.push({
-                    name,
-                    bal,
-                    courseName: courseNameDisplay,
-                  });
-                }
-              });
-
-              if (relevantBalances.length === 0) return null;
-
-              return (
-                <div
+            {pricing?.isRequestOnly ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                {renderTermsAgreement()}
+                <button
+                  onClick={() => validateAndProceed(onRequestSubmit)}
+                  style={{ ...S.primaryBtnStyle(isMobile), marginTop: "10px" }}
+                >
+                  {currentLang === "en"
+                    ? "Request Selected Dates"
+                    : "Ausgewählte Termine anfragen"}
+                </button>
+                <p
                   style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                    marginBottom: "1.5rem",
+                    fontSize: "0.75rem",
+                    opacity: 0.6,
+                    textAlign: "center",
+                    fontStyle: "italic",
+                    marginTop: "4px",
                   }}
                 >
-                  {relevantBalances.map((item, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        backgroundColor: "rgba(78, 95, 40, 0.1)",
-                        color: "#4e5f28",
-                        padding: "6px 14px",
-                        borderRadius: "100px",
-                        fontSize: "0.8rem",
-                        width: "fit-content",
-                        fontWeight: "600",
-                      }}
-                    >
-                      <Ticket size={14} />
-                      <span>
-                        {item.name}: {item.bal}{" "}
-                        {currentLang === "en" ? "credits" : "Guthaben"} (
-                        {item.courseName})
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              {pricing?.isRequestOnly ? (
-                renderRequestOption()
-              ) : coversEntirely && !activePackCode ? (
-                <>
-                  {renderTermsAgreement()}
-                  <button
-                    onClick={() => validateAndProceed(onBookCredits)}
-                    style={{
-                      ...S.creditBtnStyle(isMobile),
-                      padding: "14px",
-                      marginTop: "10px",
-                    }}
-                  >
-                    {currentLang === "en"
-                      ? `Book with ${totalTicketsSelected} Credits`
-                      : `Mit ${totalTicketsSelected} Guthaben buchen`}
-                  </button>
-                  <button
-                    onClick={() =>
-                      setShowStripeAlternative(!showStripeAlternative)
-                    }
-                    style={{
-                      background: "none",
-                      border: "none",
-                      textDecoration: "underline",
-                      color: "#4e5f28",
-                      cursor: "pointer",
-                      fontSize: "0.8rem",
-                      textAlign: "left",
-                      padding: "4px 0",
-                    }}
-                  >
-                    {currentLang === "en"
-                      ? "Or pay with card"
-                      : "Oder mit Karte zahlen"}
-                  </button>
-                  {showStripeAlternative && renderPurchaseOptions()}
-                </>
-              ) : (
-                renderPurchaseOptions()
-              )}
-            </div>
-          </>
+                  {currentLang === "en"
+                    ? "No payment required yet. We will confirm availability via email."
+                    : "Noch keine Zahlung erforderlich. Wir bestätigen die Verfügbarkeit per E-Mail."}
+                </p>
+              </div>
+            ) : (
+              renderPurchaseOptionsContent()
+            )}
+          </div>
         )}
       </div>
+
       {/* PACK INFO MODAL */}
       {showPackInfo && (
         <div
