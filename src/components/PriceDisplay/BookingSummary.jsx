@@ -2385,12 +2385,12 @@ export default function BookingSummary({
             const singleTextEn =
               sessionsForThisCourse > 0
                 ? `${sessionsForThisCourse} Individual Session${sessionsForThisCourse > 1 ? "s" : ""}`
-                : "Single Session(s)";
+                : "Single Session";
 
             const singleTextDe =
               sessionsForThisCourse > 0
                 ? `${sessionsForThisCourse} Einzeltermin${sessionsForThisCourse > 1 ? "e" : ""}`
-                : "Einzeltermin(e)";
+                : "Einzeltermin";
 
             return (
               <div
