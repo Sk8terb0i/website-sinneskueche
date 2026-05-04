@@ -1263,30 +1263,61 @@ export default function BookingSummary({
             const limitOnePerDay = pricing?.limitOnePerDay ?? true;
             const courseKey = getCreditKey(d.link || coursePath);
 
-            const hasIneligibleAttendee = d.attendees.some((att) => {
-              const pid = att.profileId || "main";
+            let creditWarningType = null;
+
+            d.attendees.forEach((att, attIdx) => {
+              if (creditWarningType) return; // Keep the first warning found
+
+              const pid = att.profileId || "guest";
+
               const hasUsedTodayInHistory = userCreditBookedIds?.includes(
                 `${d.date}_${pid}`,
               );
 
+              const hasUsedTodayInCart = selectedDates.some((sd, sdIdx) => {
+                if (sd.date !== d.date) return false;
+                const currentSdIdx = selectedDates.findIndex(
+                  (x) => x.id === d.id,
+                );
+                if (sdIdx < currentSdIdx) {
+                  return sd.attendees.some(
+                    (a) => (a.profileId || "guest") === pid,
+                  );
+                } else if (sdIdx === currentSdIdx) {
+                  return (
+                    sd.attendees.findIndex(
+                      (a) => (a.profileId || "guest") === pid,
+                    ) < attIdx
+                  );
+                }
+                return false;
+              });
+
               const hasBalance = (profileBalances[pid]?.[courseKey] || 0) > 0;
-              const isBuyingPackForThis = selectedPacks.hasOwnProperty(
-                d.link || coursePath,
+              const isBuyingPackForThis = selectedPacks.some(
+                (p) =>
+                  (p.link || coursePath) === (d.link || coursePath) &&
+                  p.profileId === pid,
               );
               const isUsingRedeemCode =
                 activePackCode && activePackCode.remaining > 0;
 
-              return (
-                hasUsedTodayInHistory &&
-                (hasBalance || isBuyingPackForThis || isUsingRedeemCode)
-              );
+              // Only show the warning if they actually have a pack/credit to use
+              if (hasBalance || isBuyingPackForThis || isUsingRedeemCode) {
+                if (hasUsedTodayInHistory) {
+                  creditWarningType = "history";
+                } else if (hasUsedTodayInCart) {
+                  creditWarningType = "cart";
+                }
+              }
             });
 
-            let alreadyUsedCredit = hasIneligibleAttendee;
-            if (!alreadyUsedCredit && activePackCode) {
-              alreadyUsedCredit = activePackCode.redeemedEventIds?.includes(
-                d.id,
-              );
+            // Also check if an active redeem code was explicitly used for this date previously
+            if (
+              !creditWarningType &&
+              activePackCode?.redeemedEventIds?.includes(d.id)
+            ) {
+              creditWarningType = "packCode";
             }
 
             return (
@@ -1334,7 +1365,7 @@ export default function BookingSummary({
                     <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>
                       {d.time || ""}
                     </span>
-                    {limitOnePerDay && alreadyUsedCredit && (
+                    {limitOnePerDay && creditWarningType && (
                       <span
                         style={{
                           fontSize: "0.65rem",
@@ -1347,9 +1378,13 @@ export default function BookingSummary({
                         }}
                       >
                         <AlertCircle size={10} />
-                        {currentLang === "en"
-                          ? "Credit already used for this date"
-                          : "Guthaben für diesen Tag bereits genutzt"}
+                        {creditWarningType === "cart"
+                          ? currentLang === "en"
+                            ? "Credit applied to another ticket on this date"
+                            : "Kredit wird für ein anderes Ticket an diesem Tag genutzt"
+                          : currentLang === "en"
+                            ? "Credit already used for this date"
+                            : "Kredit für diesen Tag bereits genutzt"}
                       </span>
                     )}
                   </div>
