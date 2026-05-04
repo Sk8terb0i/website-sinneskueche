@@ -688,6 +688,38 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           <a href="mailto:salut@sinneskueche.ch" className="footer-link">
             salut@sinneskueche.ch
           </a>
+
+          {/* Legal Links horizontally aligned with a 12px gap */}
+          <div
+            style={{
+              marginTop: "12px",
+              display: "flex",
+              flexDirection: "row",
+              gap: "15px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div
+              onClick={() => {
+                navigate("/terms");
+                onClose();
+              }}
+              className="legal-link"
+              style={{ cursor: "pointer" }}
+            >
+              {currentLang === "en" ? "terms of service" : "agb"}
+            </div>
+            <div
+              onClick={() => {
+                navigate("/privacy");
+                onClose();
+              }}
+              className="legal-link"
+              style={{ cursor: "pointer" }}
+            >
+              {currentLang === "en" ? "privacy policy" : "datenschutz"}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -709,8 +741,35 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           border-radius: 10px; 
         }
 
-        .footer-link { color: #caaff3; text-decoration: none; font-family: Satoshi; font-size: 0.9rem; transition: color 0.3s; width: fit-content; }
-        .footer-link:hover { color: #9960a8; }
+        /* Original purple style for Instagram/Email */
+        .footer-link { 
+          color: #caaff3; 
+          text-decoration: none; 
+          font-family: Satoshi; 
+          font-size: 0.9rem; 
+          transition: color 0.3s; 
+          width: fit-content; 
+        }
+        .footer-link:hover { 
+          color: #9960a8; 
+        }
+
+        /* Subtle style matching the main Footer.jsx for Legal links */
+        .legal-link { 
+          color: #1c0700; 
+          text-decoration: none; 
+          font-family: Satoshi; 
+          font-size: 0.85rem; 
+          font-style: italic;
+          opacity: 0.6;
+          transition: opacity 0.3s ease; 
+          text-transform: lowercase;
+          width: fit-content; 
+        }
+        .legal-link:hover { 
+          opacity: 1; 
+        }
+        
         @keyframes fadeInBlur { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
       `}</style>
     </>
