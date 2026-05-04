@@ -644,6 +644,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
       const stripe = httpsCallable(functions, "createStripeCheckout");
       const res = await stripe({
         ...metadataPayload,
+        guestInfo: !currentUser ? guestInfo : null,
         packPrice: mode === "pack" ? price || 0 : 0,
         totalPrice: mode !== "pack" ? price || 0 : 0,
         successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}&mode=${mode}&booked=true&packs=${encodeURIComponent(packSummary)}&sessions=${encodeURIComponent(sessionSummary)}&giftCodes=${giftCodes.join(",")}&giftNames=${giftNames.join(",")}&netAdded=${netAddedCredits}`,
