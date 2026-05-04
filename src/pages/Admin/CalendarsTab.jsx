@@ -6,6 +6,8 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  query,
+  where,
 } from "firebase/firestore";
 import {
   Calendar,
@@ -146,11 +148,63 @@ export default function CalendarsTab({ isMobile, currentLang }) {
 
   const handleDeleteCourse = async (id) => {
     if (!window.confirm(labels.deleteConfirm)) return;
+
+    // Find the full link (e.g., "/my-course") before we delete the main record
+    const courseToDelete = customCourses.find((c) => c.id === id);
+    const courseLink = courseToDelete?.link;
+
     try {
+      // 1. Delete the primary course definition
       await deleteDoc(doc(db, "custom_courses", id));
+
+      // 2. Delete linked data using the Sanitized ID (id)
+      // Targets: PricingTab, RemindersTab, TermsTab, and Add-on Schedules
+      const relatedCollections = [
+        "course_settings",
+        "course_reminders",
+        "course_terms",
+        "schedules",
+      ];
+      const deletePromises = relatedCollections.map((col) =>
+        deleteDoc(doc(db, col, id)),
+      );
+      await Promise.all(deletePromises);
+
+      // 3. Delete Scheduled Events (EventsTab)
+      // We need to find and remove actual event instances scheduled with this link
+      if (courseLink) {
+        const eventsRef = collection(db, "events");
+        const q = query(eventsRef, where("link", "==", courseLink));
+        const eventSnap = await getDocs(q);
+        const eventDeletes = eventSnap.docs.map((d) =>
+          deleteDoc(doc(db, "events", d.id)),
+        );
+        await Promise.all(eventDeletes);
+
+        // 4. Clean up Calendar Groups
+        // Remove this course link from any groups it was part of
+        for (const [groupId, includedLinks] of Object.entries(calendarGroups)) {
+          if (includedLinks.includes(courseLink)) {
+            const updatedLinks = includedLinks.filter((l) => l !== courseLink);
+            // If the group is now empty, we revert to just the base link (the group ID)
+            const fallbackLink =
+              includedLinks[0] === courseLink
+                ? `/${groupId}`
+                : includedLinks[0];
+
+            await setDoc(doc(db, "calendar_groups", groupId), {
+              includedLinks:
+                updatedLinks.length > 0 ? updatedLinks : [fallbackLink],
+            });
+          }
+        }
+      }
+
+      // Refresh local state
       await fetchData();
     } catch (err) {
-      alert(err.message);
+      console.error("Cleanup Error:", err);
+      alert(labels.errorSaving + err.message);
     }
   };
 
