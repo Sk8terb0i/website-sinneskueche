@@ -15,7 +15,7 @@ export default function TeamMoonPortrait({
   planetCenter,
   onHoverStart,
   onHoverEnd,
-  forceLeftSide = false, // NEW PROP: Only used on the Team page!
+  forceLeftSide = false,
 }) {
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
@@ -41,41 +41,25 @@ export default function TeamMoonPortrait({
   const centerX = planetCenter?.x ?? window.innerWidth * 0.3;
   const centerY = planetCenter?.y ?? window.innerHeight * 0.5;
 
-  // --- START OF DYNAMIC ANGLE LOGIC ---
   const arcRange = Math.PI / 1.5;
 
   let targetAngle;
   if (forceLeftSide) {
-    // Left side: Math.PI is 180 degrees (perfectly left).
     const leftStart = Math.PI - arcRange / 2;
     targetAngle =
       totalMoons > 1
         ? leftStart + index * (arcRange / (totalMoons - 1))
         : Math.PI;
   } else {
-    // Right side (Original): 0 is perfectly right.
     const startAngle = -arcRange / 2;
     targetAngle =
       totalMoons > 1 ? startAngle + index * (arcRange / (totalMoons - 1)) : 0;
   }
-  // --- END OF DYNAMIC ANGLE LOGIC ---
 
-  // --- DYNAMIC ENTRY/EXIT ANGLES ---
-  let entryAngle, exitAngle;
-
-  if (forceLeftSide) {
-    // If orbiting on the left, enter/exit along the left edge
-    // Top is Math.PI * 1.5, Bottom is Math.PI / 2
-    entryAngle =
-      enterDirection === "top" ? Math.PI * 1.5 + 0.5 : Math.PI / 2 - 0.5;
-    exitAngle =
-      exitDirection === "bottom" ? Math.PI / 2 - 1 : Math.PI * 1.5 + 1;
-  } else {
-    // Original right-side logic
-    entryAngle =
-      enterDirection === "top" ? -Math.PI / 2 - 0.5 : Math.PI / 2 + 0.5;
-    exitAngle = exitDirection === "bottom" ? Math.PI / 2 + 1 : -Math.PI / 2 - 1;
-  }
+  const entryAngle =
+    enterDirection === "top" ? -Math.PI / 2 - 0.5 : Math.PI / 2 + 0.5;
+  const exitAngle =
+    exitDirection === "bottom" ? Math.PI / 2 + 1 : -Math.PI / 2 - 1;
 
   const [animatedAngle, setAnimatedAngle] = useState(
     exitOnly ? targetAngle : entryAngle,
@@ -124,36 +108,14 @@ export default function TeamMoonPortrait({
     return () => cancelAnimationFrame(animId);
   }, [state, targetAngle, exitAngle]);
 
-  const handleTap = (e) => {
-    e.stopPropagation();
-    if (state === "exit") return;
-
-    setIsHovered(true);
-    onHoverStart?.();
-
-    if (!href) {
-      setIsShaking(true);
-      setTimeout(() => {
-        setIsShaking(false);
-        setIsHovered(false);
-        onHoverEnd?.();
-      }, 400);
-      return;
-    }
-
-    setTimeout(() => {
-      if (href.startsWith("http")) {
-        window.open(href, "_blank", "noreferrer");
-      } else {
-        navigate(href);
-      }
-      setIsHovered(false);
-      onHoverEnd?.();
-    }, 200);
-  };
-
   const moonX = Math.cos(animatedAngle) * orbitRadius;
   const moonY = Math.sin(animatedAngle) * orbitRadius;
+
+  // --- PIXEL-BASED MAX WIDTH CALCULATION ---
+  const currentX = centerX + moonX;
+  const availableSpace = forceLeftSide
+    ? currentX - 40 // Distance from moon to left edge
+    : windowWidth - currentX - 40; // Distance from moon to right edge
 
   return (
     <>
@@ -168,7 +130,7 @@ export default function TeamMoonPortrait({
       <div
         style={{
           position: "fixed",
-          left: centerX + moonX,
+          left: currentX,
           top: centerY + moonY,
           transform: "translate(-50%, -50%)",
           zIndex: 2000,
@@ -180,7 +142,28 @@ export default function TeamMoonPortrait({
           WebkitTapHighlightColor: "transparent",
           animation: isShaking ? "shake 0.4s ease-in-out" : "none",
         }}
-        onClick={handleTap}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (state === "exit") return;
+          setIsHovered(true);
+          onHoverStart?.();
+          if (!href) {
+            setIsShaking(true);
+            setTimeout(() => {
+              setIsShaking(false);
+              setIsHovered(false);
+              onHoverEnd?.();
+            }, 400);
+          } else {
+            setTimeout(() => {
+              if (href.startsWith("http"))
+                window.open(href, "_blank", "noreferrer");
+              else navigate(href);
+              setIsHovered(false);
+              onHoverEnd?.();
+            }, 200);
+          }
+        }}
         onMouseEnter={() => {
           if (href && state !== "exit") {
             setIsHovered(true);
@@ -218,7 +201,6 @@ export default function TeamMoonPortrait({
           style={{
             position: "absolute",
             top: "50%",
-            // THE FIX: Reverses the text alignment depending on which side it's on
             left: forceLeftSide ? "auto" : "100%",
             right: forceLeftSide ? "100%" : "auto",
             marginLeft: forceLeftSide ? "0" : "6px",
@@ -227,15 +209,12 @@ export default function TeamMoonPortrait({
             transform: "translateY(-50%)",
             display: "block",
 
-            width: "max-content",
-            // THE FIX: Changes the maximum width allowed before wrapping
-            maxWidth: forceLeftSide
-              ? `calc(${((centerX + moonX) / windowWidth) * 100}vw - 40px)`
-              : `calc(${100 - ((centerX + moonX) / windowWidth) * 100}vw - 40px)`,
+            // Constrain width to the calculated pixels
+            width: "auto",
+            maxWidth: `${Math.max(40, availableSpace)}px`,
 
             whiteSpace: "normal",
             overflowWrap: "break-word",
-
             fontSize: isHovered ? "12px" : "10px",
             fontWeight: isHovered ? "bold" : "normal",
             fontStyle: href ? "normal" : "italic",

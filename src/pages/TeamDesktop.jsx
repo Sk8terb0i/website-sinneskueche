@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, query, getDocs, orderBy } from "firebase/firestore";
@@ -31,6 +31,44 @@ export default function Teams({ currentLang, setCurrentLang }) {
     width: window.innerWidth,
     height: window.innerHeight,
   });
+
+  const [isBioPanelHovered, setIsBioPanelHovered] = useState(false);
+  const bioPanelRef = useRef(null);
+
+  const handleClosePanel = (e) => {
+    if (e) e.stopPropagation();
+    setFocusedPlanet(null);
+    setActivePlanet(null);
+    setIsBioPanelHovered(false);
+  };
+
+  const [dynamicWidth, setDynamicWidth] = useState(380);
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  // 1. Reset to base width immediately when a new planet is focused
+  useEffect(() => {
+    setDynamicWidth(380);
+    if (focusedPlanet) {
+      setIsCalculating(true);
+    }
+  }, [focusedPlanet]);
+
+  // 2. The "Invisible" Calculation
+  // This runs and re-renders BEFORE the browser paints the screen
+  useLayoutEffect(() => {
+    if (bioPanelRef.current && focusedPlanet && isCalculating) {
+      const panel = bioPanelRef.current;
+
+      // If content is too tall, jump up in large increments (100px)
+      // to find the fit faster
+      if (panel.scrollHeight > panel.clientHeight && dynamicWidth < 650) {
+        setDynamicWidth((prev) => Math.min(prev + 100, 650));
+      } else {
+        // Calculation is done; turn transitions back on
+        setIsCalculating(false);
+      }
+    }
+  }, [focusedPlanet, dynamicWidth, isCalculating]);
 
   const [isSystemMounted, setIsSystemMounted] = useState(false);
   const [isInitialAnimationDone, setIsInitialAnimationDone] = useState(false);
@@ -228,6 +266,34 @@ export default function Teams({ currentLang, setCurrentLang }) {
         />
       </div>
 
+      <style>
+        {`
+          @keyframes contentFadeIn {
+            0% { opacity: 0; transform: translateY(10px); }
+            100% { opacity: 1; transform: translateY(0); }
+          }
+          .bio-panel::-webkit-scrollbar { width: 4px; }
+          .bio-panel::-webkit-scrollbar-track { background: transparent; }
+          .bio-panel::-webkit-scrollbar-thumb { 
+            background-color: rgba(28, 7, 0, 0.1); 
+            border-radius: 10px; 
+          }
+          .bio-link {
+            background-color: #caaff380;
+            color: #1c0700;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+            border-radius: 30px;
+          }
+          .bio-link:hover {
+            background-color: #9a60a8d7;
+            color: #1c0700;
+            transform: translateY(-2px);
+          }
+        `}
+      </style>
+
       <Sun
         sunClicked={sunClicked}
         size={sunSize}
@@ -320,28 +386,16 @@ export default function Teams({ currentLang, setCurrentLang }) {
                 setFocusedPlanet(id);
               }
             }}
-            onHover={
-              isHoverable
-                ? (id) => {
-                    if (hoverTimeoutRef.current) {
-                      clearTimeout(hoverTimeoutRef.current);
-                      hoverTimeoutRef.current = null;
-                    }
-                    setHoveredPlanet(id);
-                    setFocusedPlanet(id);
-                  }
-                : undefined
-            }
+            onHover={(id) => {
+              if (isMenuOpen) return;
+              // We only set the focus; we no longer clear it on leave
+              setHoveredPlanet(id);
+              setFocusedPlanet(id);
+              setActivePlanet(id);
+            }}
             onHoverEnd={() => {
               setHoveredPlanet(null);
-              if (hoverTimeoutRef.current) {
-                clearTimeout(hoverTimeoutRef.current);
-              }
-              hoverTimeoutRef.current = setTimeout(() => {
-                setFocusedPlanet((prev) => {
-                  return hoveredMoonPlanet === prev ? prev : null;
-                });
-              }, 200);
+              // REMOVED: The timeout that clears focusedPlanet is gone!
             }}
           />
         );
@@ -407,20 +461,7 @@ export default function Teams({ currentLang, setCurrentLang }) {
                 }}
                 onHoverEnd={() => {
                   setHoveredMoonPlanet(null);
-                  if (hoverTimeoutRef.current) {
-                    clearTimeout(hoverTimeoutRef.current);
-                  }
-                  hoverTimeoutRef.current = setTimeout(() => {
-                    setFocusedPlanet((prev) => {
-                      if (
-                        hoveredPlanet === planet.id ||
-                        hoveredMoonPlanet === planet.id
-                      ) {
-                        return prev;
-                      }
-                      return null;
-                    });
-                  }, 200);
+                  // REMOVED: No more auto-clearing here either
                 }}
               />
             ))}
@@ -456,6 +497,195 @@ export default function Teams({ currentLang, setCurrentLang }) {
             : "To experience and learn, we create a safe space where no form of discrimination is tolerated. The Sinnesküche is located on the top floor and is therefore unfortunately not wheelchair accessible."}
         </p>
       </div>
+      {/* BIO PANEL INTEGRATION */}
+      {(() => {
+        const planet = planets.find((p) => p.id === focusedPlanet);
+        const isVisible =
+          focusedPlanet && planet?.bio?.[currentLang] && !isMenuOpen;
+
+        return (
+          <div
+            ref={bioPanelRef}
+            onMouseEnter={() => setIsBioPanelHovered(true)}
+            onMouseLeave={() => setIsBioPanelHovered(false)}
+            style={{
+              position: "absolute",
+              right: isVisible ? "40px" : "-100px",
+              top: "15%",
+              bottom: "15%",
+              width: `${dynamicWidth}px`,
+              padding: "45px 25px 30px 25px",
+              zIndex: 5000,
+              overflowY: "auto",
+              opacity: isVisible ? 1 : 0,
+              pointerEvents: isVisible ? "auto" : "none",
+
+              /* Disable transitions while calculating so the user doesn't see the "jump" */
+              transition: isCalculating
+                ? "none"
+                : "opacity 0.5s ease, transform 0.5s ease, right 0.5s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s ease-out",
+
+              fontFamily: "Satoshi",
+              color: "#1c0700",
+              backgroundColor: "rgba(255, 252, 230, 0.6)",
+              backdropFilter: "blur(12px)",
+              borderRadius: "24px",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.05)",
+            }}
+          >
+            {planet?.bio?.[currentLang] && (
+              <>
+                {/* CLOSE BUTTON - Persistent and static */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleClosePanel();
+                  }}
+                  style={{
+                    position: "absolute",
+                    top: "15px",
+                    right: "15px",
+                    background: "#fffce3",
+                    color: "#1c0700",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "28px",
+                    height: "28px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    zIndex: 10,
+                  }}
+                >
+                  ✕
+                </button>
+
+                {/* ANIMATED CONTENT WRAPPER */}
+                <div
+                  key={`content-${planet.id}`}
+                  style={{
+                    animation: isCalculating
+                      ? "none"
+                      : "contentFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards",
+                  }}
+                >
+                  {/* Pronoun Tag */}
+                  {planet.pronouns?.[currentLang] && (
+                    <div
+                      style={{
+                        display: "inline-block",
+                        backgroundColor: "rgba(28, 7, 0, 0.03)",
+                        border: "1px solid rgba(28, 7, 0, 0.1)",
+                        color: "rgba(28, 7, 0, 0.6)",
+                        padding: "4px 12px",
+                        borderRadius: "16px",
+                        fontSize: "0.7rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.8px",
+                        marginBottom: "20px",
+                      }}
+                    >
+                      {planet.pronouns[currentLang]}
+                    </div>
+                  )}
+
+                  {/* Q&A Section */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "30px",
+                    }}
+                  >
+                    {planet.bio[currentLang].map((item, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "10px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "inline-block",
+                            backgroundColor: "rgba(78, 95, 40, 0.12)",
+                            color: "#4e5f28",
+                            padding: "5px 12px",
+                            borderRadius: "20px",
+                            fontSize: "0.8rem",
+                            fontWeight: "bold",
+                            alignSelf: "flex-start",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          {item.q}
+                        </span>
+                        <p
+                          style={{
+                            fontSize: "0.95rem",
+                            lineHeight: "1.6",
+                            margin: 0,
+                            opacity: 0.9,
+                            whiteSpace: "pre-wrap",
+                          }}
+                        >
+                          {item.a}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Links Section */}
+                  {planet.links && (
+                    <div
+                      style={{
+                        marginTop: "35px",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "10px",
+                        paddingTop: "20px",
+                        borderTop: "1px solid rgba(28, 7, 0, 0.1)",
+                      }}
+                    >
+                      {planet.links.map((link, idx) => {
+                        const label =
+                          typeof link.label === "object"
+                            ? link.label[currentLang]
+                            : link.label;
+                        const url =
+                          typeof link.url === "object"
+                            ? link.url[currentLang]
+                            : link.url;
+                        return (
+                          <a
+                            key={idx}
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="bio-link"
+                            style={{
+                              padding: "8px 16px",
+                              fontSize: "0.85rem",
+                              fontWeight: "600",
+                              borderRadius: "30px",
+                            }}
+                          >
+                            {label}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
