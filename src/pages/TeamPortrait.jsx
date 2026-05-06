@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import PlanetPortrait from "../components/Planet/PlanetPortrait";
-import MoonPortrait from "../components/Moon/MoonPortrait";
+import TeamMoonPortrait from "../components/Moon/TeamMoonPortrait";
 import SunPortrait from "../components/Sun/SunPortrait";
 import Header from "../components/Header/Header";
 import { planets } from "../data/teammembers";
@@ -21,6 +21,8 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
     width: window.innerWidth,
     height: window.innerHeight,
   });
+
+  const bioPanelRef = useRef(null);
 
   // --- DYNAMIC SIZING ---
   // Mobile check (typical breakpoint)
@@ -93,6 +95,15 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
 
     const handleWheel = (e) => {
       if (isMenuOpenRef.current) return;
+
+      // Check if user is hovering the panel AND the panel actually needs scrolling
+      if (bioPanelRef.current && bioPanelRef.current.contains(e.target)) {
+        const panel = bioPanelRef.current;
+        if (panel.scrollHeight > panel.clientHeight) {
+          return; // Block planet scroll only if panel is scrollable
+        }
+      }
+
       e.preventDefault();
       if (Math.abs(e.deltaY) < 10) return;
       scrollHandler(e.deltaY > 0 ? "down" : "up");
@@ -100,6 +111,14 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
 
     const handleTouchStart = (e) => {
       if (isMenuOpenRef.current) return;
+
+      if (bioPanelRef.current && bioPanelRef.current.contains(e.target)) {
+        const panel = bioPanelRef.current;
+        if (panel.scrollHeight > panel.clientHeight) {
+          return;
+        }
+      }
+
       touchStartY.current = e.touches[0].clientY;
       touchLocked.current = false;
     };
@@ -111,6 +130,14 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
         touchLocked.current
       )
         return;
+
+      if (bioPanelRef.current && bioPanelRef.current.contains(e.target)) {
+        const panel = bioPanelRef.current;
+        if (panel.scrollHeight > panel.clientHeight) {
+          return;
+        }
+      }
+
       const deltaY = touchStartY.current - e.touches[0].clientY;
       if (Math.abs(deltaY) < 50) return;
       scrollHandler(deltaY > 0 ? "down" : "up");
@@ -151,15 +178,29 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
     (displayPlanets.length - 1) * normalGap +
     sunSize;
 
+  // Estimate the height of the text block based on screen size
+  const introTextHeight = isMobile ? 250 : 200;
+  const safeTopMargin = 120 + introTextHeight; // Top offset + text height
+
   const idleTranslateY = isMobile
     ? viewport.height - (idleTotalHeight - sunSize / 2) - verticalOffset
     : Math.max(
         viewport.height / 2 - idleTotalHeight / 2,
-        viewport.height * 0.07,
+        safeTopMargin, // <--- Ensures planets stop below the text
       );
 
+  // 1. Define the targets first
+  const activeTargetY = isMobile
+    ? viewport.height * 0.28
+    : viewport.height * 0.5;
+
+  const targetCenter = {
+    x: isMobile ? viewport.width * 0.5 : viewport.width * 0.4,
+    y: activeTargetY,
+  };
+
+  // 2. Define the compute function
   const computeTranslateY = () => {
-    const vh = viewport.height;
     if (activeIndex === null) {
       return idleTranslateY;
     }
@@ -171,14 +212,16 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
       return h;
     };
     return (
-      vh / 2 -
+      activeTargetY -
       getAccumulatedHeight(activeIndex) -
       getPlanetSize(activeIndex) / 2
     );
   };
 
+  // 3. NOW you can call it safely!
   const translateY = computeTranslateY();
 
+  // 4. Continue with the rest of your calculations
   const sunTopPosition =
     idleTranslateY +
     displayPlanets.length * planetSize +
@@ -197,9 +240,15 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
     }
   }, [activeIndex]);
 
-  const targetCenter = {
-    x: viewport.width * 0.4,
-    y: viewport.height * 0.5,
+  const handleNextPlanet = (e) => {
+    e.stopPropagation();
+    setScrollDirection("down");
+    setActiveIndex((prev) => {
+      const total = displayPlanets.length;
+      const nextIndex = prev === null ? 0 : (prev + 1) % total;
+      if (nextIndex !== prev) setPreviousIndex(prev);
+      return nextIndex;
+    });
   };
 
   return (
@@ -228,6 +277,45 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
           .tethered-float {
             animation: microTension var(--fdur) ease-in-out infinite;
             animation-delay: var(--fdelay);
+          }
+          
+          /* NEW: Custom Scrollbar */
+          .bio-panel::-webkit-scrollbar {
+            width: 6px;
+          }
+          .bio-panel::-webkit-scrollbar-track {
+            background: transparent;
+            margin: 20px 0; /* Keeps scrollbar away from edges */
+          }
+          .bio-panel::-webkit-scrollbar-thumb {
+            background-color: rgba(28, 7, 0, 0.15);
+            border-radius: 10px;
+          }
+          .bio-panel::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(28, 7, 0, 0.3);
+          }
+
+          /* NEW: Link Hover Effects */
+          .bio-link {
+            background-color: #caaff380; /* Lavender */
+            color: #1c0700;
+            transition: all 0.2s ease;
+          }
+          .bio-link:hover {
+            background-color: #9a60a8d7; /* Dark Purple */
+            color: #1c0700;
+            transform: translateY(-2px);
+          }
+            /* NEW: Mobile Next Indicator Bounce */
+          @keyframes subtleBounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(6px); }
+          }
+          .bio-link svg {
+            transition: transform 0.2s ease;
+          }
+          .bio-link:hover svg {
+            transform: translate(2px, -2px);
           }
         `}
       </style>
@@ -307,7 +395,7 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
           const possibleAngles = [-90, 90, -180, 45, -45];
           const startAngle = possibleAngles[index % possibleAngles.length];
           const currentAngle = isLoaded ? 0 : startAngle;
-          const translateX = hasShiftedLeft ? "-10vw" : "0";
+          const translateX = hasShiftedLeft && !isMobile ? "-10vw" : "0";
           const isVisible =
             activeIndex === null || Math.abs(index - activeIndex) <= 2;
           const isIconOnly = activeIndex !== null && activeIndex !== index;
@@ -419,7 +507,7 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
       {activeIndex !== null &&
         hasShiftedLeft &&
         displayPlanets[activeIndex]?.courses?.map((moon, idx) => (
-          <MoonPortrait
+          <TeamMoonPortrait
             key={`new-${activeIndex}-${idx}`}
             index={idx}
             totalMoons={displayPlanets[activeIndex].courses.length}
@@ -429,13 +517,14 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
             currentLang={currentLang}
             enterDirection={scrollDirection === "down" ? "top" : "bottom"}
             planetCenter={targetCenter}
+            forceLeftSide={!isMobile} /* <--- NEW PROP */
           />
         ))}
 
       {previousIndex !== null &&
         hasShiftedLeft &&
         displayPlanets[previousIndex]?.courses?.map((moon, idx) => (
-          <MoonPortrait
+          <TeamMoonPortrait
             key={`old-${previousIndex}-${idx}`}
             index={idx}
             totalMoons={displayPlanets[previousIndex].courses.length}
@@ -446,6 +535,7 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
             exitOnly
             exitDirection={scrollDirection === "down" ? "bottom" : "top"}
             planetCenter={targetCenter}
+            forceLeftSide={!isMobile} /* <--- NEW PROP */
           />
         ))}
 
@@ -480,6 +570,205 @@ export default function TeamPortrait({ currentLang, setCurrentLang }) {
             : "To experience and learn, we create a safe space where no form of discrimination is tolerated. The Sinnesküche is located on the top floor and is therefore unfortunately not wheelchair accessible."}
         </p>
       </div>
+      {/* BIO PANEL */}
+      {activeIndex !== null &&
+        hasShiftedLeft &&
+        displayPlanets[activeIndex]?.bio && (
+          <div
+            ref={bioPanelRef}
+            className="bio-panel"
+            style={{
+              position: "absolute",
+              top: isMobile ? "45%" : "15%",
+              bottom: "0",
+              left: isMobile ? "0" : "auto",
+              right: isMobile ? "0" : "5%",
+              width: isMobile ? "100%" : "40%",
+              backgroundColor: isMobile ? "#fffce3" : "transparent",
+              borderRadius: isMobile ? "30px 30px 0 0" : "0",
+              padding: isMobile ? "25px 20px 40px 20px" : "10px 20px 20px 0", // Tighter mobile padding
+              boxSizing: "border-box",
+              boxShadow: isMobile
+                ? "0 -10px 40px rgba(28, 7, 0, 0.05)"
+                : "none",
+              overflowY: "auto",
+              zIndex: 1500,
+              animation: "fadeInUp 0.5s ease forwards",
+              pointerEvents: "auto",
+              fontFamily: "Satoshi",
+              color: "#1c0700",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Pronoun Tag (Subtle & Elegant) */}
+            {displayPlanets[activeIndex].pronouns && (
+              <div
+                style={{
+                  display: "inline-block",
+                  backgroundColor: "rgba(28, 7, 0, 0.03)",
+                  border: "1px solid rgba(28, 7, 0, 0.1)",
+                  color: "rgba(28, 7, 0, 0.6)",
+                  padding: isMobile ? "3px 10px" : "4px 12px",
+                  borderRadius: "16px",
+                  fontSize: isMobile ? "0.65rem" : "0.75rem", // Smaller on mobile
+                  textTransform: "uppercase",
+                  letterSpacing: "0.8px",
+                  marginBottom: isMobile ? "16px" : "24px",
+                }}
+              >
+                {displayPlanets[activeIndex].pronouns[currentLang]}
+              </div>
+            )}
+
+            {/* Q&A Section */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: isMobile ? "24px" : "35px",
+              }}
+            >
+              {" "}
+              {/* Tighter gap on mobile */}
+              {displayPlanets[activeIndex].bio[currentLang].map((item, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: isMobile ? "8px" : "12px",
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "inline-block",
+                      backgroundColor: "rgba(78, 95, 40, 0.15)", // Soft, transparent green
+                      color: "#4e5f28", // Solid green text
+                      padding: isMobile ? "5px 12px" : "6px 14px",
+                      borderRadius: "20px",
+                      fontSize: isMobile ? "0.75rem" : "0.85rem", // Smaller on mobile
+                      fontWeight: "bold",
+                      alignSelf: "flex-start",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    {item.q}
+                  </span>
+                  <p
+                    style={{
+                      fontSize: isMobile ? "0.85rem" : "1rem", // Smaller on mobile
+                      lineHeight: isMobile ? "1.5" : "1.6",
+                      opacity: 0.9,
+                      margin: 0,
+                      paddingLeft: "4px",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {item.a}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Links Section */}
+            {displayPlanets[activeIndex].links && (
+              <div
+                style={{
+                  marginTop: isMobile ? "30px" : "45px",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: isMobile ? "8px" : "10px",
+                  paddingTop: "20px",
+                  paddingBottom: isMobile ? "10px" : "30px", // Less padding on mobile to make room for the button
+                  borderTop: "1px solid rgba(28, 7, 0, 0.1)",
+                }}
+              >
+                {displayPlanets[activeIndex].links.map((link, idx) => {
+                  const resolvedLabel =
+                    typeof link.label === "object"
+                      ? link.label[currentLang]
+                      : link.label;
+                  const resolvedUrl =
+                    typeof link.url === "object"
+                      ? link.url[currentLang]
+                      : link.url;
+
+                  return (
+                    <a
+                      key={idx}
+                      href={resolvedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bio-link"
+                      style={{
+                        display: "inline-block",
+                        textDecoration: "none",
+                        fontSize: isMobile ? "0.8rem" : "0.9rem",
+                        fontWeight: "600",
+                        padding: isMobile ? "6px 14px" : "8px 18px",
+                        borderRadius: "30px",
+                      }}
+                    >
+                      {resolvedLabel}
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* NEW: Mobile 'Next' Indicator */}
+            {isMobile && (
+              <div
+                style={{
+                  marginTop: "20px",
+                  paddingBottom: "20px",
+                  display: "flex",
+                  justifyContent: "center",
+                  width: "100%",
+                }}
+              >
+                <button
+                  onClick={handleNextPlanet}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "6px",
+                    color: "rgba(28, 7, 0, 0.4)", // Very subtle brown
+                    cursor: "pointer",
+                    fontFamily: "Satoshi",
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "1px",
+                    fontWeight: "bold",
+                    padding: "10px", // Generous hit area for thumbs
+                  }}
+                >
+                  {currentLang === "de" ? "Weiter" : "Next"}
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{
+                      animation: "subtleBounce 2s ease-in-out infinite",
+                    }}
+                  >
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <polyline points="19 12 12 19 5 12"></polyline>
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
     </div>
   );
 }
