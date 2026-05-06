@@ -82,6 +82,40 @@ export const planets = [
         base: getImage("sonja.png"),
       };
     },
+    pronouns: {
+      de: "Pferd/Pferds",
+      en: "horse/horse",
+    },
+    bio: {
+      de: [
+        {
+          q: "Wer bist du?",
+          a: "Ein stolzes Ross aus den weiten Wiesen der Kreativität.",
+        },
+        {
+          q: "Was kreierst du?",
+          a: "Elegante Galopp-Choreografien und den perfekten Hufschlag.",
+        },
+        {
+          q: "Was setzt du in der Sinnesküche um?",
+          a: "Ich sorge dafür, dass der Sinn für Abenteuer nie verloren geht.",
+        },
+      ],
+      en: [
+        {
+          q: "Who are you?",
+          a: "A proud steed from the wide meadows of creativity.",
+        },
+        {
+          q: "What do you create?",
+          a: "Elegant gallop choreographies and the perfect rhythm of hooves.",
+        },
+        {
+          q: "What do you realize in the Sinnesküche?",
+          a: "I make sure that the sense of adventure never gets lost.",
+        },
+      ],
+    },
     courses: [
       {
         text: {
@@ -101,6 +135,40 @@ export const planets = [
         base: getImage("lu.png"),
       };
     },
+    pronouns: {
+      de: "Pony/Pony",
+      en: "pony/pony",
+    },
+    bio: {
+      de: [
+        {
+          q: "Wer bist du?",
+          a: "Ein kleines, flauschiges Pony mit verdammt grossen Träumen.",
+        },
+        {
+          q: "Was kreierst du?",
+          a: "Glitzernde Hufeisen und staubige Wolken voller Freude.",
+        },
+        {
+          q: "Was setzt du in der Sinnesküche um?",
+          a: "Ich bringe den Hoppi-Galoppi-Spirit direkt in den Stall.",
+        },
+      ],
+      en: [
+        {
+          q: "Who are you?",
+          a: "A small, fluffy pony with damn big dreams.",
+        },
+        {
+          q: "What do you create?",
+          a: "Sparkling horseshoes and dusty clouds full of joy.",
+        },
+        {
+          q: "What do you realize in the Sinnesküche?",
+          a: "I bring the 'hoppi gallopi' spirit directly into the stable.",
+        },
+      ],
+    },
     courses: [
       {
         text: {
@@ -119,6 +187,40 @@ export const planets = [
         de: getImage("gini_name.png"),
         base: getImage("gini.png"),
       };
+    },
+    pronouns: {
+      de: "Wildpferd/Wildpferd",
+      en: "wild horse/wild horse",
+    },
+    bio: {
+      de: [
+        {
+          q: "Wer bist du?",
+          a: "Ein Wildpferd, das immer der Sonne entgegen galoppiert.",
+        },
+        {
+          q: "Was kreierst du?",
+          a: "Abenteuerlustige Ausritte durch unberührte kreative Felder.",
+        },
+        {
+          q: "Was setzt du in der Sinnesküche um?",
+          a: "Ich suche den perfekten Sonnenuntergang für den Abendgalopp.",
+        },
+      ],
+      en: [
+        {
+          q: "Who are you?",
+          a: "A wild horse that always gallops towards the sun.",
+        },
+        {
+          q: "What do you create?",
+          a: "Adventurous rides through untouched creative fields.",
+        },
+        {
+          q: "What do you realize in the Sinnesküche?",
+          a: "Searching for the perfect sunset for an evening gallop.",
+        },
+      ],
     },
     courses: [
       {
