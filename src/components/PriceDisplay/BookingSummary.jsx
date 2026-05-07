@@ -586,7 +586,10 @@ export default function BookingSummary({
   const isMixedPayment =
     usableCredits > 0 && (ticketsToPayCash > 0 || addonCashTotal > 0);
   const coversEntirely =
-    totalTicketsSelected > 0 && ticketsToPayCash === 0 && addonCashTotal === 0;
+    totalTicketsSelected > 0 &&
+    ticketsToPayCash === 0 &&
+    addonCashTotal === 0 &&
+    selectedPacks.length === 0;
 
   let finalTotalPrice = totalIndividualCash + addonCashTotal;
 
@@ -610,8 +613,8 @@ export default function BookingSummary({
       const courseName = pData?.courseName || sp.link.replace(/\//g, "");
       const packTitle =
         currentLang === "en"
-          ? `${pack.size} Session Pack (${courseName})`
-          : `${pack.size}er Karte (${courseName})`;
+          ? `${pack.size} Session Pack: ${courseName}`
+          : `${pack.size}er Karte: ${courseName}`;
 
       if (!breakdownMap[packTitle]) {
         breakdownMap[packTitle] = {
@@ -2351,7 +2354,7 @@ export default function BookingSummary({
               border: "none",
               cursor: "pointer",
               color: "#9960a8",
-              padding: "4px",
+              padding: "0",
             }}
           >
             <Info size={18} />
@@ -2672,173 +2675,248 @@ export default function BookingSummary({
                                   style={{
                                     display: "flex",
                                     flexDirection: "column",
-                                    gap: "6px",
+                                    gap: "6px", // Space between name row and hint text
                                   }}
                                 >
-                                  <div
-                                    onClick={() => {
-                                      if (prof.isGift) {
-                                        setGiftPrompt({
-                                          link,
-                                          packIdx: pIdx,
-                                          profileId: prof.id,
-                                          isGift: true,
-                                          recipientName: "",
-                                        });
-                                        return;
-                                      }
-                                      setSelectedPacks((prev) => [
-                                        ...prev,
-                                        {
-                                          id:
-                                            Date.now().toString() +
-                                            Math.random(),
-                                          link,
-                                          packIdx: pIdx,
-                                          profileId: prof.id,
-                                          isGift: false,
-                                          recipientName: "",
-                                        },
-                                      ]);
-                                    }}
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: "10px",
-                                      fontSize: "0.9rem",
-                                      fontWeight: "600",
-                                      cursor: "pointer",
-                                      color: "#1c0700",
-                                      userSelect: "none",
-                                    }}
-                                  >
-                                    <div
-                                      className="plus-btn-anim"
-                                      style={{
-                                        width: "20px",
-                                        height: "20px",
-                                        borderRadius: "6px",
-                                        border: "2px solid #caaff3",
-                                        backgroundColor:
-                                          "rgba(255, 252, 227, 0.8)",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        flexShrink: 0,
-                                      }}
-                                    >
-                                      <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        width="14"
-                                        height="14"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="#9960a8"
-                                        strokeWidth="3"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      >
-                                        <line
-                                          x1="12"
-                                          y1="5"
-                                          x2="12"
-                                          y2="19"
-                                        ></line>
-                                        <line
-                                          x1="5"
-                                          y1="12"
-                                          x2="19"
-                                          y2="12"
-                                        ></line>
-                                      </svg>
-                                    </div>
-                                    {prof.name}
-                                  </div>
+                                  {(() => {
+                                    // Move calculation up so both top row and bottom row can see it
+                                    const packsForProf = selectedPacks.filter(
+                                      (p) =>
+                                        p.link === link &&
+                                        p.packIdx === pIdx &&
+                                        p.profileId === prof.id,
+                                    );
+                                    const packCount = packsForProf.length;
 
-                                  <div
-                                    style={{
-                                      fontSize: "0.75rem",
-                                      color: "#4e5f28",
-                                      paddingLeft: "30px",
-                                      fontWeight: "600",
-                                      lineHeight: 1.4,
-                                      marginTop: "-4px",
-                                    }}
-                                  >
-                                    {prof.isGift ? (
-                                      <span>
-                                        {currentLang === "en"
-                                          ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} as gift code.`
-                                          : `${pack.size} ${pack.size === 1 ? "Kredit" : "Kredite"} als Geschenkcode.`}
-                                      </span>
-                                    ) : (
-                                      (() => {
-                                        const needed =
-                                          sessionsNeeded[prof.id]?.[link] || 0;
-                                        const packsInCartForProf =
-                                          selectedPacks.filter(
-                                            (p) =>
-                                              p.link === link &&
-                                              p.profileId === prof.id,
-                                          );
-                                        const pendingCreditsInCart =
-                                          packsInCartForProf.reduce(
-                                            (sum, p) =>
-                                              sum +
-                                              (pricingMap[link]?.packs?.[
-                                                p.packIdx
-                                              ]?.size || 0),
-                                            0,
-                                          );
+                                    return (
+                                      <>
+                                        {/* TOP ROW: Name and Stepper */}
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            gap: "16px",
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              fontSize: "0.9rem",
+                                              fontWeight: "700",
+                                              color: "#1c0700",
+                                              cursor: prof.isGift
+                                                ? "pointer"
+                                                : "default",
+                                              userSelect: "none",
+                                            }}
+                                            onClick={() => {
+                                              if (prof.isGift) {
+                                                setGiftPrompt({
+                                                  link,
+                                                  packIdx: pIdx,
+                                                  profileId: prof.id,
+                                                  isGift: true,
+                                                  recipientName: "",
+                                                });
+                                              }
+                                            }}
+                                          >
+                                            {prof.name}
+                                          </span>
 
-                                        const existingBal =
-                                          profileBalances[prof.id]?.[
-                                            getCreditKey(link)
-                                          ] || 0;
-                                        const totalAvailable =
-                                          existingBal + pendingCreditsInCart;
+                                          <div
+                                            style={{
+                                              display: "flex",
+                                              alignItems: "center",
+                                              gap: "8px",
+                                              backgroundColor:
+                                                "rgba(202, 175, 243, 0.1)",
+                                              borderRadius: "8px",
+                                              padding: "2px 4px",
+                                              flexShrink: 0,
+                                            }}
+                                          >
+                                            <button
+                                              disabled={packCount === 0}
+                                              onClick={() => {
+                                                setSelectedPacks((prev) => {
+                                                  const indexToRemove =
+                                                    prev.findIndex(
+                                                      (p) =>
+                                                        p.link === link &&
+                                                        p.packIdx === pIdx &&
+                                                        p.profileId === prof.id,
+                                                    );
+                                                  if (indexToRemove !== -1) {
+                                                    const newPacks = [...prev];
+                                                    newPacks.splice(
+                                                      indexToRemove,
+                                                      1,
+                                                    );
+                                                    return newPacks;
+                                                  }
+                                                  return prev;
+                                                });
+                                              }}
+                                              style={{
+                                                border: "none",
+                                                background: "none",
+                                                cursor:
+                                                  packCount === 0
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                                fontWeight: "900",
+                                                color: "#9960a8",
+                                                padding: "0 6px",
+                                                opacity:
+                                                  packCount === 0 ? 0.3 : 1,
+                                              }}
+                                            >
+                                              -
+                                            </button>
+                                            <span
+                                              style={{
+                                                fontWeight: "900",
+                                                fontSize: "0.85rem",
+                                                minWidth: "10px",
+                                                textAlign: "center",
+                                                color: "#9960a8",
+                                              }}
+                                            >
+                                              {packCount}
+                                            </span>
+                                            <button
+                                              onClick={() => {
+                                                if (prof.isGift) {
+                                                  setGiftPrompt({
+                                                    link,
+                                                    packIdx: pIdx,
+                                                    profileId: prof.id,
+                                                    isGift: true,
+                                                    recipientName: "",
+                                                  });
+                                                  return;
+                                                }
+                                                setSelectedPacks((prev) => [
+                                                  ...prev,
+                                                  {
+                                                    id:
+                                                      Date.now().toString() +
+                                                      Math.random(),
+                                                    link,
+                                                    packIdx: pIdx,
+                                                    profileId: prof.id,
+                                                    isGift: false,
+                                                    recipientName: "",
+                                                  },
+                                                ]);
+                                              }}
+                                              style={{
+                                                border: "none",
+                                                background: "none",
+                                                cursor: "pointer",
+                                                fontWeight: "900",
+                                                color: "#9960a8",
+                                                padding: "0 6px",
+                                              }}
+                                            >
+                                              +
+                                            </button>
+                                          </div>
+                                        </div>
 
-                                        const actualNeeds = Math.max(
-                                          0,
-                                          needed - totalAvailable,
-                                        );
-                                        const used = Math.min(
-                                          actualNeeds,
-                                          pack.size,
-                                        );
-                                        const added = pack.size - used;
+                                        {/* BOTTOM ROW: Hint (Only renders if count is > 0) */}
+                                        {packCount > 0 && (
+                                          <div
+                                            style={{
+                                              fontSize: isMobile
+                                                ? "0.55rem"
+                                                : "0.75rem",
+                                              color: "#4e5f28",
+                                              fontWeight: "400",
+                                              lineHeight: 1.4,
+                                              width: "100%", // Ensures it uses full panel width on mobile
+                                            }}
+                                          >
+                                            {prof.isGift ? (
+                                              <span>
+                                                {currentLang === "en"
+                                                  ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} as gift code.`
+                                                  : `${pack.size} ${pack.size === 1 ? "Kredit" : "Kredite"} als Geschenkcode.`}
+                                              </span>
+                                            ) : (
+                                              (() => {
+                                                const needed =
+                                                  sessionsNeeded[prof.id]?.[
+                                                    link
+                                                  ] || 0;
+                                                const packsInCartForProf =
+                                                  selectedPacks.filter(
+                                                    (p) =>
+                                                      p.link === link &&
+                                                      p.profileId === prof.id,
+                                                  );
+                                                const pendingCreditsInCart =
+                                                  packsInCartForProf.reduce(
+                                                    (sum, p) =>
+                                                      sum +
+                                                      (pricingMap[link]
+                                                        ?.packs?.[p.packIdx]
+                                                        ?.size || 0),
+                                                    0,
+                                                  );
+                                                const existingBal =
+                                                  profileBalances[prof.id]?.[
+                                                    getCreditKey(link)
+                                                  ] || 0;
+                                                const totalAvailable =
+                                                  existingBal +
+                                                  pendingCreditsInCart;
+                                                const actualNeeds = Math.max(
+                                                  0,
+                                                  needed - totalAvailable,
+                                                );
+                                                const used = Math.min(
+                                                  actualNeeds,
+                                                  pack.size,
+                                                );
+                                                const added = pack.size - used;
+                                                const isGuestProfile =
+                                                  !currentUser ||
+                                                  prof.id === "guest";
 
-                                        const isGuestProfile =
-                                          !currentUser || prof.id === "guest";
-
-                                        if (used === 0) {
-                                          if (isGuestProfile) {
-                                            return currentLang === "en"
-                                              ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} will be sent to you as a code.`
-                                              : `${pack.size} ${pack.size === 1 ? "Kredit" : "Kredite"} ${pack.size === 1 ? "wird" : "werden"} dir als Code zugesendet.`;
-                                          } else {
-                                            return currentLang === "en"
-                                              ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} will be added to your profile balance.`
-                                              : `${pack.size} ${pack.size === 1 ? "Kredit" : "Kredite"} ${pack.size === 1 ? "wird" : "werden"} deinem Profilguthaben hinzugefügt.`;
-                                          }
-                                        } else if (added === 0) {
-                                          return currentLang === "en"
-                                            ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"}.`
-                                            : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt.`;
-                                        } else {
-                                          if (isGuestProfile) {
-                                            return currentLang === "en"
-                                              ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"} and ${added} will be sent to you as a code.`
-                                              : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt und ${added} ${added === 1 ? "Kredit" : "Kredite"} ${added === 1 ? "wird" : "werden"} dir als Code zugesendet.`;
-                                          } else {
-                                            return currentLang === "en"
-                                              ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"} and ${added} will be added to your profile balance.`
-                                              : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt und ${added} ${added === 1 ? "Kredit" : "Kredite"} ${added === 1 ? "wird" : "werden"} deinem Profilguthaben hinzugefügt.`;
-                                          }
-                                        }
-                                      })()
-                                    )}
-                                  </div>
+                                                if (used === 0) {
+                                                  if (isGuestProfile) {
+                                                    return currentLang === "en"
+                                                      ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} will be sent to you as a code.`
+                                                      : `${pack.size} ${pack.size === 1 ? "Kredit" : "Kredite"} ${pack.size === 1 ? "wird" : "werden"} dir als Code zugesendet.`;
+                                                  } else {
+                                                    return currentLang === "en"
+                                                      ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} will be added to your profile balance.`
+                                                      : `${pack.size} ${pack.size === 1 ? "Kredit" : "Kredite"} ${pack.size === 1 ? "wird" : "werden"} deinem Profilguthaben hinzugefügt.`;
+                                                  }
+                                                } else if (added === 0) {
+                                                  return currentLang === "en"
+                                                    ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"}.`
+                                                    : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt.`;
+                                                } else {
+                                                  if (isGuestProfile) {
+                                                    return currentLang === "en"
+                                                      ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"} and ${added} will be sent to you as a code.`
+                                                      : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt und ${added} ${added === 1 ? "Kredit" : "Kredite"} ${added === 1 ? "wird" : "werden"} dir als Code zugesendet.`;
+                                                  } else {
+                                                    return currentLang === "en"
+                                                      ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"} and ${added} will be added to your profile balance.`
+                                                      : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt und ${added} ${added === 1 ? "Kredit" : "Kredite"} ${added === 1 ? "wird" : "werden"} deinem Profilguthaben hinzugefügt.`;
+                                                  }
+                                                }
+                                              })()
+                                            )}
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               );
                             })}
@@ -2896,22 +2974,41 @@ export default function BookingSummary({
                       fontSize: "0.75rem",
                       display: "flex",
                       justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "8px",
                     }}
                   >
-                    <span>
+                    <span
+                      style={{
+                        flex: 1,
+                        lineHeight: 1.4,
+                        paddingRight: "10px",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
                       {item.count}{" "}
                       {item.isPack
                         ? "x"
                         : currentLang === "en"
                           ? item.count === 1
-                            ? "Session"
-                            : "Sessions"
+                            ? "Session:"
+                            : "Sessions:"
                           : item.count === 1
-                            ? "Termin"
-                            : "Termine"}{" "}
+                            ? "Termin:"
+                            : "Termine:"}{" "}
                       {item.name}
                     </span>
-                    <span style={{ opacity: 0.8, color: "#4e5f28" }}>
+                    <span
+                      style={{
+                        opacity: 0.8,
+                        color: "#4e5f28",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                        textAlign: "right",
+                      }}
+                    >
                       {item.isCredit
                         ? currentLang === "en"
                           ? "Paid with credit"
@@ -3163,92 +3260,6 @@ export default function BookingSummary({
               : "Code einlösen & Buchen"}
           </button>
         </div>
-      ) : coversEntirely && !activePackCode ? (
-        <>
-          {renderTermsAgreement()}
-          <button
-            onClick={() => validateAndProceed(onBookCredits)}
-            style={{
-              ...S.creditBtnStyle(isMobile),
-              padding: "14px",
-              marginTop: "10px",
-            }}
-          >
-            {currentLang === "en"
-              ? `Book with ${totalTicketsSelected} ${totalTicketsSelected === 1 ? "credit" : "credits"}`
-              : `Mit ${totalTicketsSelected} ${totalTicketsSelected === 1 ? "Kredit" : "Krediten"} buchen`}
-          </button>
-          <button
-            onClick={() => setShowStripeAlternative(!showStripeAlternative)}
-            style={{
-              background: "none",
-              border: "none",
-              textDecoration: "underline",
-              color: "#4e5f28",
-              cursor: "pointer",
-              fontSize: "0.8rem",
-              textAlign: "left",
-              padding: "4px 0",
-            }}
-          >
-            {currentLang === "en"
-              ? "Or pay with card"
-              : "Oder mit Karte zahlen"}
-          </button>
-          {showStripeAlternative && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "1.2rem",
-                marginTop: "1.5rem",
-              }}
-            >
-              {renderPackOption()}
-              {renderTermsAgreement()}
-              <button
-                onClick={() =>
-                  validateAndProceed(() => {
-                    const packCount = selectedPacks.length;
-                    if (packCount > 0) {
-                      onPayment(
-                        "pack",
-                        promoAppliesToPack ? activePromo?.code : null,
-                        selectedPacks,
-                        finalPackPrice,
-                        usableCredits,
-                        activePackCode,
-                      );
-                    } else {
-                      onPayment(
-                        "individual",
-                        promoAppliesToSingle ? activePromo?.code : null,
-                        totalTicketsSelected,
-                        finalTotalPrice,
-                        usableCredits,
-                        activePackCode,
-                      );
-                    }
-                  })
-                }
-                style={{ ...S.primaryBtnStyle(isMobile) }}
-              >
-                {(() => {
-                  const price = formatPrice(
-                    selectedPacks.length > 0 ? finalPackPrice : finalTotalPrice,
-                  );
-                  const creditText =
-                    usableCredits > 0
-                      ? `${usableCredits} ${currentLang === "en" ? (usableCredits === 1 ? "Credit" : "Credits") : "Guthaben"} + `
-                      : "";
-                  return currentLang === "en"
-                    ? `Buy & Book (${creditText}${price} CHF)`
-                    : `Kaufen & Buchen (${creditText}${price} CHF)`;
-                })()}
-              </button>
-            </div>
-          )}
-        </>
       ) : (
         <div
           style={{
@@ -3273,6 +3284,8 @@ export default function BookingSummary({
                     usableCredits,
                     activePackCode,
                   );
+                } else if (coversEntirely && !activePackCode) {
+                  onBookCredits();
                 } else {
                   onPayment(
                     "individual",
@@ -3288,16 +3301,42 @@ export default function BookingSummary({
             style={{ ...S.primaryBtnStyle(isMobile) }}
           >
             {(() => {
-              const price = formatPrice(
-                selectedPacks.length > 0 ? finalPackPrice : finalTotalPrice,
-              );
+              const priceNum =
+                selectedPacks.length > 0 ? finalPackPrice : finalTotalPrice;
+              const price = formatPrice(priceNum);
+              const isZeroCost = priceNum === 0;
+
               const creditText =
                 usableCredits > 0
-                  ? `${usableCredits} ${currentLang === "en" ? (usableCredits === 1 ? "Credit" : "Credits") : "Guthaben"} + `
+                  ? `${usableCredits} ${currentLang === "en" ? (usableCredits === 1 ? "Credit" : "Credits") : "Guthaben"}`
                   : "";
+
+              const plusStr = usableCredits > 0 && !isZeroCost ? " + " : "";
+
+              let actionTextEn = "Buy";
+              let actionTextDe = "Kaufen";
+
+              if (hasSelection) {
+                if (isZeroCost) {
+                  actionTextEn = "Book";
+                  actionTextDe = "Buchen";
+                } else {
+                  actionTextEn = "Buy & Book";
+                  actionTextDe = "Kaufen & Buchen";
+                }
+              }
+
+              const costString = isZeroCost
+                ? creditText
+                : `${creditText}${plusStr}${price} CHF`;
+
               return currentLang === "en"
-                ? `Buy & Book (${creditText}${price} CHF)`
-                : `Kaufen & Buchen (${creditText}${price} CHF)`;
+                ? costString
+                  ? `${actionTextEn} (${costString})`
+                  : actionTextEn
+                : costString
+                  ? `${actionTextDe} (${costString})`
+                  : actionTextDe;
             })()}
           </button>
         </div>
