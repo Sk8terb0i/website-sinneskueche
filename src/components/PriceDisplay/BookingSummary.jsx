@@ -4117,29 +4117,28 @@ export default function BookingSummary({
                 {currentUser ? (
                   currentLang === "en" ? (
                     <>
-                      Credits are tied to your profile and are non-transferable.
-                      <br />
-                      You can use one credit per course day.
+                      Credits are tied to your profile. They are
+                      non-transferable and limited to one ticket per course day.
+                      Purchased packs expire after 1 year.
                     </>
                   ) : (
                     <>
-                      Guthaben sind an dein Profil gebunden und nicht
-                      übertragbar.
-                      <br />
-                      Pro Kurstag kann ein Guthaben genutzt werden.
+                      Guthaben sind an dein Profil gebunden. Sie sind nicht
+                      übertragbar und auf ein Ticket pro Kurstag begrenzt.
+                      Gekaufte Pakete verfallen nach 1 Jahr.
                     </>
                   )
                 ) : currentLang === "en" ? (
                   <>
                     Credits are tied to your email address. They are
                     non-transferable and limited to one ticket per course day.
+                    Purchased packs expire after 1 year.
                   </>
                 ) : (
                   <>
-                    Guthaben sind an deine E-Mail-Adresse gebunden.
-                    <br />
-                    Sie sind nicht übertragbar und auf ein Ticket pro Kurstag
-                    begrenzt.
+                    Guthaben sind an deine E-Mail-Adresse gebunden. Sie sind
+                    nicht übertragbar und auf ein Ticket pro Kurstag begrenzt.
+                    Gekaufte Pakete verfallen nach 1 Jahr.
                   </>
                 )}
               </p>
