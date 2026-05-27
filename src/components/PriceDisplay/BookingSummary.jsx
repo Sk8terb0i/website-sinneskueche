@@ -4119,7 +4119,7 @@ export default function BookingSummary({
                     <>
                       Credits are tied to your profile. They are
                       non-transferable and limited to one ticket per course day.
-                      Purchased packs expire after 1 year.
+                      Each purchased pack expires after 1 year.
                     </>
                   ) : (
                     <>
@@ -4130,15 +4130,13 @@ export default function BookingSummary({
                   )
                 ) : currentLang === "en" ? (
                   <>
-                    Credits are tied to your email address. They are
-                    non-transferable and limited to one ticket per course day.
-                    Purchased packs expire after 1 year.
+                    Guest pack codes are non-transferable and are limited to one
+                    ticket per course day. Purchased packs expire after 1 year.
                   </>
                 ) : (
                   <>
-                    Guthaben sind an deine E-Mail-Adresse gebunden. Sie sind
-                    nicht übertragbar und auf ein Ticket pro Kurstag begrenzt.
-                    Gekaufte Pakete verfallen nach 1 Jahr.
+                    Gast-Codes sind nicht übertragbar und auf ein Ticket pro
+                    Kurstag begrenzt. Gekaufte Pakete verfallen nach 1 Jahr.
                   </>
                 )}
               </p>

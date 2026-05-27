@@ -6,7 +6,15 @@ import CourseTitle from "../components/CourseTitle/CourseTitle";
 import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
 import CourseDescription from "../components/CourseDescription/CourseDescription";
 import RegisterShortcut from "../components/RegisterShortcut/RegisterShortcut";
-import { Clock, Users, Coffee, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Clock,
+  Users,
+  Coffee,
+  ChevronDown,
+  ChevronUp,
+  Ticket,
+  CreditCard,
+} from "lucide-react";
 import { motion } from "framer-motion";
 
 const planetImages = import.meta.glob("../assets/planets/*.png", {
@@ -80,8 +88,20 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         },
         {
           title: "Four options to choose from",
-          content:
-            "• Single ticket for a spontaneous visit\n• 2-, 5-, or 10-session pass with flexible scheduling. Credits are saved to your profile and can be redeemed later. They are valid for 1 year.",
+          content: (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+            >
+              <div>
+                <strong>Single ticket:</strong> For a spontaneous visit.
+              </div>
+              <div>
+                <strong>Session pass (2, 5, or 10):</strong> Flexible
+                scheduling. Credits are saved to your profile and can be
+                redeemed later. They are valid for 1 year.
+              </div>
+            </div>
+          ),
         },
         {
           title: "Fancy the pottery wheel?",
@@ -113,8 +133,20 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         },
         {
           title: "Vier Karten zur Auswahl",
-          content:
-            "• Einzelkarte für den spontanen Besuch\n• 2er-, 5er- oder 10er-Abo mit freier Terminwahl. Die Guthaben werden deinem Profil gutgeschrieben und du kannst sie auch später einlösen. Sie sind 1 Jahr gültig.",
+          content: (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+            >
+              <div>
+                <strong>Einzelkarte:</strong> Für den spontanen Besuch.
+              </div>
+              <div>
+                <strong>Abo (2er, 5er, 10er):</strong> Mit freier Terminwahl.
+                Die Guthaben werden deinem Profil gutgeschrieben und du kannst
+                sie auch später einlösen. Sie sind 1 Jahr gültig.
+              </div>
+            </div>
+          ),
         },
         {
           title: "Lust auf die Drehscheibe?",
