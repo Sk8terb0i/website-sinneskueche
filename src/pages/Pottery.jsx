@@ -6,7 +6,7 @@ import CourseTitle from "../components/CourseTitle/CourseTitle";
 import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
 import CourseDescription from "../components/CourseDescription/CourseDescription";
 import RegisterShortcut from "../components/RegisterShortcut/RegisterShortcut";
-import { Clock, Users, Coffee } from "lucide-react";
+import { Clock, Users, Coffee, ChevronDown, ChevronUp } from "lucide-react";
 import { motion } from "framer-motion";
 
 const planetImages = import.meta.glob("../assets/planets/*.png", {
@@ -20,6 +20,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
   const [isBookingExpanded, setIsBookingExpanded] = useState(false);
   const bookingRef = useRef(null);
   const [customTitle, setCustomTitle] = useState(null);
+  const [activeTab, setActiveTab] = useState(null);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
@@ -70,7 +71,29 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         { icon: <Users size={18} />, text: "All skill levels" },
         { icon: <Coffee size={18} />, text: "Small, cozy groups" },
       ],
-      description: `A little piece of earth for your home! Clay, minerals, and glass. At our Pottery Tuesdays, you can try your hand at pottery in a welcoming atmosphere and hone your skills. It doesn’t matter how much experience you have, everyone is welcome. Unlike other pottery classes, you can visit us on Tuesdays whenever it suits you, without committing to the next few months.\n\nWe have everything here, from pottery wheels to rollers, tools, and glazes.\nThe clay and firing are also included in your ticket.\n\nCome knead the clay, and we promise that with the leftover clay on your hands, you’ll wash away some of your worries by the end.`,
+      description: `In our pottery kitchen, you can try your hand at pottery in a welcoming atmosphere and hone your skills. It doesn't matter how much experience you bring, everyone is welcome.\n\nClay, tools, and rollers are ready for you. You drop by, work on your own project, or get inspired by the materials and other participants. If you need help, we are here.`,
+      tabs: [
+        {
+          title: "How it works",
+          content:
+            "Pick a date, drop by, get started. If it's your first time, you'll get a brief introduction to the studio, materials, processes, and basic techniques. After that, you work freely at your own pace.\n\nEverything is included in the price: clay, glazes, the firing of your pieces, and the use of all tools. You only need to bring your ideas.",
+        },
+        {
+          title: "Four options to choose from",
+          content:
+            "• Single ticket for a spontaneous visit\n• 2-, 5-, or 10-session pass with flexible scheduling. Credits are saved to your profile and can be redeemed later. They are valid for 1 year.",
+        },
+        {
+          title: "Fancy the pottery wheel?",
+          content:
+            "For an additional charge, you can book an introduction to the pottery wheel on a separate day, as well as individual 1-hour slots.",
+        },
+        {
+          title: "Flexible & Simple",
+          content:
+            "Whether you come regularly or just want to get a taste of it. With us, you don't need to book a course in advance and don't need to bring anything except your love for pottery.",
+        },
+      ],
     },
     de: {
       title: "Töpferküche",
@@ -81,7 +104,29 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         { icon: <Users size={18} />, text: "Alle Level willkommen" },
         { icon: <Coffee size={18} />, text: "Kleine, gemütliche Gruppen" },
       ],
-      description: `Ein Stückchen Erde für Zuhause! Ton, Mineralien und Glas. An unseren Pottery Tuesdays kannst du dich in vertrauter Atmosphäre im Töpfern versuchen und deine Fähigkeiten schärfen. Es spielt keine Rolle wieviel Erfahrung du mitbringst, jede*r ist willkommen. Anders als in sonstigen Töpfer-Kursen kannst du uns an den Dienstagen besuchen, an denen es dir passt ohne dich für die nächsten Monate zu verpflichten.\n\nWir haben alles hier von Drehscheiben, über Walzen, Werkzeuge und Glasuren. Auch der Ton und das Brennen sind in deinem Ticket inklusive.\n\nKomm Kneten und versprochen mit dem Restton an den Händen, wäschst du dir am Ende auch etwas Kummer vom Leib.`,
+      description: `In unserer Töpferküche kannst du dich in vertrauter Atmosphäre im Töpfern versuchen und deine Fähigkeiten schärfen. Es spielt keine Rolle wieviel Erfahrung du mitbringst, jede*r ist willkommen.\n\nTon, Werkzeug, Walze stehen für dich bereit. Du kommst vorbei, arbeitest an deinem eigenen Projekt oder lässt dich vom Material und den anderen Teilnehmer:innen inspirieren. Wenn du Hilfe brauchst, sind wir da.`,
+      tabs: [
+        {
+          title: "So funktioniert’s",
+          content:
+            "Termin aussuchen, vorbeikommen, loslegen. Wer zum ersten Mal da ist, bekommt eine kurze Einführung in Werkstatt, Material, Abläufe und grundlegende Techniken. Danach arbeitest du frei in deinem Tempo.\n\nIm Preis ist alles drin: Ton, Glasuren, das Brennen deiner Werke, sowie die Nutzung sämtlicher Werkzeuge. Du bringst nur deine Ideen mit.",
+        },
+        {
+          title: "Vier Karten zur Auswahl",
+          content:
+            "• Einzelkarte für den spontanen Besuch\n• 2er-, 5er- oder 10er-Abo mit freier Terminwahl. Die Guthaben werden deinem Profil gutgeschrieben und du kannst sie auch später einlösen. Sie sind 1 Jahr gültig.",
+        },
+        {
+          title: "Lust auf die Drehscheibe?",
+          content:
+            "Gegen Aufpreis kannst du an einem separaten Tag eine Einführung an der Drehscheibe sowie einzelne 1-Stunden-Slots dazubuchen.",
+        },
+        {
+          title: "Flexibel & Unkompliziert",
+          content:
+            "Egal ob du regelmässig kommst oder einfach mal reinschnuppern willst. Bei uns musst du keinen Kurs vorab buchen und nichts mitbringen ausser Lust am Töpfern.",
+        },
+      ],
     },
   };
 
@@ -156,6 +201,41 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       boxShadow: "0 4px 20px rgba(0,0,0,0.02)",
     },
     infoLabel: { fontSize: "0.85rem", lineHeight: "1.4", fontWeight: "600" },
+    accordionContainer: {
+      marginTop: "32px",
+      textAlign: "left",
+      width: "100%",
+    },
+    accordionItem: {
+      border: "1px solid rgba(202, 175, 243, 0.25)",
+      borderRadius: "14px",
+      marginBottom: "14px",
+      overflow: "hidden",
+      background: "rgba(202, 175, 243, 0.03)",
+    },
+    accordionHeader: {
+      width: "100%",
+      padding: "18px 24px",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      background: "rgba(202, 175, 243, 0.06)",
+      border: "none",
+      cursor: "pointer",
+      color: "#1c0700",
+      fontFamily: "inherit",
+      fontSize: "1.05rem",
+      fontWeight: "600",
+      textAlign: "left",
+    },
+    accordionContent: {
+      padding: "20px 24px",
+      color: "#1c0700",
+      opacity: 0.9,
+      lineHeight: "1.65",
+      whiteSpace: "pre-line",
+      fontSize: "0.95rem",
+    },
   };
 
   return (
@@ -277,6 +357,41 @@ export default function Pottery({ currentLang, setCurrentLang }) {
           }}
         >
           <CourseDescription text={current.description} />
+
+          {/* Dynamic Accordion Tabs Section */}
+          <div style={styles.accordionContainer}>
+            {current.tabs.map((tab, idx) => {
+              const isOpen = activeTab === idx;
+              return (
+                <div key={idx} style={styles.accordionItem}>
+                  <button
+                    onClick={() => setActiveTab(isOpen ? null : idx)}
+                    style={styles.accordionHeader}
+                  >
+                    <span>{tab.title}</span>
+                    <motion.div
+                      animate={{ rotate: isOpen ? 180 : 0 }}
+                      transition={{ duration: 0.2 }}
+                      style={{ display: "flex", color: "#caaff3" }}
+                    >
+                      <ChevronUp size={20} />
+                    </motion.div>
+                  </button>
+                  <motion.div
+                    initial={false}
+                    animate={{
+                      height: isOpen ? "auto" : 0,
+                      opacity: isOpen ? 1 : 0,
+                    }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    style={{ overflow: "hidden" }}
+                  >
+                    <div style={styles.accordionContent}>{tab.content}</div>
+                  </motion.div>
+                </div>
+              );
+            })}
+          </div>
         </motion.div>
 
         <motion.div

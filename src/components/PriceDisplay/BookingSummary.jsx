@@ -31,6 +31,7 @@ import {
   getDocs,
   updateDoc,
   arrayUnion,
+  deleteDoc,
 } from "firebase/firestore";
 import { auth, db } from "../../firebase";
 import * as S from "./PriceDisplayStyles";
@@ -974,6 +975,25 @@ export default function BookingSummary({
 
       if (packSnap.exists()) {
         const packData = packSnap.data();
+        const createdAt = packData.createdAt?.toDate
+          ? packData.createdAt.toDate()
+          : packData.createdAt
+            ? new Date(packData.createdAt)
+            : null;
+
+        // Auto-delete and reject if the code is older than 1 year
+        if (createdAt && new Date() - createdAt > 365 * 24 * 60 * 60 * 1000) {
+          await deleteDoc(packDocRef);
+          setCodeStatus({
+            loading: false,
+            error:
+              currentLang === "en"
+                ? "This session pack code has expired (valid for 1 year)."
+                : "Dieser Code ist abgelaufen (1 Jahr Gültigkeit).",
+          });
+          return;
+        }
+
         if (packData.remainingCredits > 0) {
           setActivePackCode({
             code: upperCode,

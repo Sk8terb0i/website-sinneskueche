@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { db } from "../../firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import {
   Ticket,
   PlusCircle,
@@ -23,6 +25,23 @@ export default function PackStatusCard({
   const [selectedHistoryCourse, setSelectedHistoryCourse] = useState(null);
   const [showPackPicker, setShowPackPicker] = useState(null);
   const [viewingProfileId, setViewingProfileId] = useState("main");
+  const [allHistory, setAllHistory] = useState([]);
+
+  useEffect(() => {
+    const fetchAllHistory = async () => {
+      try {
+        const q = query(
+          collection(db, "credit_history"),
+          where("userId", "==", currentUser.uid),
+        );
+        const snap = await getDocs(q);
+        setAllHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        console.error("Error checking expirations:", err);
+      }
+    };
+    if (currentUser?.uid) fetchAllHistory();
+  }, [currentUser]);
 
   // Build the array of available profiles and their respective credits
   const allProfiles = useMemo(() => {
@@ -51,11 +70,101 @@ export default function PackStatusCard({
     allProfiles.find((p) => p.id === viewingProfileId) || allProfiles[0];
   const activeCredits = activeProfile.credits || {};
 
-  // Filter out any courses where the credit amount is 0 or less
-  const validCredits = Object.entries(activeCredits).filter(([key, amount]) => {
-    const numericAmount = isNaN(parseFloat(amount)) ? 0 : parseFloat(amount);
-    return numericAmount > 0;
-  });
+  const creditExpirationInfo = useMemo(() => {
+    const info = {};
+    const cleanKey = (key) =>
+      (key || "").replace(/\//g, "").toLowerCase().trim();
+    const reverseMapping = {
+      "pottery tuesdays": "pottery",
+      "artistic vision": "artistic-vision",
+      "get ink!": "get-ink",
+      "vocal coaching": "singing",
+      "extended voice lab": "extended-voice-lab",
+      "performing words": "performing-words",
+      "singing basics weekend": "singing-basics",
+    };
+
+    Object.keys(activeCredits).forEach((courseKey) => {
+      const inputKey = cleanKey(courseKey);
+      const targetId = reverseMapping[inputKey] || inputKey;
+      const validKeys = new Set([inputKey, targetId]);
+      for (const [legacy, id] of Object.entries(reverseMapping)) {
+        if (id === targetId) validKeys.add(cleanKey(legacy));
+      }
+
+      let courseHistory = allHistory.filter((item) => {
+        const matchesKey =
+          validKeys.has(cleanKey(item.courseKey)) ||
+          validKeys.has(cleanKey(item.coursePath));
+        const matchesProfile =
+          viewingProfileId === "main"
+            ? !item.profileId || item.profileId === "main"
+            : item.profileId === viewingProfileId;
+        return matchesKey && matchesProfile;
+      });
+
+      // Sort oldest to newest for FIFO matching
+      courseHistory.sort(
+        (a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0),
+      );
+
+      let buckets = [];
+      for (const item of courseHistory) {
+        const amount = item.amount || 0;
+        if (amount > 0) {
+          const secs = item.createdAt?.seconds || 0;
+          const createdAt = new Date(secs * 1000);
+          const expiresAt = new Date(
+            createdAt.getTime() + 365 * 24 * 60 * 60 * 1000,
+          );
+          buckets.push({ amount, remaining: amount, expiresAt });
+        } else if (amount < 0) {
+          let toDeduct = Math.abs(amount);
+          for (let b of buckets) {
+            if (b.remaining > 0) {
+              if (b.remaining >= toDeduct) {
+                b.remaining -= toDeduct;
+                toDeduct = 0;
+                break;
+              } else {
+                toDeduct -= b.remaining;
+                b.remaining = 0;
+              }
+            }
+          }
+        }
+      }
+
+      const now = new Date();
+      let expiredAmount = 0;
+      let nextExpiring = null;
+
+      for (let b of buckets) {
+        if (b.remaining > 0) {
+          if (b.expiresAt < now) {
+            expiredAmount += b.remaining;
+          } else {
+            if (!nextExpiring || b.expiresAt < nextExpiring.expiresAt) {
+              nextExpiring = b;
+            }
+          }
+        }
+      }
+
+      info[courseKey] = { expiredAmount, nextExpiring };
+    });
+    return info;
+  }, [activeCredits, allHistory, viewingProfileId]);
+
+  // Adjust display amounts dynamically based on FIFO expiration calculations
+  const validCredits = Object.entries(activeCredits)
+    .map(([key, amount]) => {
+      const numericAmount = isNaN(parseFloat(amount)) ? 0 : parseFloat(amount);
+      const expired = creditExpirationInfo[key]?.expiredAmount || 0;
+      const displayAmount = Math.max(0, numericAmount - expired);
+      return [key, displayAmount, creditExpirationInfo[key]?.nextExpiring];
+    })
+    .filter(([_, displayAmount]) => displayAmount > 0);
 
   const hasCredits = validCredits.length > 0;
 
@@ -202,10 +311,8 @@ export default function PackStatusCard({
         </div>
       ) : (
         <div style={styles.creditsList}>
-          {validCredits.map(([courseKey, amount]) => {
-            const numericAmount = parseFloat(amount);
-
-            const isPlural = numericAmount !== 1;
+          {validCredits.map(([courseKey, displayAmount, nextExpiring]) => {
+            const isPlural = displayAmount !== 1;
             const sessionLabel =
               currentLang === "de"
                 ? isPlural
@@ -226,11 +333,27 @@ export default function PackStatusCard({
                   </div>
 
                   <div style={styles.creditsBalanceRow}>
-                    <span style={styles.creditsNumber}>{numericAmount}</span>
+                    <span style={styles.creditsNumber}>{displayAmount}</span>
                     <span style={styles.creditsLabel}>
                       {sessionLabel} {t.remaining}
                     </span>
                   </div>
+
+                  {nextExpiring && (
+                    <p
+                      style={{
+                        margin: "6px 0 0 0",
+                        fontSize: "0.75rem",
+                        color: "#9960a8",
+                        fontWeight: "700",
+                        lineHeight: "1.3",
+                      }}
+                    >
+                      {currentLang === "de"
+                        ? `${nextExpiring.remaining} ${nextExpiring.remaining === 1 ? "Guthaben verfällt" : "Guthaben verfallen"} am ${nextExpiring.expiresAt.toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" })}, wenn nicht genutzt.`
+                        : `${nextExpiring.remaining} ${nextExpiring.remaining === 1 ? "credit" : "credits"} will expire on ${nextExpiring.expiresAt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} if not used.`}
+                    </p>
+                  )}
                 </div>
 
                 <div style={styles.actionPod}>

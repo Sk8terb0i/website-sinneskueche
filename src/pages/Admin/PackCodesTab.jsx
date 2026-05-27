@@ -127,18 +127,49 @@ export default function PackCodesTab({ isMobile, currentLang }) {
         }
       });
 
-      // 2. Process Codes and Categorize
-      const allPackCodes = codesSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-        source: "pack_codes",
-      }));
+      // 2. Process Codes, Filter Expirations, and Categorize
+      const now = new Date();
+      const allPackCodes = [];
 
-      const allMonetaryGifts = giftSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-        source: "gift_cards",
-      }));
+      for (const d of codesSnap.docs) {
+        const data = d.data();
+        const createdAt = data.createdAt?.toDate
+          ? data.createdAt.toDate()
+          : data.createdAt
+            ? new Date(data.createdAt)
+            : null;
+
+        // Auto-delete guest session codes if older than 1 year
+        if (
+          createdAt &&
+          now - createdAt > 365 * 24 * 60 * 60 * 1000 &&
+          !data.recipientName
+        ) {
+          await deleteDoc(doc(db, "pack_codes", d.id));
+          continue;
+        }
+
+        allPackCodes.push({
+          id: d.id,
+          ...data,
+          createdAt,
+          source: "pack_codes",
+        });
+      }
+
+      const allMonetaryGifts = giftSnap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          createdAt: data.createdAt?.toDate
+            ? data.createdAt.toDate()
+            : data.createdAt
+              ? new Date(data.createdAt)
+              : null,
+          source: "gift_cards",
+        };
+      });
 
       const gifts = [
         ...allMonetaryGifts,
@@ -584,6 +615,8 @@ export default function PackCodesTab({ isMobile, currentLang }) {
                       {g.source === "pack_codes" ? `${g.courseKey} • ` : ""}
                       {g.buyerName}{" "}
                       {g.recipientName ? `→ ${g.recipientName}` : ""}
+                      {g.createdAt &&
+                        ` • ${g.createdAt.toLocaleDateString(currentLang === "en" ? "en-GB" : "de-DE", { day: "2-digit", month: "short", year: "numeric" })}`}
                     </p>
                   </div>
                   <div
@@ -704,6 +737,8 @@ export default function PackCodesTab({ isMobile, currentLang }) {
                     >
                       {g.courseKey} • {g.buyerName}{" "}
                       {g.recipientName ? `(For: ${g.recipientName})` : ""}
+                      {g.createdAt &&
+                        ` • ${g.createdAt.toLocaleDateString(currentLang === "en" ? "en-GB" : "de-DE", { day: "2-digit", month: "short", year: "numeric" })}`}
                     </p>
                   </div>
                   <div
