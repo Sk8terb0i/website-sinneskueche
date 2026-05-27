@@ -224,7 +224,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       cursor: "pointer",
       color: "#1c0700",
       fontFamily: "inherit",
-      fontSize: "1.05rem",
+      fontSize: isMobile ? "0.85rem" : "1.05rem",
       fontWeight: "600",
       textAlign: "left",
     },
@@ -234,7 +234,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       opacity: 0.9,
       lineHeight: "1.65",
       whiteSpace: "pre-line",
-      fontSize: "0.95rem",
+      fontSize: isMobile ? "0.85rem" : "0.95rem",
     },
   };
 
