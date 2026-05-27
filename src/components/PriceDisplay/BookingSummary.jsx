@@ -598,7 +598,7 @@ export default function BookingSummary({
     return pack;
   });
 
-  let finalPackPrice = addonCashTotal;
+  let finalPackPrice = 0;
   let extraItemsBreakdown = [];
   let infoSentence = "";
   const breakdownMap = {};
@@ -838,6 +838,9 @@ export default function BookingSummary({
     activePromo && (promoApplyTo === "both" || promoApplyTo === "single");
 
   if (activePromo) {
+    let preDiscountPrice =
+      selectedPacks.length > 0 ? finalPackPrice : finalTotalPrice;
+
     if (activePromo.discountType === "percent") {
       const multiplier = (100 - activePromo.discountValue) / 100;
       if (promoAppliesToSingle)
@@ -853,6 +856,25 @@ export default function BookingSummary({
         finalTotalPrice = Math.max(0, finalTotalPrice - discount);
       if (promoAppliesToPack)
         finalPackPrice = Math.max(0, finalPackPrice - discount);
+    }
+
+    let postDiscountPrice =
+      selectedPacks.length > 0 ? finalPackPrice : finalTotalPrice;
+    let discountAmount = preDiscountPrice - postDiscountPrice;
+
+    if (discountAmount > 0) {
+      extraItemsBreakdown.push({
+        name:
+          currentLang === "en"
+            ? `Promo Code (${activePromo.code})`
+            : `Rabattcode (${activePromo.code})`,
+        count: 1,
+        price: -discountAmount,
+        isFree: false,
+        isDiscount: true,
+        isPack: false,
+        details: [],
+      });
     }
   }
 
@@ -2885,7 +2907,16 @@ export default function BookingSummary({
                                                   !currentUser ||
                                                   prof.id === "guest";
 
-                                                if (used === 0) {
+                                                const actualUsed = Math.min(
+                                                  selectedDates
+                                                    ? selectedDates.length
+                                                    : 0,
+                                                  pack.size,
+                                                );
+                                                const actualAdded =
+                                                  pack.size - actualUsed;
+
+                                                if (actualUsed === 0) {
                                                   if (isGuestProfile) {
                                                     return currentLang === "en"
                                                       ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} will be sent to you as a code.`
@@ -2895,19 +2926,19 @@ export default function BookingSummary({
                                                       ? `${pack.size} ${pack.size === 1 ? "credit" : "credits"} will be added to your profile balance.`
                                                       : `${pack.size} ${pack.size === 1 ? "Kredit" : "Kredite"} ${pack.size === 1 ? "wird" : "werden"} deinem Profilguthaben hinzugefügt.`;
                                                   }
-                                                } else if (added === 0) {
+                                                } else if (actualAdded === 0) {
                                                   return currentLang === "en"
-                                                    ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"}.`
-                                                    : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt.`;
+                                                    ? `${actualUsed} ${actualUsed === 1 ? "credit" : "credits"} will be used for the ${actualUsed === 1 ? "selected course" : "selected courses"}.`
+                                                    : `${actualUsed} ${actualUsed === 1 ? "Kredit" : "Kredite"} ${actualUsed === 1 ? "wird" : "werden"} für ${actualUsed === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt.`;
                                                 } else {
                                                   if (isGuestProfile) {
                                                     return currentLang === "en"
-                                                      ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"} and ${added} will be sent to you as a code.`
-                                                      : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt und ${added} ${added === 1 ? "Kredit" : "Kredite"} ${added === 1 ? "wird" : "werden"} dir als Code zugesendet.`;
+                                                      ? `${actualUsed} ${actualUsed === 1 ? "credit" : "credits"} will be used for the ${actualUsed === 1 ? "selected course" : "selected courses"} and ${actualAdded} will be sent to you as a code.`
+                                                      : `${actualUsed} ${actualUsed === 1 ? "Kredit" : "Kredite"} ${actualUsed === 1 ? "wird" : "werden"} für ${actualUsed === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt und ${actualAdded} ${actualAdded === 1 ? "Kredit" : "Kredite"} ${actualAdded === 1 ? "wird" : "werden"} dir als Code zugesendet.`;
                                                   } else {
                                                     return currentLang === "en"
-                                                      ? `${used} ${used === 1 ? "credit" : "credits"} will be used for the ${used === 1 ? "selected course" : "selected courses"} and ${added} will be added to your profile balance.`
-                                                      : `${used} ${used === 1 ? "Kredit" : "Kredite"} ${used === 1 ? "wird" : "werden"} für ${used === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt und ${added} ${added === 1 ? "Kredit" : "Kredite"} ${added === 1 ? "wird" : "werden"} deinem Profilguthaben hinzugefügt.`;
+                                                      ? `${actualUsed} ${actualUsed === 1 ? "credit" : "credits"} will be used for the ${actualUsed === 1 ? "selected course" : "selected courses"} and ${actualAdded} will be added to your profile balance.`
+                                                      : `${actualUsed} ${actualUsed === 1 ? "Kredit" : "Kredite"} ${actualUsed === 1 ? "wird" : "werden"} für ${actualUsed === 1 ? "den ausgewählten Kurs" : "die ausgewählten Kurse"} genutzt und ${actualAdded} ${actualAdded === 1 ? "Kredit" : "Kredite"} ${actualAdded === 1 ? "wird" : "werden"} deinem Profilguthaben hinzugefügt.`;
                                                   }
                                                 }
                                               })()
@@ -3015,7 +3046,9 @@ export default function BookingSummary({
                           : "Mit Guthaben bezahlt"
                         : item.isFree
                           ? "FREE"
-                          : `+ ${formatPrice(item.price * item.count)} CHF`}
+                          : item.isDiscount
+                            ? `${formatPrice(item.price * item.count)} CHF`
+                            : `+ ${formatPrice(item.price * item.count)} CHF`}
                     </span>
                   </p>
                   {item.details && item.details.length > 0 && (
@@ -3197,8 +3230,8 @@ export default function BookingSummary({
               >
                 <CheckCircle size={14} />{" "}
                 {currentLang === "en"
-                  ? `Promo applied: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% OFF" : " FREE"}`
-                  : `Promo angewendet: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% RABATT" : " GRATIS"}`}
+                  ? `Promo applied: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% OFF" : " CHF DISCOUNT"}`
+                  : `Promo angewendet: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% RABATT" : " CHF RABATT"}`}
               </p>
             )}
             {activePackCode && (

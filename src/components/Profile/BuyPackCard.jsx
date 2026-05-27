@@ -1,6 +1,16 @@
 import React, { useState, useMemo } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { ShoppingBag, Loader2, User, PlusCircle, XCircle } from "lucide-react";
+import {
+  ShoppingBag,
+  Loader2,
+  User,
+  PlusCircle,
+  XCircle,
+  Ticket,
+  CheckCircle,
+} from "lucide-react";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../../firebase";
 
 export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
   const [selectedCoursePack, setSelectedCoursePack] = useState("");
@@ -8,6 +18,11 @@ export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
   const [selectedProfileId, setSelectedProfileId] = useState("main");
   const [giftRecipient, setGiftRecipient] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const [isCodeExpanded, setIsCodeExpanded] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
+  const [activePromo, setActivePromo] = useState(null);
+  const [codeStatus, setCodeStatus] = useState({ loading: false, error: "" });
 
   // Build the array of available profiles
   const allProfiles = useMemo(() => {
@@ -70,10 +85,81 @@ export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
     setCart((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const totalPrice = cart.reduce(
+  let basePrice = cart.reduce(
     (sum, item) => sum + parseFloat(item.pack.price),
     0,
   );
+  let totalPrice = basePrice;
+  let discountAmount = 0;
+
+  if (activePromo) {
+    const promoApplyTo = activePromo.applyTo || "both";
+    const promoAppliesToPack =
+      promoApplyTo === "both" || promoApplyTo === "pack";
+
+    if (promoAppliesToPack) {
+      if (activePromo.discountType === "percent") {
+        discountAmount = basePrice * (activePromo.discountValue / 100);
+      } else if (activePromo.discountType === "free") {
+        discountAmount = basePrice;
+      } else if (activePromo.discountType === "amount") {
+        discountAmount = parseFloat(activePromo.discountValue || 0);
+      }
+      totalPrice = Math.max(0, basePrice - discountAmount);
+    }
+  }
+
+  const handleApplyCode = async () => {
+    if (!codeInput.trim()) return;
+    setCodeStatus({ loading: true, error: "" });
+    setActivePromo(null);
+
+    const upperCode = codeInput.trim().toUpperCase();
+
+    try {
+      const promoQ = query(
+        collection(db, "promo_codes"),
+        where("code", "==", upperCode),
+      );
+      const promoSnap = await getDocs(promoQ);
+
+      if (!promoSnap.empty) {
+        const promoData = promoSnap.docs[0].data();
+
+        if (
+          promoData.limitType === "uses" &&
+          promoData.timesUsed >= promoData.maxUses
+        ) {
+          setCodeStatus({
+            loading: false,
+            error:
+              currentLang === "en"
+                ? "This code has reached its usage limit."
+                : "Dieser Code hat sein Nutzungslimit erreicht.",
+          });
+          return;
+        }
+
+        setActivePromo(promoData);
+        setCodeStatus({ loading: false, error: "" });
+        return;
+      }
+
+      setCodeStatus({
+        loading: false,
+        error: currentLang === "en" ? "Invalid code." : "Ungültiger Code.",
+      });
+    } catch (err) {
+      console.error(err);
+      setCodeStatus({
+        loading: false,
+        error:
+          currentLang === "en"
+            ? "Error verifying code."
+            : "Fehler bei der Code-Prüfung.",
+      });
+    }
+  };
 
   const handleBuy = async () => {
     if (cart.length === 0) return;
@@ -145,6 +231,7 @@ export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
       const result = await createCheckout({
         mode: "pack",
         packPrice: totalPrice,
+        promoCode: activePromo ? activePromo.code : null,
         packSize: JSON.stringify(modifiedSize),
         packSummary: packSummary,
         coursePath: `/${cart[0].course.id}`,
@@ -297,9 +384,192 @@ export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
               );
             })}
           </div>
-          <div style={styles.totalRow}>
+
+          <div
+            style={{
+              backgroundColor: "rgba(202, 175, 243, 0.1)",
+              padding: "12px",
+              borderRadius: "12px",
+              border: "1px dashed rgba(202, 175, 243, 0.4)",
+              marginTop: "1rem",
+            }}
+          >
+            {!isCodeExpanded && !activePromo ? (
+              <button
+                onClick={() => setIsCodeExpanded(true)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#9960a8",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  padding: 0,
+                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <Ticket size={16} />{" "}
+                {currentLang === "en" ? "Add Promo Code" : "Code hinzufügen"}
+              </button>
+            ) : (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "6px" }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <label
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: "bold",
+                      color: "#9960a8",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {currentLang === "en" ? "Enter Code" : "Code eingeben"}
+                  </label>
+                  <button
+                    onClick={() => {
+                      setIsCodeExpanded(false);
+                      setCodeInput("");
+                      setActivePromo(null);
+                      setCodeStatus({ loading: false, error: "" });
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#1c0700",
+                      opacity: 0.5,
+                      fontSize: "0.7rem",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    {currentLang === "en" ? "Remove" : "Entfernen"}
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    type="text"
+                    placeholder="e.g. SUMMER24"
+                    value={codeInput}
+                    onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
+                    disabled={activePromo}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "12px",
+                      border: "1px solid rgba(28,7,0,0.1)",
+                      background: activePromo
+                        ? "rgba(78, 95, 40, 0.05)"
+                        : "rgba(255, 252, 227, 0.4)",
+                      flex: 1,
+                      fontFamily: "Satoshi",
+                      outline: "none",
+                      fontSize: "0.85rem",
+                    }}
+                  />
+                  {!activePromo && (
+                    <button
+                      onClick={handleApplyCode}
+                      disabled={codeStatus.loading || !codeInput}
+                      style={{
+                        padding: "0 15px",
+                        backgroundColor: "#9960a8",
+                        color: "#fdf8e1",
+                        border: "none",
+                        borderRadius: "12px",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {codeStatus.loading ? (
+                        <Loader2 size={16} className="spinner" />
+                      ) : currentLang === "en" ? (
+                        "Apply"
+                      ) : (
+                        "Anwenden"
+                      )}
+                    </button>
+                  )}
+                </div>
+                {activePromo && (
+                  <p
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#4e5f28",
+                      marginTop: "4px",
+                      fontWeight: "bold",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <CheckCircle size={14} />{" "}
+                    {currentLang === "en"
+                      ? `Promo applied: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% OFF" : " CHF DISCOUNT"}`
+                      : `Promo angewendet: ${activePromo.discountValue}${activePromo.discountType === "percent" ? "% RABATT" : " CHF RABATT"}`}
+                  </p>
+                )}
+                {codeStatus.error && (
+                  <p
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#1c0700",
+                      opacity: 0.7,
+                      marginTop: "4px",
+                      fontWeight: "bold",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <XCircle size={14} /> {codeStatus.error}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {discountAmount > 0 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: "1rem",
+                fontSize: "0.9rem",
+                fontWeight: "700",
+                color: "#e74c3c",
+              }}
+            >
+              <span>{currentLang === "en" ? "Discount:" : "Rabatt:"}</span>
+              <span>
+                -{" "}
+                {Number.isInteger(discountAmount)
+                  ? discountAmount
+                  : discountAmount.toFixed(2)}{" "}
+                CHF
+              </span>
+            </div>
+          )}
+          <div
+            style={{
+              ...styles.totalRow,
+              marginTop: discountAmount > 0 ? "0.5rem" : "1rem",
+            }}
+          >
             <span>Total:</span>
-            <span>{totalPrice} CHF</span>
+            <span>
+              {Number.isInteger(totalPrice)
+                ? totalPrice
+                : totalPrice.toFixed(2)}{" "}
+              CHF
+            </span>
           </div>
           <button
             onClick={handleBuy}
@@ -314,7 +584,7 @@ export default function BuyPackCard({ packCourses, currentLang, t, userData }) {
             {isProcessing ? (
               <Loader2 className="spinner" size={18} />
             ) : (
-              `${currentLang === "en" ? "Checkout" : "Kaufen"} (${totalPrice} CHF)`
+              `${currentLang === "en" ? "Checkout" : "Kaufen"} (${Number.isInteger(totalPrice) ? totalPrice : totalPrice.toFixed(2)} CHF)`
             )}
           </button>
         </div>

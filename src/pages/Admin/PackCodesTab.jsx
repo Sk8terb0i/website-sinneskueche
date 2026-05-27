@@ -33,6 +33,7 @@ export default function PackCodesTab({ isMobile, currentLang }) {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [modalSearch, setModalSearch] = useState("");
+  const [addAmount, setAddAmount] = useState(1);
 
   const labels = {
     en: {
@@ -173,16 +174,20 @@ export default function PackCodesTab({ isMobile, currentLang }) {
   const updateBalance = async (user, courseKey, delta) => {
     setIsUpdating(true);
     try {
-      const parentId = user.isMain ? user.id : user.parentId;
+      const isMainUser = user.isMain !== false;
+      const parentId = isMainUser ? user.id : user.parentId;
       const userRef = doc(db, "users", parentId);
 
-      if (user.isMain) {
+      // ✅ FIX: Use the 'isMainUser' boolean instead of 'user.isMain'
+      if (isMainUser) {
         await updateDoc(userRef, {
           [`credits.${courseKey}`]: increment(delta),
         });
       } else {
         const snap = await getDoc(userRef);
-        const updatedLinked = snap.data().linkedProfiles.map((lp) => {
+        // ✅ SAFETY FIX: Default to an empty array if linkedProfiles is undefined
+        const linkedProfiles = snap.data().linkedProfiles || [];
+        const updatedLinked = linkedProfiles.map((lp) => {
           if (lp.id === user.realSubId) {
             const cur = lp.credits?.[courseKey] || 0;
             return {
@@ -260,12 +265,12 @@ export default function PackCodesTab({ isMobile, currentLang }) {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: "10px",
+        gap: "4px", // Reduced gap to bring buttons closer to the number
         backgroundColor: "rgba(28, 7, 0, 0.04)",
-        padding: "4px 12px",
+        padding: "4px 8px", // Tighter padding inside the pill
         borderRadius: "100px",
         border: "1px solid rgba(78, 95, 40, 0.1)",
-        minWidth: isMobile ? "100px" : "auto",
+        minWidth: isMobile ? "90px" : "auto",
         justifyContent: "center",
       }}
     >
@@ -278,22 +283,48 @@ export default function PackCodesTab({ isMobile, currentLang }) {
           cursor: "pointer",
           fontWeight: "900",
           color: "#4e5f28",
-          fontSize: "1.1rem",
+          fontSize: "1.2rem",
+          width: "24px", // Fixed width
+          height: "24px", // Fixed height
+          padding: 0, // Kill browser default padding
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          lineHeight: 0, // Helps vertically center the minus sign perfectly
         }}
       >
         -
       </button>
-      <span
+      <input
+        key={val}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        defaultValue={val}
+        disabled={isUpdating}
+        onBlur={(e) => {
+          const num = parseInt(e.target.value);
+          if (!isNaN(num) && num !== val) {
+            onUpdate(num - val);
+          } else {
+            e.target.value = val;
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.target.blur();
+        }}
         style={{
           fontWeight: "900",
-          minWidth: "18px",
+          width: "24px",
+          padding: 0,
           textAlign: "center",
-          fontSize: "0.9rem",
+          fontSize: "0.95rem",
           color: "#1c0700",
+          background: "none",
+          border: "none",
+          outline: "none",
         }}
-      >
-        {val}
-      </span>
+      />
       <button
         onClick={() => onUpdate(1)}
         disabled={isUpdating}
@@ -303,7 +334,14 @@ export default function PackCodesTab({ isMobile, currentLang }) {
           cursor: "pointer",
           fontWeight: "900",
           color: "#4e5f28",
-          fontSize: "1.1rem",
+          fontSize: "1.2rem",
+          width: "24px", // Fixed width
+          height: "24px", // Fixed height
+          padding: 0, // Kill browser default padding
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          lineHeight: 0, // Helps vertically center the plus sign perfectly
         }}
       >
         +
@@ -450,6 +488,7 @@ export default function PackCodesTab({ isMobile, currentLang }) {
                   >
                     {Object.entries(u.credits || {})
                       .filter(([_, v]) => v > 0)
+                      .sort(([a], [b]) => a.localeCompare(b))
                       .map(([k, v]) => (
                         <div
                           key={k}
@@ -755,17 +794,36 @@ export default function PackCodesTab({ isMobile, currentLang }) {
             >
               {labels.addBtn}
             </h3>
-            <input
-              type="text"
-              placeholder={labels.selectUser}
-              style={{
-                ...S.inputStyle,
-                backgroundColor: "rgba(255,255,255,0.5)",
-                borderRadius: "14px",
-              }}
-              value={modalSearch}
-              onChange={(e) => setModalSearch(e.target.value)}
-            />
+            <div style={{ display: "flex", gap: "10px" }}>
+              <input
+                type="text"
+                placeholder={labels.selectUser}
+                style={{
+                  ...S.inputStyle,
+                  backgroundColor: "rgba(255,255,255,0.5)",
+                  borderRadius: "14px",
+                  flex: 1,
+                  marginBottom: 0,
+                }}
+                value={modalSearch}
+                onChange={(e) => setModalSearch(e.target.value)}
+              />
+              <input
+                type="number"
+                placeholder="Qty"
+                style={{
+                  ...S.inputStyle,
+                  backgroundColor: "rgba(255,255,255,0.5)",
+                  borderRadius: "14px",
+                  width: "80px",
+                  marginBottom: 0,
+                  textAlign: "center",
+                }}
+                value={addAmount}
+                onChange={(e) => setAddAmount(parseInt(e.target.value) || 1)}
+                min="1"
+              />
+            </div>
             <div
               style={{
                 maxHeight: isMobile ? "280px" : "320px",
@@ -822,7 +880,11 @@ export default function PackCodesTab({ isMobile, currentLang }) {
                           key={course.id}
                           onClick={() => {
                             // Safely map the ID back to the legacy key to prevent breaking old logic
-                            updateBalance(u, getCreditKeyForDB(course.id), 1);
+                            updateBalance(
+                              u,
+                              getCreditKeyForDB(course.id),
+                              addAmount,
+                            );
                             setIsAddModalOpen(false);
                           }}
                           style={{
