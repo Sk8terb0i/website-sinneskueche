@@ -9,6 +9,7 @@ import {
   updateDoc,
   getDoc,
   increment,
+  addDoc,
 } from "firebase/firestore";
 import {
   Ticket,
@@ -208,15 +209,14 @@ export default function PackCodesTab({ isMobile, currentLang }) {
       const isMainUser = user.isMain !== false;
       const parentId = isMainUser ? user.id : user.parentId;
       const userRef = doc(db, "users", parentId);
+      const profileId = isMainUser ? "main" : user.realSubId; // Track profile accurately
 
-      // ✅ FIX: Use the 'isMainUser' boolean instead of 'user.isMain'
       if (isMainUser) {
         await updateDoc(userRef, {
           [`credits.${courseKey}`]: increment(delta),
         });
       } else {
         const snap = await getDoc(userRef);
-        // ✅ SAFETY FIX: Default to an empty array if linkedProfiles is undefined
         const linkedProfiles = snap.data().linkedProfiles || [];
         const updatedLinked = linkedProfiles.map((lp) => {
           if (lp.id === user.realSubId) {
@@ -230,6 +230,16 @@ export default function PackCodesTab({ isMobile, currentLang }) {
         });
         await updateDoc(userRef, { linkedProfiles: updatedLinked });
       }
+
+      await addDoc(collection(db, "credit_history"), {
+        userId: parentId,
+        profileId: profileId,
+        courseKey: courseKey,
+        amount: delta,
+        type: "adjustment",
+        createdAt: new Date(),
+      });
+
       fetchData();
     } catch (e) {
       alert(e.message);

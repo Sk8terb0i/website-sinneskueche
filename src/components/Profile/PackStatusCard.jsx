@@ -135,6 +135,34 @@ export default function PackStatusCard({
         }
       }
 
+      const liveBalance = Math.max(
+        0,
+        parseFloat(activeCredits[courseKey]) || 0,
+      );
+      let totalBucketRemaining = buckets.reduce(
+        (sum, b) => sum + b.remaining,
+        0,
+      );
+
+      // If the history logs claim more credits exist than the actual profile balance,
+      // it means an admin deleted credits in the past before history logs were implemented.
+      // We retroactively trim the excess from the oldest buckets to match reality.
+      if (totalBucketRemaining > liveBalance) {
+        let excess = totalBucketRemaining - liveBalance;
+        for (let b of buckets) {
+          if (b.remaining > 0) {
+            if (b.remaining >= excess) {
+              b.remaining -= excess;
+              excess = 0;
+              break;
+            } else {
+              excess -= b.remaining;
+              b.remaining = 0;
+            }
+          }
+        }
+      }
+
       const now = new Date();
       let expiredAmount = 0;
       let nextExpiring = null;
@@ -145,7 +173,18 @@ export default function PackStatusCard({
             expiredAmount += b.remaining;
           } else {
             if (!nextExpiring || b.expiresAt < nextExpiring.expiresAt) {
-              nextExpiring = b;
+              // Found a strictly sooner expiration bucket
+              nextExpiring = {
+                amount: b.amount,
+                remaining: b.remaining,
+                expiresAt: b.expiresAt,
+              };
+            } else if (
+              nextExpiring &&
+              b.expiresAt.toDateString() ===
+                nextExpiring.expiresAt.toDateString()
+            ) {
+              nextExpiring.remaining += b.remaining;
             }
           }
         }
