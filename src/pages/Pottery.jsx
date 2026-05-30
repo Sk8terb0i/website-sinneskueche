@@ -15,13 +15,22 @@ import {
   Ticket,
   CreditCard,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 const planetImages = import.meta.glob("../assets/planets/*.png", {
   eager: true,
 });
 const getImage = (filename) =>
   planetImages[`../assets/planets/${filename}`]?.default || "";
+
+// Import pottery gallery images dynamically
+const potteryGallery = import.meta.glob(
+  "../assets/pottery/*.{jpg,JPG,jpeg,png,webp}",
+  { eager: true },
+);
+const galleryImages = Object.values(potteryGallery).map(
+  (module) => module.default,
+);
 
 export default function Pottery({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -31,6 +40,13 @@ export default function Pottery({ currentLang, setCurrentLang }) {
   const [activeTab, setActiveTab] = useState(null);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  // Gallery State
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
+  const [galleryDirection, setGalleryDirection] = useState(0); // NEW: Track glide direction
+  const totalImages = galleryImages.length;
+  const touchStartX = useRef(null);
+  const touchEndX = useRef(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -179,6 +195,44 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     },
   };
 
+  // NEW: Directional Slide Variants for Feature Card Slider
+  const gallerySlideVariants = {
+    enter: (direction) => ({
+      x: direction > 0 ? "100%" : direction < 0 ? "-100%" : 0,
+      opacity: 0,
+    }),
+    center: {
+      x: 0,
+      opacity: 1,
+    },
+    exit: (direction) => ({
+      x: direction > 0 ? "-100%" : direction < 0 ? "100%" : 0,
+      opacity: 0,
+    }),
+  };
+
+  // --- Swipe Handlers for the Main Image ---
+  const handleNextImage = () => {
+    setGalleryDirection(1);
+    setActiveGalleryIndex((prev) => (prev + 1) % totalImages);
+  };
+
+  const handlePrevImage = () => {
+    setGalleryDirection(-1);
+    setActiveGalleryIndex((prev) => (prev - 1 + totalImages) % totalImages);
+  };
+
+  const handleTouchStart = (e) => (touchStartX.current = e.touches[0].clientX);
+  const handleTouchMove = (e) => (touchEndX.current = e.touches[0].clientX);
+  const handleTouchEnd = () => {
+    if (!touchStartX.current || !touchEndX.current) return;
+    const distance = touchStartX.current - touchEndX.current;
+    if (distance > 50) handleNextImage();
+    if (distance < -50) handlePrevImage();
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
+
   const styles = {
     main: {
       maxWidth: "1100px",
@@ -202,7 +256,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     },
     infoGrid: {
       display: "flex",
-      justifyContent: "center",
+      justify欣Center: "center",
       alignItems: "center",
       gap: "16px",
       marginTop: "25px",
@@ -214,8 +268,8 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       alignItems: "center",
       gap: "10px",
       padding: "12px 28px",
-      background: "rgba(202, 175, 243, 0.15)", // A bit more of the Sinnesküche purple
-      border: "1px solid rgba(202, 175, 243, 0.3)", // Subtle border for definition
+      background: "rgba(202, 175, 243, 0.15)",
+      border: "1px solid rgba(202, 175, 243, 0.3)",
       borderRadius: "100px",
       color: "#1c0700",
       whiteSpace: "nowrap",
@@ -282,6 +336,75 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       <style>
         {`
           html { scroll-behavior: smooth; }
+
+          /* Feature Card Layout */
+          .feature-gallery-container {
+            width: 100%;
+            margin-top: 20px;
+            margin-bottom: 40px; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+          }
+
+          .feature-main-wrapper {
+            width: 100%;
+            height: 480px; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            touch-action: pan-y;
+          }
+
+          .feature-main-image {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 12px;
+            object-fit: contain;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.15);
+            position: absolute; 
+          }
+
+          .feature-thumbnail-strip {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: nowrap;
+            width: 100%;
+            padding: 0 5px;
+          }
+
+          .feature-thumbnail {
+            width: 32px; /* Fixed back to 32px on Desktop */
+            height: 32px;
+            flex-shrink: 0;
+            border-radius: 50%;
+            object-fit: cover;
+            cursor: pointer;
+            opacity: 0.45;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            border: 2px solid transparent;
+          }
+
+          .feature-thumbnail:hover {
+            opacity: 0.8;
+            transform: scale(1.05);
+          }
+
+          .feature-thumbnail.active {
+            opacity: 1;
+            transform: scale(1.1);
+            border-color: #caaff3;
+            box-shadow: 0 6px 15px rgba(202, 175, 243, 0.4);
+          }
+
+          .desc-wrapper {
+            margin-bottom: 40px;
+          }
+
           @media (max-width: 768px) {
             .main-content { 
               display: flex !important; 
@@ -301,21 +424,43 @@ export default function Pottery({ currentLang, setCurrentLang }) {
               width: 85vw !important; 
               line-height: 1.5;
             }
+            
+            /* FORCE COMPACT SINGLE LINE PILLS ON MOBILE */
             .info-grid { 
-              flex-direction: column !important; 
-              gap: 12px !important; 
-              width: 100%; 
-              margin-top: 10px !important;
-              margin-bottom: 30px !important;
+              flex-direction: row !important; 
+              flex-wrap: nowrap !important; 
+              justify-content: center !important;
+              gap: 6px !important; 
+              width: 100vw !important;
+              max-width: 100vw !important;
+              margin-top: 10px !important; 
+              margin-bottom: 20px !important; 
+              overflow-x: auto;
+              scrollbar-width: none; 
+              padding: 0 15px !important;
             }
-            .info-item {
-              padding: 12px 24px !important;
-              width: 80%;
-              justify-content: center;
+            .info-grid::-webkit-scrollbar { display: none; }
+            .info-item { flex-shrink: 0; padding: 6px 12px !important; }
+            
+            .feature-gallery-container {
+              margin-top: 10px;
+              margin-bottom: 25px;
+              gap: 12px;
             }
-            /* Breaking up the "wall of text" on mobile and forcing left-alignment */
+            .feature-main-wrapper {
+              height: 220px;
+            }
+            .feature-thumbnail-strip {
+              gap: 8px;
+            }
+            .feature-thumbnail {
+              width: 20px; /* Locked to exactly 20px on Mobile */
+              height: 20px;
+            }
+
             .desc-wrapper {
               padding: 0 5px;
+              margin-bottom: 20px !important;
             }
             .desc-wrapper, .desc-wrapper * {
               text-align: left !important;
@@ -349,38 +494,140 @@ export default function Pottery({ currentLang, setCurrentLang }) {
           className="info-grid"
           style={styles.infoGrid}
         >
-          {current.details.map((item, index) => (
-            <motion.div
-              key={index}
-              className="info-item"
-              style={styles.infoItem}
-              whileHover={{
-                scale: 1.03,
-                backgroundColor: "rgba(202, 175, 243, 0.25)",
-              }}
-              transition={{ type: "spring", stiffness: 300 }}
-            >
-              <div style={{ display: "flex", color: "#caaff3" }}>
-                {item.icon}
-              </div>
-              <span style={styles.infoLabel}>{item.text}</span>
-            </motion.div>
-          ))}
+          {/* Dynamically slice the details array down to 2 elements on mobile */}
+          {(isMobile ? current.details.slice(0, 2) : current.details).map(
+            (item, index) => (
+              <motion.div
+                key={index}
+                className="info-item"
+                style={styles.infoItem}
+                whileHover={{
+                  scale: 1.03,
+                  backgroundColor: "rgba(202, 175, 243, 0.25)",
+                }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <div style={{ display: "flex", color: "#caaff3" }}>
+                  {item.icon}
+                </div>
+                <span style={styles.infoLabel}>{item.text}</span>
+              </motion.div>
+            ),
+          )}
         </motion.div>
 
+        {/* --- INLINE RENDERING KEEPS Snapshots/Tab Titles Reacting perfectly --- */}
+
+        {/* Mobile Gallery (Gallery first on mobile) */}
+        {isMobile && galleryImages.length > 0 && (
+          <motion.div
+            className="feature-gallery-container"
+            variants={itemVariants}
+          >
+            <div
+              className="feature-main-wrapper"
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <AnimatePresence initial={false} custom={galleryDirection}>
+                <motion.img
+                  key={activeGalleryIndex}
+                  custom={galleryDirection}
+                  variants={gallerySlideVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  src={galleryImages[activeGalleryIndex]}
+                  alt={`Featured Pottery ${activeGalleryIndex + 1}`}
+                  className="feature-main-image"
+                />
+              </AnimatePresence>
+            </div>
+            <div className="feature-thumbnail-strip">
+              {galleryImages.map((src, index) => (
+                <img
+                  key={index}
+                  src={src}
+                  alt={`Thumbnail ${index + 1}`}
+                  className={`feature-thumbnail ${activeGalleryIndex === index ? "active" : ""}`}
+                  onClick={() => {
+                    setGalleryDirection(index > activeGalleryIndex ? 1 : -1);
+                    setActiveGalleryIndex(index);
+                  }}
+                  loading="lazy"
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Description Block */}
         <motion.div
           variants={itemVariants}
           className="desc-wrapper"
           style={{
             width: "100%",
-            maxWidth: "800px", // Constrains the width to force better paragraph shapes
+            maxWidth: "800px",
             margin: "0 auto",
-            textWrap: "pretty", // Prevents awkward "orphans" (single words) on the bottom line
+            textWrap: "pretty",
           }}
         >
           <CourseDescription text={current.description} />
+        </motion.div>
 
-          {/* Dynamic Accordion Tabs Section */}
+        {/* Desktop Gallery (Description first on Desktop) */}
+        {!isMobile && galleryImages.length > 0 && (
+          <motion.div
+            className="feature-gallery-container"
+            variants={itemVariants}
+          >
+            <div
+              className="feature-main-wrapper"
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <AnimatePresence initial={false} custom={galleryDirection}>
+                <motion.img
+                  key={activeGalleryIndex}
+                  custom={galleryDirection}
+                  variants={gallerySlideVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  src={galleryImages[activeGalleryIndex]}
+                  alt={`Featured Pottery ${activeGalleryIndex + 1}`}
+                  className="feature-main-image"
+                />
+              </AnimatePresence>
+            </div>
+            <div className="feature-thumbnail-strip">
+              {galleryImages.map((src, index) => (
+                <img
+                  key={index}
+                  src={src}
+                  alt={`Thumbnail ${index + 1}`}
+                  className={`feature-thumbnail ${activeGalleryIndex === index ? "active" : ""}`}
+                  onClick={() => {
+                    setGalleryDirection(index > activeGalleryIndex ? 1 : -1);
+                    setActiveGalleryIndex(index);
+                  }}
+                  loading="lazy"
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Dynamic Accordion Tabs Section */}
+        <motion.div
+          variants={itemVariants}
+          className="tabs-wrapper"
+          style={{ width: "100%", maxWidth: "800px", margin: "0 auto" }}
+        >
           <div style={styles.accordionContainer}>
             {current.tabs.map((tab, idx) => {
               const isOpen = activeTab === idx;
@@ -420,7 +667,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
           variants={itemVariants}
           ref={bookingRef}
           className="booking-section"
-          style={{ width: "100%", marginTop: isMobile ? "0px" : "20px" }}
+          style={{ width: "100%", marginTop: isMobile ? "-15px" : "20px" }}
         >
           <PriceDisplay
             coursePath="/pottery"
