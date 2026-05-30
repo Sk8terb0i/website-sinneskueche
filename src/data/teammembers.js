@@ -136,36 +136,36 @@ export const planets = [
       };
     },
     pronouns: {
-      de: "Pony/Pony",
-      en: "pony/pony",
+      de: "er/ihm",
+      en: "he/him",
     },
     bio: {
       de: [
         {
           q: "Wer bist du?",
-          a: "Ein kleines, flauschiges Pony mit verdammt grossen Träumen.",
+          a: "Ich bin Luca Elisha, aufgewachsen in Schlieren und Bremgarten. Gegen Ende meiner Schulzeit habe ich meine künstlerische Ader zugunsten der Naturwissenschaften beiseitegelegt. Doch in der Sinnesküche habe ich den perfekten Ort gefunden, um sie wieder zum Leben zu erwecken.",
         },
         {
           q: "Was kreierst du?",
-          a: "Glitzernde Hufeisen und staubige Wolken voller Freude.",
+          a: "Das Töpfern begleitet mich schon seit meiner Kindheit. Vor fünf Jahren entdeckte ich die Töpferscheibe und seitdem lässt sie mich nicht mehr los. Ich liebe es, Gefässe aller Art zu drehen: Manchmal mit klaren, reduzierten Linien, manchmal verspielt und experimentell. Meinen ganz eigenen Stil entwickle ich noch und genau das macht es so spannend. Daneben male ich, spiele Gitarre und Klavier.",
         },
         {
           q: "Was setzt du in der Sinnesküche um?",
-          a: "Ich bringe den Hoppi-Galoppi-Spirit direkt in den Stall.",
+          a: "Mein Herz schlägt vor allem für die Töpferküche. Ich plane und leite die Kurse und arbeite eng mit Luca und Sonja zusammen, um im Hintergrund vieles am Laufen zu halten. Ich freue mich dort auf dich!",
         },
       ],
       en: [
         {
           q: "Who are you?",
-          a: "A small, fluffy pony with damn big dreams.",
+          a: "I’m Luca Elisha, raised in Schlieren and Bremgarten. Towards the end of my school years, I set aside my artistic side in favour of the natural sciences. But in the Sinnesküche, I’ve found the perfect place to bring it back to life.",
         },
         {
           q: "What do you create?",
-          a: "Sparkling horseshoes and dusty clouds full of joy.",
+          a: "Pottery has been part of my life since childhood. Five years ago I discovered the potter’s wheel and I’ve been hooked ever since. I love throwing vessels of all kinds: sometimes with clean, minimalist lines, sometimes playful and experimental. I’m still finding my own style and that’s exactly what makes it so exciting. Beyond pottery, I paint, play guitar and piano.",
         },
         {
           q: "What do you realize in the Sinnesküche?",
-          a: "I bring the 'hoppi gallopi' spirit directly into the stable.",
+          a: "I‘m mainly working in „Töpferküche“. I plan and lead the courses, and work closely with Luca and Sonja to keep everything running smoothly behind the scenes. Looking forward to seeing you there!",
         },
       ],
     },
