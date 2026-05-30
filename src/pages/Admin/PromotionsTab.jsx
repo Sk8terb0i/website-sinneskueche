@@ -9,6 +9,7 @@ import {
   deleteDoc,
   doc,
   serverTimestamp,
+  updateDoc, // Added for editing capabilities
 } from "firebase/firestore";
 import { planets } from "../../data/planets";
 import {
@@ -40,6 +41,7 @@ export default function PromotionsTab({
   const [promoCodes, setPromoCodes] = useState([]);
   const [code, setCode] = useState("");
   const [coursePath, setCoursePath] = useState("");
+  const [editingId, setEditingId] = useState(null); // Track the active code being edited
 
   const [isCourseDropdownOpen, setIsCourseDropdownOpen] = useState(false);
   const courseDropdownRef = useRef(null);
@@ -69,6 +71,7 @@ export default function PromotionsTab({
   const labels = {
     en: {
       titleNew: "New Promo Code",
+      titleEdit: "Edit Promo Code",
       codeName: "Code Name",
       applyTo: "Apply to Course",
       validFor: "Valid For",
@@ -86,6 +89,8 @@ export default function PromotionsTab({
       validUntil: "Valid Until",
       genIng: "Generating...",
       genBtn: "Generate Code",
+      saveBtn: "Update Code",
+      cancelBtn: "Cancel Edit",
       active: "Active Promotions",
       myCourses: "(My Courses)",
       off: "OFF",
@@ -95,6 +100,7 @@ export default function PromotionsTab({
     },
     de: {
       titleNew: "Neuer Rabattcode",
+      titleEdit: "Rabattcode bearbeiten",
       codeName: "Code-Name",
       applyTo: "Gilt für Kurs",
       validFor: "Gültig für",
@@ -112,6 +118,8 @@ export default function PromotionsTab({
       validUntil: "Gültig bis",
       genIng: "Erstelle...",
       genBtn: "Code erstellen",
+      saveBtn: "Code aktualisieren",
+      cancelBtn: "Bearbeiten abbrechen",
       active: "Aktive Rabattcodes",
       myCourses: "(Meine Kurse)",
       off: "RABATT",
@@ -153,13 +161,13 @@ export default function PromotionsTab({
           (c) => isFullAdmin || allowedCourses.includes(c.link),
         );
         setAvailableCourses(filtered);
-        if (filtered.length > 0) setCoursePath("all"); // Default to 'All Courses'
+        if (filtered.length > 0 && !editingId) setCoursePath("all"); // Default to 'All Courses' if not editing
       } catch (err) {
         const filtered = base.filter(
           (c) => isFullAdmin || allowedCourses.includes(c.link),
         );
         setAvailableCourses(filtered);
-        if (filtered.length > 0) setCoursePath("all");
+        if (filtered.length > 0 && !editingId) setCoursePath("all");
       }
     };
     fetchCoursesAndGroups();
@@ -179,11 +187,35 @@ export default function PromotionsTab({
     setPromoCodes(filteredCodes);
   };
 
+  const resetForm = () => {
+    setEditingId(null);
+    setCode("");
+    setCoursePath("all");
+    setApplyTo("both");
+    setDiscountType("free");
+    setDiscountValue(5);
+    setLimitType("uses");
+    setMaxUses(1);
+    setExpiryDate("");
+  };
+
+  const handleEditClick = (pc) => {
+    setEditingId(pc.id);
+    setCode(pc.code);
+    setCoursePath(pc.coursePath || "all");
+    setApplyTo(pc.applyTo || "both");
+    setDiscountType(pc.discountType || "free");
+    setDiscountValue(pc.discountType === "free" ? 5 : pc.discountValue);
+    setLimitType(pc.limitType || "uses");
+    setMaxUses(pc.maxUses || 1);
+    setExpiryDate(pc.expiryDate || "");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await addDoc(collection(db, "promo_codes"), {
+      const payload = {
         code: code.toUpperCase().trim(),
         coursePath,
         applyTo,
@@ -192,14 +224,25 @@ export default function PromotionsTab({
         limitType,
         maxUses: limitType === "uses" ? parseInt(maxUses) : null,
         expiryDate: limitType === "date" ? expiryDate : null,
-        timesUsed: 0,
-        createdAt: serverTimestamp(),
-        createdByRole: userRole,
-      });
-      setCode("");
+      };
+
+      if (editingId) {
+        // Update operational fields securely on existing item
+        await updateDoc(doc(db, "promo_codes", editingId), payload);
+      } else {
+        // Create standard operational fields on fresh item
+        await addDoc(collection(db, "promo_codes"), {
+          ...payload,
+          timesUsed: 0,
+          createdAt: serverTimestamp(),
+          createdByRole: userRole,
+        });
+      }
+
+      resetForm();
       fetchCodes();
     } catch (err) {
-      alert("Error creating code: " + err.message);
+      alert("Error saving code: " + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -209,6 +252,7 @@ export default function PromotionsTab({
     if (window.confirm("Delete this promo code?")) {
       try {
         await deleteDoc(doc(db, "promo_codes", id));
+        if (editingId === id) resetForm();
         fetchCodes();
       } catch (err) {
         alert("Error deleting code: " + err.message);
@@ -221,7 +265,8 @@ export default function PromotionsTab({
       <section style={{ width: isMobile ? "100%" : "400px" }}>
         <div style={formCardStyle}>
           <h3 style={sectionTitleStyle}>
-            <Ticket size={18} /> {labels.titleNew}
+            <Ticket size={18} />{" "}
+            {editingId ? labels.titleEdit : labels.titleNew}
           </h3>
           <form
             onSubmit={handleSubmit}
@@ -637,8 +682,27 @@ export default function PromotionsTab({
             )}
 
             <button type="submit" style={btnStyle} disabled={isLoading}>
-              {isLoading ? labels.genIng : labels.genBtn}
+              {isLoading
+                ? labels.genIng
+                : editingId
+                  ? labels.saveBtn
+                  : labels.genBtn}
             </button>
+
+            {editingId && (
+              <button
+                type="button"
+                style={{
+                  ...btnStyle,
+                  backgroundColor: "transparent",
+                  border: "1px solid rgba(28, 7, 0, 0.2)",
+                  color: "#1c0700",
+                }}
+                onClick={resetForm}
+              >
+                {labels.cancelBtn}
+              </button>
+            )}
           </form>
         </div>
       </section>
@@ -651,12 +715,16 @@ export default function PromotionsTab({
           {promoCodes.map((pc) => (
             <div
               key={pc.id}
+              onClick={() => handleEditClick(pc)}
               style={{
                 ...cardStyle,
                 backgroundColor: "#fdf8e1",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                cursor: "pointer",
+                border:
+                  editingId === pc.id ? "2px solid #9960a8" : cardStyle.border,
               }}
             >
               <div>
@@ -712,6 +780,7 @@ export default function PromotionsTab({
                     gap: "15px",
                     marginTop: "8px",
                     fontSize: "0.85rem",
+                    flexWrap: "wrap",
                   }}
                 >
                   <span
@@ -749,20 +818,34 @@ export default function PromotionsTab({
                       {labels.used}
                     </span>
                   ) : (
-                    <span
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <Clock size={14} /> {labels.expires} {pc.expiryDate}
-                    </span>
+                    <>
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <Clock size={14} /> {labels.expires} {pc.expiryDate}
+                      </span>
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <Hash size={14} /> {pc.timesUsed} {labels.used}
+                      </span>
+                    </>
                   )}
                 </div>
               </div>
               <button
-                onClick={() => deleteCode(pc.id)}
+                onClick={(e) => {
+                  e.stopPropagation(); // Stop edit trigger from fire events during deletion
+                  deleteCode(pc.id);
+                }}
                 style={{
                   background: "none",
                   border: "none",
