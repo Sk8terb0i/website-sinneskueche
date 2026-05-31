@@ -838,6 +838,8 @@ export default function BookingSummary({
   const promoAppliesToSingle =
     activePromo && (promoApplyTo === "both" || promoApplyTo === "single");
 
+  let discountAmount = 0;
+
   if (activePromo) {
     let preDiscountPrice =
       selectedPacks.length > 0 ? finalPackPrice : finalTotalPrice;
@@ -861,7 +863,7 @@ export default function BookingSummary({
 
     let postDiscountPrice =
       selectedPacks.length > 0 ? finalPackPrice : finalTotalPrice;
-    let discountAmount = preDiscountPrice - postDiscountPrice;
+    discountAmount = preDiscountPrice - postDiscountPrice;
 
     if (discountAmount > 0) {
       extraItemsBreakdown.push({
@@ -3336,6 +3338,7 @@ export default function BookingSummary({
                     finalPackPrice,
                     usableCredits,
                     activePackCode,
+                    discountAmount,
                   );
                 } else if (coversEntirely && !activePackCode) {
                   onBookCredits();
@@ -3347,6 +3350,7 @@ export default function BookingSummary({
                     finalTotalPrice,
                     usableCredits,
                     activePackCode,
+                    discountAmount,
                   );
                 }
               })

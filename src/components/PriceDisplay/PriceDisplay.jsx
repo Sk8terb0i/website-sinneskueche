@@ -458,6 +458,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
     price,
     creditsToUse = 0,
     activePackCode = null,
+    promoDiscountUsed = 0,
   ) => {
     setIsProcessing(true);
     try {
@@ -635,6 +636,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         origin: baseUrl,
         creditsToUse: creditsToUse.toString(),
         promoCode: code || "",
+        promoDiscountUsed: promoDiscountUsed.toString(),
         chunkCount: chunks.length.toString(),
       };
       chunks.forEach((chunk, i) => {

@@ -623,6 +623,7 @@ exports.createStripeCheckout = onCall(
         profileId,
         profileName,
         promoCode,
+        promoDiscountUsed,
         chunkCount,
       } = request.data;
       const userId = request.auth ? request.auth.uid : "GUEST_USER";
@@ -673,6 +674,9 @@ exports.createStripeCheckout = onCall(
           profileId: profileId || "main",
           profileName: profileName || "Main User",
           promoCode: promoCode || "",
+          promoDiscountUsed: promoDiscountUsed
+            ? promoDiscountUsed.toString()
+            : "0",
           chunkCount: chunkCount || "0",
           // NEW: Attach each individual chunk to Stripe metadata
           ...(() => {
@@ -767,6 +771,7 @@ exports.handleStripeWebhook = onRequest(
           let userRef = null;
           let promoRef = null;
           let promoExists = false;
+          let promoData = null; // <-- Added to hold data for Phase 2
 
           // ==========================================
           // PHASE 1: ALL READS (Must happen first!)
@@ -775,6 +780,7 @@ exports.handleStripeWebhook = onRequest(
             promoRef = db.collection("promo_codes").doc(promoCode);
             const promoSnap = await transaction.get(promoRef);
             promoExists = promoSnap.exists;
+            if (promoExists) promoData = promoSnap.data(); // <-- Save data
           }
 
           if (!isGuest) {
@@ -825,10 +831,34 @@ exports.handleStripeWebhook = onRequest(
           // ==========================================
           // PHASE 2: ALL WRITES
           // ==========================================
-          if (promoExists) {
-            transaction.update(promoRef, {
-              timesUsed: admin.firestore.FieldValue.increment(1),
-            });
+          if (promoExists && promoData) {
+            const discountUsed = parseFloat(
+              session.metadata.promoDiscountUsed || "0",
+            );
+
+            // Only apply declining balance to single-use codes (like refunds or personal gift cards)
+            if (
+              promoData.discountType === "amount" &&
+              discountUsed > 0 &&
+              promoData.maxUses === 1
+            ) {
+              const remainingBalance =
+                (promoData.discountValue || 0) - discountUsed;
+
+              if (remainingBalance > 0) {
+                transaction.update(promoRef, {
+                  discountValue: remainingBalance,
+                });
+              } else {
+                transaction.update(promoRef, {
+                  timesUsed: admin.firestore.FieldValue.increment(1),
+                });
+              }
+            } else {
+              transaction.update(promoRef, {
+                timesUsed: admin.firestore.FieldValue.increment(1),
+              });
+            }
           }
 
           const profileDeductions = {};

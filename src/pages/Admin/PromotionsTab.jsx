@@ -798,6 +798,19 @@ export default function PromotionsTab({
                     ) : pc.discountType === "amount" ? (
                       <>
                         <Ticket size={14} /> -{pc.discountValue} CHF
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            opacity: 0.6,
+                            marginLeft: "4px",
+                          }}
+                        >
+                          {pc.maxUses === 1
+                            ? currentLang === "en"
+                              ? "(Remaining)"
+                              : "(Restbetrag)"
+                            : ""}
+                        </span>
                       </>
                     ) : (
                       <>
