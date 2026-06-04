@@ -91,7 +91,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       welcome: "Join our creative kitchen",
       ctaFloating: "register now",
       details: [
-        { icon: <Clock size={18} />, text: "19:00 - 21:00" },
+        { icon: <Clock size={18} />, text: "18:30 - 21:15" },
         { icon: <Users size={18} />, text: "All skill levels" },
         { icon: <Coffee size={18} />, text: "Small, cozy groups" },
       ],
@@ -131,7 +131,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       welcome: "Gönn dir eine kreative Auszeit",
       ctaFloating: "jetzt buchen",
       details: [
-        { icon: <Clock size={18} />, text: "19:00 - 21:00" },
+        { icon: <Clock size={18} />, text: "18:30 - 21:15" },
         { icon: <Users size={18} />, text: "Alle Level willkommen" },
         { icon: <Coffee size={18} />, text: "Kleine, gemütliche Gruppen" },
       ],
