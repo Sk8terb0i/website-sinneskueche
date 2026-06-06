@@ -20,7 +20,9 @@ export default function Header({
   const navigate = useNavigate();
   const { currentUser, userData, loading } = useAuth();
 
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(
+    () => window.location.hash === "#login",
+  );
   const [isPortrait, setIsPortrait] = useState(
     window.innerWidth < window.innerHeight,
   );
