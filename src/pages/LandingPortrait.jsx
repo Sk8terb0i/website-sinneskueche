@@ -19,7 +19,9 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
   const [scrollDirection, setScrollDirection] = useState("down");
   const [isLoaded, setIsLoaded] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(
+    () => window.location.hash === "#login",
+  );
   const [courseVisibility, setCourseVisibility] = useState({});
 
   const [viewport, setViewport] = useState({

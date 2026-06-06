@@ -18,7 +18,9 @@ export default function Landing({ currentLang, setCurrentLang }) {
     (p) => p.type !== "home",
   );
 
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(
+    () => window.location.hash === "#login",
+  );
   const [activePlanet, setActivePlanet] = useState(null);
   const [hoveredPlanet, setHoveredPlanet] = useState(null);
   const [focusedPlanet, setFocusedPlanet] = useState(null);
