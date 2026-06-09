@@ -12,6 +12,7 @@ import {
   doc,
   getDoc,
   updateDoc,
+  setDoc,
   collection,
   query,
   where,
@@ -156,24 +157,43 @@ export default function StudentFiringForm() {
     }
   }, []);
 
-  const fetchPieces = useCallback(async (targetCode) => {
-    if (!targetCode) return;
-    setLoading(true);
-    setError("");
-    try {
-      const lookupFn = httpsCallable(getFunctions(), "getStudentObjects");
-      const res = await lookupFn({ userCode: targetCode.toUpperCase() });
-      const sorted = (res.data || []).sort(
-        (a, b) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0),
-      );
-      setExistingObjects(sorted);
-      setStep("selection");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const fetchPieces = useCallback(
+    async (targetCode) => {
+      if (!targetCode) return;
+      setLoading(true);
+      setError("");
+      try {
+        const lookupFn = httpsCallable(getFunctions(), "getStudentObjects");
+        const res = await lookupFn({ userCode: targetCode.toUpperCase() });
+        const sorted = (res.data || []).sort(
+          (a, b) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0),
+        );
+        setExistingObjects(sorted);
+
+        // --- NEW: AUTOFILL LOGIC FOR GUESTS ---
+        // If they aren't logged in and have existing pieces, extract their info
+        if (!currentUser && sorted.length > 0) {
+          const latestObj = sorted[0];
+
+          // Populate the state so the form autofills
+          if (latestObj.name && latestObj.name !== "Guest") {
+            setGuestName(latestObj.name);
+          }
+          if (latestObj.email) {
+            setGuestEmail(latestObj.email);
+          }
+        }
+        // --------------------------------------
+
+        setStep("selection");
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [currentUser],
+  );
 
   useEffect(() => {
     fetchAbandoned();
@@ -186,12 +206,18 @@ export default function StudentFiringForm() {
 
           if (!code) {
             code = Math.random().toString(36).substring(2, 6).toUpperCase();
-            await updateDoc(userRef, { firingCode: code });
+            // CHANGED: Use setDoc with merge to prevent crashes if doc doesn't exist
+            await setDoc(userRef, { firingCode: code }, { merge: true });
           }
 
           setUserCode(code);
           fetchPieces(code);
-        } catch (err) {}
+        } catch (err) {
+          console.error("Failed to initialize user code:", err);
+          setError(
+            "Failed to generate your firing code. Please contact support.",
+          );
+        }
       }
     };
     initUser();
@@ -384,6 +410,11 @@ export default function StudentFiringForm() {
     setError("");
 
     const finalCode = userCode.toUpperCase();
+
+    if (!finalCode || finalCode.length !== 4) {
+      setLoading(false);
+      return setError(labels.codeLength);
+    }
 
     // 1. Resolve Identity
     const activeProfile =
@@ -1136,7 +1167,7 @@ export default function StudentFiringForm() {
               </div>
             )}
 
-            {!currentUser && existingObjects.length === 0 && (
+            {!currentUser && (
               <div
                 style={{
                   ...sectionStyle,
