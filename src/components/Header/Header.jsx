@@ -114,8 +114,7 @@ export default function Header({
         style={{
           position: "fixed",
           top: 0,
-          left: "50%",
-          transform: "translateX(-50%)",
+          left: 0,
           width: "100%",
           height: "60px",
           display: "flex",
