@@ -116,7 +116,7 @@ export default function Header({
           top: 0,
           left: "50%",
           transform: "translateX(-50%)",
-          width: "100vw",
+          width: "100%",
           height: "60px",
           display: "flex",
           alignItems: "center",
