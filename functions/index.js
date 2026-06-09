@@ -777,10 +777,19 @@ exports.handleStripeWebhook = onRequest(
           // PHASE 1: ALL READS (Must happen first!)
           // ==========================================
           if (promoCode) {
-            promoRef = db.collection("promo_codes").doc(promoCode);
-            const promoSnap = await transaction.get(promoRef);
-            promoExists = promoSnap.exists;
-            if (promoExists) promoData = promoSnap.data(); // <-- Save data
+            // Search for the document where the 'code' field matches the promoCode string
+            const promoQuerySnap = await transaction.get(
+              db
+                .collection("promo_codes")
+                .where("code", "==", promoCode)
+                .limit(1),
+            );
+
+            if (!promoQuerySnap.empty) {
+              promoExists = true;
+              promoRef = promoQuerySnap.docs[0].ref; // Grab the correct document reference
+              promoData = promoQuerySnap.docs[0].data();
+            }
           }
 
           if (!isGuest) {
