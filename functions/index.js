@@ -658,6 +658,11 @@ exports.createStripeCheckout = onCall(
           },
         ],
         mode: "payment",
+        payment_intent_data: {
+          metadata: {
+            promoCode: promoCode || "",
+          },
+        },
         success_url: successUrl,
         cancel_url: cancelUrl,
         metadata: {
@@ -895,6 +900,7 @@ exports.handleStripeWebhook = onRequest(
               status: "confirmed",
               lang,
               usedCredit: isCreditBooking,
+              promoCodeUsed: promoCode || null,
               timestamp: admin.firestore.FieldValue.serverTimestamp(),
             });
           });
