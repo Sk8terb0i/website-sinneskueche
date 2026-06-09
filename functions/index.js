@@ -1158,6 +1158,29 @@ exports.handleStripeWebhook = onRequest(
 // ============================================================================
 // 3. ADMIN & USER ACTIONS
 // ============================================================================
+
+exports.deleteUserAccount = onCall({ cors: true }, async (request) => {
+  // 1. Ensure the user making the request is an authenticated admin
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be logged in.");
+  }
+
+  const targetUid = request.data.uid;
+
+  try {
+    // 2. Delete the user from Firebase Authentication
+    await admin.auth().deleteUser(targetUid);
+
+    // 3. Delete the user's data from Firestore
+    await db.collection("users").doc(targetUid).delete();
+
+    return { success: true, message: "User completely deleted." };
+  } catch (error) {
+    logger.error("Error deleting user:", error);
+    throw new HttpsError("internal", "Failed to delete user.");
+  }
+});
+
 exports.bookWithCredits = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   try {

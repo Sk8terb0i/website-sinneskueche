@@ -11,6 +11,7 @@ import {
   getDoc,
   deleteDoc,
 } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   Edit2,
   Trash2,
@@ -210,15 +211,18 @@ export default function ProfilesTab({
 
   const handleDeleteUser = async (u) => {
     const msg = u.isMain
-      ? "Delete main user? Linked profiles will be lost."
+      ? "Delete main user? This will completely remove their account, login access, and linked profiles. THIS CANNOT BE UNDONE."
       : `Delete sub-user ${u.firstName}?`;
 
     if (window.confirm(msg)) {
       try {
-        const userRef = doc(db, "users", u.isMain ? u.id : u.parentId);
         if (u.isMain) {
-          await deleteDoc(userRef);
+          // --- NEW: Call Cloud Function to delete Auth AND Firestore ---
+          const deleteFn = httpsCallable(getFunctions(), "deleteUserAccount");
+          await deleteFn({ uid: u.id });
         } else {
+          // --- Keep existing sub-user logic (they are just array items, not Auth accounts) ---
+          const userRef = doc(db, "users", u.parentId); // Fix: use u.parentId
           const parentSnap = await getDoc(userRef);
           const updatedLinked = parentSnap
             .data()
