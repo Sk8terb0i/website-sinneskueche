@@ -97,6 +97,7 @@ export default function BookingSummary({
   const [isRegistering, setIsRegistering] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [showGuestError, setShowGuestError] = useState(false);
 
   const [showStripeAlternative, setShowStripeAlternative] = useState(false);
 
@@ -3931,15 +3932,47 @@ export default function BookingSummary({
             {currentUser && renderBalanceDisplay()}
 
             {hasSelection ? (
-              <button
-                onClick={() => setBookingStep(2)}
-                style={{ ...S.primaryBtnStyle(isMobile), marginTop: "0.5rem" }}
-                disabled={
-                  !currentUser && (!guestInfo.firstName || !guestInfo.email)
-                }
-              >
-                {currentLang === "en" ? "Continue" : "Weiter"}
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    if (
+                      !currentUser &&
+                      (!guestInfo.firstName || !guestInfo.email)
+                    ) {
+                      setShowGuestError(true);
+                      return;
+                    }
+                    setShowGuestError(false);
+                    setBookingStep(2);
+                  }}
+                  style={{
+                    ...S.primaryBtnStyle(isMobile),
+                    marginTop: "0.5rem",
+                  }}
+                >
+                  {currentLang === "en" ? "Continue" : "Weiter"}
+                </button>
+                {showGuestError &&
+                  !currentUser &&
+                  (!guestInfo.firstName || !guestInfo.email) && (
+                    <p
+                      style={{
+                        margin: "4px 0 0 0",
+                        fontSize: "0.75rem",
+                        color: "#e74c3c",
+                        fontWeight: "700",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                    >
+                      <AlertCircle size={13} />
+                      {currentLang === "en"
+                        ? "Please enter your name and email to continue."
+                        : "Bitte gib deinen Namen und deine E-Mail ein, um fortzufahren."}
+                    </p>
+                  )}
+              </>
             ) : pricing?.isRequestOnly ? (
               <div
                 style={{
