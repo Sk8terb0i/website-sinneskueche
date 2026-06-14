@@ -94,6 +94,7 @@ export default function StudentFiringForm() {
   const [userCode, setUserCode] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
+  const [guestLanguage, setGuestLanguage] = useState(lang);
 
   const [existingObjects, setExistingObjects] = useState([]);
   const [abandonedObjects, setAbandonedObjects] = useState([]);
@@ -181,6 +182,9 @@ export default function StudentFiringForm() {
           }
           if (latestObj.email) {
             setGuestEmail(latestObj.email);
+          }
+          if (latestObj.preferredLanguage) {
+            setGuestLanguage(latestObj.preferredLanguage);
           }
         }
         // --------------------------------------
@@ -454,7 +458,10 @@ export default function StudentFiringForm() {
         userCode: finalCode,
         stage: "bisque",
         imageUrl,
-        currentLang: lang, // FIXED variable mapping
+        currentLang: currentUser ? lang : guestLanguage, // Fallback for existing templates
+        preferredLanguage: currentUser
+          ? userData?.preferredLanguage || lang
+          : guestLanguage,
         profileId: selectedProfileId,
       });
 
@@ -1203,6 +1210,15 @@ export default function StudentFiringForm() {
                   required
                   style={inputStyle}
                 />
+                <select
+                  value={guestLanguage}
+                  onChange={(e) => setGuestLanguage(e.target.value)}
+                  required
+                  style={inputStyle}
+                >
+                  <option value="en">English</option>
+                  <option value="de">Deutsch</option>
+                </select>
               </div>
             )}
 

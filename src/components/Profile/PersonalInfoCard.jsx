@@ -33,6 +33,7 @@ export default function PersonalInfoCard({
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editPassword, setEditPassword] = useState("");
+  const [editPrefLang, setEditPrefLang] = useState("");
 
   // --- PRONOUN STATES ---
   const [selectedStandard, setSelectedStandard] = useState([]);
@@ -62,6 +63,7 @@ export default function PersonalInfoCard({
         email: userData?.email || "",
         phone: userData?.phone || "",
         pronouns: userData?.pronouns || "",
+        preferredLanguage: userData?.preferredLanguage || "en",
       },
       ...linkedProfiles.map((p) => ({ ...p, isMain: false })),
     ],
@@ -76,6 +78,7 @@ export default function PersonalInfoCard({
       setEditLastName(currentProfile.lastName || "");
       setEditEmail(currentProfile.email || "");
       setEditPhone(currentProfile.phone || "");
+      setEditPrefLang(currentProfile.preferredLanguage || "en");
       setEditPassword("");
 
       const saved = currentProfile.pronouns || "";
@@ -155,6 +158,7 @@ export default function PersonalInfoCard({
           lastName: editLastName,
           phone: editPhone,
           pronouns: combined,
+          preferredLanguage: editPrefLang,
         });
       } else {
         const updatedLinked = [...linkedProfiles];
@@ -164,6 +168,7 @@ export default function PersonalInfoCard({
           lastName: editLastName,
           email: editEmail,
           pronouns: combined,
+          preferredLanguage: editPrefLang,
         };
         await updateDoc(doc(db, "users", currentUser.uid), {
           linkedProfiles: updatedLinked,
@@ -498,6 +503,22 @@ export default function PersonalInfoCard({
               />
             </div>
           )}
+
+          <div>
+            <label style={styles.label}>
+              {currentLang === "de"
+                ? "Bevorzugte Sprache"
+                : "Preferred Language"}
+            </label>
+            <select
+              value={editPrefLang}
+              onChange={(e) => setEditPrefLang(e.target.value)}
+              style={styles.input}
+            >
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+            </select>
+          </div>
         </div>
       ) : (
         <div style={{ flexGrow: 1 }}>

@@ -135,7 +135,10 @@ export default function FiringTab({ isMobile, currentLang }) {
       snap.docs.forEach((doc) => {
         const data = doc.data();
         if (data.email)
-          map[data.email.toLowerCase()] = `${data.firstName} ${data.lastName}`;
+          map[data.email.toLowerCase()] = {
+            name: `${data.firstName} ${data.lastName}`,
+            preferredLanguage: data.preferredLanguage || "",
+          };
       });
       setUserMap(map);
     });
@@ -321,13 +324,16 @@ export default function FiringTab({ isMobile, currentLang }) {
     const isSelected = selectedIds.includes(item.id);
 
     // --- FIX FOR THE "GUEST" BUG ON DISPLAY ---
-    const studentName = userMap[item.email?.toLowerCase()];
+    const mappedUser = userMap[item.email?.toLowerCase()] || {};
+    const studentName = mappedUser.name;
     // Prioritize the real name from the userMap if the database accidentally saved "Guest"
     const savedName = item.name === "Guest" ? null : item.name;
     const displayName =
       item.name && item.name !== "Guest" && item.name !== "Student"
         ? item.name
-        : userMap[item.email?.toLowerCase()] || item.email || "Guest";
+        : mappedUser.name || item.email || "Guest";
+    const prefLang =
+      item.preferredLanguage || mappedUser.preferredLanguage || "";
     // ------------------------------------------
 
     const isOverdue = checkOverdue(item);
@@ -565,6 +571,22 @@ export default function FiringTab({ isMobile, currentLang }) {
               <Mail size={12} color="#caaff3" />
             )}
             {displayName}
+            <span
+              style={{
+                fontSize: "0.6rem",
+                color: prefLang ? "#9960a8" : "#ff4d4d",
+                backgroundColor: prefLang
+                  ? "rgba(153, 96, 168, 0.1)"
+                  : "rgba(255, 77, 77, 0.1)",
+                padding: "2px 6px",
+                borderRadius: "100px",
+                textTransform: "uppercase",
+                marginLeft: "4px",
+                fontWeight: "900",
+              }}
+            >
+              {prefLang || "TBD"}
+            </span>
           </div>
           {item.userCode && (
             <div

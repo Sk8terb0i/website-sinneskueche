@@ -1323,6 +1323,8 @@ exports.redeemPackCode = onCall({ cors: true }, async (request) => {
           userId: "GUEST_USER",
           guestName: `${guestInfo.firstName} ${guestInfo.lastName}`,
           guestEmail: guestInfo.email,
+          guestPreferredLanguage:
+            guestInfo.preferredLanguage || currentLang || "en",
           eventId: d.id,
           date: d.date,
           attendeeName: d.attendeeName || "Customer",

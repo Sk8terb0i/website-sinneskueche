@@ -21,6 +21,9 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
+  const [preferredLanguage, setPreferredLanguage] = useState(
+    currentLang || "en",
+  );
 
   // NEW: Sub-User State
   const [subUsers, setSubUsers] = useState([]);
@@ -150,6 +153,7 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
           lastName,
           email,
           phone,
+          preferredLanguage,
           role: "user",
           linkedProfiles,
           credits: {},
@@ -368,16 +372,34 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
             </div>
 
             {view === "register" && (
-              <div>
-                <label style={styles.label}>{t.phone}</label>
-                <input
-                  className="auth-drawer-input"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  style={styles.input}
-                />
-              </div>
+              <>
+                <div>
+                  <label style={styles.label}>{t.phone}</label>
+                  <input
+                    className="auth-drawer-input"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    style={styles.input}
+                  />
+                </div>
+                <div>
+                  <label style={styles.label}>
+                    {currentLang === "de"
+                      ? "Bevorzugte Sprache"
+                      : "Preferred Language"}
+                  </label>
+                  <select
+                    className="auth-drawer-input"
+                    value={preferredLanguage}
+                    onChange={(e) => setPreferredLanguage(e.target.value)}
+                    style={styles.input}
+                  >
+                    <option value="en">English</option>
+                    <option value="de">Deutsch</option>
+                  </select>
+                </div>
+              </>
             )}
 
             {view !== "reset" && (

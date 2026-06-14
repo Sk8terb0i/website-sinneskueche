@@ -2,7 +2,9 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { db } from "./firebase";
+import { doc, updateDoc } from "firebase/firestore";
 
 import { syncPlanetCourseNames } from "./data/planets";
 
@@ -39,10 +41,35 @@ import { planets } from "./data/planets";
 const Admin = lazy(() => import("./pages/Admin/Admin"));
 
 export default function App() {
+  const { currentUser, userData } = useAuth();
+  const [showLangModal, setShowLangModal] = useState(false);
+  const [forcedLang, setForcedLang] = useState("");
+
   const [currentLang, setCurrentLang] = useState(() => {
     const savedLang = localStorage.getItem("userLanguage");
     return savedLang && languages[savedLang] ? savedLang : defaultLang;
   });
+
+  useEffect(() => {
+    if (currentUser && userData && !userData.preferredLanguage) {
+      setForcedLang(currentLang);
+      setShowLangModal(true);
+    } else {
+      setShowLangModal(false);
+    }
+  }, [currentUser, userData]);
+
+  const handleSaveForcedLang = async () => {
+    try {
+      await updateDoc(doc(db, "users", currentUser.uid), {
+        preferredLanguage: forcedLang,
+      });
+      setCurrentLang(forcedLang);
+      setShowLangModal(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem("userLanguage", currentLang);
@@ -361,6 +388,86 @@ export default function App() {
         </AnimatePresence>
       </div>
       <Footer currentLang={currentLang} key={location.pathname} />
+
+      {/* Forced Language Selection Modal for Existing Users */}
+      {showLangModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            backgroundColor: "rgba(28, 7, 0, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fffce3",
+              padding: "2rem",
+              borderRadius: "24px",
+              width: "100%",
+              maxWidth: "400px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            }}
+          >
+            <h2
+              style={{
+                fontFamily: "Harmond-SemiBoldCondensed",
+                fontSize: "2rem",
+                margin: 0,
+                color: "#1c0700",
+              }}
+            >
+              {currentLang === "de"
+                ? "Wähle deine Sprache"
+                : "Select your language"}
+            </h2>
+            <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.7 }}>
+              {currentLang === "de"
+                ? "Bitte wähle deine bevorzugte Sprache für E-Mails und dein Profil aus."
+                : "Please select your preferred language for emails and your profile."}
+            </p>
+            <select
+              value={forcedLang}
+              onChange={(e) => setForcedLang(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "14px",
+                borderRadius: "12px",
+                border: "1px solid rgba(28, 7, 0, 0.1)",
+                backgroundColor: "rgba(255, 252, 227, 0.5)",
+                fontSize: "1rem",
+                color: "#1c0700",
+                fontFamily: "Satoshi",
+              }}
+            >
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+            </select>
+            <button
+              onClick={handleSaveForcedLang}
+              style={{
+                padding: "14px",
+                backgroundColor: "#caaff3",
+                color: "#1c0700",
+                border: "none",
+                borderRadius: "100px",
+                fontWeight: "bold",
+                fontSize: "1rem",
+                cursor: "pointer",
+                marginTop: "0.5rem",
+              }}
+            >
+              {currentLang === "de" ? "Speichern" : "Save"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

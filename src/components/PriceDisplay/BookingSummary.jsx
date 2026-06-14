@@ -3923,6 +3923,19 @@ export default function BookingSummary({
                         setGuestInfo({ ...guestInfo, email: e.target.value })
                       }
                     />
+                    <select
+                      value={guestInfo.preferredLanguage || currentLang}
+                      onChange={(e) =>
+                        setGuestInfo({
+                          ...guestInfo,
+                          preferredLanguage: e.target.value,
+                        })
+                      }
+                      style={S.guestInputStyle}
+                    >
+                      <option value="en">English</option>
+                      <option value="de">Deutsch</option>
+                    </select>
                   </div>
                 )}
               </div>

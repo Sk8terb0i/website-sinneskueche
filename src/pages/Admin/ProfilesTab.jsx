@@ -644,6 +644,18 @@ export default function ProfilesTab({
                           >
                             <Mail size={12} />
                             {u.isMain ? u.email : `Linked to: ${u.parentEmail}`}
+                            <span
+                              style={{
+                                marginLeft: "4px",
+                                fontWeight: "bold",
+                                textTransform: "uppercase",
+                                color: u.preferredLanguage
+                                  ? "inherit"
+                                  : "#ff4d4d",
+                              }}
+                            >
+                              • {u.preferredLanguage || "TBD"}
+                            </span>
                           </p>
 
                           {u.allowedCourses?.length > 0 && (

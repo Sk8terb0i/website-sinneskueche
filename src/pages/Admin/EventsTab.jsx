@@ -421,6 +421,7 @@ export default function EventsTab({
               email: b.guestEmail || "Email not found",
               isGuest: true,
               pronouns: "",
+              preferredLanguage: b.guestPreferredLanguage || b.lang || "TBD",
             };
           } else {
             const userSnap = await getDoc(doc(db, "users", b.userId));
@@ -437,9 +438,17 @@ export default function EventsTab({
                 const subProfile = fullUserData.linkedProfiles.find(
                   (p) => p.id === b.profileId,
                 );
-                if (subProfile) baseInfo.pronouns = subProfile.pronouns || "";
+                if (subProfile) {
+                  baseInfo.pronouns = subProfile.pronouns || "";
+                  baseInfo.preferredLanguage =
+                    subProfile.preferredLanguage ||
+                    fullUserData.preferredLanguage ||
+                    "TBD";
+                }
               } else {
                 baseInfo.pronouns = fullUserData.pronouns || "";
+                baseInfo.preferredLanguage =
+                  fullUserData.preferredLanguage || "TBD";
               }
             }
           }
@@ -475,7 +484,8 @@ export default function EventsTab({
               {
                 name: u.attendeeName || u.firstName,
                 addons: u.addons,
-                pronouns: u.pronouns, // <-- Added
+                pronouns: u.pronouns,
+                preferredLanguage: u.preferredLanguage,
               },
             ],
           };
@@ -484,7 +494,8 @@ export default function EventsTab({
           groupedUsersMap[key].tickets.push({
             name: u.attendeeName || u.firstName,
             addons: u.addons,
-            pronouns: u.pronouns, // <-- Added
+            pronouns: u.pronouns,
+            preferredLanguage: u.preferredLanguage,
           });
         }
       });
@@ -1094,6 +1105,32 @@ export default function EventsTab({
                               })()}
                             </span>
                           )}
+                          <span
+                            style={{
+                              backgroundColor:
+                                t.preferredLanguage &&
+                                t.preferredLanguage !== "TBD"
+                                  ? "rgba(153, 96, 168, 0.12)"
+                                  : "rgba(255, 77, 77, 0.1)",
+                              color:
+                                t.preferredLanguage &&
+                                t.preferredLanguage !== "TBD"
+                                  ? "#9960a8"
+                                  : "#ff4d4d",
+                              padding: "2px 8px",
+                              borderRadius: "100px",
+                              fontSize: "0.65rem",
+                              fontWeight: "800",
+                              textTransform: "uppercase",
+                              border:
+                                t.preferredLanguage &&
+                                t.preferredLanguage !== "TBD"
+                                  ? "1px solid rgba(153, 96, 168, 0.2)"
+                                  : "1px solid rgba(255, 77, 77, 0.2)",
+                            }}
+                          >
+                            {t.preferredLanguage || "TBD"}
+                          </span>
                         </div>
                       </div>
 
