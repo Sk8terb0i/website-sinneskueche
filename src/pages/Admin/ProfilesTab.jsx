@@ -96,7 +96,7 @@ export default function ProfilesTab({
   );
 
   useEffect(() => {
-    fetchUsers();
+    fetchUsers(true);
   }, []);
 
   const getGroupTint = (id) => {
@@ -108,8 +108,8 @@ export default function ProfilesTab({
     return `hsl(${h}, 35%, 94%)`;
   };
 
-  const fetchUsers = async () => {
-    setLoading(true);
+  const fetchUsers = async (showLoader = false) => {
+    if (showLoader) setLoading(true);
     try {
       const roleOrder = { admin: 0, course_admin: 1, instructor: 2, user: 3 };
       const q = query(collection(db, "users"), orderBy("email", "asc"));
@@ -195,7 +195,7 @@ export default function ProfilesTab({
         await updateDoc(userRef, { linkedProfiles: updatedLinked });
       }
       setEditingId(null);
-      fetchUsers();
+      fetchUsers(false);
     } catch (error) {
       alert("Update failed: " + error.message);
     }
@@ -229,7 +229,7 @@ export default function ProfilesTab({
             .linkedProfiles.filter((lp) => lp.id !== u.realSubId);
           await updateDoc(userRef, { linkedProfiles: updatedLinked });
         }
-        fetchUsers();
+        fetchUsers(false);
       } catch (e) {
         alert("Delete failed: " + e.message);
       }
@@ -321,7 +321,7 @@ export default function ProfilesTab({
         });
         await updateDoc(userRef, { linkedProfiles: updatedLinked });
       }
-      fetchUsers();
+      fetchUsers(false);
       setHistoryModalOpen(false);
     } catch (e) {
       alert("Error saving history: " + e.message);
