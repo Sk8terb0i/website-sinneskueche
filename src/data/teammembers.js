@@ -83,36 +83,36 @@ export const planets = [
       };
     },
     pronouns: {
-      de: "Pferd/Pferds",
-      en: "horse/horse",
+      de: "sie/ihr",
+      en: "she/her",
     },
     bio: {
       de: [
         {
           q: "Wer bist du?",
-          a: "Ein stolzes Ross aus den weiten Wiesen der Kreativität.",
+          a: "Mein Name ist Sonja und seit ich denken kann, ist es meine Leidenschaft, mich in verschiedenen Medien kreativ auszudrücken, vom Nähen und Malen bis hin zur Fotografie und vielem mehr. Diese kreative Reise führte mich nach Lausanne für mein Industrial Design Studium. Nach Zwischenstationen in verschiedenen Teilen der Schweiz habe ich mich schließlich für meinen Job als Designerin in Zürich niedergelassen. Da meine tägliche Arbeit viel Bildschirmzeit mit sich bringt, liebe ich es, durch handfeste Projekte einen Ausgleich zu schaffen und so habe ich meinen Weg zum Töpfern gefunden.",
         },
         {
           q: "Was kreierst du?",
-          a: "Elegante Galopp-Choreografien und den perfekten Hufschlag.",
+          a: "In den letzten zwei Jahren ist das Töpfern zu einem großen Fokus von mir geworden. Durch meinen Hintergrund im Industrial Design denke ich ganz automatisch in Form und Funktion. Mein Töpferstil zeichnet sich vor allem durch klare Kanten und symmetrische Formen aus. Dabei liebe ich es, mit Gussformen und Stempeln zu experimentieren, um zu sehen, wie ich mit verschiedenen Entstehungsprozessen spielen kann.",
         },
         {
           q: "Was setzt du in der Sinnesküche um?",
-          a: "Ich sorge dafür, dass der Sinn für Abenteuer nie verloren geht.",
+          a: "In der Sinnesküche möchte ich diese Faszination für Formen und das Erschaffen teilen. Ich leite Töpferkurse, in denen wir gemeinsam rohe Ideen in reale Objekte verwandeln. Ich freue mich darauf, dich im Studio zu begrüßen und gemeinsam neue Projekte zum Leben zu erwecken.",
         },
       ],
       en: [
         {
           q: "Who are you?",
-          a: "A proud steed from the wide meadows of creativity.",
+          a: "I am Sonja and for as long as I can remember, my passion has been to create across many different mediums, from sewing and painting to photography and many more. This creative journey took me to Lausanne to study Industrial Design. After living in different parts of Switzerland, I finally settled in Zurich for my job as a designer. Since my daily work involves a lot of screen time, I love to compensate with hands-on projects, which is exactly how I found my way to pottery.",
         },
         {
           q: "What do you create?",
-          a: "Elegant gallop choreographies and the perfect rhythm of hooves.",
+          a: "Over the past two years, pottery has become a focus of mine. Coming from an industrial design background, I instinctively think about form and function. My pottery style is mostly defined by clean edges and symmetrical shapes, and I love experimenting with molds and stamps to see how I can play with different processes of creation.",
         },
         {
           q: "What do you realize in the Sinnesküche?",
-          a: "I make sure that the sense of adventure never gets lost.",
+          a: "In the Sinnesküche, I want to share this fascination for shapes and creation. I am leading pottery courses where we can transform raw ideas into real objects. I look forward to welcoming you to the studio and bringing new projects to life together.",
         },
       ],
     },
