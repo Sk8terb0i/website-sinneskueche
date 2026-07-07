@@ -92,6 +92,12 @@ export default function StudentFiringForm() {
   const [step, setStep] = useState("email");
   const [activeTab, setActiveTab] = useState("active");
   const [userCode, setUserCode] = useState("");
+
+  const [lang, setLang] = useState(() => {
+    const savedLang = localStorage.getItem("userLanguage");
+    return savedLang === "de" || savedLang === "en" ? savedLang : "en";
+  });
+
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [guestLanguage, setGuestLanguage] = useState(lang);
@@ -124,11 +130,6 @@ export default function StudentFiringForm() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
-  const [lang, setLang] = useState(() => {
-    const savedLang = localStorage.getItem("userLanguage");
-    return savedLang === "de" || savedLang === "en" ? savedLang : "en";
-  });
 
   // FIXED: allProfiles definition
   const allProfiles = useMemo(() => {
