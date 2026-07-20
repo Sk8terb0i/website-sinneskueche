@@ -755,8 +755,8 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         <h2 style={S.overarchingTitleStyle(isMobile)}>
           {isMobile
             ? currentLang === "en"
-              ? "Available Dates & Packs"
-              : "Termine & Kurspakete"
+              ? "Available Dates & Tickets"
+              : "Termine & Tickets"
             : currentLang === "en"
               ? "Available Dates & Tickets"
               : "Termine & Tickets"}
