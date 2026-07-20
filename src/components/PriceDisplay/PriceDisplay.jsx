@@ -758,8 +758,8 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
               ? "Available Dates & Packs"
               : "Termine & Kurspakete"
             : currentLang === "en"
-              ? "Available Dates & Session Packs"
-              : "Termine & Kurspakete"}
+              ? "Available Dates & Tickets"
+              : "Termine & Tickets"}
         </h2>
         {isMobile &&
           (isMobileExpanded ? (

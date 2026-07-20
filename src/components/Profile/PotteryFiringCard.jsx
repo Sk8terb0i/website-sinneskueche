@@ -615,7 +615,7 @@ export default function PotteryFiringCard({ currentLang }) {
               color: "#1c0700",
             }}
           >
-            <Home size={18} /> {labels.goHome}
+            <CheckCircle size={18} /> Okay
           </button>
         </div>
       </div>
