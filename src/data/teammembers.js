@@ -179,13 +179,13 @@ export const planets = [
     ],
   },
   {
-    id: "gini",
+    id: "sarra",
     type: "courses",
     get icon() {
       return {
-        en: getImage("gini_name.png"),
-        de: getImage("gini_name.png"),
-        base: getImage("gini.png"),
+        en: getImage("sarra_name.png"),
+        de: getImage("sarra_name.png"),
+        base: getImage("sarra.png"),
       };
     },
     pronouns: {
