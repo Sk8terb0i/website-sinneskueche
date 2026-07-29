@@ -88,14 +88,14 @@ export default function Pottery({ currentLang, setCurrentLang }) {
   const content = {
     en: {
       title: "Töpferküche",
-      welcome: "Join our creative kitchen",
+      welcome: "Cook up your own masterpiece",
       ctaFloating: "register now",
       details: [
         { icon: <Clock size={18} />, text: "18:30 - 21:15" },
         { icon: <Users size={18} />, text: "All skill levels" },
         { icon: <Coffee size={18} />, text: "Small, cozy groups" },
       ],
-      description: `In our pottery kitchen, you can try your hand at pottery in a welcoming atmosphere and hone your skills. It doesn't matter how much experience you bring, everyone is welcome.\n\nClay, tools, and rollers are ready for you. You drop by, work on your own project, or get inspired by the materials and other participants. If you need help, we are here. Whether you come regularly or just want to get a taste of it.\n\nWith us, you don't need to book a course in advance and don't need to bring anything except your love for pottery.`,
+      description: `In our Töpferküche, you can try your hand at pottery in a welcoming atmosphere and hone your skills. It doesn't matter how much experience you bring, everyone is welcome.\n\nClay, tools, and rollers are ready for you. You drop by, work on your own project, or get inspired by the materials and other participants. If you need help, we are here. Whether you come regularly or just want to get a taste of it.\n\nWith us, you don't need to book a course in advance and don't need to bring anything except your love for pottery.`,
       tabs: [
         {
           title: "How it works",
@@ -121,8 +121,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         },
         {
           title: "Fancy the pottery wheel?",
-          content:
-            "For an additional charge, you can book an introduction to the pottery wheel on a separate day, as well as individual 1-hour slots.",
+          content: "Book a wheel for an additional charge.",
         },
       ],
     },
@@ -135,7 +134,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         { icon: <Users size={18} />, text: "Alle Level willkommen" },
         { icon: <Coffee size={18} />, text: "Kleine, gemütliche Gruppen" },
       ],
-      description: `In unserer Töpferküche kannst du dich in vertrauter Atmosphäre im Töpfern versuchen und deine Fähigkeiten schärfen. Es spielt keine Rolle wieviel Erfahrung du mitbringst, jede*r ist willkommen.\n\nTon, Werkzeug, Walze stehen für dich bereit. Du kommst vorbei, arbeitest an deinem eigenen Projekt oder lässt dich vom Material und den anderen Teilnehmer:innen inspirieren. Wenn du Hilfe brauchst, sind wir da.\n\nEgal ob du regelmässig kommst oder einfach mal reinschnuppern willst. Bei uns musst du keinen Kurs vorab buchen und nichts mitbringen ausser Lust am Töpfern.`,
+      description: `In unserer Töpferküche kannst du dich in vertrauter Atmosphäre im Töpfern versuchen und deine Fähigkeiten schärfen. Es spielt keine Rolle wieviel Erfahrung du mitbringst, jede:r ist willkommen.\n\nTon, Werkzeug, Walze stehen für dich bereit. Du kommst vorbei, arbeitest an deinem eigenen Projekt oder lässt dich vom Material und den anderen Teilnehmer:innen inspirieren. Wenn du Hilfe brauchst, sind wir da.\n\nEgal ob du regelmässig kommst oder einfach mal reinschnuppern willst. Bei uns musst du keinen Kurs vorab buchen und nichts mitbringen ausser Lust am Töpfern.`,
       tabs: [
         {
           title: "So funktioniert’s",
@@ -161,8 +160,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         },
         {
           title: "Lust auf die Drehscheibe?",
-          content:
-            "Gegen Aufpreis kannst du an einem separaten Tag eine Einführung an der Drehscheibe sowie einzelne 1-Stunden-Slots dazubuchen.",
+          content: "Gegen Aufpreis dazubuchen.",
         },
       ],
     },

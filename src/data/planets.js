@@ -61,15 +61,15 @@ export const planets = [
     },
     courses: [
       {
-        text: { en: "pottery tuesdays", de: "pottery tuesdays" },
+        text: { en: "Pottery Tuesdays", de: "Pottery Tuesdays" },
         link: "/pottery",
       },
       {
-        text: { en: "artistic vision", de: "artistic vision" },
+        text: { en: "Artistic Vision", de: "Artistic Vision" },
         link: "/artistic-vision",
       },
       {
-        text: { en: "get ink!", de: "get ink!" },
+        text: { en: "Get Ink!", de: "Get Ink!" },
         link: "/get-ink",
       },
     ],
@@ -90,15 +90,15 @@ export const planets = [
     },
     courses: [
       {
-        text: { en: "pottery tuesdays", de: "pottery tuesdays" },
+        text: { en: "Pottery Tuesdays", de: "Pottery Tuesdays" },
         link: "/pottery",
       },
       {
-        text: { en: "artistic vision", de: "artistic vision" },
+        text: { en: "Artistic Vision", de: "Artistic Vision" },
         link: "/artistic-vision",
       },
       {
-        text: { en: "get ink!", de: "get ink!" },
+        text: { en: "Get Ink!", de: "Get Ink!" },
         link: "/get-ink",
       },
     ],
@@ -122,23 +122,23 @@ export const planets = [
     },
     courses: [
       {
-        text: { en: "vocal coaching", de: "gesangscoaching" },
+        text: { en: "Vocal Coaching", de: "Gesangscoaching" },
         link: "/singing",
       },
       {
-        text: { en: "extended voice lab", de: "extended voice lab" },
+        text: { en: "Extended Voice Lab", de: "Extended Voice Lab" },
         link: "/extended-voice-lab",
       },
       {
-        text: { en: "artistic vision", de: "artistic vision" },
+        text: { en: "Artistic Vision", de: "Artistic Vision" },
         link: "/artistic-vision",
       },
       {
-        text: { en: "performing words", de: "performing words" },
+        text: { en: "Performing Words", de: "Performing Words" },
         link: "/performing-words",
       },
       {
-        text: { en: "singing basics weekend", de: "singing basics weekend" },
+        text: { en: "Singing Basics Weekend", de: "Singing Basics Weekend" },
         link: "/singing-basics",
       },
     ],
@@ -154,12 +154,12 @@ export const planets = [
       };
     },
     fallback: {
-      text: { en: "smell you later.", de: "wir riechen uns später." },
+      text: { en: "Smell you later.", de: "Wir riechen uns später." },
       isItalic: true,
     },
     courses: [
       {
-        text: { en: "artistic vision", de: "artistic vision" },
+        text: { en: "Artistic Vision", de: "Artistic Vision" },
         link: "/artistic-vision",
       },
     ],
@@ -176,14 +176,14 @@ export const planets = [
     },
     fallback: {
       text: {
-        en: "it's on the tip of my tongue.",
-        de: "es liegt mir auf der Zunge.",
+        en: "It's on the tip of my tongue.",
+        de: "Es liegt mir auf der Zunge.",
       },
       isItalic: true,
     },
     courses: [
       {
-        text: { en: "artistic vision", de: "artistic vision" },
+        text: { en: "Artistic Vision", de: "Artistic Vision" },
         link: "/artistic-vision",
       },
     ],
@@ -199,7 +199,7 @@ export const planets = [
     },
     courses: [
       {
-        text: { en: "how to find us :)", de: "so findest du uns :)" },
+        text: { en: "How to Find Us :)", de: "So findest du uns :)" },
         link: "/location",
       },
     ],
@@ -214,7 +214,7 @@ export const planets = [
       };
     },
     courses: [
-      { text: { en: "get to know us", de: "das sind wir" }, link: "/team" },
+      { text: { en: "Get to Know Us", de: "Das sind wir" }, link: "/team" },
     ],
   },
   {
@@ -227,7 +227,7 @@ export const planets = [
       };
     },
     courses: [
-      { text: { en: "come back later :)", de: "komm später wieder :)" } },
+      { text: { en: "Come Back Later :)", de: "Komm später wieder :)" } },
     ],
   },
   {
@@ -240,7 +240,7 @@ export const planets = [
       };
     },
     courses: [
-      { text: { en: "get in touch!", de: "melde dich!" }, link: "/contact" },
+      { text: { en: "Get in Touch!", de: "Melde dich!" }, link: "/contact" },
     ],
   },
   {
@@ -253,7 +253,7 @@ export const planets = [
       };
     },
     courses: [
-      { text: { en: "rent our space", de: "raum mieten" }, link: "/rent" },
+      { text: { en: "Rent Our Space", de: "Raum mieten" }, link: "/rent" },
     ],
   },
   {
@@ -268,19 +268,19 @@ export const planets = [
     },
     courses: [
       {
-        text: { en: "about us", de: "über uns" },
+        text: { en: "About Us", de: "Über uns" },
         link: "/team",
       },
       {
-        text: { en: "location", de: "standort" },
+        text: { en: "Location", de: "Standort" },
         link: "/location",
       },
       {
-        text: { en: "rent our space", de: "raum mieten" },
+        text: { en: "Rent Our Space", de: "Raum mieten" },
         link: "/rent",
       },
       {
-        text: { en: "contact", de: "kontakt" },
+        text: { en: "Contact", de: "Kontakt" },
         link: "/contact",
       },
     ],

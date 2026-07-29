@@ -488,7 +488,7 @@ export default function Teams({ currentLang, setCurrentLang }) {
       >
         <p style={{ margin: "0 0 10px 0" }}>
           {currentLang === "de"
-            ? "Die Sinnesküche ist ein kreativer Gemeinschaftsort. Wir nehmen wahr über unsere Sinne und gehen in Kontakt miteinander. Hier wollen wir unsere Sinne bewusst füttern und uns mit Eindrücken, Erfahrungen und Fähigkeiten bereichern. Vokalist*in und Künstler*in Luca Koch hat die Sinnesküche im Februar 2024 gegründet und gestaltet seither mit Freunden ein breites, multisensuelles Kurs- und Eventangebot. Lerne hier unsere Facilitator kennen."
+            ? "Die Sinnesküche ist ein kreativer Gemeinschaftsort. Wir nehmen wahr über unsere Sinne und gehen in Kontakt miteinander. Hier wollen wir unsere Sinne bewusst füttern und uns mit Eindrücken, Erfahrungen und Fähigkeiten bereichern. Vokalist:in und Künstler:in Luca Koch hat die Sinnesküche im Februar 2024 gegründet und gestaltet seither mit Freunden ein breites, multisensuelles Kurs- und Eventangebot. Lerne hier unsere Facilitator kennen."
             : "The Sinnesküche is a creative community space. We perceive through our senses and connect with one another. Here, we want to consciously feed our senses and enrich ourselves with impressions, experiences, and skills. Vocalist and artist Luca Koch founded the Sinnesküche in February 2024 and has since been shaping a broad, multisensory range of courses and events with friends. Get to know our facilitators here."}
         </p>
         <p style={{ margin: 0 }}>
