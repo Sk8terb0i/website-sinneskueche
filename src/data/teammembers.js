@@ -249,11 +249,11 @@ export const planets = [
       de: [
         {
           q: "Wer bist du?",
-          a: "Konzeptionell bin ich ein Horse; künstlerisch eine Identitätskrise. Ich habe Game Design studiert...",
+          a: "Konzeptionell bin ich ein Horse; künstlerisch eine Identitätskrise. Ich habe Game Design studiert und diese Fähigkeiten dann während meines Masters in Transdisciplinary Studies genutzt, um in alle erdenklichen Richtungen auszubrechen. Ich habe an der Mitarbeit in bestehenden Projekten, die ich mit meinen Skills bereichern kann, genauso viel Freude wie an der Umsetzung meiner eigenen Ideen. Solange es mich nicht beim Galoppieren behindert.",
         },
         {
           q: "Was kreierst du?",
-          a: "Wenn es für mich nach Spass klingt, erschaffe ich es...",
+          a: "Wenn es für mich nach Spass klingt, erschaffe ich es. Denn was der Affe als Business betrachtet, ist für das Horse ein Spiel.",
         },
         {
           q: "Was setzt du in der Sinnesküche um?",
@@ -263,11 +263,11 @@ export const planets = [
       en: [
         {
           q: "Who are you?",
-          a: "Conceptually, I’m a horse; artistically, an identity crisis. I studied game design...",
+          a: "Conceptually, I’m a horse; artistically, an identity crisis. I studied game design, and then used those skills to branch out into any and all directions during my master in transdisciplinary studies. I enjoy joining existing projects where I can add my skillset just as much as creating my own projects. As long as it doesn’t get in the way of my galloping.",
         },
         {
           q: "What do you create?",
-          a: "If it sounds fun to me, I will create it...",
+          a: "If it sounds fun to me, I will create it. For what the monkey considers business the horse considers play.",
         },
         {
           q: "What do you realize in the Sinnesküche?",
@@ -283,7 +283,6 @@ export const planets = [
       { label: "noearnold.com", url: "https://noearnold.com" },
       { label: "Instagram", url: "https://www.instagram.com/noe.arnold/" },
     ],
-
     courses: [
       {
         text: {
