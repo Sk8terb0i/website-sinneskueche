@@ -196,21 +196,21 @@ export const planets = [
       de: [
         {
           q: "Wer bist du?",
-          a: "Ich bin Sarra, ursprünglich aus Wien, und habe von dort meinen Hang zum Schmäh mitgebracht. Ebenso liebe ich Struktur, Ordnung und Präzision. Beim Töpfern macht der Ton sowieso, was er will, und so entstehen meist wunderbar eigenwillige Formen, die sich keinem Plan fügen. Kreativität schleicht sich bei mir überall ein, ob beim Reisen, Kochen oder beim Versuch, aus Ton etwas zu formen, das seine Form behält. Reisen ist meine zweite große Leidenschaft: neue Städte, neue Klänge, neue Ideen, die ich dann irgendwie in meine Arbeiten und Kunstwerke schmuggle.",
+          a: "Ich bin Sarra, ursprünglich aus Wien und habe von dort meinen Hang zum Schmäh mitgebracht. Gleichzeitig liebe ich Struktur, Ordnung und Präzision. Beim Töpfern kommt davon erstaunlich wenig an: der Ton macht sowieso, was er will, und so entstehen meist wunderbar eigenwillige Formen, die sich keinem Plan fügen. Kreativität schleicht sich für mich überall ein, ob beim Reisen, Kochen oder beim Versuch, aus Ton etwas zu formen, das seine Form behält. Reisen ist meine zweite große Leidenschaft: neue Städte, neue Klänge, neue Ideen, die ich dann irgendwie in meine Arbeiten und Kunstwerke schmuggle.",
         },
         {
           q: "Was kreierst du?",
-          a: "Meistens arbeite ich gerne an der Drehscheibe, manchmal im Handaufbau, je nachdem, ob die Scheibe an dem Tag Lust hat, mit mir zu kooperieren.",
+          a: "Meistens arbeite ich gerne an der Drehscheibe, manchmal Handaufbau, je nachdem, ob die Scheibe an dem Tag Lust hat, mit mir zu kooperieren.",
         },
         {
           q: "Was setzt du in der Sinnesküche um?",
-          a: "Ich leite mit meinen anderen Teammitgliedern die Töpferkurse und bin für Fragen, Tipps oder einfach ein aufmunterndes Wort immer erreichbar. Am meisten freut es mich zuzusehen, wie aus ein bisschen Ton und ganz viel Neugier am Ende ein echtes Stück entsteht.",
+          a: "Ich leite mit meinen anderen Teammitgliedern die Töpferkurse und bin für Fragen, Tipps oder einfach ein aufmunterndes Wort immer erreichbar. Am meisten freut es mich, zuzusehen, wie aus ein bisschen Ton und ganz viel Neugier am Ende ein echtes Stück entsteht.",
         },
       ],
       en: [
         {
           q: "Who are you?",
-          a: "I am Sarra, originally from Vienna, which is where I got my sense of humor. I also truly love organising, structure, and precision. When it comes to pottery, the clay pretty much does what it wants, so I usually end up with wonderfully weird shapes that follow their own path. Creativity sneaks in everywhere for me, whether I'm traveling, cooking, or trying to shape clay into something that holds its shape. Traveling is my second passion: new cities, new sounds, new ideas that I end up integrating into my work and art pieces.",
+          a: "I am Sarra, originally from Vienna, which is where I got my sense of humor. I also love organising, structure and precision. Surprisingly little of that survives contact with pottery: the clay pretty much does what it wants, so I usually end up with wonderfully weird shapes that refuse to follow any plan. Creativity sneaks in everywhere for me, whether I'm traveling, cooking, or trying to shape clay into something that holds its shape. Traveling is my second passion: new cities, new sounds, new ideas that I end up integrating into my work and art pieces.",
         },
         {
           q: "What do you create?",
