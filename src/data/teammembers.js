@@ -189,36 +189,36 @@ export const planets = [
       };
     },
     pronouns: {
-      de: "Wildpferd/Wildpferd",
-      en: "wild horse/wild horse",
+      de: "sie/ihr",
+      en: "she/her",
     },
     bio: {
       de: [
         {
           q: "Wer bist du?",
-          a: "Ein Wildpferd, das immer der Sonne entgegen galoppiert.",
+          a: "Ich bin Sarra, ursprünglich aus Wien, und habe von dort meinen Hang zum Schmäh mitgebracht. Ebenso liebe ich Struktur, Ordnung und Präzision. Beim Töpfern macht der Ton sowieso, was er will, und so entstehen meist wunderbar eigenwillige Formen, die sich keinem Plan fügen. Kreativität schleicht sich bei mir überall ein, ob beim Reisen, Kochen oder beim Versuch, aus Ton etwas zu formen, das seine Form behält. Reisen ist meine zweite große Leidenschaft: neue Städte, neue Klänge, neue Ideen, die ich dann irgendwie in meine Arbeiten und Kunstwerke schmuggle.",
         },
         {
           q: "Was kreierst du?",
-          a: "Abenteuerlustige Ausritte durch unberührte kreative Felder.",
+          a: "Meistens arbeite ich gerne an der Drehscheibe, manchmal im Handaufbau, je nachdem, ob die Scheibe an dem Tag Lust hat, mit mir zu kooperieren.",
         },
         {
           q: "Was setzt du in der Sinnesküche um?",
-          a: "Ich suche den perfekten Sonnenuntergang für den Abendgalopp.",
+          a: "Ich leite mit meinen anderen Teammitgliedern die Töpferkurse und bin für Fragen, Tipps oder einfach ein aufmunterndes Wort immer erreichbar. Am meisten freut es mich zuzusehen, wie aus ein bisschen Ton und ganz viel Neugier am Ende ein echtes Stück entsteht.",
         },
       ],
       en: [
         {
           q: "Who are you?",
-          a: "A wild horse that always gallops towards the sun.",
+          a: "I am Sarra, originally from Vienna, which is where I got my sense of humor. I also truly love organising, structure, and precision. When it comes to pottery, the clay pretty much does what it wants, so I usually end up with wonderfully weird shapes that follow their own path. Creativity sneaks in everywhere for me, whether I'm traveling, cooking, or trying to shape clay into something that holds its shape. Traveling is my second passion: new cities, new sounds, new ideas that I end up integrating into my work and art pieces.",
         },
         {
           q: "What do you create?",
-          a: "Adventurous rides through untouched creative fields.",
+          a: "I mostly like working on the wheel, though sometimes hand-building is also fun, depending on whether the wheel's in the mood to cooperate with me that day.",
         },
         {
           q: "What do you realize in the Sinnesküche?",
-          a: "Searching for the perfect sunset for an evening gallop.",
+          a: "Together with the rest of the team, I lead the pottery classes and I'm always around for questions, tips, or just a bit of encouragement. What I love most is watching a little lump of clay and a lot of curiosity turn into an actual finished piece.",
         },
       ],
     },
