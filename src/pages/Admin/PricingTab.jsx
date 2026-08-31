@@ -52,7 +52,7 @@ export default function PricingTab({
   const [newEventInfoEn, setNewEventInfoEn] = useState("");
   const [newEventInfoDe, setNewEventInfoDe] = useState("");
   const [newEventTimeSlots, setNewEventTimeSlots] = useState([
-    { startTime: "", endTime: "", capacity: "" },
+    { startTime: "", endTime: "", capacity: "", dayOfWeek: "all" },
   ]);
 
   const isFullAdmin = userRole === "admin";
@@ -94,6 +94,8 @@ export default function PricingTab({
       timeSlots: "Time Slots",
       startTime: "Start Time",
       endTime: "End Time",
+      day: "Day",
+      allDays: "All Days",
       addSlot: "Add Slot",
       addAddon: "Create Add-on",
       saving: "Saving Updates...",
@@ -135,6 +137,8 @@ export default function PricingTab({
       timeSlots: "Zeitslots",
       startTime: "Startzeit",
       endTime: "Endzeit",
+      day: "Tag",
+      allDays: "Alle Tage",
       addSlot: "Slot hinzufügen",
       addAddon: "Extra Erstellen",
       saving: "Speichern...",
@@ -263,7 +267,7 @@ export default function PricingTab({
   const addNewTimeSlot = () => {
     setNewEventTimeSlots([
       ...newEventTimeSlots,
-      { startTime: "", endTime: "", capacity: "" },
+      { startTime: "", endTime: "", capacity: "", dayOfWeek: "all" },
     ]);
   };
 
@@ -292,7 +296,7 @@ export default function PricingTab({
           ...ev,
           timeSlots: [
             ...(ev.timeSlots || []),
-            { startTime: "", endTime: "", capacity: "" },
+            { startTime: "", endTime: "", capacity: "", dayOfWeek: "all" },
           ],
         };
       }
@@ -325,6 +329,7 @@ export default function PricingTab({
         startTime: t.startTime?.trim() || "",
         endTime: t.endTime?.trim() || "",
         capacity: parseInt(t.capacity?.toString().trim() || "0") || 0,
+        dayOfWeek: t.dayOfWeek || "all",
       }));
 
     handlePriceChange(courseId, "specialEvents", [
@@ -353,7 +358,9 @@ export default function PricingTab({
     setNewEventMandatory(false);
     setNewEventFreePack(false);
     setNewEventIntroId("");
-    setNewEventTimeSlots([{ startTime: "", endTime: "", capacity: "" }]);
+    setNewEventTimeSlots([
+      { startTime: "", endTime: "", capacity: "", dayOfWeek: "all" },
+    ]);
   };
 
   const updateSpecialEvent = (courseId, eventId, field, value) => {
@@ -574,6 +581,7 @@ export default function PricingTab({
                                       startTime: "",
                                       endTime: "",
                                       capacity: "",
+                                      dayOfWeek: "all",
                                     },
                                   ]);
                                   setIsCourseDropdownOpen(false);
@@ -646,7 +654,12 @@ export default function PricingTab({
                                 setNewEventFreePack(false);
                                 setNewEventIntroId("");
                                 setNewEventTimeSlots([
-                                  { startTime: "", endTime: "", capacity: "" },
+                                  {
+                                    startTime: "",
+                                    endTime: "",
+                                    capacity: "",
+                                    dayOfWeek: "all",
+                                  },
                                 ]);
                                 setIsCourseDropdownOpen(false);
                               }}
@@ -1654,9 +1667,111 @@ export default function PricingTab({
                                 display: "flex",
                                 gap: "10px",
                                 alignItems: "center",
-                                flexWrap: "wrap", // <-- Added to allow wrapping on mobile
+                                flexWrap: "wrap",
                               }}
                             >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: "4px",
+                                  flex: 1,
+                                  minWidth: "140px",
+                                }}
+                              >
+                                {[
+                                  {
+                                    v: "1",
+                                    l: currentLang === "en" ? "Mo" : "Mo",
+                                  },
+                                  {
+                                    v: "2",
+                                    l: currentLang === "en" ? "Tu" : "Di",
+                                  },
+                                  {
+                                    v: "3",
+                                    l: currentLang === "en" ? "We" : "Mi",
+                                  },
+                                  {
+                                    v: "4",
+                                    l: currentLang === "en" ? "Th" : "Do",
+                                  },
+                                  {
+                                    v: "5",
+                                    l: currentLang === "en" ? "Fr" : "Fr",
+                                  },
+                                  {
+                                    v: "6",
+                                    l: currentLang === "en" ? "Sa" : "Sa",
+                                  },
+                                  {
+                                    v: "0",
+                                    l: currentLang === "en" ? "Su" : "So",
+                                  },
+                                ].map((day) => {
+                                  const isSelected = Array.isArray(
+                                    slot.dayOfWeek,
+                                  )
+                                    ? slot.dayOfWeek.includes(day.v)
+                                    : slot.dayOfWeek === "all" ||
+                                      !slot.dayOfWeek ||
+                                      slot.dayOfWeek === String(day.v);
+                                  return (
+                                    <div
+                                      key={day.v}
+                                      onClick={() => {
+                                        let current = Array.isArray(
+                                          slot.dayOfWeek,
+                                        )
+                                          ? slot.dayOfWeek
+                                          : slot.dayOfWeek === "all" ||
+                                              !slot.dayOfWeek
+                                            ? [
+                                                "1",
+                                                "2",
+                                                "3",
+                                                "4",
+                                                "5",
+                                                "6",
+                                                "0",
+                                              ]
+                                            : [String(slot.dayOfWeek)];
+                                        let next = current.includes(day.v)
+                                          ? current.filter((d) => d !== day.v)
+                                          : [...current, day.v];
+                                        if (
+                                          next.length === 7 ||
+                                          next.length === 0
+                                        )
+                                          next = ["all"];
+                                        updateExistingTimeSlot(
+                                          selectedCourse,
+                                          ev.id,
+                                          sIdx,
+                                          "dayOfWeek",
+                                          next,
+                                        );
+                                      }}
+                                      style={{
+                                        flex: 1,
+                                        textAlign: "center",
+                                        padding: "6px 0",
+                                        backgroundColor: isSelected
+                                          ? "#9960a8"
+                                          : "white",
+                                        color: isSelected ? "white" : "#ccc",
+                                        fontSize: "0.75rem",
+                                        fontWeight: "bold",
+                                        cursor: "pointer",
+                                        borderRadius: "6px",
+                                        border: `1px solid ${isSelected ? "#9960a8" : "#eee"}`,
+                                        userSelect: "none",
+                                      }}
+                                    >
+                                      {day.l}
+                                    </div>
+                                  );
+                                })}
+                              </div>
                               <input
                                 type="time"
                                 value={slot.startTime || ""}
@@ -2063,6 +2178,70 @@ export default function PricingTab({
                             flexWrap: "wrap", // <-- Added to allow wrapping on mobile
                           }}
                         >
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "4px",
+                              flex: 1,
+                              minWidth: "140px",
+                            }}
+                          >
+                            {[
+                              { v: "1", l: currentLang === "en" ? "Mo" : "Mo" },
+                              { v: "2", l: currentLang === "en" ? "Tu" : "Di" },
+                              { v: "3", l: currentLang === "en" ? "We" : "Mi" },
+                              { v: "4", l: currentLang === "en" ? "Th" : "Do" },
+                              { v: "5", l: currentLang === "en" ? "Fr" : "Fr" },
+                              { v: "6", l: currentLang === "en" ? "Sa" : "Sa" },
+                              { v: "0", l: currentLang === "en" ? "Su" : "So" },
+                            ].map((day) => {
+                              const isSelected = Array.isArray(slot.dayOfWeek)
+                                ? slot.dayOfWeek.includes(day.v)
+                                : slot.dayOfWeek === "all" ||
+                                  !slot.dayOfWeek ||
+                                  slot.dayOfWeek === String(day.v);
+                              return (
+                                <div
+                                  key={day.v}
+                                  onClick={() => {
+                                    let current = Array.isArray(slot.dayOfWeek)
+                                      ? slot.dayOfWeek
+                                      : slot.dayOfWeek === "all" ||
+                                          !slot.dayOfWeek
+                                        ? ["1", "2", "3", "4", "5", "6", "0"]
+                                        : [String(slot.dayOfWeek)];
+                                    let next = current.includes(day.v)
+                                      ? current.filter((d) => d !== day.v)
+                                      : [...current, day.v];
+                                    if (next.length === 7 || next.length === 0)
+                                      next = ["all"];
+                                    handleNewTimeSlotChange(
+                                      sIdx,
+                                      "dayOfWeek",
+                                      next,
+                                    );
+                                  }}
+                                  style={{
+                                    flex: 1,
+                                    textAlign: "center",
+                                    padding: "6px 0",
+                                    backgroundColor: isSelected
+                                      ? "#9960a8"
+                                      : "white",
+                                    color: isSelected ? "white" : "#ccc",
+                                    fontSize: "0.75rem",
+                                    fontWeight: "bold",
+                                    cursor: "pointer",
+                                    borderRadius: "6px",
+                                    border: `1px solid ${isSelected ? "#9960a8" : "#eee"}`,
+                                    userSelect: "none",
+                                  }}
+                                >
+                                  {day.l}
+                                </div>
+                              );
+                            })}
+                          </div>
                           <input
                             type="time"
                             value={slot.startTime}

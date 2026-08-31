@@ -229,7 +229,10 @@ export default function ScheduleTab({
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
     const [y, m, d] = dateStr.split("-");
-    return `${d}.${m}.${y}`;
+    const day = new Date(dateStr).toLocaleDateString("en-US", {
+      weekday: "short",
+    });
+    return `${day} ${d}.${m}.${y}`;
   };
 
   useEffect(() => {

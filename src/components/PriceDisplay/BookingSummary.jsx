@@ -1538,10 +1538,26 @@ export default function BookingSummary({
                             );
                             if (def?.isMandatory && !history.includes(aid)) {
                               if (def.timeSlots?.length > 0) {
-                                autoAddons.push({
-                                  id: aid,
-                                  time: `${def.timeSlots[0].startTime}-${def.timeSlots[0].endTime}`,
-                                });
+                                const [y, m, day] = d.date
+                                  .split("-")
+                                  .map(Number);
+                                const targetDay = new Date(y, m - 1, day)
+                                  .getDay()
+                                  .toString();
+                                const validSlots = def.timeSlots.filter(
+                                  (ts) =>
+                                    !ts.dayOfWeek ||
+                                    ts.dayOfWeek === "all" ||
+                                    (Array.isArray(ts.dayOfWeek)
+                                      ? ts.dayOfWeek.includes(targetDay)
+                                      : ts.dayOfWeek === String(targetDay)),
+                                );
+                                if (validSlots.length > 0) {
+                                  autoAddons.push({
+                                    id: aid,
+                                    time: `${validSlots[0].startTime}-${validSlots[0].endTime}`,
+                                  });
+                                }
                               } else {
                                 autoAddons.push(aid);
                               }
@@ -1625,11 +1641,28 @@ export default function BookingSummary({
                     const attHistory = getProfileHistory(att.profileId);
 
                     const evPricing = pricingMap[d.link] || pricing;
-                    const visibleAddons = (
-                      evPricing?.specialEvents || []
-                    ).filter((se) => {
-                      return assignedAddonIds.includes(se.id);
-                    });
+                    const [y, m, day] = d.date.split("-").map(Number);
+                    const targetDay = new Date(y, m - 1, day)
+                      .getDay()
+                      .toString();
+
+                    const visibleAddons = (evPricing?.specialEvents || [])
+                      .filter((se) => {
+                        return assignedAddonIds.includes(se.id);
+                      })
+                      .filter((se) => {
+                        if (se.timeSlots && se.timeSlots.length > 0) {
+                          return se.timeSlots.some(
+                            (ts) =>
+                              !ts.dayOfWeek ||
+                              ts.dayOfWeek === "all" ||
+                              (Array.isArray(ts.dayOfWeek)
+                                ? ts.dayOfWeek.includes(targetDay)
+                                : ts.dayOfWeek === String(targetDay)),
+                          );
+                        }
+                        return true;
+                      });
 
                     const isAddonsExpanded =
                       selectedDates.length === 1 && d.attendees.length === 1
@@ -1712,10 +1745,27 @@ export default function BookingSummary({
                                     !history.includes(aid)
                                   ) {
                                     if (def.timeSlots?.length > 0) {
-                                      mandatoryForThisPerson.push({
-                                        id: aid,
-                                        time: `${def.timeSlots[0].startTime}-${def.timeSlots[0].endTime}`,
-                                      });
+                                      const [y, m, day] = d.date
+                                        .split("-")
+                                        .map(Number);
+                                      const targetDay = new Date(y, m - 1, day)
+                                        .getDay()
+                                        .toString();
+                                      const validSlots = def.timeSlots.filter(
+                                        (ts) =>
+                                          !ts.dayOfWeek ||
+                                          ts.dayOfWeek === "all" ||
+                                          (Array.isArray(ts.dayOfWeek)
+                                            ? ts.dayOfWeek.includes(targetDay)
+                                            : ts.dayOfWeek ===
+                                              String(targetDay)),
+                                      );
+                                      if (validSlots.length > 0) {
+                                        mandatoryForThisPerson.push({
+                                          id: aid,
+                                          time: `${validSlots[0].startTime}-${validSlots[0].endTime}`,
+                                        });
+                                      }
                                     } else {
                                       mandatoryForThisPerson.push(aid);
                                     }
@@ -1969,120 +2019,133 @@ export default function BookingSummary({
                                             paddingLeft: "14px",
                                           }}
                                         >
-                                          {addon.timeSlots.map((ts) => {
-                                            const timeString = `${ts.startTime}-${ts.endTime}`;
-                                            const isSelected =
-                                              att.selectedAddons?.some(
-                                                (a) =>
-                                                  typeof a === "object" &&
-                                                  a.id === addon.id &&
-                                                  a.time === timeString,
-                                              );
-                                            const bookedKey = `${d.id}_${addon.id}_${timeString}`;
-                                            const booked =
-                                              addonBookingCounts[bookedKey] ||
-                                              0;
-                                            const isFull =
-                                              booked >=
-                                              parseInt(ts.capacity || 999);
+                                          {addon.timeSlots
+                                            .filter(
+                                              (ts) =>
+                                                !ts.dayOfWeek ||
+                                                ts.dayOfWeek === "all" ||
+                                                (Array.isArray(ts.dayOfWeek)
+                                                  ? ts.dayOfWeek.includes(
+                                                      targetDay,
+                                                    )
+                                                  : ts.dayOfWeek ===
+                                                    String(targetDay)),
+                                            )
+                                            .map((ts) => {
+                                              const timeString = `${ts.startTime}-${ts.endTime}`;
+                                              const isSelected =
+                                                att.selectedAddons?.some(
+                                                  (a) =>
+                                                    typeof a === "object" &&
+                                                    a.id === addon.id &&
+                                                    a.time === timeString,
+                                                );
+                                              const bookedKey = `${d.id}_${addon.id}_${timeString}`;
+                                              const booked =
+                                                addonBookingCounts[bookedKey] ||
+                                                0;
+                                              const isFull =
+                                                booked >=
+                                                parseInt(ts.capacity || 999);
 
-                                            return (
-                                              <div
-                                                key={timeString}
-                                                onClick={() =>
-                                                  !isFull &&
-                                                  toggleAddon(
-                                                    d.id,
-                                                    nameIdx,
-                                                    addon,
-                                                    addon.isMandatory,
-                                                    timeString,
-                                                  )
-                                                }
-                                                style={{
-                                                  display: "flex",
-                                                  alignItems: "center",
-                                                  gap: "10px",
-                                                  padding: "8px 10px",
-                                                  borderRadius: "8px",
-                                                  cursor: isFull
-                                                    ? "not-allowed"
-                                                    : "pointer",
-                                                  backgroundColor: isSelected
-                                                    ? "rgba(78, 95, 40, 0.1)"
-                                                    : "rgba(28,7,0,0.03)",
-                                                  border:
-                                                    "1px solid rgba(28,7,0,0.05)",
-                                                  transition: "all 0.2s",
-                                                }}
-                                              >
+                                              return (
                                                 <div
+                                                  key={timeString}
+                                                  onClick={() =>
+                                                    !isFull &&
+                                                    toggleAddon(
+                                                      d.id,
+                                                      nameIdx,
+                                                      addon,
+                                                      addon.isMandatory,
+                                                      timeString,
+                                                    )
+                                                  }
                                                   style={{
-                                                    width: "16px",
-                                                    height: "16px",
-                                                    borderRadius: "4px",
-                                                    border: `2px solid ${isSelected ? addonColor : "#caaff3"}`,
                                                     display: "flex",
                                                     alignItems: "center",
-                                                    justifyContent: "center",
+                                                    gap: "10px",
+                                                    padding: "8px 10px",
+                                                    borderRadius: "8px",
+                                                    cursor: isFull
+                                                      ? "not-allowed"
+                                                      : "pointer",
                                                     backgroundColor: isSelected
-                                                      ? addonColor
-                                                      : "transparent",
+                                                      ? "rgba(78, 95, 40, 0.1)"
+                                                      : "rgba(28,7,0,0.03)",
+                                                    border:
+                                                      "1px solid rgba(28,7,0,0.05)",
+                                                    transition: "all 0.2s",
                                                   }}
                                                 >
-                                                  {isSelected && (
-                                                    <Check
-                                                      size={12}
-                                                      color="#fdf8e1"
-                                                      strokeWidth={4}
-                                                    />
-                                                  )}
-                                                </div>
-                                                <div
-                                                  style={{
-                                                    flex: 1,
-                                                    display: "flex",
-                                                    justifyContent:
-                                                      "space-between",
-                                                    alignItems: "center",
-                                                  }}
-                                                >
-                                                  <span
+                                                  <div
                                                     style={{
-                                                      fontSize: "0.75rem",
-                                                      fontWeight: "600",
-                                                      color: isFull
-                                                        ? "#ccc"
-                                                        : "#1c0700",
+                                                      width: "16px",
+                                                      height: "16px",
+                                                      borderRadius: "4px",
+                                                      border: `2px solid ${isSelected ? addonColor : "#caaff3"}`,
                                                       display: "flex",
                                                       alignItems: "center",
-                                                      gap: "6px",
+                                                      justifyContent: "center",
+                                                      backgroundColor:
+                                                        isSelected
+                                                          ? addonColor
+                                                          : "transparent",
                                                     }}
                                                   >
-                                                    <Clock
-                                                      size={12}
-                                                      opacity={0.6}
-                                                    />{" "}
-                                                    {ts.startTime} -{" "}
-                                                    {ts.endTime}
-                                                  </span>
-                                                  {isFull && (
+                                                    {isSelected && (
+                                                      <Check
+                                                        size={12}
+                                                        color="#fdf8e1"
+                                                        strokeWidth={4}
+                                                      />
+                                                    )}
+                                                  </div>
+                                                  <div
+                                                    style={{
+                                                      flex: 1,
+                                                      display: "flex",
+                                                      justifyContent:
+                                                        "space-between",
+                                                      alignItems: "center",
+                                                    }}
+                                                  >
                                                     <span
                                                       style={{
-                                                        fontSize: "0.6rem",
-                                                        color: "#ff4d4d",
-                                                        fontWeight: "800",
+                                                        fontSize: "0.75rem",
+                                                        fontWeight: "600",
+                                                        color: isFull
+                                                          ? "#ccc"
+                                                          : "#1c0700",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: "6px",
                                                       }}
                                                     >
-                                                      {currentLang === "en"
-                                                        ? "FULL"
-                                                        : "AUSGEBUCHT"}
+                                                      <Clock
+                                                        size={12}
+                                                        opacity={0.6}
+                                                      />{" "}
+                                                      {ts.startTime} -{" "}
+                                                      {ts.endTime}
                                                     </span>
-                                                  )}
+                                                    {isFull && (
+                                                      <span
+                                                        style={{
+                                                          fontSize: "0.6rem",
+                                                          color: "#ff4d4d",
+                                                          fontWeight: "800",
+                                                        }}
+                                                      >
+                                                        {currentLang === "en"
+                                                          ? "FULL"
+                                                          : "AUSGEBUCHT"}
+                                                      </span>
+                                                    )}
+                                                  </div>
                                                 </div>
-                                              </div>
-                                            );
-                                          })}
+                                              );
+                                            })}
                                         </div>
                                       </div>
                                     );
@@ -4000,9 +4063,13 @@ export default function BookingSummary({
                   style={{
                     ...S.primaryBtnStyle(isMobile),
                     marginTop: "0.5rem",
+                    border: "1px solid #9960a8", // Overrides sub-pixel background bleed
+                    boxSizing: "border-box",
+                    transform: "translateZ(0)", // Forces GPU layer to composite correctly
+                    WebkitFontSmoothing: "antialiased",
                   }}
                 >
-                  {currentLang === "en" ? "Continue" : "Weiter"}
+                  <span>{currentLang === "en" ? "Continue" : "Weiter"}</span>
                 </button>
                 {showGuestError &&
                   !currentUser &&
@@ -4319,43 +4386,75 @@ export default function BookingSummary({
                 )}
               </p>
 
-              {pricing?.specialEvents?.some((se) => se.freeWithPack) && (
-                <div
-                  style={{
-                    backgroundColor: "rgba(153, 96, 168, 0.1)",
-                    padding: "12px",
-                    borderRadius: "12px",
-                    border: "1px solid rgba(153, 96, 168, 0.2)",
-                  }}
-                >
-                  <p
+              {(() => {
+                const freeAddons = [];
+                Object.values(pricingMap).forEach((pData) => {
+                  (pData.specialEvents || []).forEach((se) => {
+                    if (
+                      se.freeWithPack &&
+                      !freeAddons.some((a) => a.id === se.id)
+                    ) {
+                      freeAddons.push(se);
+                    }
+                  });
+                });
+
+                if (freeAddons.length === 0) return null;
+
+                return (
+                  <div
                     style={{
-                      margin: 0,
-                      fontWeight: "700",
-                      color: "#9960a8",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
+                      backgroundColor: "rgba(153, 96, 168, 0.1)",
+                      padding: "12px",
+                      borderRadius: "12px",
+                      border: "1px solid rgba(153, 96, 168, 0.2)",
                     }}
                   >
-                    <Star size={14} fill="#9960a8" />
-                    {currentLang === "en"
-                      ? "Intro Special"
-                      : "Einführungs-Special"}
-                  </p>
-                  <p
-                    style={{
-                      margin: "4px 0 0 0",
-                      fontSize: "0.85rem",
-                      textAlign: "left",
-                    }}
-                  >
-                    {currentLang === "en"
-                      ? "When purchasing a pack, all mandatory intro courses for this session are free of charge."
-                      : "Beim Kauf eines Pakets sind alle obligatorischen Einführungskurse für diesen Termin kostenlos."}
-                  </p>
-                </div>
-              )}
+                    <p
+                      style={{
+                        margin: 0,
+                        fontWeight: "700",
+                        color: "#9960a8",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <Star size={14} fill="#9960a8" />
+                      {currentLang === "en"
+                        ? "Pack Specials"
+                        : "Paket-Specials"}
+                    </p>
+                    <div
+                      style={{
+                        margin: "4px 0 0 0",
+                        fontSize: "0.85rem",
+                        textAlign: "left",
+                      }}
+                    >
+                      <span style={{ display: "block", marginBottom: "4px" }}>
+                        {currentLang === "en"
+                          ? "When purchasing a pack, the following add-ons are free of charge:"
+                          : "Beim Kauf eines Pakets sind die folgenden Extras kostenlos:"}
+                      </span>
+                      <ul
+                        style={{
+                          margin: "4px 0 0 0",
+                          paddingLeft: "20px",
+                          color: "#9960a8",
+                          fontWeight: "700",
+                        }}
+                      >
+                        {freeAddons.map((addon) => (
+                          <li key={addon.id}>
+                            {currentLang === "en" ? addon.nameEn : addon.nameDe}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <button

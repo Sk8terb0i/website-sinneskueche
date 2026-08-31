@@ -44,7 +44,13 @@ import {
 const formatDisplayDate = (dateStr) => {
   if (!dateStr) return "";
   const parts = dateStr.split("-");
-  return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : dateStr;
+  if (parts.length === 3) {
+    const day = new Date(dateStr).toLocaleDateString("en-US", {
+      weekday: "short",
+    });
+    return `${day} ${parts[2]}.${parts[1]}.${parts[0]}`;
+  }
+  return dateStr;
 };
 
 export default function EventsTab({

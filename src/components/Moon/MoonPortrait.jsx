@@ -142,9 +142,21 @@ export default function MoonPortrait({
           20%, 60% { transform: translate(-55%, -50%); }
           40%, 80% { transform: translate(-45%, -50%); }
         }
+        /* Expands hitbox without moving the element */
+        .moon-hitbox::before {
+          content: "";
+          position: absolute;
+          top: -15px;
+          bottom: -15px;
+          left: -25px;
+          right: -90px;
+          border-radius: 20px;
+          z-index: -1;
+        }
       `}</style>
 
       <div
+        className="moon-hitbox"
         style={{
           position: "fixed",
           left: centerX + moonX,
@@ -153,7 +165,6 @@ export default function MoonPortrait({
           zIndex: 2000,
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
           pointerEvents: state !== "exit" ? "auto" : "none",
           cursor: href ? "pointer" : "default",
           WebkitTapHighlightColor: "transparent",
@@ -173,53 +184,61 @@ export default function MoonPortrait({
           }
         }}
       >
-        <img
-          src={moonImage}
-          alt="moon"
+        <div
           style={{
-            width: "24px",
-            height: "24px",
-            objectFit: "contain",
-            transition:
-              "filter 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
-            transform: `scale(${isHovered ? 1.3 : animatedScale})`,
-            opacity: animatedOpacity,
-            filter: isShaking
-              ? "brightness(1.5) opacity(0.7)"
-              : href && isHovered
-                ? "drop-shadow(0 0 8px #9960a8) drop-shadow(0 0 2px #9960a8)"
-                : "none",
-            flexShrink: 0,
-          }}
-        />
-
-        <span
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "100%",
-            marginLeft: "6px",
-            transform: "translateY(-50%)",
-            display: "block",
-
-            // The Fix:
-            width: "max-content",
-            maxWidth: `calc(${100 - ((centerX + moonX) / windowWidth) * 100}vw - 40px)`,
-            whiteSpace: "normal",
-            overflowWrap: "break-word",
-
-            fontSize: isHovered ? "12px" : "10px",
-            fontWeight: isHovered ? "bold" : "normal",
-            fontStyle: href ? "normal" : "italic",
-            color: isShaking ? "rgba(28, 7, 0, 0.5)" : "#1c0700",
-            textDecoration: href && isHovered ? "underline" : "none",
-            opacity: animatedOpacity,
-            lineHeight: "1.2",
-            transition: "all 0.2s ease",
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
           }}
         >
-          {content}
-        </span>
+          <img
+            src={moonImage}
+            alt="moon"
+            style={{
+              width: "24px",
+              height: "24px",
+              objectFit: "contain",
+              transition:
+                "filter 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
+              transform: `scale(${isHovered ? 1.3 : animatedScale})`,
+              opacity: animatedOpacity,
+              filter: isShaking
+                ? "brightness(1.5) opacity(0.7)"
+                : href && isHovered
+                  ? "drop-shadow(0 0 8px #9960a8) drop-shadow(0 0 2px #9960a8)"
+                  : "none",
+              flexShrink: 0,
+            }}
+          />
+
+          <span
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "100%",
+              marginLeft: "6px",
+              transform: "translateY(-50%)",
+              display: "block",
+
+              // The Fix:
+              width: "max-content",
+              maxWidth: `calc(${100 - ((centerX + moonX) / windowWidth) * 100}vw - 60px)`, // adjusted for padding
+              whiteSpace: "normal",
+              overflowWrap: "break-word",
+
+              fontSize: isHovered ? "12px" : "10px",
+              fontWeight: isHovered ? "bold" : "normal",
+              fontStyle: href ? "normal" : "italic",
+              color: isShaking ? "rgba(28, 7, 0, 0.5)" : "#1c0700",
+              textDecoration: href && isHovered ? "underline" : "none",
+              opacity: animatedOpacity,
+              lineHeight: "1.2",
+              transition: "all 0.2s ease",
+            }}
+          >
+            {content}
+          </span>
+        </div>
       </div>
     </>
   );
