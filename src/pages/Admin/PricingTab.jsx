@@ -1481,7 +1481,7 @@ export default function PricingTab({
                           gap: "10px",
                         }}
                       >
-                        <input
+                        <textarea
                           value={ev.infoEn || ""}
                           onChange={(e) =>
                             updateSpecialEvent(
@@ -1492,15 +1492,18 @@ export default function PricingTab({
                             )
                           }
                           placeholder={labels.infoEn}
+                          rows={2}
                           style={{
                             ...inputStyle,
                             padding: "8px 12px",
                             flex: 1,
                             marginBottom: 0,
                             fontSize: "0.85rem",
+                            resize: "vertical",
+                            minHeight: "50px",
                           }}
                         />
-                        <input
+                        <textarea
                           value={ev.infoDe || ""}
                           onChange={(e) =>
                             updateSpecialEvent(
@@ -1511,12 +1514,15 @@ export default function PricingTab({
                             )
                           }
                           placeholder={labels.infoDe}
+                          rows={2}
                           style={{
                             ...inputStyle,
                             padding: "8px 12px",
                             flex: 1,
                             marginBottom: 0,
                             fontSize: "0.85rem",
+                            resize: "vertical",
+                            minHeight: "50px",
                           }}
                         />
                       </div>
@@ -2026,28 +2032,34 @@ export default function PricingTab({
                       gap: "10px",
                     }}
                   >
-                    <input
+                    <textarea
                       value={newEventInfoEn}
                       onChange={(e) => setNewEventInfoEn(e.target.value)}
                       placeholder={labels.infoEn}
+                      rows={2}
                       style={{
                         ...inputStyle,
                         padding: "10px 12px",
                         flex: 1,
                         marginBottom: 0,
                         backgroundColor: "white",
+                        resize: "vertical",
+                        minHeight: "50px",
                       }}
                     />
-                    <input
+                    <textarea
                       value={newEventInfoDe}
                       onChange={(e) => setNewEventInfoDe(e.target.value)}
                       placeholder={labels.infoDe}
+                      rows={2}
                       style={{
                         ...inputStyle,
                         padding: "10px 12px",
                         flex: 1,
                         marginBottom: 0,
                         backgroundColor: "white",
+                        resize: "vertical",
+                        minHeight: "50px",
                       }}
                     />
                   </div>
