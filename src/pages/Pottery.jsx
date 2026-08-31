@@ -121,7 +121,8 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         },
         {
           title: "Fancy the pottery wheel?",
-          content: "Book a wheel for an additional charge.",
+          content:
+            "After completing the mandatory pottery studio intro, you can take the pottery wheel intro course. Once that is finished, you can book slots for the wheel for an additional charge. Please note: The wheel intro is strictly to get familiar with the equipment and does not include practice time.",
         },
       ],
     },
@@ -160,7 +161,8 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         },
         {
           title: "Lust auf die Drehscheibe?",
-          content: "Gegen Aufpreis dazubuchen.",
+          content:
+            "Nach dem obligatorischen Einführungskurs für die Töpferwerkstatt kannst du den Einführungskurs für die Drehscheibe besuchen. Sobald dieser abgeschlossen ist, kannst du gegen Aufpreis Plätze für die Drehscheibe buchen. Bitte beachte: Die Einführung dient lediglich dem Kennenlernen des Geräts und beinhaltet keine freie Übungszeit.",
         },
       ],
     },

@@ -122,6 +122,7 @@ export default function BookingSummary({
 
   const [manuallyExpandedDates, setManuallyExpandedDates] = useState({});
   const [showPackInfo, setShowPackInfo] = useState(false);
+  const [activeAddonInfo, setActiveAddonInfo] = useState(null);
   const [expandedPacks, setExpandedPacks] = useState({});
   const [giftPrompt, setGiftPrompt] = useState(null);
 
@@ -1627,14 +1628,7 @@ export default function BookingSummary({
                     const visibleAddons = (
                       evPricing?.specialEvents || []
                     ).filter((se) => {
-                      const isAssigned = assignedAddonIds.includes(se.id);
-                      const isAlreadyDone = attHistory.includes(se.id);
-                      const isPrerequisite = evPricing?.specialEvents?.some(
-                        (other) => other.requiresIntroId === se.id,
-                      );
-                      const hideBecauseDone =
-                        isAlreadyDone && (se.isMandatory || isPrerequisite);
-                      return isAssigned && !hideBecauseDone;
+                      return assignedAddonIds.includes(se.id);
                     });
 
                     const isAddonsExpanded =
@@ -1931,7 +1925,25 @@ export default function BookingSummary({
                                                 backgroundColor: addonColor,
                                               }}
                                             />
-                                            {displayAddonName}
+                                            <span>{displayAddonName}</span>
+                                            {(addon.infoEn || addon.infoDe) && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setActiveAddonInfo(addon);
+                                                }}
+                                                style={{
+                                                  background: "none",
+                                                  border: "none",
+                                                  color: "#9960a8",
+                                                  cursor: "pointer",
+                                                  padding: "0",
+                                                  display: "flex",
+                                                }}
+                                              >
+                                                <Info size={14} />
+                                              </button>
+                                            )}
                                           </div>
                                           {addon.freeWithPack &&
                                             !qualifiesForFreeAddon && (
@@ -2155,7 +2167,34 @@ export default function BookingSummary({
                                               flexDirection: "column",
                                             }}
                                           >
-                                            {displayAddonName}
+                                            <div
+                                              style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "6px",
+                                              }}
+                                            >
+                                              <span>{displayAddonName}</span>
+                                              {(addon.infoEn ||
+                                                addon.infoDe) && (
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setActiveAddonInfo(addon);
+                                                  }}
+                                                  style={{
+                                                    background: "none",
+                                                    border: "none",
+                                                    color: "#9960a8",
+                                                    cursor: "pointer",
+                                                    padding: "0",
+                                                    display: "flex",
+                                                  }}
+                                                >
+                                                  <Info size={14} />
+                                                </button>
+                                              )}
+                                            </div>
                                             {addon.freeWithPack &&
                                               !qualifiesForFreeAddon &&
                                               !isFull && (
@@ -4095,6 +4134,95 @@ export default function BookingSummary({
           </div>
         )}
       </div>
+
+      {/* ADDON INFO MODAL */}
+      {activeAddonInfo && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(28, 7, 0, 0.2)",
+            zIndex: 30000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={() => setActiveAddonInfo(null)}
+        >
+          <div
+            style={{
+              backgroundColor: "#fffce3",
+              maxWidth: "400px",
+              width: "100%",
+              borderRadius: "24px",
+              padding: "2rem",
+              boxShadow: "0 20px 40px rgba(28, 7, 0, 0.2)",
+              position: "relative",
+              border: "1px solid #caaff3",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setActiveAddonInfo(null)}
+              style={{
+                position: "absolute",
+                top: "16px",
+                right: "16px",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                opacity: 0.4,
+              }}
+            >
+              <X size={20} />
+            </button>
+
+            <h3
+              style={{
+                marginTop: 0,
+                fontFamily: "Harmond-SemiBoldCondensed",
+                fontSize: "1.6rem",
+              }}
+            >
+              {currentLang === "en"
+                ? activeAddonInfo.nameEn
+                : activeAddonInfo.nameDe}
+            </h3>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "1.2rem",
+                fontSize: "0.9rem",
+                color: "#1c0700",
+                lineHeight: 1.5,
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {currentLang === "en"
+                ? activeAddonInfo.infoEn
+                : activeAddonInfo.infoDe}
+            </div>
+
+            <button
+              onClick={() => setActiveAddonInfo(null)}
+              style={{
+                ...S.primaryBtnStyle(isMobile),
+                marginTop: "1.5rem",
+                padding: "12px",
+              }}
+            >
+              {currentLang === "en" ? "Got it" : "Verstanden"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* PACK INFO MODAL */}
       {showPackInfo && (

@@ -49,6 +49,8 @@ export default function PricingTab({
   const [newEventMandatory, setNewEventMandatory] = useState(false);
   const [newEventFreePack, setNewEventFreePack] = useState(false);
   const [newEventIntroId, setNewEventIntroId] = useState("");
+  const [newEventInfoEn, setNewEventInfoEn] = useState("");
+  const [newEventInfoDe, setNewEventInfoDe] = useState("");
   const [newEventTimeSlots, setNewEventTimeSlots] = useState([
     { startTime: "", endTime: "", capacity: "" },
   ]);
@@ -80,6 +82,8 @@ export default function PricingTab({
       addons: "Session Add-ons",
       nameEn: "Name (EN)",
       nameDe: "Name (DE)",
+      infoEn: "Info (EN)",
+      infoDe: "Info (DE)",
       cap: "Cap",
       addonPrice: "+ CHF",
       newAddonEn: "New Add-on (EN)",
@@ -119,6 +123,8 @@ export default function PricingTab({
       addons: "Session Extras",
       nameEn: "Name (EN)",
       nameDe: "Name (DE)",
+      infoEn: "Info (EN)",
+      infoDe: "Info (DE)",
       cap: "Max",
       addonPrice: "+ CHF",
       newAddonEn: "Neues Extra (EN)",
@@ -327,6 +333,8 @@ export default function PricingTab({
         id: Date.now().toString(),
         nameEn: newEventEn.trim(),
         nameDe: newEventDe.trim(),
+        infoEn: newEventInfoEn.trim(),
+        infoDe: newEventInfoDe.trim(),
         capacity: newEventCap || null,
         price: newEventPrice || null,
         isMandatory: newEventMandatory,
@@ -338,6 +346,8 @@ export default function PricingTab({
 
     setNewEventEn("");
     setNewEventDe("");
+    setNewEventInfoEn("");
+    setNewEventInfoDe("");
     setNewEventCap("");
     setNewEventPrice("");
     setNewEventMandatory(false);
@@ -552,6 +562,8 @@ export default function PricingTab({
                                   setSelectedCourse(optId);
                                   setNewEventEn("");
                                   setNewEventDe("");
+                                  setNewEventInfoEn("");
+                                  setNewEventInfoDe("");
                                   setNewEventCap("");
                                   setNewEventPrice("");
                                   setNewEventMandatory(false);
@@ -1448,6 +1460,54 @@ export default function PricingTab({
                         </div>
                       </div>
 
+                      {/* Info Row */}
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: isMobile ? "column" : "row",
+                          gap: "10px",
+                        }}
+                      >
+                        <input
+                          value={ev.infoEn || ""}
+                          onChange={(e) =>
+                            updateSpecialEvent(
+                              selectedCourse,
+                              ev.id,
+                              "infoEn",
+                              e.target.value,
+                            )
+                          }
+                          placeholder={labels.infoEn}
+                          style={{
+                            ...inputStyle,
+                            padding: "8px 12px",
+                            flex: 1,
+                            marginBottom: 0,
+                            fontSize: "0.85rem",
+                          }}
+                        />
+                        <input
+                          value={ev.infoDe || ""}
+                          onChange={(e) =>
+                            updateSpecialEvent(
+                              selectedCourse,
+                              ev.id,
+                              "infoDe",
+                              e.target.value,
+                            )
+                          }
+                          placeholder={labels.infoDe}
+                          style={{
+                            ...inputStyle,
+                            padding: "8px 12px",
+                            flex: 1,
+                            marginBottom: 0,
+                            fontSize: "0.85rem",
+                          }}
+                        />
+                      </div>
+
                       {/* Rules & Prerequisites Row */}
                       <div
                         style={{
@@ -1841,6 +1901,40 @@ export default function PricingTab({
                         }}
                       />
                     </div>
+                  </div>
+
+                  {/* New Add-on Info */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: isMobile ? "column" : "row",
+                      gap: "10px",
+                    }}
+                  >
+                    <input
+                      value={newEventInfoEn}
+                      onChange={(e) => setNewEventInfoEn(e.target.value)}
+                      placeholder={labels.infoEn}
+                      style={{
+                        ...inputStyle,
+                        padding: "10px 12px",
+                        flex: 1,
+                        marginBottom: 0,
+                        backgroundColor: "white",
+                      }}
+                    />
+                    <input
+                      value={newEventInfoDe}
+                      onChange={(e) => setNewEventInfoDe(e.target.value)}
+                      placeholder={labels.infoDe}
+                      style={{
+                        ...inputStyle,
+                        padding: "10px 12px",
+                        flex: 1,
+                        marginBottom: 0,
+                        backgroundColor: "white",
+                      }}
+                    />
                   </div>
 
                   {/* New Add-on Rules */}
