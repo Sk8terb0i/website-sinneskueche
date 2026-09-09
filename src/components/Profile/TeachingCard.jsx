@@ -77,6 +77,9 @@ export default function TeachingCard({
             const coworkerList = ev.fullCoInstructors || [];
 
             if (actualEventId) {
+              const eventSnap = await getDoc(doc(db, "events", actualEventId));
+              if (!eventSnap.exists()) return null;
+
               const bSnap = await getDocs(
                 query(
                   collection(db, "bookings"),
@@ -187,7 +190,7 @@ export default function TeachingCard({
             };
           }),
         );
-        setEnrichedEvents(enriched);
+        setEnrichedEvents(enriched.filter(Boolean));
       } catch (err) {
         console.error("Error enriching teaching data:", err);
       } finally {
