@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { db } from "../firebase";
 import { doc, getDoc } from "firebase/firestore";
 import Header from "../components/Header/Header";
@@ -497,11 +498,68 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
               style={{
                 margin: 0,
                 fontSize: "0.85rem",
-                opacity: 0.8,
+                opacity: 0.85,
                 lineHeight: 1.5,
               }}
             >
-              {current.generalInfo.discountsText}
+              {currentLang === "de" ? (
+                <>
+                  Ich biete einen Solidaritätsrabatt für Menschen mit
+                  finanziellen Engpässen an. Frag einfach per{" "}
+                  <Link
+                    to="/contact"
+                    style={{
+                      color: "#4e5f28",
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    Kontaktformular
+                  </Link>{" "}
+                  oder{" "}
+                  <a
+                    href="mailto:salut@sinneskueche.ch"
+                    style={{
+                      color: "#4e5f28",
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    E-Mail (salut@sinneskueche.ch)
+                  </a>{" "}
+                  nach einem Code. Es sind keine Nachweise oder Erklärungen
+                  erforderlich. Ich vertraue darauf, dass dieses Angebot fair
+                  genutzt wird.
+                </>
+              ) : (
+                <>
+                  I offer a solidarity discount for anyone experiencing
+                  financial constraints. Simply ask for a code via the{" "}
+                  <Link
+                    to="/contact"
+                    style={{
+                      color: "#4e5f28",
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    contact form
+                  </Link>{" "}
+                  or{" "}
+                  <a
+                    href="mailto:salut@sinneskueche.ch"
+                    style={{
+                      color: "#4e5f28",
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    email (salut@sinneskueche.ch)
+                  </a>
+                  . No proof or explanation is required. I trust that this
+                  option is used fairly.
+                </>
+              )}
             </p>
           </div>
           <div style={styles.infoPanel}>
@@ -521,11 +579,44 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
               style={{
                 margin: 0,
                 fontSize: "0.85rem",
-                opacity: 0.8,
+                opacity: 0.85,
                 lineHeight: 1.5,
               }}
             >
-              {current.generalInfo.privateText}
+              {currentLang === "de" ? (
+                <>
+                  Suchst du nach einem privaten Gruppen-Workshop, einem
+                  Team-Event oder einer 1-zu-1 Session? Massgeschneiderte
+                  Termine können jederzeit per{" "}
+                  <a
+                    href="mailto:salut@sinneskueche.ch"
+                    style={{
+                      color: "#9960a8",
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    E-Mail (salut@sinneskueche.ch)
+                  </a>{" "}
+                  angefragt werden.
+                </>
+              ) : (
+                <>
+                  Looking for a custom group workshop, a team event, or a 1-on-1
+                  session? You can book custom dates on demand by sending an{" "}
+                  <a
+                    href="mailto:salut@sinneskueche.ch"
+                    style={{
+                      color: "#9960a8",
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    email (salut@sinneskueche.ch)
+                  </a>
+                  .
+                </>
+              )}
             </p>
           </div>
         </motion.div>
