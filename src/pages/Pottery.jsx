@@ -53,6 +53,65 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Dynamic SEO Metadata & Canonical Tag
+  useEffect(() => {
+    const isEn = currentLang === "en";
+
+    document.title = isEn
+      ? "Pottery Studio | Töpferküche | Sinnesküche Schlieren"
+      : "Töpferwerkstatt | Töpferküche | Sinnesküche Schlieren";
+
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      metaDesc.setAttribute(
+        "content",
+        isEn
+          ? "Open pottery studio and pottery wheel workshops in Schlieren, Zurich. All skill levels welcome."
+          : "Offene Töpferwerkstatt und Drehscheiben-Kurse in Schlieren, Zürich. Alle Level willkommen.",
+      );
+    }
+
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.setAttribute("rel", "canonical");
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute("href", "https://sinneskueche.ch/pottery/");
+  }, [currentLang]);
+
+  // Schema.org Structured Data (JSON-LD)
+  useEffect(() => {
+    const schemaData = {
+      "@context": "https://schema.org",
+      "@type": "Course",
+      name: "Töpferküche",
+      description:
+        "Open pottery studio sessions and pottery wheel workshops in Schlieren.",
+      provider: {
+        "@type": "Organization",
+        name: "Sinnesküche",
+        sameAs: "https://sinneskueche.ch",
+      },
+      hasCourseInstance: {
+        "@type": "CourseInstance",
+        courseMode: "OnSite",
+        location: "Atelier Sinnesküche, Schlieren, Switzerland",
+      },
+    };
+
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.innerHTML = JSON.stringify(schemaData);
+    document.head.appendChild(script);
+
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+
   const config = {
     desktop: {
       topIcon: { top: "-35px", left: "-80px" },

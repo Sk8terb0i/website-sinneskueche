@@ -5,15 +5,51 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://sinneskueche.ch/team/</loc>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://sinneskueche.ch/location/</loc>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://sinneskueche.ch/pottery/</loc>
     <priority>0.8</priority>
   </url>
-  </urlset>
+  <url>
+    <loc>https://sinneskueche.ch/singing/</loc>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://sinneskueche.ch/digitalkueche/</loc>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://sinneskueche.ch/artistic-vision/</loc>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://sinneskueche.ch/get-ink/</loc>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://sinneskueche.ch/extended-voice-lab/</loc>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://sinneskueche.ch/performing-words/</loc>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://sinneskueche.ch/singing-basics/</loc>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://sinneskueche.ch/team/</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sinneskueche.ch/location/</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sinneskueche.ch/rent/</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sinneskueche.ch/contact/</loc>
+    <priority>0.7</priority>
+  </url>
+</urlset>

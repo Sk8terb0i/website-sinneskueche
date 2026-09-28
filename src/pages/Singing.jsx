@@ -28,6 +28,65 @@ export default function Singing({ currentLang, setCurrentLang }) {
   const [isBookingExpanded, setIsBookingExpanded] = useState(false);
   const bookingRef = useRef(null);
 
+  // Dynamic SEO Metadata & Canonical Tag
+  useEffect(() => {
+    const isEn = currentLang === "en";
+
+    document.title = isEn
+      ? "Vocal Coaching | Gesangsküche | Sinnesküche Schlieren"
+      : "Gesangscoaching | Gesangsküche | Sinnesküche Schlieren";
+
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      metaDesc.setAttribute(
+        "content",
+        isEn
+          ? "Vocal coaching and voice techniques in Schlieren, Zurich. Pop, Jazz & Contemporary vocal lessons."
+          : "Gesangscoaching und Stimmtechnik in Schlieren, Zürich. Gesangsunterricht für Pop, Jazz & Zeitgenössisch.",
+      );
+    }
+
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.setAttribute("rel", "canonical");
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute("href", "https://sinneskueche.ch/singing/");
+  }, [currentLang]);
+
+  // Schema.org Structured Data (JSON-LD)
+  useEffect(() => {
+    const schemaData = {
+      "@context": "https://schema.org",
+      "@type": "Course",
+      name: "Gesangsküche",
+      description:
+        "Vocal coaching and voice lessons covering technique, expression, and performance.",
+      provider: {
+        "@type": "Organization",
+        name: "Sinnesküche",
+        sameAs: "https://sinneskueche.ch",
+      },
+      hasCourseInstance: {
+        "@type": "CourseInstance",
+        courseMode: "OnSite",
+        location: "Atelier Sinnesküche, Schlieren, Switzerland",
+      },
+    };
+
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.innerHTML = JSON.stringify(schemaData);
+    document.head.appendChild(script);
+
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+
   const config = {
     desktop: {
       topIcon: { top: "-30px", left: "-35px" },

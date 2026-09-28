@@ -33,6 +33,68 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Dynamic SEO Metadata & Canonical Tag
+  useEffect(() => {
+    const isEn = currentLang === "en";
+
+    // Dynamic Title
+    document.title = isEn
+      ? "Webdesign Course | Digitalküche | Sinnesküche Schlieren"
+      : "Webdesign Kurs | Digitalküche | Sinnesküche Schlieren";
+
+    // Dynamic Meta Description
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      metaDesc.setAttribute(
+        "content",
+        isEn
+          ? "Build your own website in 1 day with Astro and GitHub Pages. 0 CHF hosting costs. Beginner-friendly workshop in Schlieren, Zurich."
+          : "Erstelle deine eigene Website in 1 Tag mit Astro und GitHub Pages. 0 CHF Hosting-Kosten. Anfängerfreundlicher Kurs in Schlieren, Zürich.",
+      );
+    }
+
+    // Dynamic Canonical Link
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.setAttribute("rel", "canonical");
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute("href", "https://sinneskueche.ch/digitalkueche/");
+  }, [currentLang]);
+
+  // Schema.org Structured Data (JSON-LD)
+  useEffect(() => {
+    const schemaData = {
+      "@context": "https://schema.org",
+      "@type": "Course",
+      name: "Webdesign Course",
+      description:
+        "Learn to build and host your own website in one day with zero ongoing hosting fees.",
+      provider: {
+        "@type": "Organization",
+        name: "Sinnesküche",
+        sameAs: "https://sinneskueche.ch",
+      },
+      hasCourseInstance: {
+        "@type": "CourseInstance",
+        courseMode: "OnSite",
+        location: "Atelier Sinnesküche, Schlieren, Switzerland",
+      },
+    };
+
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.innerHTML = JSON.stringify(schemaData);
+    document.head.appendChild(script);
+
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+
   const config = {
     desktop: {
       topIcon: { top: "-35px", left: "-80px" },
