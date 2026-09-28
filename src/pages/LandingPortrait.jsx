@@ -27,6 +27,62 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
     height: window.innerHeight,
   });
 
+  // Dynamic SEO Metadata for Homepage
+  useEffect(() => {
+    const isEn = currentLang === "en";
+
+    document.title = isEn
+      ? "Atelier Sinnesküche | Creative Community Space & Courses in Schlieren"
+      : "Atelier Sinnesküche | Gemeinschaftsort & Kurse in Schlieren";
+
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      metaDesc.setAttribute(
+        "content",
+        isEn
+          ? "Atelier Sinnesküche is a creative community space in Schlieren offering multisensory courses in pottery, singing, web design, and arts."
+          : "Die Sinnesküche ist ein kreativer Gemeinschaftsort in Schlieren mit multisensuellen Kursen in Töpfern, Gesang, Webdesign und Kunst.",
+      );
+    }
+
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.setAttribute("rel", "canonical");
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute("href", "https://sinneskueche.ch/");
+  }, [currentLang]);
+
+  // Schema.org Structured Data
+  useEffect(() => {
+    const schemaData = {
+      "@context": "https://schema.org",
+      "@type": "EducationalOrganization",
+      name: "Atelier Sinnesküche",
+      url: "https://sinneskueche.ch/",
+      logo: "https://sinneskueche.ch/favicon.png",
+      image: "https://sinneskueche.ch/preview-image.jpg",
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: "Schlieren",
+        addressRegion: "Zürich",
+        addressCountry: "CH",
+      },
+    };
+
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.innerHTML = JSON.stringify(schemaData);
+    document.head.appendChild(script);
+
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const handleResize = () => {
       setViewport({
