@@ -434,7 +434,12 @@ const sendBookingEmail = async (
   let overarchingCourseKey = getCleanCourseKey(coursePath);
   if (uniqueLinks.length === 1) {
     const sData = settingsMap[uniqueLinks[0]];
-    if (sData && sData.courseName) overarchingCourseKey = sData.courseName;
+    if (sData) {
+      overarchingCourseKey =
+        sData[`name${lang === "en" ? "En" : "De"}`] ||
+        sData.courseName ||
+        overarchingCourseKey;
+    }
   } else {
     overarchingCourseKey = lang === "de" ? "Deine Kurse" : "Your Courses";
   }
@@ -474,7 +479,10 @@ const sendBookingEmail = async (
     for (const link in ticketsByLink) {
       const linkTickets = ticketsByLink[link];
       const settings = settingsMap[link] || {};
-      const courseName = settings.courseName || getCleanCourseKey(link);
+      const courseName =
+        settings[`name${lang === "en" ? "En" : "De"}`] ||
+        settings.courseName ||
+        getCleanCourseKey(link);
       const specialEvents = settings.specialEvents || [];
 
       // Create a specific block for this course
@@ -636,6 +644,15 @@ exports.createStripeCheckout = onCall(
       if (!request.auth && !guestInfo)
         throw new HttpsError("unauthenticated", "Login required.");
 
+      // NEW: Fetch custom course name dynamically for Stripe receipt
+      const cId = (coursePath || "").replace(/\//g, "");
+      const sSnap = await db.collection("course_settings").doc(cId).get();
+      const sData = sSnap.exists ? sSnap.data() : {};
+      const dynamicCourseName =
+        sData[`name${currentLang === "en" ? "En" : "De"}`] ||
+        sData.courseName ||
+        getCleanCourseKey(coursePath);
+
       const session = await stripe.checkout.sessions.create({
         customer_email: userEmail,
         line_items: [
@@ -646,8 +663,8 @@ exports.createStripeCheckout = onCall(
                 name:
                   mode === "pack"
                     ? request.data.packSummary ||
-                      `${packSize}-Session Pack: ${getCleanCourseKey(coursePath)}`
-                    : `Sessions: ${getCleanCourseKey(coursePath)}`,
+                      `${packSize}-Session Pack: ${dynamicCourseName}`
+                    : `Sessions: ${dynamicCourseName}`,
               },
               unit_amount:
                 mode === "pack"
@@ -1522,9 +1539,12 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
       .collection("course_settings")
       .doc(courseId)
       .get();
-    const specialEvents = settingsSnap.exists
-      ? settingsSnap.data().specialEvents || []
-      : [];
+    const settingsData = settingsSnap.exists ? settingsSnap.data() : {};
+    const specialEvents = settingsData.specialEvents || [];
+    const dynamicCourseName =
+      settingsData[`name${lang === "en" ? "En" : "De"}`] ||
+      settingsData.courseName ||
+      getCleanCourseKey(eventData.link || "");
 
     const bookingsSnap = await db
       .collection("bookings")
@@ -1630,7 +1650,7 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
           emailsToSend.push({
             email: item.email,
             name: item.name,
-            courseKey,
+            courseKey: dynamicCourseName,
             date: eventData.date,
             code: newCode,
             addonRefundValue: item.addonRefundValue,
@@ -1678,7 +1698,7 @@ exports.adminCancelEvent = onCall({ cors: true }, async (request) => {
           emailsToSend.push({
             email: item.email,
             name: item.name,
-            courseKey,
+            courseKey: dynamicCourseName,
             date: eventData.date,
             code: null,
             addonRefundValue: item.addonRefundValue,
@@ -1791,9 +1811,15 @@ exports.sendCourseReminders = onSchedule("0 8 * * *", async (event) => {
       const evSnap = await db.collection("events").doc(booking.eventId).get();
       if (evSnap.exists) courseTime = evSnap.data().time || "";
 
+      const sData = settingsSnap.exists ? settingsSnap.data() : {};
+      const dynamicCourseName =
+        sData[`name${lang === "en" ? "En" : "De"}`] ||
+        sData.courseName ||
+        getCleanCourseKey(booking.coursePath);
+
       const replacements = {
         "{userName}": name,
-        "{courseName}": getCleanCourseKey(booking.coursePath),
+        "{courseName}": dynamicCourseName,
         "{courseDate}": formatDate(booking.date),
         "{courseTime}": courseTime,
       };
@@ -1921,7 +1947,15 @@ exports.onRentRequestCreate = onDocumentCreated(
 exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
   try {
     const { courseId, instructors, baseUrl } = request.data;
-    const courseKey = getCleanCourseKey(courseId);
+
+    const sSnap = await db
+      .collection("course_settings")
+      .doc(courseId.replace(/\//g, ""))
+      .get();
+    const sData = sSnap.exists ? sSnap.data() : {};
+    // Default to English or CourseName for instructor notifications
+    const courseKey =
+      sData.nameEn || sData.courseName || getCleanCourseKey(courseId);
 
     // Dynamically uses the sender's origin (localhost or live)
     const origin = baseUrl || "https://sinneskueche.ch";
@@ -2026,7 +2060,15 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
   try {
     const { courseId, assignments, specialAssignments, baseUrl } = request.data;
     const origin = baseUrl || "https://sinneskueche.ch";
-    const courseKey = getCleanCourseKey(courseId);
+
+    const sSnap = await db
+      .collection("course_settings")
+      .doc(courseId.replace(/\//g, ""))
+      .get();
+    const sData = sSnap.exists ? sSnap.data() : {};
+    const courseKey =
+      sData.nameEn || sData.courseName || getCleanCourseKey(courseId);
+
     const instructorSchedules = {};
 
     const allInstructorIds = [...new Set(Object.values(assignments).flat())];
@@ -2519,7 +2561,16 @@ exports.submitAvailabilityRequest = onCall({ cors: true }, async (request) => {
     }
 
     // 4. Format the Email Content
-    const courseName = getCleanCourseKey(coursePath).toUpperCase();
+    const sSnap = await db
+      .collection("course_settings")
+      .doc((coursePath || "").replace(/\//g, ""))
+      .get();
+    const sData = sSnap.exists ? sSnap.data() : {};
+    const courseName = (
+      sData.nameEn ||
+      sData.courseName ||
+      getCleanCourseKey(coursePath)
+    ).toUpperCase();
 
     const datesHtml = selectedDates
       .map((d) => {
