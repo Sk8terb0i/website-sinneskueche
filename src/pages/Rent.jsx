@@ -10,14 +10,8 @@ const CONFIG = {
   RANDOM_WAIT: 4000,
 };
 
-const planetImages = import.meta.glob("../assets/atelier/*.png", {
-  eager: true,
-});
-
-const getImage = (filename) => {
-  const key = `../assets/atelier/${filename}`;
-  return planetImages[key]?.default || "";
-};
+// Serves atelier icons on-demand from public/atelier/
+const getImage = (filename) => `/atelier/${filename}`;
 
 export default function Rent({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);

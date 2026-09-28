@@ -15,11 +15,8 @@ const MOBILE_LAYOUT = {
   doorVerticalShift: "0px",
 };
 
-const planetImages = import.meta.glob("../assets/planets/*.png", {
-  eager: true,
-});
-const getImage = (filename) =>
-  planetImages[`../assets/planets/${filename}`]?.default || "";
+// Serves planet icons on-demand from public/planets/
+const getImage = (filename) => `/planets/${filename}`;
 
 export default function Location({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
