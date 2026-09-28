@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import { db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
 import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
@@ -11,6 +13,7 @@ import {
   Mail,
   HeartHandshake,
   ChevronUp,
+  Tag,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -26,11 +29,33 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
   const bookingRef = useRef(null);
   const [activeTab, setActiveTab] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [coursePrice, setCoursePrice] = useState("");
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const fetchPrice = async () => {
+      try {
+        const docRef = doc(db, "course_settings", "webdesign");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const priceVal =
+            data.packs?.priceSingle ||
+            data.priceSingle ||
+            data.singlePrice ||
+            data.price;
+          if (priceVal) setCoursePrice(`${priceVal} CHF`);
+        }
+      } catch (err) {
+        console.error("Error fetching price:", err);
+      }
+    };
+    fetchPrice();
   }, []);
 
   // Dynamic SEO Metadata & Canonical Tag
@@ -118,8 +143,14 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
         {
           title: "Webdesign Course",
           details: [
-            { icon: <Clock size={18} />, text: "1 Day Course (1hr break)" },
-            { icon: <Users size={18} />, text: "Beginners (No coding needed)" },
+            { icon: <Clock size={18} />, text: "10:00 - 18:00 (1hr break)" },
+            ...(coursePrice
+              ? [{ icon: <Tag size={18} />, text: coursePrice }]
+              : []),
+            {
+              icon: <Users size={18} />,
+              text: "Beginners (No coding experience needed)",
+            },
             { icon: <Coffee size={18} />, text: "Bring your own laptop" },
             { icon: <Globe size={18} />, text: "EN / DE (adapted to group)" },
           ],
@@ -161,7 +192,10 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
         {
           title: "Webdesign Course",
           details: [
-            { icon: <Clock size={18} />, text: "1 Tageskurs (1 Std. Pause)" },
+            { icon: <Clock size={18} />, text: "10:00 - 18:00 (1 Std. Pause)" },
+            ...(coursePrice
+              ? [{ icon: <Tag size={18} />, text: coursePrice }]
+              : []),
             {
               icon: <Users size={18} />,
               text: "Anfänger (ohne Vorkenntnisse)",
@@ -256,10 +290,12 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
       fontSize: isMobile ? "1.8rem" : "2.2rem",
       color: "#1c0700",
       marginTop: 0,
-      marginBottom: "1rem",
+      marginBottom: "2rem",
+      textAlign: "center",
     },
     infoGrid: {
       display: "flex",
+      justifyContent: "center",
       gap: "12px",
       marginBottom: "1.5rem",
       flexWrap: "wrap",
