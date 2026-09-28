@@ -1953,6 +1953,75 @@ exports.requestAvailabilities = onCall({ cors: true }, async (request) => {
   }
 });
 
+// --- NEW HELPER: Generates an .ics calendar string for an instructor's shifts ---
+const generateInstructorICS = (scheduleList, courseName) => {
+  let ics =
+    "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Atelier Sinneskueche//Instructor Schedule//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n";
+
+  scheduleList.forEach((s) => {
+    const dateStr = s.date.replace(/-/g, ""); // Convert YYYY-MM-DD to YYYYMMDD
+    let startTimeStr = "000000";
+    let endTimeStr = "235959";
+    let isAllDay = true;
+
+    // Parse the time string (e.g., "14:00-16:00" -> "140000" and "160000")
+    if (s.time) {
+      const times = s.time.split("-");
+      if (times.length > 0 && times[0].trim()) {
+        const startParts = times[0].trim().split(":");
+        startTimeStr =
+          (startParts[0] || "00").padStart(2, "0") +
+          (startParts[1] || "00").padStart(2, "0") +
+          "00";
+        isAllDay = false;
+      }
+      if (times.length > 1 && times[1].trim()) {
+        const endParts = times[1].trim().split(":");
+        endTimeStr =
+          (endParts[0] || "00").padStart(2, "0") +
+          (endParts[1] || "00").padStart(2, "0") +
+          "00";
+      } else if (!isAllDay) {
+        // If there's a start time but no end time, default to 2 hours later
+        const startHour = parseInt(startTimeStr.substring(0, 2), 10);
+        endTimeStr =
+          String((startHour + 2) % 24).padStart(2, "0") +
+          startTimeStr.substring(2);
+      }
+    }
+
+    const dtStamp =
+      new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    const uid = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}@sinneskueche.ch`;
+
+    ics += "BEGIN:VEVENT\r\n";
+    ics += `UID:${uid}\r\n`;
+    ics += `DTSTAMP:${dtStamp}\r\n`;
+
+    if (isAllDay) {
+      ics += `DTSTART;VALUE=DATE:${dateStr}\r\n`;
+    } else {
+      // Floating local time (adopts the user's local timezone automatically)
+      ics += `DTSTART:${dateStr}T${startTimeStr}\r\n`;
+      ics += `DTEND:${dateStr}T${endTimeStr}\r\n`;
+    }
+
+    ics += `SUMMARY:Teaching: ${courseName}\r\n`;
+
+    // Format description with escaped newlines
+    let desc = `Course: ${courseName}\\nCo-Instructors: ${s.coInstructor}`;
+    if (s.addon) {
+      desc += `\\nAdd-on: ${s.addon}`;
+    }
+    ics += `DESCRIPTION:${desc}\r\n`;
+    ics += "LOCATION:Sägestrasse 11\\, 8952 Schlieren\r\n";
+    ics += "END:VEVENT\r\n";
+  });
+
+  ics += "END:VCALENDAR\r\n";
+  return ics;
+};
+
 exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
   try {
     const { courseId, assignments, specialAssignments, baseUrl } = request.data;
@@ -2044,11 +2113,27 @@ exports.sendFinalSchedules = onCall({ cors: true }, async (request) => {
         "{profileUrl}": `${origin}/profile`,
       };
 
+      // Generate the .ics string and encode it to base64 for Nodemailer
+      const icsString = generateInstructorICS(
+        instructorSchedules[uid],
+        courseKey,
+      );
+      const icsBase64 = Buffer.from(icsString, "utf8").toString("base64");
+      const safeFileName = `Teaching_Schedule_${courseKey.replace(/[^a-zA-Z0-9]/g, "_")}.ics`;
+
       await db.collection("mail").add({
         to: email,
         message: {
           subject: replaceVars(template.subject, replacements),
           html: replaceVars(template.body, replacements),
+          attachments: [
+            {
+              filename: safeFileName,
+              content: icsBase64,
+              encoding: "base64",
+              contentType: "text/calendar",
+            },
+          ],
         },
       });
     }
