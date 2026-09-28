@@ -15,10 +15,11 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Direct imports load only the images needed for this page
-import touchImg from "../assets/planets/touch.png";
-import sightImg from "../assets/planets/sight.png";
-import potteryRegisterImg from "../assets/planets/pottery_register.png";
+const planetImages = import.meta.glob("../assets/planets/*.png", {
+  eager: true,
+});
+const getImage = (filename) =>
+  planetImages[`../assets/planets/${filename}`]?.default || "";
 
 // Import pottery gallery images dynamically
 const potteryGallery = import.meta.glob(
@@ -205,7 +206,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     },
   };
 
-  const icons = [touchImg, sightImg];
+  const icons = [getImage("touch.png"), getImage("sight.png")];
   const current = content[currentLang];
 
   // --- ANIMATION VARIANTS ---
@@ -360,7 +361,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       <RegisterShortcut
         bookingRef={bookingRef}
         ctaText={current.ctaFloating}
-        planetImage={potteryRegisterImg}
+        planetImage={getImage("pottery_register.png")}
         onClick={() => setIsBookingExpanded(true)}
       />
 

@@ -15,10 +15,11 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-// Direct imports load only the images needed for this page
-import hearingImg from "../assets/planets/hearing.png";
-import hearingMicImg from "../assets/planets/hearing_mic.png";
-import singRegisterImg from "../assets/planets/sing.png";
+const planetImages = import.meta.glob("../assets/planets/*.png", {
+  eager: true,
+});
+const getImage = (filename) =>
+  planetImages[`../assets/planets/${filename}`]?.default || "";
 
 export default function Singing({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -183,7 +184,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
   };
 
   const current = content[currentLang];
-  const icons = [hearingImg, hearingMicImg];
+  const icons = [getImage("hearing.png"), getImage("hearing_mic.png")];
 
   // --- ANIMATION VARIANTS ---
   const containerVariants = {
@@ -331,7 +332,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
       <RegisterShortcut
         bookingRef={bookingRef}
         ctaText={current.ctaFloating}
-        planetImage={singRegisterImg}
+        planetImage={getImage("sing.png")}
         onClick={() => setIsBookingExpanded(true)}
       />
 
