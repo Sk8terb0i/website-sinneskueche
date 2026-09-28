@@ -284,8 +284,9 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
       display: "flex",
       justifyContent: "center",
       gap: "12px",
-      marginBottom: "1.5rem",
       flexWrap: "wrap",
+      maxWidth: "650px",
+      margin: "0 auto 1.5rem auto",
     },
     infoItem: {
       display: "flex",
@@ -622,4 +623,3 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
     </div>
   );
 }
-// trigger redeploy
