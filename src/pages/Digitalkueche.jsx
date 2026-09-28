@@ -18,10 +18,11 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-// Direct imports prevent Vite from eagerly loading the entire planets asset folder
-import sightDigital from "../assets/planets/sight_digital.png";
-import touchDigital from "../assets/planets/touch_digital.png";
-import digitalRegister from "../assets/planets/digital_register.png";
+const planetImages = import.meta.glob("../assets/planets/*.png", {
+  eager: true,
+});
+const getImage = (filename) =>
+  planetImages[`../assets/planets/${filename}`]?.default || "";
 
 export default function Digitalkueche({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -223,7 +224,7 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
     },
   };
 
-  const icons = [sightDigital, touchDigital];
+  const icons = [getImage("sight_digital.png"), getImage("touch_digital.png")];
   const current = content[currentLang];
 
   const containerVariants = {
@@ -371,7 +372,7 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
       <RegisterShortcut
         bookingRef={bookingRef}
         ctaText={current.ctaFloating}
-        planetImage={digitalRegister}
+        planetImage={getImage("digital_register.png")}
         onClick={() => setIsBookingExpanded(true)}
       />
 
