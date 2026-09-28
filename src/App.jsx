@@ -24,6 +24,7 @@ import ExtendedVoiceLab from "./pages/ExtendedVoiceLab";
 import PerformingWords from "./pages/PerformingWords";
 import SingingBasics from "./pages/SingingBasicsWeekend";
 import GetInk from "./pages/GetInk";
+import Digitalkueche from "./pages/Digitalkueche";
 
 // New Auth & Profile imports
 import Profile from "./pages/Profile";
@@ -228,6 +229,18 @@ export default function App() {
               element={
                 <PageTransition>
                   <GetInk
+                    currentLang={currentLang}
+                    setCurrentLang={setCurrentLang}
+                  />
+                </PageTransition>
+              }
+            />
+
+            <Route
+              path="/digitalkueche"
+              element={
+                <PageTransition>
+                  <Digitalkueche
                     currentLang={currentLang}
                     setCurrentLang={setCurrentLang}
                   />

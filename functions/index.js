@@ -28,6 +28,7 @@ const courseMapping = {
   "/extended-voice-lab": "extended voice lab",
   "/performing-words": "performing words",
   "/singing-basics": "singing basics weekend",
+  "/digitalkueche": "digitalkueche",
 };
 
 const getCleanCourseKey = (path) =>

@@ -280,6 +280,12 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           senses: ["touch", "sight"],
           icon: dotIconObj,
         },
+        {
+          text: { en: "Digitalküche", de: "Digitalküche" },
+          link: "/digitalkueche",
+          senses: ["sight", "touch"],
+          icon: dotIconObj,
+        },
       ].map((course) => {
         // Look up the custom name from our fetched settings
         const sanitizedId = course.link.replace(/\//g, "");

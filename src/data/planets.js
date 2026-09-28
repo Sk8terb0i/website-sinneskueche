@@ -72,6 +72,10 @@ export const planets = [
         text: { en: "Get Ink!", de: "Get Ink!" },
         link: "/get-ink",
       },
+      {
+        text: { en: "Digitalküche", de: "Digitalküche" },
+        link: "/digitalkueche",
+      },
     ],
   },
   {
@@ -100,6 +104,10 @@ export const planets = [
       {
         text: { en: "Get Ink!", de: "Get Ink!" },
         link: "/get-ink",
+      },
+      {
+        text: { en: "Digitalküche", de: "Digitalküche" },
+        link: "/digitalkueche",
       },
     ],
   },

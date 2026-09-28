@@ -546,14 +546,21 @@ export default function BookingSummary({
       size: totalTicketsSelected,
       price: totalIndividualCash,
     },
-    ...(pricing?.packs?.length > 0
-      ? pricing.packs.map((p) => ({
-          size: Number(p.size || 0),
-          price: Number(p.price || 0),
-        }))
-      : pricing?.packSize
-        ? [{ size: Number(pricing.packSize), price: Number(pricing.priceFull) }]
-        : []),
+    ...(pricing?.hasPack
+      ? pricing?.packs?.length > 0
+        ? pricing.packs.map((p) => ({
+            size: Number(p.size || 0),
+            price: Number(p.price || 0),
+          }))
+        : pricing?.packSize
+          ? [
+              {
+                size: Number(pricing.packSize),
+                price: Number(pricing.priceFull),
+              },
+            ]
+          : []
+      : []),
   ];
 
   const isBuyingPack = selectedPacks.length > 0;
@@ -1288,8 +1295,12 @@ export default function BookingSummary({
             }}
           >
             {currentLang === "en"
-              ? "Select a date from the calendar and/or choose a session pack below."
-              : "Termin im Kalender wählen und/oder ein Kurspaket unten hinzufügen."}
+              ? pricing?.hasPack
+                ? "Select a date from the calendar and/or choose a session pack below."
+                : "Select a date from the calendar above."
+              : pricing?.hasPack
+                ? "Termin im Kalender wählen und/oder ein Kurspaket unten hinzufügen."
+                : "Bitte wähle einen Termin im Kalender aus."}
           </p>
         </div>
       ) : (
@@ -2441,6 +2452,10 @@ export default function BookingSummary({
   );
 
   const renderPackOption = () => {
+    const hasAnyPacks = Object.values(pricingMap).some(
+      (p) => p.hasPack && p.packs?.length > 0,
+    );
+
     const sessionsNeeded = {};
     const localUsedDates = new Set();
 
@@ -2474,39 +2489,41 @@ export default function BookingSummary({
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <span
+        {hasAnyPacks && (
+          <div
             style={{
-              fontSize: "0.75rem",
-              fontWeight: "900",
-              letterSpacing: "1px",
-              opacity: 0.6,
-              textTransform: "uppercase",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
             }}
           >
-            {currentLang === "en"
-              ? "Purchase Session Packs"
-              : "Kurspakete wählen"}
-          </span>
-          <button
-            onClick={() => setShowPackInfo(true)}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "#9960a8",
-              padding: "0",
-            }}
-          >
-            <Info size={18} />
-          </button>
-        </div>
+            <span
+              style={{
+                fontSize: "0.75rem",
+                fontWeight: "900",
+                letterSpacing: "1px",
+                opacity: 0.6,
+                textTransform: "uppercase",
+              }}
+            >
+              {currentLang === "en"
+                ? "Purchase Session Packs"
+                : "Kurspakete wählen"}
+            </span>
+            <button
+              onClick={() => setShowPackInfo(true)}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "#9960a8",
+                padding: "0",
+              }}
+            >
+              <Info size={18} />
+            </button>
+          </div>
+        )}
 
         {Object.keys(pricingMap)
           .sort()
@@ -4138,9 +4155,11 @@ export default function BookingSummary({
                     : "Noch keine Zahlung erforderlich. Wir bestätigen die Verfügbarkeit per E-Mail."}
                 </p>
               </div>
-            ) : (
+            ) : Object.values(pricingMap).some(
+                (p) => p.hasPack && p.packs?.length > 0,
+              ) ? (
               renderPurchaseOptionsContent()
-            )}
+            ) : null}
           </div>
         )}
 
