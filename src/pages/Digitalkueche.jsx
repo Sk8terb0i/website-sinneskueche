@@ -622,3 +622,4 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
     </div>
   );
 }
+// trigger redeploy
