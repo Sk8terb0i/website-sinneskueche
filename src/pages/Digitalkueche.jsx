@@ -18,11 +18,8 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-const planetImages = import.meta.glob("../assets/planets/*.png", {
-  eager: true,
-});
-const getImage = (filename) =>
-  planetImages[`../assets/planets/${filename}`]?.default || "";
+// Serves planet images on-demand from public/planets/ (downloads ~600 KB instead of 9 MB)
+const getImage = (filename) => `/planets/${filename}`;
 
 export default function Digitalkueche({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
