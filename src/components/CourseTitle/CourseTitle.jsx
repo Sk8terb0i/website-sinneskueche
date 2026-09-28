@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../../firebase"; // Adjust path to your firebase config as needed
 
 const CONFIG_ANIM = {
   TRANSITION_SPEED: 1400,
@@ -8,10 +11,63 @@ const CONFIG_ANIM = {
 };
 
 export default function CourseTitle({ title, config, icons = [] }) {
+  const location = useLocation();
+  const [customTitle, setCustomTitle] = useState(null);
+  const [currentLang, setCurrentLang] = useState(
+    document.documentElement.lang || "en",
+  );
+
   // If more than 2 icons are passed, we activate the Artistic Vision dynamic swapping
   const isDynamic = icons.length > 2;
   const topImgStatic = icons.length > 0 ? icons[0] : null;
   const bottomImgStatic = icons.length > 1 ? icons[1] : null;
+
+  // 1. Listen for language changes dynamically without needing a prop
+  useEffect(() => {
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.attributeName === "lang") {
+          setCurrentLang(document.documentElement.lang);
+        }
+      }
+    });
+    observer.observe(document.documentElement, { attributes: true });
+    return () => observer.disconnect();
+  }, []);
+
+  // 2. Fetch the custom title for this specific route
+  useEffect(() => {
+    const fetchCustomTitle = async () => {
+      // Remove the leading slash from the path (e.g., "/pottery" -> "pottery")
+      const courseId = location.pathname.replace(/\//g, "");
+      if (!courseId) return;
+
+      try {
+        const snap = await getDoc(doc(db, "course_settings", courseId));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.nameEn || data.nameDe) {
+            setCustomTitle({
+              en: data.nameEn || data.courseName || title,
+              de: data.nameDe || data.courseName || title,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Could not fetch custom course title:", err);
+      }
+    };
+    fetchCustomTitle();
+  }, [location.pathname, title]);
+
+  const displayTitle = customTitle?.[currentLang] || title;
+
+  // 3. Keep the document title in sync with the displayTitle
+  useEffect(() => {
+    if (displayTitle) {
+      document.title = `${displayTitle} | Atelier Sinnesküche`;
+    }
+  }, [displayTitle]);
 
   // --- DYNAMIC STATE (Only runs if isDynamic is true) ---
   const leftIdxRef = useRef(0);
@@ -203,7 +259,7 @@ export default function CourseTitle({ title, config, icons = [] }) {
           />
         )}
         <h1 className="course-title" style={styles.title}>
-          {title}
+          {displayTitle}
         </h1>
         {bottomImg && (
           <img

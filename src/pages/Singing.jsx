@@ -27,27 +27,6 @@ export default function Singing({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isBookingExpanded, setIsBookingExpanded] = useState(false);
   const bookingRef = useRef(null);
-  const [customTitle, setCustomTitle] = useState(null);
-
-  useEffect(() => {
-    const fetchCustomTitle = async () => {
-      try {
-        const snap = await getDoc(doc(db, "course_settings", "singing"));
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.nameEn || data.nameDe) {
-            setCustomTitle({
-              en: data.nameEn || data.courseName,
-              de: data.nameDe || data.courseName,
-            });
-          }
-        }
-      } catch (err) {
-        console.error("Could not fetch custom course title:", err);
-      }
-    };
-    fetchCustomTitle();
-  }, []);
 
   const config = {
     desktop: {
@@ -148,13 +127,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
   };
 
   const current = content[currentLang];
-  const displayTitle = customTitle?.[currentLang] || current.title;
   const icons = [getImage("hearing.png"), getImage("hearing_mic.png")];
-
-  // NEW: Update the browser tab title dynamically
-  useEffect(() => {
-    document.title = `${displayTitle} | Atelier Sinnesküche`;
-  }, [displayTitle]);
 
   // --- ANIMATION VARIANTS ---
   const containerVariants = {
@@ -328,7 +301,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
         animate="show"
       >
         <motion.div variants={itemVariants} className="course-title-wrapper">
-          <CourseTitle title={displayTitle} config={config} icons={icons} />
+          <CourseTitle title={current.title} config={config} icons={icons} />
         </motion.div>
 
         <motion.p

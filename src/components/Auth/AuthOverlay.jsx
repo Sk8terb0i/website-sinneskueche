@@ -5,6 +5,9 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 
@@ -24,6 +27,7 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
   const [preferredLanguage, setPreferredLanguage] = useState(
     currentLang || "en",
   );
+  const [rememberMe, setRememberMe] = useState(true);
 
   // NEW: Sub-User State
   const [subUsers, setSubUsers] = useState([]);
@@ -124,6 +128,11 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
     setIsLoading(true);
 
     try {
+      const persistenceType = rememberMe
+        ? browserLocalPersistence
+        : browserSessionPersistence;
+      await setPersistence(auth, persistenceType);
+
       if (view === "login") {
         await signInWithEmailAndPassword(auth, email, password);
         onClose();
@@ -430,6 +439,39 @@ export default function AuthOverlay({ isOpen, onClose, currentLang }) {
                   onChange={(e) => setPassword(e.target.value)}
                   style={styles.input}
                 />
+
+                {view === "login" && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      marginTop: "12px",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      id="rememberMe"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      style={{ cursor: "pointer" }}
+                    />
+                    <label
+                      htmlFor="rememberMe"
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "#1c0700",
+                        fontFamily: "Satoshi",
+                        cursor: "pointer",
+                        opacity: 0.8,
+                      }}
+                    >
+                      {currentLang === "en"
+                        ? "Remember me"
+                        : "Angemeldet bleiben"}
+                    </label>
+                  </div>
+                )}
               </div>
             )}
 

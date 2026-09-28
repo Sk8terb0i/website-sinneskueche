@@ -2606,6 +2606,16 @@ export default function BookingSummary({
                       {currentLang === "en" ? singleTextEn : singleTextDe}
                     </span>
                   </div>
+                  <span
+                    style={{
+                      fontWeight: isMobile ? "700" : "800",
+                      color: "#4e5f28",
+                      fontSize: isMobile ? "0.9rem" : "0.95rem",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {pricingMap[link]?.priceSingle} CHF
+                  </span>
                 </div>
 
                 {coursePacks.map((pack, pIdx) => {

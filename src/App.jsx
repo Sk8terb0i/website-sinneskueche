@@ -41,7 +41,7 @@ import { planets } from "./data/planets";
 const Admin = lazy(() => import("./pages/Admin/Admin"));
 
 export default function App() {
-  const { currentUser, userData } = useAuth();
+  const { currentUser, userData, loading } = useAuth();
   const [showLangModal, setShowLangModal] = useState(false);
   const [forcedLang, setForcedLang] = useState("");
 
@@ -117,6 +117,10 @@ export default function App() {
       }
     }
   }, [location.pathname, currentLang]);
+
+  if (loading) {
+    return <div style={loadingContainerStyle} />;
+  }
 
   return (
     <div style={layoutStyle}>

@@ -21,7 +21,8 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [closeActive, setCloseActive] = useState(false);
   const [courseVisibility, setCourseVisibility] = useState({});
-  const [courseSettings, setCourseSettings] = useState({}); // NEW: Save settings for the nav menu
+  const [courseSettings, setCourseSettings] = useState({});
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
   const [activeSenses, setActiveSenses] = useState([
     "sight",
@@ -61,6 +62,8 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         setCourseSettings(settingsMap); // NEW: Save map to state
       } catch (error) {
         console.warn("Could not fetch course settings:", error);
+      } finally {
+        setIsLoadingSettings(false);
       }
 
       try {
@@ -545,59 +548,76 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
             toggle={() => setIsCoursesOpen(!isCoursesOpen)}
             isMobile={isMobile}
           >
-            <div style={{ padding: isMobile ? "12px 0" : "15px 0" }}>
-              <p style={filterLabelStyle}>
-                {currentLang === "en"
-                  ? "Filter by sense"
-                  : "Nach Sinnen filtern"}
-              </p>
+            {isLoadingSettings ? (
               <div
                 style={{
-                  display: "flex",
-                  gap: isMobile ? "12px" : "14px",
-                  alignItems: "center",
+                  padding: "10px 0",
+                  opacity: 0.5,
+                  fontSize: "0.9rem",
+                  fontFamily: "Satoshi",
                 }}
               >
-                {Object.keys(planetIcons).map((senseId) => {
-                  const isActive = activeSenses.includes(senseId);
-                  return (
-                    <img
-                      key={senseId}
-                      src={planetIcons[senseId].base}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSense(senseId);
-                      }}
-                      style={{
-                        width: isMobile ? "24px" : "28px",
-                        height: isMobile ? "24px" : "28px",
-                        cursor: "pointer",
-                        transition: "all 0.3s ease",
-                        opacity: isActive ? 1 : 0.15,
-                        filter: isActive ? "none" : "grayscale(100%)",
-                        transform: isActive ? "scale(1.1)" : "scale(0.95)",
-                      }}
-                      alt={senseId}
-                    />
-                  );
-                })}
+                {currentLang === "en"
+                  ? "Loading courses..."
+                  : "Kurse werden geladen..."}
               </div>
-            </div>
+            ) : (
+              <>
+                <div style={{ padding: isMobile ? "12px 0" : "15px 0" }}>
+                  <p style={filterLabelStyle}>
+                    {currentLang === "en"
+                      ? "Filter by sense"
+                      : "Nach Sinnen filtern"}
+                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: isMobile ? "12px" : "14px",
+                      alignItems: "center",
+                    }}
+                  >
+                    {Object.keys(planetIcons).map((senseId) => {
+                      const isActive = activeSenses.includes(senseId);
+                      return (
+                        <img
+                          key={senseId}
+                          src={planetIcons[senseId].base}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSense(senseId);
+                          }}
+                          style={{
+                            width: isMobile ? "24px" : "28px",
+                            height: isMobile ? "24px" : "28px",
+                            cursor: "pointer",
+                            transition: "all 0.3s ease",
+                            opacity: isActive ? 1 : 0.15,
+                            filter: isActive ? "none" : "grayscale(100%)",
+                            transform: isActive ? "scale(1.1)" : "scale(0.95)",
+                          }}
+                          alt={senseId}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
 
-            {displayItems.map((item, i) => (
-              <MenuLink
-                key={i}
-                item={item}
-                lang={currentLang}
-                isMobile={isMobile}
-                onNavigate={(p) => {
-                  if (p) {
-                    navigate(p);
-                    onClose();
-                  }
-                }}
-              />
-            ))}
+                {displayItems.map((item, i) => (
+                  <MenuLink
+                    key={i}
+                    item={item}
+                    lang={currentLang}
+                    isMobile={isMobile}
+                    onNavigate={(p) => {
+                      if (p) {
+                        navigate(p);
+                        onClose();
+                      }
+                    }}
+                  />
+                ))}
+              </>
+            )}
           </Section>
 
           <Section

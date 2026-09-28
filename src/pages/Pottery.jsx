@@ -36,7 +36,6 @@ export default function Pottery({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isBookingExpanded, setIsBookingExpanded] = useState(false);
   const bookingRef = useRef(null);
-  const [customTitle, setCustomTitle] = useState(null);
   const [activeTab, setActiveTab] = useState(null);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -54,28 +53,10 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  useEffect(() => {
-    const fetchCustomTitle = async () => {
-      try {
-        const snap = await getDoc(doc(db, "course_settings", "pottery"));
-        if (snap.exists()) {
-          const data = snap.data();
-          setCustomTitle({
-            en: data.nameEn,
-            de: data.nameDe,
-          });
-        }
-      } catch (err) {
-        console.error("Could not fetch custom course title:", err);
-      }
-    };
-    fetchCustomTitle();
-  }, []);
-
   const config = {
     desktop: {
       topIcon: { top: "-35px", left: "-80px" },
-      bottomIcon: { top: "60px", left: "400px" },
+      bottomIcon: { top: "60px", left: "300px" },
       titleSize: "4.5rem",
     },
     mobile: {
@@ -91,7 +72,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       welcome: "Cook up your own masterpiece",
       ctaFloating: "register now",
       details: [
-        { icon: <Clock size={18} />, text: "18:30 - 21:15" },
+        { icon: <Clock size={18} />, text: "Tuesday, Thursday & Sunday" },
         { icon: <Users size={18} />, text: "All skill levels" },
         { icon: <Coffee size={18} />, text: "Small, cozy groups" },
       ],
@@ -131,7 +112,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       welcome: "Gönn dir eine kreative Auszeit",
       ctaFloating: "jetzt buchen",
       details: [
-        { icon: <Clock size={18} />, text: "18:30 - 21:15" },
+        { icon: <Clock size={18} />, text: "Dienstag, Donnerstag & Sonntag" },
         { icon: <Users size={18} />, text: "Alle Level willkommen" },
         { icon: <Coffee size={18} />, text: "Kleine, gemütliche Gruppen" },
       ],
@@ -170,12 +151,6 @@ export default function Pottery({ currentLang, setCurrentLang }) {
 
   const icons = [getImage("touch.png"), getImage("sight.png")];
   const current = content[currentLang];
-  const displayTitle = customTitle?.[currentLang] || current.title;
-
-  // NEW: Update the browser tab title dynamically
-  useEffect(() => {
-    document.title = `${displayTitle} | Atelier Sinnesküche`;
-  }, [displayTitle]);
 
   // --- ANIMATION VARIANTS ---
   const containerVariants = {
@@ -478,7 +453,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
         animate="show"
       >
         <motion.div variants={itemVariants} className="course-title-wrapper">
-          <CourseTitle title={displayTitle} config={config} icons={icons} />
+          <CourseTitle title={current.title} config={config} icons={icons} />
         </motion.div>
 
         <motion.p
