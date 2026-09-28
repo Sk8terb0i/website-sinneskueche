@@ -1,6 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
 import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
@@ -17,11 +15,10 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-const planetImages = import.meta.glob("../assets/planets/*.png", {
-  eager: true,
-});
-const getImage = (filename) =>
-  planetImages[`../assets/planets/${filename}`]?.default || "";
+// Direct imports load only the images needed for this page
+import hearingImg from "../assets/planets/hearing.png";
+import hearingMicImg from "../assets/planets/hearing_mic.png";
+import singRegisterImg from "../assets/planets/sing.png";
 
 export default function Singing({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -186,7 +183,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
   };
 
   const current = content[currentLang];
-  const icons = [getImage("hearing.png"), getImage("hearing_mic.png")];
+  const icons = [hearingImg, hearingMicImg];
 
   // --- ANIMATION VARIANTS ---
   const containerVariants = {
@@ -334,7 +331,7 @@ export default function Singing({ currentLang, setCurrentLang }) {
       <RegisterShortcut
         bookingRef={bookingRef}
         ctaText={current.ctaFloating}
-        planetImage={getImage("sing.png")}
+        planetImage={singRegisterImg}
         onClick={() => setIsBookingExpanded(true)}
       />
 

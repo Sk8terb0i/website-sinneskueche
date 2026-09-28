@@ -1,6 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
 import Header from "../components/Header/Header";
 import CourseTitle from "../components/CourseTitle/CourseTitle";
 import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
@@ -17,11 +15,10 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const planetImages = import.meta.glob("../assets/planets/*.png", {
-  eager: true,
-});
-const getImage = (filename) =>
-  planetImages[`../assets/planets/${filename}`]?.default || "";
+// Direct imports load only the images needed for this page
+import touchImg from "../assets/planets/touch.png";
+import sightImg from "../assets/planets/sight.png";
+import potteryRegisterImg from "../assets/planets/pottery_register.png";
 
 // Import pottery gallery images dynamically
 const potteryGallery = import.meta.glob(
@@ -208,7 +205,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
     },
   };
 
-  const icons = [getImage("touch.png"), getImage("sight.png")];
+  const icons = [touchImg, sightImg];
   const current = content[currentLang];
 
   // --- ANIMATION VARIANTS ---
@@ -363,7 +360,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       <RegisterShortcut
         bookingRef={bookingRef}
         ctaText={current.ctaFloating}
-        planetImage={getImage("pottery_register.png")}
+        planetImage={potteryRegisterImg}
         onClick={() => setIsBookingExpanded(true)}
       />
 
