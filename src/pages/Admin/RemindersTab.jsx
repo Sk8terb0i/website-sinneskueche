@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../../firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 import { planets } from "../../data/planets";
 import {
   Save,
@@ -103,15 +103,39 @@ export default function RemindersTab({
     },
   };
 
-  const availableCourses = Array.from(
-    new Map(
-      planets
-        .filter((p) => p.type === "courses")
-        .flatMap((p) => p.courses || [])
-        .filter((c) => c.link)
-        .map((course) => [course.link, course]),
-    ).values(),
-  ).filter((c) => isFullAdmin || allowedCourses.includes(c.link));
+  const [availableCourses, setAvailableCourses] = useState([]);
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      const base = Array.from(
+        new Map(
+          planets
+            .filter((p) => p.type === "courses")
+            .flatMap((p) => p.courses || [])
+            .filter((c) => c.link)
+            .map((course) => [course.link, course]),
+        ).values(),
+      );
+      try {
+        const snap = await getDocs(collection(db, "custom_courses"));
+        const custom = snap.docs.map((d) => ({
+          link: d.data().link,
+          text: { en: d.data().nameEn, de: d.data().nameDe },
+        }));
+        const combined = [...base, ...custom];
+        setAvailableCourses(
+          combined.filter(
+            (c) => isFullAdmin || allowedCourses.includes(c.link),
+          ),
+        );
+      } catch (err) {
+        setAvailableCourses(
+          base.filter((c) => isFullAdmin || allowedCourses.includes(c.link)),
+        );
+      }
+    };
+    fetchCourses();
+  }, [userRole, allowedCourses, isFullAdmin]);
 
   useEffect(() => {
     if (availableCourses.length > 0 && !selectedCourse) {
