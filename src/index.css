@@ -3,6 +3,7 @@
   src: url("/src/assets/fonts/Satoshi-Regular.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
@@ -37,6 +38,7 @@
 @font-face {
   font-family: "Harmond-SemiBoldCondensed";
   src: url("/src/assets/fonts/Harmond-SemiBoldCondensed.woff2") format("woff2");
+  font-display: swap;
 }
 
 /* --- Custom Scrollbar Styles --- */
