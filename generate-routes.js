@@ -8,6 +8,12 @@ const __dirname = path.dirname(__filename);
 // Map your routes to their specific SEO data
 const routes = [
   {
+    path: "/digitalkueche",
+    title: "Digitalküche | Webdesign Kurs Schlieren | Sinnesküche",
+    description:
+      "Erstelle deine eigene Website in 1 Tag mit Astro und GitHub Pages. 0 CHF Hosting-Kosten im Atelier Sinnesküche in Schlieren.",
+  },
+  {
     path: "/pottery",
     title: "Töpferküche | Töpferkurs Schlieren | Sinnesküche",
     description:
