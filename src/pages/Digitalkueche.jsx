@@ -18,11 +18,10 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-const planetImages = import.meta.glob("../assets/planets/*.png", {
-  eager: true,
-});
-const getImage = (filename) =>
-  planetImages[`../assets/planets/${filename}`]?.default || "";
+// Direct imports prevent Vite from eagerly loading the entire planets asset folder
+import sightDigital from "../assets/planets/sight_digital.png";
+import touchDigital from "../assets/planets/touch_digital.png";
+import digitalRegister from "../assets/planets/digital_register.png";
 
 export default function Digitalkueche({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -63,12 +62,10 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
   useEffect(() => {
     const isEn = currentLang === "en";
 
-    // Dynamic Title
     document.title = isEn
       ? "Webdesign Course | Digitalküche | Sinnesküche Schlieren"
       : "Webdesign Kurs | Digitalküche | Sinnesküche Schlieren";
 
-    // Dynamic Meta Description
     let metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
       metaDesc.setAttribute(
@@ -79,7 +76,6 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
       );
     }
 
-    // Dynamic Canonical Link
     let canonical = document.querySelector('link[rel="canonical"]');
     if (!canonical) {
       canonical = document.createElement("link");
@@ -144,16 +140,16 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
         {
           title: "Webdesign Course",
           details: [
-            { icon: <Clock size={18} />, text: "10:00 - 18:00 (1hr break)" },
+            { icon: <Clock size={18} />, text: "10:00 - 18:00" },
             ...(coursePrice
               ? [{ icon: <Tag size={18} />, text: coursePrice }]
               : []),
             {
               icon: <Users size={18} />,
-              text: "Beginners (No coding experience needed)",
+              text: "No coding experience",
             },
             { icon: <Coffee size={18} />, text: "Bring your own laptop" },
-            { icon: <Globe size={18} />, text: "EN / DE (adapted to group)" },
+            { icon: <Globe size={18} />, text: "EN / DE" },
           ],
           description: `Build your own unique website from scratch in **just one day**!\n\nIn this workshop, we will use Astro. This modern and beginner-friendly framework builds lightning-fast websites. We will connect your site to your custom domain and host it via GitHub. This keeps your **ongoing monthly hosting costs at 0 CHF**.\n\nWe will go through the entire setup together. We will look at **templates** to understand how the code works under the hood and customize everything to your liking. As a game designer and transdisciplinary artist, I will support you with the **technical code** and with finding your **unique visual design**.`,
           tabs: [
@@ -177,11 +173,7 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
       ],
       generalInfo: {
         discountsTitle: "Solidarity Discounts",
-        discountsText:
-          "I offer a solidarity discount for anyone experiencing financial constraints. Simply ask for a code via the contact form or email. No proof or explanation is required. I trust that this option is used fairly.",
         privateTitle: "On-Demand Workshops",
-        privateText:
-          "Looking for a custom group workshop, a team event, or a 1-on-1 session? You can book custom dates on demand by sending an email.",
       },
     },
     de: {
@@ -193,16 +185,16 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
         {
           title: "Webdesign Course",
           details: [
-            { icon: <Clock size={18} />, text: "10:00 - 18:00 (1 Std. Pause)" },
+            { icon: <Clock size={18} />, text: "10:00 - 18:00" },
             ...(coursePrice
               ? [{ icon: <Tag size={18} />, text: coursePrice }]
               : []),
             {
               icon: <Users size={18} />,
-              text: "Anfänger (ohne Vorkenntnisse)",
+              text: "Ohne Vorkenntnisse",
             },
             { icon: <Coffee size={18} />, text: "Bring deinen Laptop mit" },
-            { icon: <Globe size={18} />, text: "EN / DE (je nach Gruppe)" },
+            { icon: <Globe size={18} />, text: "EN / DE" },
           ],
           description: `Erstelle in **nur einem Tag** deine eigene, einzigartige Website von Grund auf neu!\n\nIn diesem Workshop nutzen wir Astro. Dieses moderne und anfängerfreundliche Tool erstellt blitzschnelle Websites. Wir verknüpfen deine Seite mit deiner eigenen Domain und hosten sie über GitHub. So bleiben **deine laufenden Hosting-Kosten bei exakt 0 CHF**.\n\nWir richten alles gemeinsam ein. Wir schauen uns **Templates** an, um den Code zu verstehen und alles nach deinen Wünschen anzupassen. Als Game Designer und transdisziplinärer Künstler unterstütze ich dich bei der **Technik** und beim **visuellen Design** deiner Seite.`,
           tabs: [
@@ -226,16 +218,12 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
       ],
       generalInfo: {
         discountsTitle: "Solidaritätsrabatt",
-        discountsText:
-          "Ich biete einen Solidaritätsrabatt für Menschen mit finanziellen Engpässen an. Frag einfach per Kontaktformular oder E-Mail nach einem Code. Es sind keine Nachweise oder Erklärungen erforderlich. Ich vertraue darauf, dass dieses Angebot fair genutzt wird.",
         privateTitle: "Workshops auf Anfrage",
-        privateText:
-          "Suchst du nach einem privaten Gruppen-Workshop, einem Team-Event oder einer 1-zu-1 Session? Massgeschneiderte Termine können jederzeit per E-Mail angefragt werden.",
       },
     },
   };
 
-  const icons = [getImage("sight_digital.png"), getImage("touch_digital.png")];
+  const icons = [sightDigital, touchDigital];
   const current = content[currentLang];
 
   const containerVariants = {
@@ -383,7 +371,7 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
       <RegisterShortcut
         bookingRef={bookingRef}
         ctaText={current.ctaFloating}
-        planetImage={getImage("digital_register.png")}
+        planetImage={digitalRegister}
         onClick={() => setIsBookingExpanded(true)}
       />
 
