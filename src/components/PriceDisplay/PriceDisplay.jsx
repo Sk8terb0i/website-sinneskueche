@@ -622,6 +622,26 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
         return;
       }
 
+      if (price === 0 && code && mode !== "pack") {
+        const processFree = httpsCallable(
+          functions,
+          "processFreePromoCheckout",
+        );
+        await processFree({
+          coursePath,
+          selectedDates: expandedDates,
+          promoCode: code,
+          guestInfo: !currentUser ? guestInfo : null,
+          currentLang,
+          baseUrl,
+        });
+        navigate(
+          `/success?type=promo&booked=true&sessions=${encodeURIComponent(sessionSummary)}`,
+        );
+        setIsProcessing(false);
+        return;
+      }
+
       const datesJson = JSON.stringify(expandedDates);
       const chunks = datesJson.match(/.{1,450}/g) || [];
       const metadataPayload = {

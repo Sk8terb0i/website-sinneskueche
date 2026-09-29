@@ -2632,3 +2632,87 @@ exports.submitAvailabilityRequest = onCall({ cors: true }, async (request) => {
     throw new HttpsError("internal", "Unable to submit request.");
   }
 });
+
+exports.processFreePromoCheckout = onCall({ cors: true }, async (request) => {
+  try {
+    const {
+      coursePath,
+      selectedDates,
+      promoCode,
+      guestInfo,
+      currentLang,
+      baseUrl,
+    } = request.data;
+    const origin = baseUrl || "https://sinneskueche.ch";
+    const userId = request.auth ? request.auth.uid : "GUEST_USER";
+
+    let finalName = guestInfo
+      ? `${guestInfo.firstName} ${guestInfo.lastName}`
+      : "Customer";
+    let userEmail = guestInfo?.email;
+    let userData = null;
+
+    await db.runTransaction(async (t) => {
+      // 1. Find and validate the Promo Code
+      const promoQuerySnap = await t.get(
+        db.collection("promo_codes").where("code", "==", promoCode).limit(1),
+      );
+      if (promoQuerySnap.empty)
+        throw new HttpsError("not-found", "Invalid code.");
+      const promoRef = promoQuerySnap.docs[0].ref;
+
+      // 2. Increment promo code usage
+      t.update(promoRef, {
+        timesUsed: admin.firestore.FieldValue.increment(1),
+      });
+
+      // 3. Get User Data if logged in
+      if (userId !== "GUEST_USER") {
+        const userSnap = await t.get(db.collection("users").doc(userId));
+        if (userSnap.exists) {
+          userData = userSnap.data();
+          finalName = userData.firstName || finalName;
+          userEmail = request.auth.token.email;
+        }
+      }
+
+      // 4. Create the Bookings in the database
+      selectedDates.forEach((d) => {
+        t.set(db.collection("bookings").doc(), {
+          userId,
+          guestName: userId === "GUEST_USER" ? finalName : null,
+          guestEmail: userId === "GUEST_USER" ? userEmail : null,
+          eventId: d.id,
+          date: d.date,
+          attendeeName: d.attendeeName || "Customer",
+          profileId: d.profileId || "main",
+          coursePath: d.link || coursePath,
+          selectedAddons: d.selectedAddons || [],
+          status: "confirmed",
+          lang: currentLang || "en",
+          usedCredit: false,
+          promoCodeUsed: promoCode,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+    });
+
+    // 5. Send the Booking Confirmation Email
+    await sendBookingEmail(
+      null,
+      userEmail,
+      finalName,
+      coursePath,
+      selectedDates,
+      currentLang || "en",
+      userId === "GUEST_USER",
+      origin,
+      userData,
+    );
+
+    return { success: true };
+  } catch (error) {
+    logger.error("processFreePromoCheckout failed", error);
+    throw new HttpsError("internal", error.message);
+  }
+});
