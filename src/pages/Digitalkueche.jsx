@@ -38,7 +38,7 @@ export default function Digitalkueche({ currentLang, setCurrentLang }) {
   useEffect(() => {
     const fetchPrice = async () => {
       try {
-        const docRef = doc(db, "course_settings", "webdesign");
+        const docRef = doc(db, "course_settings", "digitalkueche-webdesign");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
