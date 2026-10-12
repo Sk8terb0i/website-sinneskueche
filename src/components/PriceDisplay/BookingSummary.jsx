@@ -438,7 +438,7 @@ export default function BookingSummary({
     const courseKey = getCreditKey(d.link || coursePath);
 
     (d.attendees || []).forEach((att) => {
-      const pid = att.profileId;
+      const pid = att.profileId || "guest";
       if (!pid) {
         ineligibleForCredit += 1;
       } else {
@@ -508,7 +508,7 @@ export default function BookingSummary({
 
     (d.attendees || []).forEach((att) => {
       const coursePrice = parseFloat(pricingMap[d.link]?.priceSingle || 0);
-      const pid = att.profileId;
+      const pid = att.profileId || "guest";
 
       let usedCredit = false;
 
@@ -694,7 +694,7 @@ export default function BookingSummary({
       (typeof d.title === "object" ? d.title[currentLang || "en"] : d.title);
 
     (d.attendees || []).forEach((att) => {
-      const pid = att.profileId;
+      const pid = att.profileId || "guest";
       let usedCredit = false;
 
       const alreadyUsedToday =
