@@ -62,7 +62,7 @@ export default function PriceDisplay({ coursePath, currentLang, forceExpand }) {
   });
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
-  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
+  const [isMobileExpanded, setIsMobileExpanded] = useState(true);
   const [hasBookedBefore, setHasBookedBefore] = useState(false);
   const [requestedDates, setRequestedDates] = useState([]);
   const [profileHistoryMap, setProfileHistoryMap] = useState({});

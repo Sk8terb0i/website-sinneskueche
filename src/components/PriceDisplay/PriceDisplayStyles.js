@@ -8,7 +8,7 @@ export const initialLoaderStyle = {
 
 export const overarchingTitleStyle = (isMobile) => ({
   fontFamily: "Harmond-SemiBoldCondensed",
-  fontSize: isMobile ? "1.8rem" : "3.5rem",
+  fontSize: isMobile ? "1.7rem" : "3.5rem",
   fontWeight: isMobile ? "400" : "bold",
   color: "#1c0700",
   textAlign: "center",
@@ -17,7 +17,7 @@ export const overarchingTitleStyle = (isMobile) => ({
 
 export const outerWrapperStyle = {
   width: "100%",
-  marginTop: "4rem",
+  marginTop: "2rem",
   borderTop: "1px solid rgba(28, 7, 0, 0.05)",
   paddingTop: "3rem",
 };

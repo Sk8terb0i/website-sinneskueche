@@ -4,6 +4,8 @@ import CourseTitle from "../components/CourseTitle/CourseTitle";
 import PriceDisplay from "../components/PriceDisplay/PriceDisplay";
 import CourseDescription from "../components/CourseDescription/CourseDescription";
 import RegisterShortcut from "../components/RegisterShortcut/RegisterShortcut";
+import KulturlegiUpload from "../components/KulturlegiUpload/KulturlegiUpload";
+
 import {
   Clock,
   Users,
@@ -126,6 +128,10 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       welcome: "Cook up your own masterpiece",
       ctaFloating: "register now",
       details: [
+        {
+          icon: <Ticket size={18} />,
+          text: "49.- / Single Session, All inclusive",
+        },
         { icon: <Clock size={18} />, text: "Tuesday, Thursday & Sunday" },
         { icon: <Users size={18} />, text: "All skill levels" },
         { icon: <Coffee size={18} />, text: "Small, cozy groups" },
@@ -166,6 +172,10 @@ export default function Pottery({ currentLang, setCurrentLang }) {
       welcome: "Gönn dir eine kreative Auszeit",
       ctaFloating: "jetzt buchen",
       details: [
+        {
+          icon: <Ticket size={18} />,
+          text: "49.- / Einzeltermin, Alles inklusive",
+        },
         { icon: <Clock size={18} />, text: "Dienstag, Donnerstag & Sonntag" },
         { icon: <Users size={18} />, text: "Alle Level willkommen" },
         { icon: <Coffee size={18} />, text: "Kleine, gemütliche Gruppen" },
@@ -454,22 +464,19 @@ export default function Pottery({ currentLang, setCurrentLang }) {
               line-height: 1.5;
             }
             
-            /* FORCE COMPACT SINGLE LINE PILLS ON MOBILE */
+            /* WRAPPING PILLS ON MOBILE */
             .info-grid { 
               flex-direction: row !important; 
-              flex-wrap: nowrap !important; 
+              flex-wrap: wrap !important; 
               justify-content: center !important;
-              gap: 6px !important; 
-              width: 100vw !important;
-              max-width: 100vw !important;
+              gap: 8px !important; 
+              width: 100% !important;
+              max-width: 100% !important;
               margin-top: 10px !important; 
               margin-bottom: 20px !important; 
-              overflow-x: auto;
-              scrollbar-width: none; 
               padding: 0 15px !important;
             }
-            .info-grid::-webkit-scrollbar { display: none; }
-            .info-item { flex-shrink: 0; padding: 6px 12px !important; }
+            .info-item { padding: 6px 12px !important; }
             
             .feature-gallery-container {
               margin-top: 10px;
@@ -523,26 +530,23 @@ export default function Pottery({ currentLang, setCurrentLang }) {
           className="info-grid"
           style={styles.infoGrid}
         >
-          {/* Dynamically slice the details array down to 2 elements on mobile */}
-          {(isMobile ? current.details.slice(0, 2) : current.details).map(
-            (item, index) => (
-              <motion.div
-                key={index}
-                className="info-item"
-                style={styles.infoItem}
-                whileHover={{
-                  scale: 1.03,
-                  backgroundColor: "rgba(202, 175, 243, 0.25)",
-                }}
-                transition={{ type: "spring", stiffness: 300 }}
-              >
-                <div style={{ display: "flex", color: "#caaff3" }}>
-                  {item.icon}
-                </div>
-                <span style={styles.infoLabel}>{item.text}</span>
-              </motion.div>
-            ),
-          )}
+          {current.details.map((item, index) => (
+            <motion.div
+              key={index}
+              className="info-item"
+              style={styles.infoItem}
+              whileHover={{
+                scale: 1.03,
+                backgroundColor: "rgba(202, 175, 243, 0.25)",
+              }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <div style={{ display: "flex", color: "#caaff3" }}>
+                {item.icon}
+              </div>
+              <span style={styles.infoLabel}>{item.text}</span>
+            </motion.div>
+          ))}
         </motion.div>
 
         {/* --- INLINE RENDERING KEEPS Snapshots/Tab Titles Reacting perfectly --- */}
@@ -698,6 +702,7 @@ export default function Pottery({ currentLang, setCurrentLang }) {
           className="booking-section"
           style={{ width: "100%", marginTop: isMobile ? "-15px" : "20px" }}
         >
+          <KulturlegiUpload currentLang={currentLang} />
           <PriceDisplay
             coursePath="/pottery"
             currentLang={currentLang}

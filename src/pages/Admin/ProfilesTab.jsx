@@ -12,6 +12,7 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { getStorage, ref as storageRef, deleteObject } from "firebase/storage";
 import {
   Edit2,
   Trash2,
@@ -180,6 +181,7 @@ export default function ProfilesTab({
           lastName: editForm.lastName || "",
           // Save the permitted courses
           allowedCourses: editForm.allowedCourses || [],
+          kulturlegi: editForm.kulturlegi || false,
         });
       } else {
         const parentSnap = await getDoc(userRef);
@@ -189,11 +191,46 @@ export default function ProfilesTab({
                 ...lp,
                 firstName: editForm.firstName,
                 lastName: editForm.lastName,
+                kulturlegi: editForm.kulturlegi || false,
               }
             : lp,
         );
         await updateDoc(userRef, { linkedProfiles: updatedLinked });
       }
+
+      // If the discount is granted, securely delete the proof from Storage & Firestore
+      if (editForm.kulturlegi) {
+        try {
+          const targetUserId = editForm.isMain ? editingId : editForm.parentId;
+          const reqQ = query(
+            collection(db, "kulturlegi_requests"),
+            where("userId", "==", targetUserId),
+          );
+          const reqSnap = await getDocs(reqQ);
+
+          if (!reqSnap.empty) {
+            const storage = getStorage();
+            for (const reqDoc of reqSnap.docs) {
+              const reqData = reqDoc.data();
+              if (reqData.proofUrl) {
+                try {
+                  const fileRef = storageRef(storage, reqData.proofUrl);
+                  await deleteObject(fileRef);
+                } catch (sErr) {
+                  console.warn(
+                    "Storage deletion error (file might already be gone):",
+                    sErr,
+                  );
+                }
+              }
+              await deleteDoc(doc(db, "kulturlegi_requests", reqDoc.id));
+            }
+          }
+        } catch (cleanupErr) {
+          console.error("Error cleaning up Kulturlegi proof:", cleanupErr);
+        }
+      }
+
       setEditingId(null);
       fetchUsers(false);
     } catch (error) {
@@ -454,6 +491,32 @@ export default function ProfilesTab({
                         }
                         placeholder={labels.first}
                       />
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          fontSize: "0.85rem",
+                          fontWeight: "bold",
+                          margin: "4px 0",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={editForm.kulturlegi || false}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              kulturlegi: e.target.checked,
+                            })
+                          }
+                          style={{
+                            transform: "scale(1.2)",
+                            accentColor: "#9960a8",
+                          }}
+                        />
+                        Kulturlegi Discount Active
+                      </label>
                       <label style={S.labelStyle}>{labels.role}</label>
                       <select
                         style={S.inputStyle}

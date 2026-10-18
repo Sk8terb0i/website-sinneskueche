@@ -2716,3 +2716,38 @@ exports.processFreePromoCheckout = onCall({ cors: true }, async (request) => {
     throw new HttpsError("internal", error.message);
   }
 });
+
+// ============================================================================
+// 9. GENERAL EMAIL NOTIFICATIONS
+// ============================================================================
+
+exports.sendEmailNotification = onCall({ cors: true }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Must be logged in to send notifications.",
+    );
+  }
+
+  const { to, subject, text } = request.data;
+
+  if (!to || !subject || !text) {
+    throw new HttpsError("invalid-argument", "Missing email parameters.");
+  }
+
+  try {
+    // Pushes the email to your existing 'mail' collection trigger
+    await db.collection("mail").add({
+      to: to,
+      message: {
+        subject: subject,
+        text: text, // Plain text format as requested by the frontend
+      },
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error("sendEmailNotification failed", error);
+    throw new HttpsError("internal", "Unable to send email.");
+  }
+});

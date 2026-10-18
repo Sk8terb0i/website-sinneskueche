@@ -426,6 +426,13 @@ export default function BookingSummary({
   };
   const availableProfiles = getAvailableProfiles();
 
+  const checkKulturlegi = (pid) => {
+    if (!currentUser || !userData || !pid || pid === "guest") return false;
+    if (pid === "main") return !!userData?.kulturlegi;
+    const linked = userData.linkedProfiles?.find((p) => p.id === pid);
+    return !!linked?.kulturlegi;
+  };
+
   // --- CREDIT & PAYMENT LOGIC ---
   const limitOnePerDay = pricing?.limitOnePerDay ?? true;
   let eligibleForCredit = 0;
@@ -532,10 +539,13 @@ export default function BookingSummary({
         }
       }
 
+      const hasKulturlegi = checkKulturlegi(pid);
+      const actualCoursePrice = hasKulturlegi ? coursePrice * 0.7 : coursePrice;
+
       if (usedCredit) {
         calcUsedDates.add(`${d.date}_${pid}`);
       } else {
-        totalIndividualCash += coursePrice;
+        totalIndividualCash += actualCoursePrice;
       }
     });
   });
@@ -720,7 +730,10 @@ export default function BookingSummary({
         }
       }
 
-      const mapKey = usedCredit ? `${title}_credit` : title;
+      const hasKulturlegi = checkKulturlegi(pid);
+      const actualCoursePrice = hasKulturlegi ? coursePrice * 0.7 : coursePrice;
+      const titleSuffix = hasKulturlegi ? " (Kulturlegi)" : "";
+      const mapKey = usedCredit ? `${title}_credit` : `${title}${titleSuffix}`;
 
       if (usedCredit) {
         breakdownUsedDates.add(`${d.date}_${pid}`);
@@ -741,16 +754,16 @@ export default function BookingSummary({
           person: att.name || (currentLang === "en" ? "Guest" : "Gast"),
         });
       } else {
-        finalPackPrice += coursePrice;
+        finalPackPrice += actualCoursePrice;
         const hasPackForLink = selectedPacks.some((p) => p.link === d.link);
         if (hasPackForLink) hasExceededPack = true;
         else hasUncoveredMixedCourse = true;
 
         if (!breakdownMap[mapKey])
           breakdownMap[mapKey] = {
-            displayName: title,
+            displayName: `${title}${titleSuffix}`,
             count: 0,
-            price: coursePrice,
+            price: actualCoursePrice,
             isFree: false,
             details: [],
           };
@@ -1417,7 +1430,36 @@ export default function BookingSummary({
                           ? d.title[currentLang || "en"]
                           : d.title)}
                       {" | "}
-                      {pricingMap[d.link]?.priceSingle || 0} CHF
+                      {(() => {
+                        const basePrice = parseFloat(
+                          pricingMap[d.link]?.priceSingle ||
+                            pricing?.priceSingle ||
+                            0,
+                        );
+                        const firstPid =
+                          d.attendees?.[0]?.profileId ||
+                          (currentUser ? "main" : "guest");
+                        const hasKulturlegi = checkKulturlegi(firstPid);
+
+                        return hasKulturlegi ? (
+                          <>
+                            <span
+                              style={{
+                                textDecoration: "line-through",
+                                opacity: 0.5,
+                                marginRight: "4px",
+                              }}
+                            >
+                              {basePrice} CHF
+                            </span>
+                            <span style={{ color: "#4e5f28" }}>
+                              {formatPrice(basePrice * 0.7)} CHF
+                            </span>
+                          </>
+                        ) : (
+                          `${basePrice} CHF`
+                        );
+                      })()}
                     </span>
                     <span style={{ fontWeight: "800", fontSize: "0.9rem" }}>
                       {formatDate(d.date)}
@@ -2629,9 +2671,73 @@ export default function BookingSummary({
                       color: "#4e5f28",
                       fontSize: isMobile ? "0.9rem" : "0.95rem",
                       whiteSpace: "nowrap",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
                     }}
                   >
-                    {pricingMap[link]?.priceSingle} CHF
+                    {(() => {
+                      const baseSinglePrice = parseFloat(
+                        pricingMap[link]?.priceSingle || 0,
+                      );
+                      const relevantDates = selectedDates.filter(
+                        (d) => (d.link || coursePath) === link,
+                      );
+
+                      let totalBase = 0;
+                      let totalDiscounted = 0;
+                      let hasDiscount = false;
+
+                      if (sessionsForThisCourse > 0) {
+                        relevantDates.forEach((d) => {
+                          const attendees =
+                            d.attendees?.length > 0
+                              ? d.attendees
+                              : [{ profileId: currentUser ? "main" : "guest" }];
+
+                          attendees.forEach((att) => {
+                            const pid =
+                              att.profileId || (currentUser ? "main" : "guest");
+                            const isKultur = checkKulturlegi(pid);
+                            totalBase += baseSinglePrice;
+                            if (isKultur) {
+                              totalDiscounted += baseSinglePrice * 0.7;
+                              hasDiscount = true;
+                            } else {
+                              totalDiscounted += baseSinglePrice;
+                            }
+                          });
+                        });
+                      } else {
+                        // Default to 1 session if no dates are selected yet
+                        totalBase = baseSinglePrice;
+                        const isKultur = checkKulturlegi("main");
+                        if (isKultur) {
+                          totalDiscounted = baseSinglePrice * 0.7;
+                          hasDiscount = true;
+                        } else {
+                          totalDiscounted = baseSinglePrice;
+                        }
+                      }
+
+                      return hasDiscount ? (
+                        <>
+                          <span
+                            style={{
+                              textDecoration: "line-through",
+                              opacity: 0.5,
+                              fontSize: "0.85em",
+                              color: "#1c0700",
+                            }}
+                          >
+                            {formatPrice(totalBase)} CHF
+                          </span>
+                          <span>{formatPrice(totalDiscounted)} CHF</span>
+                        </>
+                      ) : (
+                        `${formatPrice(totalBase)} CHF`
+                      );
+                    })()}
                   </span>
                 </div>
 
