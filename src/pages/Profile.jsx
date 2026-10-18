@@ -21,6 +21,7 @@ import BuyPackCard from "../components/Profile/BuyPackCard";
 import PackStatusCard from "../components/Profile/PackStatusCard";
 import RentalBookingsCard from "../components/Profile/RentalBookingsCard";
 import PotteryFiringCard from "../components/Profile/PotteryFiringCard";
+import PrinterBookingsCard from "../components/Profile/PrinterBookingsCard";
 import TeachingCard from "../components/Profile/TeachingCard";
 import FamilyMemberCard from "../components/Profile/FamilyMemberCard";
 
@@ -36,6 +37,7 @@ export default function Profile({ currentLang, setCurrentLang }) {
 
   const [hasPotteryHistory, setHasPotteryHistory] = useState(false);
   const [hasRentalAccess, setHasRentalAccess] = useState(false);
+  const [isPrinterEnabled, setIsPrinterEnabled] = useState(false);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -73,13 +75,18 @@ export default function Profile({ currentLang, setCurrentLang }) {
   }, [currentUser, userData]);
 
   useEffect(() => {
+    if (userData) {
+      setIsPrinterEnabled(!!userData.showPrinterInProfile);
+    }
+  }, [userData]);
+
+  useEffect(() => {
     const checkRentalAccess = async () => {
-      if (!currentUser || !userData) return;
+      if (!currentUser) return;
       try {
         const configDoc = await getDoc(doc(db, "settings", "admin_config"));
         if (configDoc.exists() && configDoc.data().showRentalInProfile) {
           setHasRentalAccess(true);
-          return;
         }
         const snap = await getDocs(
           query(
@@ -90,11 +97,11 @@ export default function Profile({ currentLang, setCurrentLang }) {
         );
         if (!snap.empty) setHasRentalAccess(true);
       } catch (e) {
-        console.error(e);
+        console.error("Rental access check failed:", e);
       }
     };
     checkRentalAccess();
-  }, [currentUser, userData]);
+  }, [currentUser]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
@@ -319,6 +326,13 @@ export default function Profile({ currentLang, setCurrentLang }) {
                       currentLang={currentLang}
                     />
                   )}
+                  {isPrinterEnabled && (
+                    <PrinterBookingsCard
+                      userId={currentUser.uid}
+                      currentLang={currentLang}
+                      userData={userData}
+                    />
+                  )}
                   <TeachingCard
                     teachingEvents={teachingEvents}
                     isScheduleLoading={isScheduleLoading}
@@ -413,6 +427,13 @@ export default function Profile({ currentLang, setCurrentLang }) {
                 <PotteryFiringCard
                   currentUser={currentUser}
                   currentLang={currentLang}
+                />
+              )}
+              {isPrinterEnabled && (
+                <PrinterBookingsCard
+                  userId={currentUser.uid}
+                  currentLang={currentLang}
+                  userData={userData}
                 />
               )}
               {hasRentalAccess && (

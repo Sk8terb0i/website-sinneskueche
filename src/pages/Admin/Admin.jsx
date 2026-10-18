@@ -29,6 +29,7 @@ import {
   Pin,
   Mail,
   Flame,
+  Printer,
   ChevronDown,
   ChevronUp,
   MessageSquare,
@@ -55,6 +56,7 @@ import RemindersTab from "./RemindersTab";
 import ScheduleTab from "./ScheduleTab";
 import EmailTemplatesTab from "./EmailTemplatesTab";
 import FiringTab from "./FiringTab";
+import PrinterTab from "./PrinterTab";
 import MessagesTab from "./MessagesTab";
 import CalendarsTab from "./CalendarsTab";
 
@@ -112,6 +114,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       defaultView: "Default View",
       setDefault: "Set as Default",
       firing: "Firing Schedule",
+      printer: "3D Printer",
       messages: "Messages",
       customize: "Customize Nav",
       save: "Save Layout",
@@ -143,6 +146,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       defaultView: "Standardansicht",
       setDefault: "Als Standard setzen",
       firing: "Brennplan",
+      printer: "3D-Drucker",
       messages: "Nachrichten",
       customize: "Nav anpassen",
       save: "Layout speichern",
@@ -183,7 +187,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       {
         id: "g4",
         name: { en: "Studio", de: "Studio" },
-        items: ["firing", "messages", "rental"],
+        items: ["firing", "printer", "messages", "rental"],
       },
     ],
     tabSettings: {},
@@ -202,6 +206,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
     promotions: "promotions",
     rental: "rental",
     firing: "firing",
+    printer: "printer",
     messages: "messages",
   };
 
@@ -270,6 +275,11 @@ export default function Admin({ currentLang, setCurrentLang }) {
     firing: {
       icon: <Flame size={18} />,
       label: labels.firing,
+      adminOnly: true,
+    },
+    printer: {
+      icon: <Printer size={18} />,
+      label: labels.printer,
       adminOnly: true,
     },
     messages: {
@@ -1357,6 +1367,13 @@ export default function Admin({ currentLang, setCurrentLang }) {
         {/* Render FiringTab for anyone authorized via the canSeeFiring check */}
         {activeTab === "firing" && canSeeFiring && (
           <FiringTab isMobile={isMobile} currentLang={currentLang} />
+        )}
+        {activeTab === "printer" && isFullAdmin && (
+          <PrinterTab
+            isMobile={isMobile}
+            currentLang={currentLang}
+            adminData={adminData}
+          />
         )}
       </div>
 
