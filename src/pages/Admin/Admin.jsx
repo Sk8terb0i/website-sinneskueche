@@ -483,6 +483,38 @@ export default function Admin({ currentLang, setCurrentLang }) {
     return () => unsubscribe();
   }, [user, adminData]);
 
+  const [expandedAllowedCourses, setExpandedAllowedCourses] = useState([]);
+
+  useEffect(() => {
+    if (!adminData || adminData.role === "admin") {
+      setExpandedAllowedCourses(adminData?.allowedCourses || []);
+      return;
+    }
+
+    const fetchAndExpandCourses = async () => {
+      try {
+        const cgSnap = await getDocs(collection(db, "calendar_groups"));
+        let expanded = [...(adminData.allowedCourses || [])];
+
+        cgSnap.docs.forEach((docSnap) => {
+          const baseId = docSnap.id;
+          const includedLinks = docSnap.data().includedLinks || [];
+
+          if (expanded.some((c) => c.replace(/\//g, "") === baseId)) {
+            expanded = [...expanded, ...includedLinks];
+          }
+        });
+
+        setExpandedAllowedCourses([...new Set(expanded)]);
+      } catch (err) {
+        console.error("Error expanding allowed courses", err);
+        setExpandedAllowedCourses(adminData.allowedCourses || []);
+      }
+    };
+
+    fetchAndExpandCourses();
+  }, [adminData]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -1296,7 +1328,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
             isMobile={isMobile}
             currentLang={currentLang}
             userRole={adminData.role}
-            allowedCourses={adminData.allowedCourses || []}
+            allowedCourses={expandedAllowedCourses}
           />
         )}
         {activeTab === "profiles" && isFullAdmin && (
@@ -1310,7 +1342,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
           <PricingTab
             isMobile={isMobile}
             userRole={adminData.role}
-            allowedCourses={adminData.allowedCourses || []}
+            allowedCourses={expandedAllowedCourses}
             currentLang={currentLang}
           />
         )}
@@ -1321,7 +1353,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
           <ScheduleTab
             isMobile={isMobile}
             userRole={adminData.role}
-            allowedCourses={adminData.allowedCourses || []}
+            allowedCourses={expandedAllowedCourses}
             currentLang={currentLang}
           />
         )}
@@ -1330,14 +1362,14 @@ export default function Admin({ currentLang, setCurrentLang }) {
             isMobile={isMobile}
             currentLang={currentLang}
             userRole={adminData.role}
-            allowedCourses={adminData.allowedCourses || []}
+            allowedCourses={expandedAllowedCourses}
           />
         )}
         {activeTab === "reminders" && (
           <RemindersTab
             isMobile={isMobile}
             userRole={adminData.role}
-            allowedCourses={adminData.allowedCourses || []}
+            allowedCourses={expandedAllowedCourses}
             currentLang={currentLang}
           />
         )}
@@ -1345,7 +1377,8 @@ export default function Admin({ currentLang, setCurrentLang }) {
           <TermsTab
             isMobile={isMobile}
             userRole={adminData.role}
-            allowedCourses={adminData.allowedCourses || []}
+            allowedCourses={expandedAllowedCourses}
+            currentLang={currentLang}
           />
         )}
         {activeTab === "emails" && (
@@ -1364,7 +1397,6 @@ export default function Admin({ currentLang, setCurrentLang }) {
             )}
           </>
         )}
-        {/* Render FiringTab for anyone authorized via the canSeeFiring check */}
         {activeTab === "firing" && canSeeFiring && (
           <FiringTab isMobile={isMobile} currentLang={currentLang} />
         )}
