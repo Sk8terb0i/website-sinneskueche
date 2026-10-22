@@ -383,7 +383,7 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
       <RegisterShortcut
         bookingRef={bookingRef}
         ctaText={current.ctaFloating}
-        planetImage={getImage("digital_register.png")}
+        planetImage={getImage("leather_register.png")}
         onClick={() => setIsBookingExpanded(true)}
       />
 

@@ -14,6 +14,12 @@ const routes = [
       "Erstelle deine eigene Website in 1 Tag mit Astro und GitHub Pages. 0 CHF Hosting-Kosten im Atelier Sinnesküche in Schlieren.",
   },
   {
+    path: "/lederkueche",
+    title: "Lederküche | Leathercraft Workshop Schlieren | Sinnesküche",
+    description:
+      "Baue und personalisiere dein eigenes Leder-Notizbuch in unserem Traveler's Notebook Workshop. Hochwertige Upcycling-Materialien im Atelier Sinnesküche.",
+  },
+  {
     path: "/pottery",
     title: "Töpferküche | Töpferkurs Schlieren | Sinnesküche",
     description:
