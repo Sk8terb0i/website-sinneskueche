@@ -292,4 +292,57 @@ export const planets = [
       },
     ],
   },
+  {
+    id: "tara",
+    type: "courses",
+    get icon() {
+      return {
+        en: getImage("tara_name.png"),
+        de: getImage("tara_name.png"),
+        base: getImage("tara.png"),
+      };
+    },
+    pronouns: {
+      de: "sie/ihr",
+      en: "she/her",
+    },
+    bio: {
+      de: [
+        {
+          q: "Wer bist du?",
+          a: "Ich bin Tara. Ich arbeite als Soziologin im Projektmanagement und nutze verschiedene Hobbys – von Lederhandwerk bis hin zu Aquarellmalerei und Urban Sketching – als achtsamen, taktilen Ausgleich zu meiner intellektuellen, bildschirmbasierten Arbeit im Unternehmen. Als große Liebhaberin von feinen Schreibwaren und analoger Planung teile ich dieses Hobby gerne mit anderen.",
+        },
+        {
+          q: "Was kreierst du?",
+          a: "Ich habe mit dem Lederhandwerk und der Herstellung eigener Notizbücher begonnen, um ein achtsames, kreatives Ventil zu haben – und um meine Organisation und Planung mehr abseits des Bildschirms zu erledigen. Als berufstätige Mutter von zwei kleinen Kindern liebe ich die Modularität und die Anpassungsmöglichkeiten. Da ich mich nach Kreativität und Gemeinschaft sehne, teile ich dies gerne mit anderen.",
+        },
+        {
+          q: "Was setzt du in der Sinnesküche um?",
+          a: "Ich biete die Traveler's Notebook-Workshops als einen Raum an, um das Arbeiten mit Leder und die Herstellung eigener Schreibwaren zu entdecken. Mein Ziel ist es, einen sicheren, entspannten und angeleiteten Ort zu schaffen, an dem wir zusammenkommen, unsere Kreativität ohne 'Corporate Energy' ausdrücken und gemeinsam lernen und erschaffen können.",
+        },
+      ],
+      en: [
+        {
+          q: "Who are you?",
+          a: "I’m Tara, I am a sociologist working as a project manager, who employs various hobbies - from leathercraft to watercolour & urban sketching - as a mindful, tactile escape from intellectual, corporate and screen-based work. As an avid enthusiast of fine stationery and analogue planning, I love sharing this hobby with others.",
+        },
+        {
+          q: "What do you create?",
+          a: "I started Leathercraft and making my own notebooks as a mindful creative outlet - and to do more of my organising and planning off-screen. As a working mom of two small children, I love the modularity and customisation aspect. As a being who craves creativity and community, I love to share this with others.",
+        },
+        {
+          q: "What do you realise in Sinnesküche?",
+          a: 'I offer the Travelers Notebook- workshops as a space to explore working with leather and making your own stationary. My goal is to provide a safe, relaxed but guided space where we can come together, and express our creativity without "corporate energy", to learn and create together.',
+        },
+      ],
+    },
+    courses: [
+      {
+        text: {
+          en: "Learn the basics of leathercraft and design your own personalized, tactile accessories.",
+          de: "Lerne die Grundlagen der Lederverarbeitung und gestalte deine eigenen, personalisierten Accessoires.",
+        },
+      },
+    ],
+  },
 ];

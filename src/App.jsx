@@ -25,6 +25,7 @@ import PerformingWords from "./pages/PerformingWords";
 import SingingBasics from "./pages/SingingBasicsWeekend";
 import GetInk from "./pages/GetInk";
 import Digitalkueche from "./pages/Digitalkueche";
+import Lederkueche from "./pages/Lederkueche";
 
 // New Auth & Profile imports
 import Profile from "./pages/Profile";
@@ -241,6 +242,18 @@ export default function App() {
               element={
                 <PageTransition>
                   <Digitalkueche
+                    currentLang={currentLang}
+                    setCurrentLang={setCurrentLang}
+                  />
+                </PageTransition>
+              }
+            />
+
+            <Route
+              path="/lederkueche"
+              element={
+                <PageTransition>
+                  <Lederkueche
                     currentLang={currentLang}
                     setCurrentLang={setCurrentLang}
                   />

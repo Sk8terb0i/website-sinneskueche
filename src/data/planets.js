@@ -76,6 +76,10 @@ export const planets = [
         text: { en: "Digitalküche", de: "Digitalküche" },
         link: "/digitalkueche",
       },
+      {
+        text: { en: "Lederküche", de: "Lederküche" },
+        link: "/lederkueche",
+      },
     ],
   },
   {
@@ -108,6 +112,10 @@ export const planets = [
       {
         text: { en: "Digitalküche", de: "Digitalküche" },
         link: "/digitalkueche",
+      },
+      {
+        text: { en: "Lederküche", de: "Lederküche" },
+        link: "/lederkueche",
       },
     ],
   },

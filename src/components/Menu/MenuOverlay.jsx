@@ -286,6 +286,12 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
           senses: ["sight", "touch"],
           icon: dotIconObj,
         },
+        {
+          text: { en: "Lederküche", de: "Lederküche" },
+          link: "/lederkueche",
+          senses: ["touch", "sight"],
+          icon: dotIconObj,
+        },
       ].map((course) => {
         // Look up the custom name from our fetched settings
         const sanitizedId = course.link.replace(/\//g, "");
