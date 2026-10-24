@@ -234,7 +234,7 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
     },
   };
 
-  const icons = [getImage("touch.png"), getImage("sight.png")];
+  const icons = [getImage("touch.png"), getImage("smell.png")];
   const current = content[currentLang];
 
   const containerVariants = {
