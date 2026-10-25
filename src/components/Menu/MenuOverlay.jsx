@@ -289,7 +289,7 @@ export default function MenuDrawer({ isOpen, onClose, currentLang }) {
         {
           text: { en: "Lederküche", de: "Lederküche" },
           link: "/lederkueche",
-          senses: ["touch", "sight"],
+          senses: ["touch", "smell"],
           icon: dotIconObj,
         },
       ].map((course) => {
