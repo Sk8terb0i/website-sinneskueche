@@ -339,8 +339,8 @@ export const planets = [
     courses: [
       {
         text: {
-          en: "Learn the basics of leathercraft and design your own personalized, tactile accessories.",
-          de: "Lerne die Grundlagen der Lederverarbeitung und gestalte deine eigenen, personalisierten Accessoires.",
+          en: "mane attraction",
+          de: "von kopf bis huf ein star",
         },
       },
     ],
