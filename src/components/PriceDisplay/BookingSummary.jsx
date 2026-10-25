@@ -975,19 +975,28 @@ export default function BookingSummary({
           return;
         }
 
-        if (
-          promoData.coursePath &&
-          promoData.coursePath !== "all" &&
-          !activePath.includes(promoData.coursePath.replace(/\//g, ""))
-        ) {
-          setCodeStatus({
-            loading: false,
-            error:
-              currentLang === "en"
-                ? "Code not valid for this course."
-                : "Code gilt nicht für diesen Kurs.",
+        const cartLinks = new Set();
+        selectedDates.forEach((d) => cartLinks.add(d.link || coursePath));
+        selectedPacks.forEach((p) => cartLinks.add(p.link || coursePath));
+
+        if (promoData.coursePath && promoData.coursePath !== "all") {
+          let isValidForCart = false;
+          cartLinks.forEach((link) => {
+            if (link === promoData.coursePath) {
+              isValidForCart = true;
+            }
           });
-          return;
+
+          if (!isValidForCart) {
+            setCodeStatus({
+              loading: false,
+              error:
+                currentLang === "en"
+                  ? "Code not valid for selected items."
+                  : "Code gilt nicht für diese Kursauswahl.",
+            });
+            return;
+          }
         }
         setActivePromo(promoData);
         setCodeStatus({ loading: false, error: "" });

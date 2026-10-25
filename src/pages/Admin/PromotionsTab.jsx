@@ -167,7 +167,8 @@ export default function PromotionsTab({
           (c) => isFullAdmin || allowedCourses.includes(c.link),
         );
         setAvailableCourses(filtered);
-        if (filtered.length > 0 && !editingId) setCoursePath("all");
+        if (filtered.length > 0 && !editingId)
+          setCoursePath(isFullAdmin ? "all" : filtered[0].link);
       }
     };
     fetchCoursesAndGroups();
@@ -338,27 +339,30 @@ export default function PromotionsTab({
                     padding: "8px",
                   }}
                 >
-                  <div
-                    onClick={() => {
-                      setCoursePath("all");
-                      setIsCourseDropdownOpen(false);
-                    }}
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      backgroundColor:
-                        coursePath === "all"
-                          ? "rgba(202, 175, 243, 0.2)"
-                          : "transparent",
-                      color: coursePath === "all" ? "#9960a8" : "#1c0700",
-                      fontWeight: coursePath === "all" ? "bold" : "normal",
-                      marginBottom: "8px",
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    -- {currentLang === "en" ? "All Courses" : "Alle Kurse"} --
-                  </div>
+                  {isFullAdmin && (
+                    <div
+                      onClick={() => {
+                        setCoursePath("all");
+                        setIsCourseDropdownOpen(false);
+                      }}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        backgroundColor:
+                          coursePath === "all"
+                            ? "rgba(202, 175, 243, 0.2)"
+                            : "transparent",
+                        color: coursePath === "all" ? "#9960a8" : "#1c0700",
+                        fontWeight: coursePath === "all" ? "bold" : "normal",
+                        marginBottom: "8px",
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      -- {currentLang === "en" ? "All Courses" : "Alle Kurse"}{" "}
+                      --
+                    </div>
+                  )}
 
                   {(() => {
                     const renderedLinks = new Set();

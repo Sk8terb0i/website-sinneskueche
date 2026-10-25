@@ -174,13 +174,27 @@ export default function ProfilesTab({
       const docId = editForm.isMain ? editingId : editForm.parentId;
       const userRef = doc(db, "users", docId);
 
+      // --- EXPAND COURSES FOR BACKEND RULES ---
+      let finalAllowedCourses = editForm.allowedCourses || [];
+      if (editForm.role === "course_admin" || editForm.role === "instructor") {
+        const cgSnap = await getDocs(collection(db, "calendar_groups"));
+        let expanded = [...finalAllowedCourses];
+        cgSnap.docs.forEach((docSnap) => {
+          const baseId = docSnap.id;
+          const includedLinks = docSnap.data().includedLinks || [];
+          if (expanded.some((c) => c.replace(/\//g, "") === baseId)) {
+            expanded = [...expanded, ...includedLinks];
+          }
+        });
+        finalAllowedCourses = [...new Set(expanded)];
+      }
+
       if (editForm.isMain) {
         await updateDoc(userRef, {
           role: editForm.role || "user",
           firstName: editForm.firstName || "",
           lastName: editForm.lastName || "",
-          // Save the permitted courses
-          allowedCourses: editForm.allowedCourses || [],
+          allowedCourses: finalAllowedCourses,
           kulturlegi: editForm.kulturlegi || false,
         });
       } else {
@@ -217,10 +231,7 @@ export default function ProfilesTab({
                   const fileRef = storageRef(storage, reqData.proofUrl);
                   await deleteObject(fileRef);
                 } catch (sErr) {
-                  console.warn(
-                    "Storage deletion error (file might already be gone):",
-                    sErr,
-                  );
+                  console.warn("Storage deletion error:", sErr);
                 }
               }
               await deleteDoc(doc(db, "kulturlegi_requests", reqDoc.id));
