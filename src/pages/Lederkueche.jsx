@@ -9,16 +9,24 @@ import RegisterShortcut from "../components/RegisterShortcut/RegisterShortcut";
 import {
   Clock,
   Users,
-  Briefcase,
   Globe,
   Mail,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Tag,
   Scissors,
+  X,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 const getImage = (filename) => `/planets/${filename}`;
+
+// Fetch all images dynamically from the folder
+const imageModules = import.meta.glob("../assets/leder/*.{jpg,jpeg,JPG,JPEG}", {
+  eager: true,
+});
+const galleryImages = Object.values(imageModules).map((mod) => mod.default);
 
 export default function Lederkueche({ currentLang, setCurrentLang }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -27,6 +35,10 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
   const [activeTab, setActiveTab] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [coursePrice, setCoursePrice] = useState("");
+
+  // Gallery States
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [lightboxImage, setLightboxImage] = useState(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -140,11 +152,11 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
             { icon: <Tag size={18} />, text: coursePrice || "100,-" },
             {
               icon: <Users size={18} />,
-              text: "Beginners (No prior experience needed)",
+              text: "Beginners",
             },
             {
               icon: <Scissors size={18} />,
-              text: "All tools, leather, and paper provided",
+              text: "All tools provided",
             },
             {
               icon: <Globe size={18} />,
@@ -192,11 +204,11 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
             { icon: <Tag size={18} />, text: coursePrice || "100,-" },
             {
               icon: <Users size={18} />,
-              text: "Anfänger (Keine Vorkenntnisse nötig)",
+              text: "Anfänger:innen",
             },
             {
               icon: <Scissors size={18} />,
-              text: "Alle Werkzeuge, Leder und Papier inbegriffen",
+              text: "Alle Werkzeuge und Materialien inbegriffen",
             },
             {
               icon: <Globe size={18} />,
@@ -237,6 +249,19 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
   const icons = [getImage("touch.png"), getImage("smell.png")];
   const current = content[currentLang];
 
+  const visibleGalleryCount = isMobile ? 1 : 3;
+  const maxGalleryIndex = Math.max(
+    0,
+    galleryImages.length - visibleGalleryCount,
+  );
+
+  const nextGallerySlide = () => {
+    setGalleryIndex((prev) => Math.min(prev + 1, maxGalleryIndex));
+  };
+  const prevGallerySlide = () => {
+    setGalleryIndex((prev) => Math.max(prev - 1, 0));
+  };
+
   const containerVariants = {
     hidden: { opacity: 0 },
     show: {
@@ -274,6 +299,28 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
       opacity: 0.7,
       marginBottom: "40px",
       fontWeight: "500",
+    },
+    galleryContainer: {
+      width: "100%",
+      maxWidth: "800px",
+      marginBottom: "3rem",
+      position: "relative",
+    },
+    galleryBtn: {
+      background: "transparent",
+      border: "none",
+      width: "40px",
+      height: "40px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "#9960a8",
+      cursor: "pointer",
+      transition: "transform 0.2s ease, opacity 0.2s ease",
+      position: "absolute",
+      top: "50%",
+      transform: "translateY(-50%)",
+      zIndex: 10,
     },
     courseCard: {
       backgroundColor: "rgba(202, 175, 243, 0.05)",
@@ -393,6 +440,9 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
           .course-title-wrapper { order: -1; margin-bottom: 15px; }
           .welcome-text { margin-bottom: 25px !important; font-size: 0.85rem !important; width: 85vw !important; line-height: 1.5; }
         }
+        .gallery-image-hover:hover {
+          transform: scale(1.05);
+        }
       `}</style>
 
       <motion.main
@@ -413,6 +463,89 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
         >
           {current.welcome}
         </motion.p>
+
+        {galleryImages.length > 0 && (
+          <motion.div variants={itemVariants} style={styles.galleryContainer}>
+            <button
+              onClick={prevGallerySlide}
+              disabled={galleryIndex === 0}
+              style={{
+                ...styles.galleryBtn,
+                left: isMobile ? "-35px" : "-50px",
+                opacity: galleryIndex === 0 ? 0 : 1,
+                pointerEvents: galleryIndex === 0 ? "none" : "auto",
+              }}
+            >
+              <ChevronLeft size={32} strokeWidth={1.5} />
+            </button>
+
+            <div
+              style={{ overflow: "hidden", padding: "10px 0", width: "100%" }}
+            >
+              <motion.div
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.2}
+                onDragEnd={(e, { offset }) => {
+                  if (offset.x < -50 && galleryIndex < maxGalleryIndex)
+                    nextGallerySlide();
+                  else if (offset.x > 50 && galleryIndex > 0)
+                    prevGallerySlide();
+                }}
+                animate={{
+                  x: `calc(-${(galleryIndex * 100) / visibleGalleryCount}% - ${(galleryIndex * 15) / visibleGalleryCount}px)`,
+                }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                style={{ display: "flex", gap: "15px", width: "100%" }}
+              >
+                {galleryImages.map((src) => (
+                  <div
+                    key={src}
+                    onClick={() => setLightboxImage(src)}
+                    style={{
+                      flex: `0 0 calc((100% - ${(visibleGalleryCount - 1) * 15}px) / ${visibleGalleryCount})`,
+                      aspectRatio: "4/3",
+                      borderRadius: "16px",
+                      overflow: "hidden",
+                      cursor: "zoom-in",
+                      boxShadow: "0 4px 15px rgba(28, 7, 0, 0.05)",
+                      border: "1px solid rgba(28, 7, 0, 0.05)",
+                      boxSizing: "border-box",
+                      position: "relative",
+                    }}
+                  >
+                    <img
+                      src={src}
+                      alt="Gallery preview"
+                      className="gallery-image-hover"
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        transition: "transform 0.3s ease",
+                        pointerEvents: "none", // Prevents drag bugs
+                      }}
+                    />
+                  </div>
+                ))}
+              </motion.div>
+            </div>
+
+            <button
+              onClick={nextGallerySlide}
+              disabled={galleryIndex >= maxGalleryIndex}
+              style={{
+                ...styles.galleryBtn,
+                right: isMobile ? "-35px" : "-50px",
+                opacity: galleryIndex >= maxGalleryIndex ? 0 : 1,
+                pointerEvents:
+                  galleryIndex >= maxGalleryIndex ? "none" : "auto",
+              }}
+            >
+              <ChevronRight size={32} strokeWidth={1.5} />
+            </button>
+          </motion.div>
+        )}
 
         {current.courses.map((course, idx) => (
           <motion.div
@@ -547,6 +680,61 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
           />
         </motion.div>
       </motion.main>
+
+      <AnimatePresence>
+        {lightboxImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 99999,
+              backgroundColor: "rgba(28, 7, 0, 0.85)",
+              backdropFilter: "blur(5px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+            }}
+            onClick={() => setLightboxImage(null)}
+          >
+            <button
+              style={{
+                position: "absolute",
+                top: "20px",
+                right: "20px",
+                background: "none",
+                border: "none",
+                color: "#fffce3",
+                cursor: "pointer",
+                padding: "8px",
+                zIndex: 2,
+              }}
+            >
+              <X size={32} />
+            </button>
+            <motion.img
+              initial={{ scale: 0.8, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.8, opacity: 0, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              src={lightboxImage}
+              alt="Expanded view"
+              style={{
+                maxWidth: "100%",
+                maxHeight: "90vh",
+                objectFit: "contain",
+                borderRadius: "12px",
+                boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

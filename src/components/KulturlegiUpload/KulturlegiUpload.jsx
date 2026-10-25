@@ -148,6 +148,8 @@ export default function KulturlegiUpload({ currentLang }) {
       <div
         style={{
           width: "100%",
+          maxWidth: isMobile ? "100%" : "100vw",
+          margin: "0 auto",
           boxSizing: "border-box",
           marginBottom: isMobile ? "0.5rem" : "1rem",
           padding: isMobile ? "1.5rem" : "2rem 2.5rem",
