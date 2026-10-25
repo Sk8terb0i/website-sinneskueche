@@ -235,7 +235,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
     calendars: {
       icon: <CalendarDays size={18} />,
       label: labels.calendars,
-      adminOnly: true,
+      adminOnly: false,
     },
     schedule: {
       icon: <CalendarClock size={18} />,
@@ -1346,7 +1346,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
             currentLang={currentLang}
           />
         )}
-        {activeTab === "calendars" && isFullAdmin && (
+        {activeTab === "calendars" && (
           <CalendarsTab isMobile={isMobile} currentLang={currentLang} />
         )}
         {activeTab === "schedule" && (
