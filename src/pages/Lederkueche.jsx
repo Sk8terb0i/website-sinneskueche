@@ -17,6 +17,7 @@ import {
   Tag,
   Scissors,
   X,
+  HeartHandshake,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -185,10 +186,16 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
               content:
                 "This workshop is not about making a profit; it is about sharing a hobby. The price is calculated to cover the costs of the workspace rental and the high-quality materials.",
             },
+            {
+              title: "Buying as a Gift",
+              content:
+                "You can also purchase a session pack as a gift! When you buy a pack, we will send you a unique code. You can give this code to the recipient, who can then use it to choose and book their preferred workshop date on our website.",
+            },
           ],
         },
       ],
       generalInfo: {
+        discountsTitle: "Solidarity Discounts",
         privateTitle: "On-Demand Workshops",
       },
     },
@@ -237,10 +244,16 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
               content:
                 "Bei diesem Workshop geht es nicht darum, Gewinn zu machen, sondern ein Hobby zu teilen. Der Preis ist so kalkuliert, dass er die Kosten für die Raummiete und die hochwertigen Materialien deckt.",
             },
+            {
+              title: "Als Geschenk kaufen",
+              content:
+                "Du kannst ein Session-Paket auch als Geschenk kaufen! Nach dem Kauf erhältst du von uns einen einmaligen Code. Diesen Code kannst du der beschenkten Person geben, welche ihn dann nutzen kann, um sich ihr Wunschdatum für den Kurs auf unserer Website auszusuchen und zu buchen.",
+            },
           ],
         },
       ],
       generalInfo: {
+        discountsTitle: "Solidaritätsrabatt",
         privateTitle: "Workshops auf Anfrage",
       },
     },
@@ -608,6 +621,88 @@ export default function Lederkueche({ currentLang, setCurrentLang }) {
         ))}
 
         <motion.div variants={itemVariants} style={styles.generalInfoBox}>
+          <div style={styles.infoPanel}>
+            <h3
+              style={{
+                margin: "0 0 10px 0",
+                fontSize: "1.1rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                color: "#4e5f28",
+              }}
+            >
+              <HeartHandshake size={20} /> {current.generalInfo.discountsTitle}
+            </h3>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.85rem",
+                opacity: 0.85,
+                lineHeight: 1.5,
+              }}
+            >
+              {currentLang === "de" ? (
+                <>
+                  Ich biete einen Solidaritätsrabatt für Menschen mit
+                  finanziellen Engpässen an. Frag einfach per{" "}
+                  <Link
+                    to="/contact"
+                    style={{
+                      color: "#4e5f28",
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    Kontaktformular
+                  </Link>{" "}
+                  oder{" "}
+                  <a
+                    href="mailto:salut@sinneskueche.ch"
+                    style={{
+                      color: "#4e5f28",
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    E-Mail (salut@sinneskueche.ch)
+                  </a>{" "}
+                  nach einem Code. Es sind keine Nachweise oder Erklärungen
+                  erforderlich. Ich vertraue darauf, dass dieses Angebot fair
+                  genutzt wird.
+                </>
+              ) : (
+                <>
+                  I offer a solidarity discount for anyone experiencing
+                  financial constraints. Simply ask for a code via the{" "}
+                  <Link
+                    to="/contact"
+                    style={{
+                      color: "#4e5f28",
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    contact form
+                  </Link>{" "}
+                  or{" "}
+                  <a
+                    href="mailto:salut@sinneskueche.ch"
+                    style={{
+                      color: "#4e5f28",
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    email (salut@sinneskueche.ch)
+                  </a>
+                  . No proof or explanation is required. I trust that this
+                  option is used fairly.
+                </>
+              )}
+            </p>
+          </div>
+
           <div style={styles.infoPanel}>
             <h3
               style={{
