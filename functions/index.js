@@ -2653,7 +2653,9 @@ exports.processFreePromoCheckout = onCall({ cors: true }, async (request) => {
     let userData = null;
 
     await db.runTransaction(async (t) => {
-      // 1. Find and validate the Promo Code
+      // --- 1. PERFORM ALL READS FIRST ---
+
+      // Read Promo Code
       const promoQuerySnap = await t.get(
         db.collection("promo_codes").where("code", "==", promoCode).limit(1),
       );
@@ -2661,12 +2663,7 @@ exports.processFreePromoCheckout = onCall({ cors: true }, async (request) => {
         throw new HttpsError("not-found", "Invalid code.");
       const promoRef = promoQuerySnap.docs[0].ref;
 
-      // 2. Increment promo code usage
-      t.update(promoRef, {
-        timesUsed: admin.firestore.FieldValue.increment(1),
-      });
-
-      // 3. Get User Data if logged in
+      // Read User Data if logged in
       if (userId !== "GUEST_USER") {
         const userSnap = await t.get(db.collection("users").doc(userId));
         if (userSnap.exists) {
@@ -2676,7 +2673,14 @@ exports.processFreePromoCheckout = onCall({ cors: true }, async (request) => {
         }
       }
 
-      // 4. Create the Bookings in the database
+      // --- 2. PERFORM ALL WRITES SECOND ---
+
+      // Increment promo code usage
+      t.update(promoRef, {
+        timesUsed: admin.firestore.FieldValue.increment(1),
+      });
+
+      // Create the Bookings in the database
       selectedDates.forEach((d) => {
         t.set(db.collection("bookings").doc(), {
           userId,
