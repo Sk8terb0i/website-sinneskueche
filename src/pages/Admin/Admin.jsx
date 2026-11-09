@@ -42,12 +42,14 @@ import {
   Trash2,
   Paintbrush,
   CalendarDays,
+  DollarSign,
 } from "lucide-react";
 
 import Header from "../../components/Header/Header";
 import EventsTab from "./EventsTab";
 import PricingTab from "./PricingTab";
 import RentalTab from "./RentalTab";
+import PaymentOverviewTab from "./PaymentOverviewTab";
 import PromotionsTab from "./PromotionsTab";
 import PackCodesTab from "./PackCodesTab";
 import ProfilesTab from "./ProfilesTab";
@@ -116,6 +118,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       firing: "Firing Schedule",
       printer: "3D Printer",
       messages: "Messages",
+      paymentOverview: "Payment Overview",
       customize: "Customize Nav",
       save: "Save Layout",
       addGroup: "Add Group",
@@ -148,6 +151,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       firing: "Brennplan",
       printer: "3D-Drucker",
       messages: "Nachrichten",
+      paymentOverview: "Zahlungsübersicht",
       customize: "Nav anpassen",
       save: "Layout speichern",
       addGroup: "Gruppe hinzufügen",
@@ -165,7 +169,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
       {
         id: "g1",
         name: { en: "Management", de: "Verwaltung" },
-        items: ["events", "profiles"],
+        items: ["events", "profiles", "payment-overview"],
       },
       {
         id: "g2",
@@ -196,6 +200,7 @@ export default function Admin({ currentLang, setCurrentLang }) {
   const defaultTabKeys = {
     events: "events",
     profiles: "profiles",
+    "payment-overview": "paymentOverview",
     "course-management": "courseMgmt",
     calendars: "calendars",
     schedule: "schedule",
@@ -285,6 +290,11 @@ export default function Admin({ currentLang, setCurrentLang }) {
     messages: {
       icon: <MessageSquare size={18} />,
       label: labels.messages,
+      adminOnly: true,
+    },
+    "payment-overview": {
+      icon: <DollarSign size={18} />,
+      label: labels.paymentOverview,
       adminOnly: true,
     },
   };
@@ -1394,6 +1404,9 @@ export default function Admin({ currentLang, setCurrentLang }) {
             )}
             {activeTab === "rental" && (
               <RentalTab isMobile={isMobile} currentLang={currentLang} />
+            )}
+            {activeTab === "payment-overview" && (
+              <PaymentOverviewTab currentLang={currentLang} />
             )}
           </>
         )}

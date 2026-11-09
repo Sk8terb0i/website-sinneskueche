@@ -747,10 +747,26 @@ exports.handleStripeWebhook = onRequest(
         let isPackUser = false;
         let isPackGuest = false;
 
+        // Retrieve actual line items and product details directly from Stripe
+        const lineItems = await stripe.checkout.sessions.listLineItems(
+          session.id,
+          {
+            expand: ["data.price.product"],
+          },
+        );
+        const firstProduct = lineItems?.data?.[0]?.price?.product;
+        const productName =
+          (typeof firstProduct === "object" ? firstProduct?.name : "") || "";
+        const productCategory =
+          (typeof firstProduct === "object"
+            ? firstProduct?.metadata?.category
+            : "") || "";
+
         await db.runTransaction(async (transaction) => {
           const checkSnap = await transaction.get(paymentCheckRef);
           if (checkSnap.exists) return;
 
+          const meta = session.metadata || {};
           const {
             userId,
             guestName,
@@ -764,7 +780,59 @@ exports.handleStripeWebhook = onRequest(
             packSummary,
             promoCode,
             chunkCount,
-          } = session.metadata;
+            category,
+          } = meta;
+
+          // Resolve category from session metadata, product metadata, or product name
+          let resolvedCategory = category || coursePath;
+          if (!resolvedCategory) {
+            if (productCategory) {
+              resolvedCategory = productCategory;
+            } else if (productName.toLowerCase().includes("drink")) {
+              resolvedCategory = "drinks";
+            } else {
+              resolvedCategory = "uncategorized";
+            }
+          }
+
+          // 1. Log payment to Firestore
+          transaction.set(db.collection("stripe_payments").doc(session.id), {
+            amount: (session.amount_total || 0) / 100,
+            currency: session.currency || "chf",
+            category: resolvedCategory,
+            customerEmail: session.customer_details
+              ? session.customer_details.email
+              : "Unknown",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          // 2. Bypass booking pipeline for custom links or catalog products (like Drinks)
+          const isDirectStripeProduct = !coursePath && !packSize;
+          if (mode === "custom_payment" || isDirectStripeProduct) {
+            transaction.set(paymentCheckRef, {
+              processedAt: admin.firestore.FieldValue.serverTimestamp(),
+              userId: userId || "GUEST_USER",
+            });
+            return;
+          }
+
+          // Log every payment into a central revenue collection
+          transaction.set(db.collection("stripe_payments").doc(session.id), {
+            amount: session.amount_total / 100,
+            currency: session.currency || "chf",
+            category: category || coursePath || "uncategorized",
+            customerEmail: session.customer_details?.email || "Unknown",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          // Bypass standard booking/pack logic if this is a custom admin/drinks payment
+          if (mode === "custom_payment") {
+            transaction.set(paymentCheckRef, {
+              processedAt: admin.firestore.FieldValue.serverTimestamp(),
+              userId: userId || "GUEST_USER",
+            });
+            return;
+          }
 
           const isMultiPack =
             packSize &&
@@ -2755,3 +2823,46 @@ exports.sendEmailNotification = onCall({ cors: true }, async (request) => {
     throw new HttpsError("internal", "Unable to send email.");
   }
 });
+
+exports.generateCustomPaymentLink = onCall(
+  { cors: true, secrets: ["STRIPE_SECRET_KEY"] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Admin access required.");
+    }
+
+    const { amount, category, title, description } = request.data;
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card", "twint"],
+        line_items: [
+          {
+            price_data: {
+              currency: "chf",
+              product_data: {
+                name: title || `Payment: ${category}`,
+                description: description || undefined,
+              },
+              unit_amount: Math.round(amount * 100),
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        metadata: {
+          mode: "custom_payment",
+          category: category,
+          userId: request.auth.uid,
+        },
+        success_url: "https://sinneskueche.ch/success",
+        cancel_url: "https://sinneskueche.ch/cancel",
+      });
+
+      return { url: session.url };
+    } catch (error) {
+      logger.error("generateCustomPaymentLink failed", error);
+      throw new HttpsError("internal", error.message);
+    }
+  },
+);
