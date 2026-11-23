@@ -795,38 +795,18 @@ exports.handleStripeWebhook = onRequest(
             }
           }
 
-          // 1. Log payment to Firestore
-          transaction.set(db.collection("stripe_payments").doc(session.id), {
-            amount: (session.amount_total || 0) / 100,
-            currency: session.currency || "chf",
-            category: resolvedCategory,
-            customerEmail: session.customer_details
-              ? session.customer_details.email
-              : "Unknown",
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-
-          // 2. Bypass booking pipeline for custom links or catalog products (like Drinks)
+          // 1. Bypass booking pipeline for custom links or catalog products (like Drinks)
           const isDirectStripeProduct = !coursePath && !packSize;
           if (mode === "custom_payment" || isDirectStripeProduct) {
-            transaction.set(paymentCheckRef, {
-              processedAt: admin.firestore.FieldValue.serverTimestamp(),
-              userId: userId || "GUEST_USER",
+            // It is safe to write and return here because no further reads occur
+            transaction.set(db.collection("stripe_payments").doc(session.id), {
+              amount: (session.amount_total || 0) / 100,
+              currency: session.currency || "chf",
+              category: resolvedCategory,
+              customerEmail: session.customer_details?.email || "Unknown",
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
-            return;
-          }
 
-          // Log every payment into a central revenue collection
-          transaction.set(db.collection("stripe_payments").doc(session.id), {
-            amount: session.amount_total / 100,
-            currency: session.currency || "chf",
-            category: category || coursePath || "uncategorized",
-            customerEmail: session.customer_details?.email || "Unknown",
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-
-          // Bypass standard booking/pack logic if this is a custom admin/drinks payment
-          if (mode === "custom_payment") {
             transaction.set(paymentCheckRef, {
               processedAt: admin.firestore.FieldValue.serverTimestamp(),
               userId: userId || "GUEST_USER",
@@ -931,6 +911,16 @@ exports.handleStripeWebhook = onRequest(
           // ==========================================
           // PHASE 2: ALL WRITES
           // ==========================================
+
+          // Log payment to Firestore (Moved from Phase 1 to fix transaction violation)
+          transaction.set(db.collection("stripe_payments").doc(session.id), {
+            amount: (session.amount_total || 0) / 100,
+            currency: session.currency || "chf",
+            category: resolvedCategory,
+            customerEmail: session.customer_details?.email || "Unknown",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
           if (promoExists && promoData) {
             const discountUsed = parseFloat(
               session.metadata.promoDiscountUsed || "0",
