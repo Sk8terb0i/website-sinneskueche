@@ -4,14 +4,14 @@ import CourseTitle from "../components/CourseTitle/CourseTitle";
 import { db } from "../firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { Loader2, CheckCircle, Send } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext"; // Import useAuth
+import { useAuth } from "../contexts/AuthContext";
 import "./Course.css";
 
 // Serves planet icons on-demand from public/planets/
 const getImage = (filename) => `/planets/${filename}`;
 
 export default function Contact({ currentLang, setCurrentLang }) {
-  const { currentUser, userData } = useAuth(); // Get user data from context
+  const { currentUser, userData } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Form State
@@ -21,6 +21,10 @@ export default function Contact({ currentLang, setCurrentLang }) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // Anti-Bot State
+  const [honeypot, setHoneypot] = useState("");
+  const [formLoadTime, setFormLoadTime] = useState(() => Date.now());
 
   // Autofill logic
   useEffect(() => {
@@ -63,6 +67,7 @@ export default function Contact({ currentLang, setCurrentLang }) {
       successDesc:
         "Thank you for reaching out. We will get back to you as soon as possible.",
       sendAnother: "Send another message",
+      cooldownError: "Please wait a minute before sending another message.",
     },
     de: {
       title: "Kontakt",
@@ -77,6 +82,8 @@ export default function Contact({ currentLang, setCurrentLang }) {
       successDesc:
         "Vielen Dank für deine Nachricht. Wir melden uns so schnell wie möglich bei dir.",
       sendAnother: "Weitere Nachricht senden",
+      cooldownError:
+        "Bitte warte eine Minute, bevor du eine weitere Nachricht sendest.",
     },
   };
 
@@ -84,17 +91,55 @@ export default function Contact({ currentLang, setCurrentLang }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Trap 1: Honeypot filled out, or submitted inhumanly fast (< 2.5 seconds)
+    const elapsed = Date.now() - formLoadTime;
+    if (honeypot !== "" || elapsed < 2500) {
+      // Fake success so automated bots assume it worked and move on
+      setSuccess(true);
+      setSubject("");
+      setMessage("");
+      return;
+    }
+
+    // Trap 2: Client-side cooldown (60 seconds between submissions)
+    try {
+      const lastSubmit = localStorage.getItem("lastContactSubmit");
+      if (lastSubmit && Date.now() - Number(lastSubmit) < 60000) {
+        alert(current.cooldownError);
+        return;
+      }
+    } catch {
+      // Ignore if localStorage is blocked in strict privacy browsers
+    }
+
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedSubject = subject.trim();
+    const trimmedMessage = message.trim();
+
+    if (!trimmedName || !trimmedEmail || !trimmedSubject || !trimmedMessage) {
+      return;
+    }
+
     setLoading(true);
     try {
       await addDoc(collection(db, "contact_messages"), {
-        name,
-        email,
-        subject,
-        message,
+        name: trimmedName,
+        email: trimmedEmail,
+        subject: trimmedSubject,
+        message: trimmedMessage,
         status: "new",
-        userId: currentUser?.uid || "guest", // Added userId for internal tracking
+        userId: currentUser?.uid || "guest",
         createdAt: serverTimestamp(),
       });
+
+      try {
+        localStorage.setItem("lastContactSubmit", Date.now().toString());
+      } catch {
+        // Ignore storage errors
+      }
+
       setSuccess(true);
       // Reset only subject and message; keep name/email if user is logged in
       setSubject("");
@@ -104,6 +149,12 @@ export default function Contact({ currentLang, setCurrentLang }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleResetForm = () => {
+    setSuccess(false);
+    setHoneypot("");
+    setFormLoadTime(Date.now());
   };
 
   const styles = {
@@ -187,6 +238,14 @@ export default function Contact({ currentLang, setCurrentLang }) {
       padding: "3rem 1rem",
       textAlign: "center",
     },
+    honeypot: {
+      position: "absolute",
+      left: "-9999px",
+      opacity: 0,
+      height: 0,
+      width: 0,
+      pointerEvents: "none",
+    },
   };
 
   return (
@@ -238,7 +297,7 @@ export default function Contact({ currentLang, setCurrentLang }) {
                 {current.successDesc}
               </p>
               <button
-                onClick={() => setSuccess(false)}
+                onClick={handleResetForm}
                 style={{
                   ...styles.submitBtn,
                   backgroundColor: "transparent",
@@ -257,8 +316,21 @@ export default function Contact({ currentLang, setCurrentLang }) {
                 display: "flex",
                 flexDirection: "column",
                 gap: "1.2rem",
+                position: "relative",
               }}
             >
+              {/* Hidden Honeypot Input - Invisible to humans & screen readers */}
+              <input
+                type="text"
+                name="website"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                style={styles.honeypot}
+              />
+
               <div
                 style={{
                   display: "flex",
@@ -270,6 +342,7 @@ export default function Contact({ currentLang, setCurrentLang }) {
                   type="text"
                   placeholder={current.name}
                   required
+                  maxLength={100}
                   style={styles.input}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -278,6 +351,7 @@ export default function Contact({ currentLang, setCurrentLang }) {
                   type="email"
                   placeholder={current.email}
                   required
+                  maxLength={150}
                   style={styles.input}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -287,6 +361,7 @@ export default function Contact({ currentLang, setCurrentLang }) {
                 type="text"
                 placeholder={current.subject}
                 required
+                maxLength={200}
                 style={styles.input}
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
@@ -294,6 +369,7 @@ export default function Contact({ currentLang, setCurrentLang }) {
               <textarea
                 placeholder={current.message}
                 required
+                maxLength={3000}
                 style={styles.textarea}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
