@@ -2431,12 +2431,45 @@ exports.moveToGlazeStage = onCall({ cors: true }, async (request) => {
 // 7. CONTACT FORM
 // ============================================================================
 
+// Helper to prevent HTML/XSS injection in admin notification emails
+const escapeHtml = (str) => {
+  const map = {
+    "&": "&" + "amp;",
+    "<": "&" + "lt;",
+    ">": "&" + "gt;",
+    '"': "&" + "quot;",
+    "'": "&" + "#039;",
+  };
+  return String(str || "").replace(/[&<>"']/g, (ch) => map[ch]);
+};
+
 exports.onContactMessageCreate = onDocumentCreated(
   "contact_messages/{messageId}",
   async (event) => {
     const snap = event.data;
     if (!snap) return;
     const data = snap.data();
+
+    const cleanEmail = (data.email || "").trim().toLowerCase();
+
+    // Server-side rate limit: Max 2 messages per email every 10 minutes
+    const tenMinsAgo = admin.firestore.Timestamp.fromMillis(
+      Date.now() - 10 * 60 * 1000,
+    );
+    const recentSnap = await db
+      .collection("contact_messages")
+      .where("email", "==", data.email)
+      .where("createdAt", ">=", tenMinsAgo)
+      .limit(3)
+      .get();
+
+    if (recentSnap.size > 2) {
+      logger.warn(
+        `Rate limit exceeded for contact email: ${cleanEmail}. Deleting spam.`,
+      );
+      await snap.ref.delete();
+      return;
+    }
 
     // Fetch the array of contact emails from the admin settings
     const settingsSnap = await db
@@ -2447,27 +2480,29 @@ exports.onContactMessageCreate = onDocumentCreated(
       ? settingsSnap.data().contactEmails || []
       : [];
 
-    // If no emails are configured, do nothing
     if (contactEmails.length === 0) return;
+
+    const safeName = escapeHtml(data.name);
+    const safeEmail = escapeHtml(data.email);
+    const safeSubject = escapeHtml(data.subject);
+    const safeMessage = escapeHtml(data.message);
 
     const htmlBody = `
       <div style="font-family: Arial; padding: 30px; background: #fffce3; border: 1px solid #caaff3; border-radius: 12px; color: #1c0700;">
         <h2 style="color: #9960a8; margin-top: 0;">New Contact Form Submission</h2>
-        <p><strong>Name:</strong> ${data.name}</p>
-        <p><strong>Email:</strong> ${data.email}</p>
-        <p><strong>Subject:</strong> ${data.subject}</p>
-        <div style="background: rgba(28, 7, 0, 0.03); padding: 15px; border-radius: 8px; border: 1px dashed rgba(28, 7, 0, 0.1); margin-top: 20px; white-space: pre-wrap;">
-          ${data.message}
-        </div>
+        <p><strong>Name:</strong> ${safeName}</p>
+        <p><strong>Email:</strong> ${safeEmail}</p>
+        <p><strong>Subject:</strong> ${safeSubject}</p>
+        <div style="background: rgba(28, 7, 0, 0.03); padding: 15px; border-radius: 8px; border: 1px dashed rgba(28, 7, 0, 0.1); margin-top: 20px; white-space: pre-wrap;">${safeMessage}</div>
       </div>
     `;
 
-    // Queue up an email for every recipient in the contactEmails array
     const emailPromises = contactEmails.map((recipientEmail) => {
       return db.collection("mail").add({
         to: recipientEmail,
+        replyTo: data.email,
         message: {
-          subject: `Contact Form: ${data.subject}`,
+          subject: `Contact Form: ${String(data.subject || "").substring(0, 120)}`,
           html: htmlBody,
         },
       });
