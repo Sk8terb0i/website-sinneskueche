@@ -4,7 +4,7 @@ import PlanetPortrait from "../components/Planet/PlanetPortrait";
 import MoonPortrait from "../components/Moon/MoonPortrait";
 import SunPortrait from "../components/Sun/SunPortrait";
 import Header from "../components/Header/Header";
-import { planets } from "../data/planets";
+import { planets, directCoursePlanets, viewMoonIcons } from "../data/planets";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 
@@ -21,6 +21,7 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
   const [isResetting, setIsResetting] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [courseVisibility, setCourseVisibility] = useState({});
+  const [isCourseView, setIsCourseView] = useState(false);
 
   const [viewport, setViewport] = useState({
     width: window.innerWidth,
@@ -118,13 +119,18 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
     () => planets.filter((p) => p.type === "courses"),
     [],
   );
+  const visibleDirectCourses = useMemo(
+    () => directCoursePlanets.filter((c) => courseVisibility[c.id] !== false),
+    [courseVisibility],
+  );
   const atelierPlanet = useMemo(
     () => planets.find((p) => p.id === "atelier"),
     [],
   );
 
-  // CHANGED: Logic to handle fallbacks if no courses are visible
   const displayPlanets = useMemo(() => {
+    if (isCourseView) return visibleDirectCourses;
+
     const baseList = [...coursePlanetsOnly, atelierPlanet].filter(Boolean);
 
     return baseList.map((p) => {
@@ -135,7 +141,6 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
         return courseVisibility[courseId] !== false;
       });
 
-      // If filtering leaves the list empty, use the fallback moon if it exists
       const moonsToDisplay =
         filteredMoons.length > 0
           ? filteredMoons
@@ -145,7 +150,13 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
 
       return { ...p, courses: moonsToDisplay };
     });
-  }, [coursePlanetsOnly, atelierPlanet, courseVisibility]);
+  }, [
+    isCourseView,
+    visibleDirectCourses,
+    coursePlanetsOnly,
+    atelierPlanet,
+    courseVisibility,
+  ]);
 
   const touchStartY = useRef(null);
   const touchLocked = useRef(false);
@@ -167,9 +178,25 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
     }, 400);
   };
 
+  const handleToggleCourseView = (e) => {
+    e.stopPropagation();
+    if (isResetting || isMenuOpenRef.current) return;
+    setIsResetting(true);
+    setIsLoaded(false);
+    setTimeout(() => {
+      setIsCourseView((prev) => !prev);
+      setActiveIndex(null);
+      setPreviousIndex(null);
+      setTimeout(() => {
+        setIsLoaded(true);
+        setIsResetting(false);
+      }, 50);
+    }, 600);
+  };
+
   const handleSunClick = (e) => {
     e.stopPropagation();
-    if (isMenuOpenRef.current) return;
+    if (isMenuOpenRef.current || isCourseView) return;
 
     const atelierIdx = displayPlanets.findIndex((p) => p.id === "atelier");
     if (atelierIdx !== -1) {
@@ -180,6 +207,8 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
   };
 
   useEffect(() => {
+    if (isCourseView) return;
+
     const scrollHandler = (direction) => {
       if (isMenuOpenRef.current) return;
       setScrollDirection(direction);
@@ -231,7 +260,7 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchmove", handleTouchMove);
     };
-  }, [displayPlanets.length]);
+  }, [displayPlanets.length, isCourseView]);
 
   const normalGap = planetSize * 0.2;
   const expandedGap = planetSize * 1.1;
@@ -251,14 +280,27 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
     return distance * 2;
   };
 
+  const idleTotalHeight =
+    coursePlanetsOnly.length * planetSize +
+    (coursePlanetsOnly.length - 1) * normalGap +
+    sunSize;
+  const idleTranslateY = Math.max(
+    viewport.height / 2 - idleTotalHeight / 2,
+    viewport.height * 0.07,
+  );
+  const sunTopPosition =
+    idleTranslateY +
+    coursePlanetsOnly.length * planetSize +
+    coursePlanetsOnly.length * normalGap;
+
+  const orbitOffset = isCourseView
+    ? coursePlanetsOnly.length - visibleDirectCourses.length
+    : 0;
+
   const computeTranslateY = () => {
     const vh = viewport.height;
     if (activeIndex === null) {
-      const totalHeight =
-        coursePlanetsOnly.reduce((sum, _, i) => sum + getPlanetSize(i), 0) +
-        (coursePlanetsOnly.length - 1) * normalGap +
-        sunSize;
-      return Math.max(vh / 2 - totalHeight / 2, vh * 0.07);
+      return idleTranslateY + orbitOffset * (planetSize + normalGap);
     }
     const getAccumulatedHeight = (idx) => {
       let h = 0;
@@ -275,23 +317,15 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
   };
 
   const translateY = computeTranslateY();
-  const idleTotalHeight =
-    coursePlanetsOnly.length * planetSize +
-    (coursePlanetsOnly.length - 1) * normalGap +
-    sunSize;
-  const idleTranslateY = Math.max(
-    viewport.height / 2 - idleTotalHeight / 2,
-    viewport.height * 0.07,
-  );
-  const sunTopPosition =
-    idleTranslateY +
-    coursePlanetsOnly.length * planetSize +
-    coursePlanetsOnly.length * normalGap;
 
   const springEase = "cubic-bezier(0.34, 1.56, 0.64, 1)";
   const smoothEase = "cubic-bezier(0.4, 0, 0.2, 1)";
   const currentEase = previousIndex === null ? springEase : smoothEase;
-  const movementDuration = activeIndex === null ? "1.5s" : "0.8s";
+  const movementDuration = isResetting
+    ? "0.6s"
+    : activeIndex === null
+      ? "1.5s"
+      : "0.8s";
 
   useEffect(() => {
     if (activeIndex !== null && !hasShiftedLeft) {
@@ -302,6 +336,14 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
   }, [activeIndex]);
 
   const targetCenter = { x: viewport.width * 0.4, y: viewport.height * 0.5 };
+
+  // --- CHANGE MOON POSITION ON THE 1ST RING HERE ---
+  // 0 = directly left of the sun; increase (e.g. 25, 35, 45) to slide higher up along the ring
+  const moonAngleDeg = 25;
+  const firstRingRadius = getOrbitDiameter(coursePlanetsOnly.length - 1) / 2;
+  const moonAngleRad = (moonAngleDeg * Math.PI) / 180;
+  const moonOffsetX = Math.cos(moonAngleRad) * firstRingRadius;
+  const moonOffsetY = Math.sin(moonAngleRad) * firstRingRadius;
 
   return (
     <div
@@ -356,13 +398,13 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
           height: sunSize,
           transform: "translateX(-50%)",
           transition: `opacity 0.3s ease-out`,
-          opacity: activeIndex === null && isLoaded ? 1 : 0,
+          opacity: activeIndex === null && (isLoaded || isResetting) ? 1 : 0,
           pointerEvents: activeIndex === null && !isMenuOpen ? "auto" : "none",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           zIndex: 1,
-          cursor: "pointer",
+          cursor: isCourseView ? "default" : "pointer",
         }}
         onClick={handleSunClick}
       >
@@ -384,6 +426,40 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
             }}
           />
         ))}
+
+        {/* Courseview / Senses Moon on the 1st ring to the left of the sun */}
+        <div
+          onClick={handleToggleCourseView}
+          style={{
+            position: "absolute",
+            top: `calc(50% - ${moonOffsetY}px)`,
+            left: `calc(50% - ${moonOffsetX}px)`,
+            width: "62px",
+            height: "62px",
+            transform: "translate(-50%, -50%)",
+            zIndex: 3,
+            cursor: "pointer",
+            transition: "transform 0.3s ease",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.transform =
+              "translate(-50%, -50%) scale(1.15)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.transform = "translate(-50%, -50%) scale(1)")
+          }
+        >
+          <img
+            src={
+              isCourseView
+                ? viewMoonIcons.senses[currentLang]
+                : viewMoonIcons.courseView[currentLang]
+            }
+            alt={isCourseView ? "Senses" : "Course View"}
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
+        </div>
+
         <SunPortrait style={{ width: "100%", height: "100%", zIndex: 1 }} />
       </div>
 
@@ -397,7 +473,9 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
           alignItems: "center",
           gap: activeIndex !== null ? expandedGap : normalGap,
           transform: `translateY(${translateY}px)`,
-          transition: `transform ${movementDuration} ${currentEase}, gap 0.5s`,
+          transition: isResetting
+            ? "none"
+            : `transform ${movementDuration} ${currentEase}, gap 0.5s`,
           width: "fit-content",
           zIndex: 2,
         }}
@@ -406,12 +484,13 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
           const isAtelier = planet.id === "atelier";
           if (isAtelier && activeIndex === null) return null;
 
-          const radius = !isAtelier ? getOrbitDiameter(index) / 2 : 0;
+          const ringIndex = index + orbitOffset;
+          const radius = !isAtelier ? getOrbitDiameter(ringIndex) / 2 : 0;
           const possibleAngles = [-90, 90, -180, 45, -45];
           let startAngle =
-            index === coursePlanetsOnly.length - 1
+            ringIndex === coursePlanetsOnly.length - 1
               ? 180
-              : possibleAngles[index % possibleAngles.length];
+              : possibleAngles[ringIndex % possibleAngles.length];
           const currentAngle = isLoaded ? 0 : startAngle;
           let translateX = hasShiftedLeft ? "-10vw" : "0";
           const isVisible =
@@ -466,9 +545,12 @@ export default function LandingPortrait({ currentLang, setCurrentLang }) {
                     isIconOnly={isIconOnly}
                     onActivate={() => {
                       if (isMenuOpen) return;
+                      if (isCourseView && planet.link) {
+                        navigate(planet.link);
+                        return;
+                      }
                       if (activeIndex === index) {
                         const moonCount = planet.courses?.length || 0;
-                        // If it is a fallback moon (no link), don't navigate
                         if (moonCount === 1 && planet.courses[0].link) {
                           navigate(planet.courses[0].link);
                           return;

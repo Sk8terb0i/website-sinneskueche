@@ -40,6 +40,44 @@ export const planetIcons = {
   },
 };
 
+export const viewMoonIcons = {
+  courseView: {
+    en: getImage("courseview.png"),
+    de: getImage("kursansicht.png"),
+  },
+  senses: {
+    en: getImage("senses.png"),
+    de: getImage("sinne.png"),
+  },
+};
+
+export const directCoursePlanets = [
+  {
+    id: "pottery",
+    link: "/pottery",
+    get icon() {
+      const img = getImage("course_pottery.png");
+      return { en: img, de: img };
+    },
+  },
+  {
+    id: "digitalkueche",
+    link: "/digitalkueche",
+    get icon() {
+      const img = getImage("course_digitalkueche.png");
+      return { en: img, de: img };
+    },
+  },
+  {
+    id: "lederkueche",
+    link: "/lederkueche",
+    get icon() {
+      const img = getImage("course_lederkueche.png");
+      return { en: img, de: img };
+    },
+  },
+];
+
 export const planets = [
   {
     id: "sight",
